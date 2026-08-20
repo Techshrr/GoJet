@@ -63,6 +63,8 @@ const report = {
   overlay: null,
   console_errors: [],
   page_errors: [],
+  http_errors: [],
+  request_failures: [],
   captures: [],
 };
 
@@ -79,16 +81,39 @@ async function installLayoutObserver(context) {
   });
 }
 
+function attachDiagnostics(page, surface) {
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      report.console_errors.push({ surface, text: message.text(), location: message.location() });
+    }
+  });
+  page.on('pageerror', (error) => report.page_errors.push({ surface, text: String(error) }));
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      report.http_errors.push({
+        surface,
+        status: response.status(),
+        url: response.url(),
+        resourceType: response.request().resourceType(),
+      });
+    }
+  });
+  page.on('requestfailed', (request) => {
+    report.request_failures.push({
+      surface,
+      url: request.url(),
+      resourceType: request.resourceType(),
+      failure: request.failure(),
+    });
+  });
+}
+
 async function inspectTarget(target, viewportName, viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   await installLayoutObserver(context);
   const page = await context.newPage();
   assertViewport(`${target.surface}/${viewportName}/configured`, viewport, page.viewportSize());
-
-  page.on('console', (message) => {
-    if (message.type() === 'error') report.console_errors.push({ surface: target.surface, text: message.text() });
-  });
-  page.on('pageerror', (error) => report.page_errors.push({ surface: target.surface, text: String(error) }));
+  attachDiagnostics(page, target.surface);
 
   await page.goto(target.url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(120);
@@ -133,11 +158,12 @@ for (const target of targets) {
   }
 }
 
-async function verifySpa(url, selector, expectedPath) {
+async function verifySpa(url, selector, expectedPath, surface) {
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1 });
   await installLayoutObserver(context);
   const page = await context.newPage();
   assertViewport(`spa/${expectedPath}/configured`, viewports.desktop, page.viewportSize());
+  attachDiagnostics(page, `${surface}-spa`);
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.evaluate(() => { window.__gojetP04LayoutShift = 0; });
   const marker = `p04-${Date.now()}-${Math.random()}`;
@@ -165,14 +191,16 @@ await verifySpa(
   'http://127.0.0.1:4173/',
   'nav[aria-label="Primary navigation"] a[href="/pricing"]',
   '/pricing',
+  'website',
 );
-await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings"]', '/app/settings');
-await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/admin/operations');
+await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings"]', '/app/settings', 'workspace');
+await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/admin/operations', 'admin');
 
 {
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1 });
   const page = await context.newPage();
   assertViewport('workspace-overlay/configured', viewports.desktop, page.viewportSize());
+  attachDiagnostics(page, 'workspace-overlay');
   await page.goto('http://127.0.0.1:4174/app', { waitUntil: 'networkidle' });
   const trigger = page.getByRole('button', { name: 'Command' });
   await trigger.focus();
@@ -190,6 +218,7 @@ await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/
   const context = await browser.newContext({ viewport: viewports.mobile, deviceScaleFactor: 1, locale: 'zh-CN' });
   const page = await context.newPage();
   assertViewport('docs/zh-cn/mobile/configured', viewports.mobile, page.viewportSize());
+  attachDiagnostics(page, 'docs-zh-cn');
   await page.goto('http://127.0.0.1:4176/docs/zh-CN/', { waitUntil: 'networkidle' });
   const actualViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
   assertViewport('docs/zh-cn/mobile/layout', viewports.mobile, actualViewport);
