@@ -1,0 +1,80 @@
+name: P04 Topology and Lock Refresh Once
+
+on:
+  push:
+    branches:
+      - develop/p04-product-shells
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout P04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p04-product-shells
+          fetch-depth: 1
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+      - name: Normalize scoped workspace subpath imports
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/p01/validate.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''                imports = re.findall(r"(?:from\\s+|import\\s*)['\\\"](@gojet/[^'\\\"]+)['\\\"]", text)
+                for dep in imports:
+                    if dep not in declared:
+                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {dep}")
+                    if name in PACKAGES and dep in APPS:
+                        errors.append(f"shared package {name} imports app {dep}")
+'''
+          new = '''                imports = re.findall(r"(?:from\\s+|import\\s*)['\\\"](@gojet/[^'\\\"]+)['\\\"]", text)
+                for imported in imports:
+                    parts = imported.split("/")
+                    dep = "/".join(parts[:2]) if len(parts) >= 2 else imported
+                    if dep not in declared:
+                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {imported}")
+                    if name in PACKAGES and dep in APPS:
+                        errors.append(f"shared package {name} imports app {dep}")
+'''
+          if old not in text:
+              raise SystemExit('Expected P01 import-boundary block not found exactly')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/p01/validate.py scripts/p04/validate.py
+      - name: Refresh dependency lock
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          pnpm install --lockfile-only
+          pnpm install --frozen-lockfile
+      - name: Verify architecture and builds
+        run: |
+          set -euo pipefail
+          pnpm run typecheck:packages
+          pnpm run typecheck:apps
+          pnpm run build:apps
+          python3 scripts/p01/validate.py --case P01-T004
+          python3 scripts/p03/validate.py --case P03-T003
+          php -l installer/src/Shell.php
+          php -l installer/public/index.php
+      - name: Commit verified topology and lock
+        run: |
+          set -euo pipefail
+          rm .github/workflows/p04-topology-lock-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p01/validate.py pnpm-lock.yaml .github/workflows/p04-topology-lock-once.yml
+          git commit -m 'build(p04): restore frozen workspace topology'
+          git push origin HEAD:develop/p04-product-shells
