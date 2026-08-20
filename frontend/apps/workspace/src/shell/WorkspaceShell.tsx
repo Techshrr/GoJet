@@ -1,8 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Dialog, InlineMessage } from '@gojet/ui';
-import { useShellViewport } from '@gojet/shell-runtime';
+import { Button, Dialog, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
 
 const groups = [
