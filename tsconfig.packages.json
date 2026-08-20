@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["react", "react-dom"]
+  },
+  "include": [
+    "frontend/packages/*/src/**/*.ts",
+    "frontend/packages/*/src/**/*.tsx"
+  ]
+}
