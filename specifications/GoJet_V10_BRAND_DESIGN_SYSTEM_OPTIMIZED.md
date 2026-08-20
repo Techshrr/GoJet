@@ -1,17 +1,17 @@
-# GoJet V5 Brand & Design System — Greenfield Visual and Interaction Contract
+# GoJet V10 Brand & Design System — Greenfield Visual and Interaction Contract
 
-**Document ID:** `GJ-V5-DS-GREENFIELD-2026-08-20`  
+**Document ID:** `GJ-V10-DS-GREENFIELD-2026-08-20`  
 **Status:** APPROVED VISUAL, INTERACTION AND UX CONTRACT  
-**Product contract:** `GoJet V5`  
+**Product contract:** `GoJet V10`  
 **Implementation repository:** `Techshrr/GoJet`  
 **Implementation remote:** `https://github.com/Techshrr/GoJet.git`  
 **Implementation branch:** `main`  
 **Development model:** `GREENFIELD / SPECIFICATION-FIRST`  
 **Specification pack:** `specifications/`  
 **Applies to:** Website, Auth, Docs, Workspace, Admin, Installer and public safety/resource surfaces  
-**Master contract:** `GJ-V5-MP-GREENFIELD-2026-08-20`
+**Master contract:** `GJ-V10-MP-GREENFIELD-2026-08-20`
 
-> 本文是 GoJet V5 精确视觉值、交互状态、跨页面 UX pattern 和视觉验收值的唯一权威来源。Master Plan 与 Page-Level IA 只能引用本文 token/pattern，不得复制或重新定义颜色、尺寸、断点、密度、动效、组件状态表现或截图视口。
+> 本文是 GoJet V10 精确视觉值、交互状态、跨页面 UX pattern 和视觉验收值的唯一权威来源。Master Plan 与 Page-Level IA 只能引用本文 token/pattern，不得复制或重新定义颜色、尺寸、断点、密度、动效、组件状态表现或截图视口。
 >
 > 本文定义 Greenfield 目标合同，不引用旧 GoJet UI 作为完成证据。任何组件、token 或交互只有在当前仓库中实现并通过所属 Gate 后才可视为可用。
 
@@ -926,7 +926,7 @@ Evidence viewport 与 responsive breakpoint 是不同 token；截图只能使用
 截图名称固定为：
 
 ```text
-gjv5__{surface}__{case-id}__{state}__{theme}__{locale}__{viewport}.png
+gjv10__{surface}__{case-id}__{state}__{theme}__{locale}__{viewport}.png
 ```
 
 - `surface`：`website|auth|docs|workspace|admin|installer|public`
@@ -944,7 +944,7 @@ Accessibility JSON 使用相同 stem 加 `__a11y.json`；contrast JSON 加 `__co
 
 ```json
 {
-  "document_id": "GJ-V5-DS-GREENFIELD-2026-08-20",
+  "document_id": "GJ-V10-DS-GREENFIELD-2026-08-20",
   "branch": "main",
   "implementation_commit": "40-hex commit from the current repository",
   "build_id": "release-candidate identifier",

@@ -1,8 +1,8 @@
-# GoJet V5 Master Plan — Greenfield Implementation Contract
+# GoJet V10 Master Plan — Greenfield Implementation Contract
 
-**Document ID:** `GJ-V5-MP-GREENFIELD-2026-08-20`  
+**Document ID:** `GJ-V10-MP-GREENFIELD-2026-08-20`  
 **Status:** APPROVED GREENFIELD IMPLEMENTATION CONTRACT  
-**Product contract:** `GoJet V5`  
+**Product contract:** `GoJet V10`  
 **Implementation repository:** `Techshrr/GoJet`  
 **Implementation remote:** `https://github.com/Techshrr/GoJet.git`  
 **Implementation branch:** `main`  
@@ -13,7 +13,7 @@
 **Architecture:** Nginx + eight Go services + PHP 8.3 FPM installer + MySQL 8.x + Redis + ClamAV + local filesystem  
 **Production Docker/Compose/Node runtime:** PROHIBITED
 
-> 本文是 GoJet V5 的范围、架构、安全、实施节点和发布验收最高级契约。GoJet V5 采用完全 Greenfield 实现：产品行为只由本 Specification Pack 定义，不以任何旧 GoJet 仓库、版本、分支、提交或数据库历史作为正确性来源。`APPROVED` 只表示本文可用于实施，不表示软件已经完成；所有 `REQUIRED` 能力只有在当前仓库中完成实现并取得所属 Gate 证据后才能宣称可用。
+> 本文是 GoJet V10 的范围、架构、安全、实施节点和发布验收最高级契约。GoJet V10 采用完全 Greenfield 实现：产品行为只由本 Specification Pack 定义，不以任何旧 GoJet 仓库、版本、分支、提交或数据库历史作为正确性来源。`APPROVED` 只表示本文可用于实施，不表示软件已经完成；所有 `REQUIRED` 能力只有在当前仓库中完成实现并取得所属 Gate 证据后才能宣称可用。
 
 ---
 
@@ -30,9 +30,9 @@
 
 | 状态 | 含义 | 发布处理 |
 |---|---|---|
-| `REQUIRED` | GoJet V5 正式发布必须在当前仓库中完整实现并验证 | 所属 Node 与 Gate 全通过后才能宣称可用 |
+| `REQUIRED` | GoJet V10 正式发布必须在当前仓库中完整实现并验证 | 所属 Node 与 Gate 全通过后才能宣称可用 |
 | `REMOVED` | 正式生产链明确禁止或删除 | 代码、发布包和生产文档不得提供 |
-| `DEFERRED` | 明确不在 GoJet V5 发布范围 | 不得出现在正式功能承诺或可达导航中 |
+| `DEFERRED` | 明确不在 GoJet V10 发布范围 | 不得出现在正式功能承诺或可达导航中 |
 | `DECISION REQUIRED` | 仅允许在依赖节点开始前暂存的未决设计项 | 首个依赖节点进入前必须关闭；release candidate 数量必须为零 |
 
 Greenfield 项目不使用任何“继承既有实现即可视为完成”的 legacy-derived 状态，也不使用 `MUST PRESERVE`。能力是否完成只能由当前仓库的实现和证据证明。
@@ -40,12 +40,12 @@ Greenfield 项目不使用任何“继承既有实现即可视为完成”的 le
 ### 1.3 文档优先级
 
 1. 本 Master Plan：范围、架构、安全、节点、Gate、发布策略；
-2. `GoJet_V5_BRAND_DESIGN_SYSTEM_OPTIMIZED.md`：唯一精确视觉和交互值；
-3. `GoJet_V5_PAGE_LEVEL_IA_OPTIMIZED.md`：路由、页面组成、任务流和页面 SEO；
+2. `GoJet_V10_BRAND_DESIGN_SYSTEM_OPTIMIZED.md`：唯一精确视觉和交互值；
+3. `GoJet_V10_PAGE_LEVEL_IA_OPTIMIZED.md`：路由、页面组成、任务流和页面 SEO；
 4. Capability Matrix 与 Route Registry：实现追踪；
 5. 实现代码：必须同时满足全部适用契约。
 
-稳定交叉引用如下：Design System 为 `GJ-V5-DS-GREENFIELD-2026-08-20`，Page-Level IA 为 `GJ-V5-IA-GREENFIELD-2026-08-20`。本文件只规定能力、策略和验收边界；所有精确视觉值必须引用 Design System，所有 path、Route ID、页面组成和页面级任务流必须引用 Page-Level IA。本文中的 Surface 名称只是追踪标签，不创建或修改路由。
+稳定交叉引用如下：Design System 为 `GJ-V10-DS-GREENFIELD-2026-08-20`，Page-Level IA 为 `GJ-V10-IA-GREENFIELD-2026-08-20`。本文件只规定能力、策略和验收边界；所有精确视觉值必须引用 Design System，所有 path、Route ID、页面组成和页面级任务流必须引用 Page-Level IA。本文中的 Surface 名称只是追踪标签，不创建或修改路由。
 
 下级文档不得重新定义上级文档的权威值。发生冲突时必须修正下级文档或实现，并记录变更原因、影响、批准人和验证证据。
 
@@ -59,7 +59,7 @@ Greenfield 项目不使用任何“继承既有实现即可视为完成”的 le
 
 ### 2.1 八个 Go 运行程序
 
-| 服务 ID | 可执行程序 | 目标源码路径 | 状态 | GoJet V5 不变量 |
+| 服务 ID | 可执行程序 | 目标源码路径 | 状态 | GoJet V10 不变量 |
 |---|---|---|---|---|
 | `SVC-REDIRECT` | `redirectengine` | `services/redirectengine/cmd/server` | `REQUIRED` | 低延迟解析、风险优先、点击记录和重定向语义必须完整 |
 | `SVC-ANALYTICS-WORKER` | `analyticsworker` | `services/analyticsworker/cmd/worker` | `REQUIRED` | Redis 事件消费和分析写入不得丢失 |
@@ -125,8 +125,8 @@ Greenfield 项目不使用任何“继承既有实现即可视为完成”的 le
 |---|---|---|---|
 | `DEP-DOCKER-PRODUCTION` | `REMOVED` | Dockerfile、Compose、Docker installer/upgrade/rollback/package contract 不进入生产链 | release archive、installer、runbook 或 production validation 出现 production Docker 路径即 G1/G11 硬失败 |
 | `DEP-NODE-PRODUCTION` | `REMOVED` | Node HTTP/SSR/PM2/dev server 不进入正式主机 | Node 仅可在开发、构建、测试和打包环境存在 |
-| `CAP-S3-STORAGE` | `DEFERRED` | S3-compatible 可作为后续扩展，但 V5 fresh install 与 release 不依赖也不宣称验收 | local filesystem 是唯一强制存储路径；未来扩展不得削弱 quarantine、scan、authorization 或 audit |
-| `CAP-BIO-OPT-IN-INDEX` | `DEFERRED` | Bio owner opt-in indexing 不属于 V5 | Bio 保持 noindex 且不进入 sitemap |
+| `CAP-S3-STORAGE` | `DEFERRED` | S3-compatible 可作为后续扩展，但 V10 fresh install 与 release 不依赖也不宣称验收 | local filesystem 是唯一强制存储路径；未来扩展不得削弱 quarantine、scan、authorization 或 audit |
+| `CAP-BIO-OPT-IN-INDEX` | `DEFERRED` | Bio owner opt-in indexing 不属于 V10 | Bio 保持 noindex 且不进入 sitemap |
 | `DEP-LEGACY-GOJET-CODE` | `REMOVED` | prior GoJet repository code、migration、Git history、generated artifact 或 runtime config 不得导入 | 任一实现依赖旧仓库才能 build/test/run 即 G0/G1 硬失败 |
 
 本合同初始 `DECISION REQUIRED` 数量为零。新增未决项只能进入 change-control ledger，并必须在首个依赖节点开始前关闭。
@@ -162,7 +162,7 @@ Production Docker, Docker Compose, PM2, Node SSR and Node runtime: prohibited
 | Redis | 重定向实时态、分析事件、限流、短期状态 | 认证/连通/写读检查失败 |
 | systemd | 八个 Go 进程生命周期 | unit 缺失、权限错误、重启不恢复 |
 | ClamAV | 文件恶意内容检测 | 缺失、不健康、超时、签名超期、结果不确定 |
-| Local filesystem | V5 required default object storage | 位于 Web Root、权限过宽、隔离区可公开读取 |
+| Local filesystem | V10 required default object storage | 位于 Web Root、权限过宽、隔离区可公开读取 |
 
 Nginx 是唯一公网监听者；Go service、PHP-FPM、MySQL、Redis 和 ClamAV 只能通过 loopback、Unix socket 或受控私网端点连接，不能各自暴露公网端口。PHP 8.3 FPM 的正式请求范围仅限安装期的 `/install/`；安装锁定后 Installer 必须不可执行并返回 Page-Level IA 规定的关闭状态。ClamAV 同时是安装前置条件和持续运行依赖：安装、升级或健康检查不得把 unavailable 降级成 warning。
 
@@ -178,14 +178,14 @@ Node.js 只允许用于开发、构建、测试、静态预渲染和发布打包
 
 | 删除对象 | 状态 | 必须提供的 native replacement | 验收证据路径 |
 |---|---|---|---|
-| 根 `Dockerfile`, `compose.yaml` 和服务级 Dockerfiles | `REMOVED` | 可重复 cross/build-host Go release build、八个 versioned binaries、独立 systemd units | `artifacts/v5/P21/package-manifest.json`; `artifacts/v5/gates/G11/denylist.txt` |
-| `deploy/docker/` 与两个 `deploy/compose.*.yaml` | `REMOVED` | 原生 Nginx vhost、systemd、environment-file 和 tmpfiles/logrotate ownership contract | `artifacts/v5/P21/native-config-inventory.txt`; `artifacts/v5/P22/systemd/` |
-| `scripts/installdocker.sh` 与 `install.sh --docker` | `REMOVED` | 单一 native preflight/apply/verify workflow；不识别或明确拒绝 `--docker` | `artifacts/v5/P22/installer/`; `artifacts/v5/gates/G12/dependency-failures/` |
-| `installhostnginx.sh` 中 Compose 行为 | `REMOVED` | Nginx template render、`nginx -t`、原子替换和 reload/revert | `artifacts/v5/P22/nginx/` |
-| `upgrade.sh`, `rollback.sh`, `scripts/lib.sh` 的 Docker 依赖 | `REMOVED` | native backup、migration lock、versioned release switch、八服务 lifecycle、restore | `artifacts/v5/P22/upgrade/`; `artifacts/v5/P22/rollback/` |
-| `scripts/packagerelease.sh` 复制的 Docker assets | `REMOVED` | allowlist-driven native archive、manifest、SHA-256、SBOM 与签名材料 | `artifacts/v5/P21/` |
-| Docker-only CI/validation | `REMOVED` | Go binary、static output、native config、package denylist、clean-host install 与 rollback tests | `artifacts/v5/gates/G1/`; `artifacts/v5/gates/G11/`; `artifacts/v5/gates/G12/` |
-| Docker 文档和运行命令 | `REMOVED` | native install/operations/upgrade/rollback/troubleshooting runbooks | `artifacts/v5/P21/docs-scan.txt` |
+| 根 `Dockerfile`, `compose.yaml` 和服务级 Dockerfiles | `REMOVED` | 可重复 cross/build-host Go release build、八个 versioned binaries、独立 systemd units | `artifacts/v10/P21/package-manifest.json`; `artifacts/v10/gates/G11/denylist.txt` |
+| `deploy/docker/` 与两个 `deploy/compose.*.yaml` | `REMOVED` | 原生 Nginx vhost、systemd、environment-file 和 tmpfiles/logrotate ownership contract | `artifacts/v10/P21/native-config-inventory.txt`; `artifacts/v10/P22/systemd/` |
+| `scripts/installdocker.sh` 与 `install.sh --docker` | `REMOVED` | 单一 native preflight/apply/verify workflow；不识别或明确拒绝 `--docker` | `artifacts/v10/P22/installer/`; `artifacts/v10/gates/G12/dependency-failures/` |
+| `installhostnginx.sh` 中 Compose 行为 | `REMOVED` | Nginx template render、`nginx -t`、原子替换和 reload/revert | `artifacts/v10/P22/nginx/` |
+| `upgrade.sh`, `rollback.sh`, `scripts/lib.sh` 的 Docker 依赖 | `REMOVED` | native backup、migration lock、versioned release switch、八服务 lifecycle、restore | `artifacts/v10/P22/upgrade/`; `artifacts/v10/P22/rollback/` |
+| `scripts/packagerelease.sh` 复制的 Docker assets | `REMOVED` | allowlist-driven native archive、manifest、SHA-256、SBOM 与签名材料 | `artifacts/v10/P21/` |
+| Docker-only CI/validation | `REMOVED` | Go binary、static output、native config、package denylist、clean-host install 与 rollback tests | `artifacts/v10/gates/G1/`; `artifacts/v10/gates/G11/`; `artifacts/v10/gates/G12/` |
+| Docker 文档和运行命令 | `REMOVED` | native install/operations/upgrade/rollback/troubleshooting runbooks | `artifacts/v10/P21/docs-scan.txt` |
 
 ### 4.1 Native replacement minimum
 
@@ -397,7 +397,7 @@ G7 必须保存 raw HTML、响应头/状态、canonical/robots/lang/hreflang、�
 
 ### 10.1 Accessibility
 
-目标为 WCAG 2.2 AA：全键盘、清晰 focus-visible、可见 label、正确 name/role/value、错误关联、状态不只依赖颜色、zoom/reflow 无信息损失、完整 reduced-motion 路径。对比度与颜色映射只引用 Design System `GJ-V5-DS-GREENFIELD-2026-08-20` §§2、13；geometry、focus、layout、motion 与 component measurements 只引用 §§5-9；viewport 与 evidence requirements 只引用 §14。本文不得复制第二套精确视觉值。
+目标为 WCAG 2.2 AA：全键盘、清晰 focus-visible、可见 label、正确 name/role/value、错误关联、状态不只依赖颜色、zoom/reflow 无信息损失、完整 reduced-motion 路径。对比度与颜色映射只引用 Design System `GJ-V10-DS-GREENFIELD-2026-08-20` §§2、13；geometry、focus、layout、motion 与 component measurements 只引用 §§5-9；viewport 与 evidence requirements 只引用 §14。本文不得复制第二套精确视觉值。
 
 ### 10.2 性能预算
 
@@ -442,7 +442,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 每个节点都必须满足以下统一执行规则：
 
 - **Required Tests** 列出不可删减的最小场景。节点实现开始前，节点负责人必须在该节点证据目录提交 `test-plan.json`，每个 case 含 stable ID、precondition、exact command/driver、oracle、expected exit/status、evidence file 和 owner；禁止 placeholder、只写“manual check”或用 mock 代替合同要求的真实依赖。
-- **Evidence** 统一存入 `artifacts/v5/Pxx/`，至少包含 `environment.json`、`source.json`、`commands.log`、`test-plan.json`、机器可读 results、`evidence-index.json` 和 reviewer-signed `review.md`。`source.json` 必须记录 `repository=Techshrr/GoJet`、`remote=https://github.com/Techshrr/GoJet.git`、`branch`、被测 `implementation_commit`、三个 specification document ID、build/toolchain versions；被测 commit 必须是当前仓库可解析的 40-hex SHA。
+- **Evidence** 统一存入 `artifacts/v10/Pxx/`，至少包含 `environment.json`、`source.json`、`commands.log`、`test-plan.json`、机器可读 results、`evidence-index.json` 和 reviewer-signed `review.md`。`source.json` 必须记录 `repository=Techshrr/GoJet`、`remote=https://github.com/Techshrr/GoJet.git`、`branch`、被测 `implementation_commit`、三个 specification document ID、build/toolchain versions；被测 commit 必须是当前仓库可解析的 40-hex SHA。
 - **Exit Conditions** 只有在 Deliverables 存在、Required Tests 全通过、Evidence 可复核、所属 Gate reviewer 已签核、P0/P1 defect 为零且 `DECISION REQUIRED` 为零时才成立。截图不能替代服务端/数据证据。
 - 任何节点不得以 mock 代替要求的真实 MySQL、Redis、worker、Nginx、ClamAV、local filesystem 或 browser evidence；production-only external channel 可以在 G13 owner-controlled environment 完成，但此前必须有非生产 contract test。
 - 每个 UI 节点必须同时验证 default/loading/empty/error/read-only/permission/conflict/long-content/mobile/reduced-motion 中实际适用的状态；不得只验收 happy path。
@@ -455,7 +455,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 导入任何旧 GoJet 代码、Git objects/history、migration、build artifact、generated frontend、runtime config；根据旧实现反推产品行为。
 - **Deliverables:** repo skeleton、`README.md`、Capability Matrix、Route Registry snapshot、ADR index、security invariants、toolchain lock、evidence schema。
 - **Required Tests:** clean clone 可初始化；无 external GoJet code path；spec ID/cross-reference lint；目录与 package boundary lint；secret scan；license inventory。
-- **Evidence:** `artifacts/v5/P00/`；除统一证据文件外包含 repository tree、spec checksum、dependency provenance 和 bootstrap review。
+- **Evidence:** `artifacts/v10/P00/`；除统一证据文件外包含 repository tree、spec checksum、dependency provenance 和 bootstrap review。
 - **Exit Conditions:** 所有 REQUIRED/REMOVED/DEFERRED 能力有 owner 与 Gate；未决状态为零；当前仓库不依赖任何 prior GoJet repository 即可进入 P01。
 
 ### P01 — Engineering Foundation
@@ -466,7 +466,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 批量页面视觉迁移。
 - **Deliverables:** 可重复 build/test/typecheck 命令和 artifact 目录规范。
 - **Required Tests:** 各 app 独立构建；包边界；无循环依赖；无 production Node runtime。
-- **Evidence:** `artifacts/v5/P01/`；除统一证据文件外必须包含：build logs、bundle graph、dependency report。
+- **Evidence:** `artifacts/v10/P01/`；除统一证据文件外必须包含：build logs、bundle graph、dependency report。
 - **Exit Conditions:** G1 工程子项通过，后续节点可独立验证。
 
 ### P02 — Brand Foundation
@@ -477,7 +477,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 页面特有组件和未经实现的产品截图。
 - **Deliverables:** Design System 品牌章节和 attribution contract。
 - **Required Tests:** Logo safe area、颜色角色、资产来源和 reduced motion review。
-- **Evidence:** `artifacts/v5/P02/`；除统一证据文件外必须包含：brand boards、license records、reference captures。
+- **Evidence:** `artifacts/v10/P02/`；除统一证据文件外必须包含：brand boards、license records、reference captures。
 - **Exit Conditions:** 品牌值只在 Design System 一处权威定义。
 
 ### P03 — Design System
@@ -488,7 +488,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 业务 API 和页面级私有样式。
 - **Deliverables:** tokens、组件合同、Story/evidence pages。
 - **Required Tests:** focus、keyboard、contrast、dark、responsive、motion/reduced motion。
-- **Evidence:** `artifacts/v5/P03/`；除统一证据文件外必须包含：`artifacts/v5/P03/components/`。
+- **Evidence:** `artifacts/v10/P03/`；除统一证据文件外必须包含：`artifacts/v10/P03/components/`。
 - **Exit Conditions:** G2 通过；业务页面不得补造基础组件。
 
 ### P04 — Product Shells
@@ -499,7 +499,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 模块深层 CRUD。
 - **Deliverables:** 六类 shell，以及按 Design System §§6、14 和 Page-Level IA §16 生成的 responsive screenshot/workflow evidence。
 - **Required Tests:** route transition、focus、overflow、navigation、no reload、no layout jump，并覆盖 Page-Level IA §15 page-state applicability matrix。
-- **Evidence:** `artifacts/v5/P04/`；除统一证据文件外必须包含：按 Design System §14 与 Page-Level IA §16 生成的 capture matrix；本文不复制 viewport 数值。
+- **Evidence:** `artifacts/v10/P04/`；除统一证据文件外必须包含：按 Design System §14 与 Page-Level IA §16 生成的 capture matrix；本文不复制 viewport 数值。
 - **Exit Conditions:** Shell 路由和状态边界可供垂直切片使用。
 
 ### P05 — Links Vertical Slice
@@ -510,7 +510,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 其他模块批量复制未验收模式。
 - **Deliverables:** 完整 Links UI 与真实 API 集成。
 - **Required Tests:** 主目标/路由/A-B risk fingerprint、allow/review/block/missing、权限、并发写、redirect status。
-- **Evidence:** `artifacts/v5/P05/`；除统一证据文件外必须包含：API、Redis、browser、audit、safety surface captures。
+- **Evidence:** `artifacts/v10/P05/`；除统一证据文件外必须包含：API、Redis、browser、audit、safety surface captures。
 - **Exit Conditions:** G2/G3/G4/G5/G6 首次完整通过。
 
 ### P06 — Custom Domains
@@ -521,7 +521,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 以客服回复、前端按钮或 feature JSON 直接授权。
 - **Deliverables:** entitlement store/API、domain state machine、redirect enforcement、Page-Level IA state/API contracts 和用户 domain flow；管理员 entitlement queue/UI 由 P17 交付。
 - **Required Tests:** 无资格 direct API/crafted client 拒绝；并发 limit 不超发；跨 tenant hostname 冲突；工单存在但无独立 approval 仍拒绝；business/manual source coexistence；降级 grace/到期；abuse/ownership loss immediate suspension；DNS/TLS/risk revalidation；官方/自定义 primary/routing/A-B destination-risk parity。
-- **Evidence:** `artifacts/v5/P06/`；除统一证据文件外必须包含：`artifacts/v5/P06/` request/response、DB、audit、DNS/TLS 和 browser records。
+- **Evidence:** `artifacts/v10/P06/`；除统一证据文件外必须包含：`artifacts/v10/P06/` request/response、DB、audit、DNS/TLS 和 browser records。
 - **Exit Conditions:** 所有检查点服务端强制，G6 domain suite 通过。
 
 ### P07 — Analytics
@@ -532,7 +532,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 虚构预测指标。
 - **Deliverables:** analytics UI/API 与恢复运行手册。
 - **Required Tests:** Redis event、MySQL aggregate、reconcile idempotency、empty/partial/stale states。
-- **Evidence:** `artifacts/v5/P07/`；除统一证据文件外必须包含：worker logs、known event totals、UI captures。
+- **Evidence:** `artifacts/v10/P07/`；除统一证据文件外必须包含：worker logs、known event totals、UI captures。
 - **Exit Conditions:** 数据对账一致且 G3/G9 通过。
 
 ### P08 — QR
@@ -543,7 +543,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 未验证的视觉特性宣传。
 - **Deliverables:** QR pages、API integration、download evidence。
 - **Required Tests:** 扫码可达、不同 viewport、权限、删除、错误输出。
-- **Evidence:** `artifacts/v5/P08/`；除统一证据文件外必须包含：generated assets、scanner result、browser/API logs。
+- **Evidence:** `artifacts/v10/P08/`；除统一证据文件外必须包含：generated assets、scanner result、browser/API logs。
 - **Exit Conditions:** CAP-QR 完整通过并进入 G10。
 
 ### P09 — Files and Mandatory ClamAV
@@ -554,7 +554,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 以客户端扫描或扩展名替代 ClamAV。
 - **Deliverables:** file state machine、health checks、installer preflight、admin status。
 - **Required Tests:** EICAR、clean、timeout、daemon down、signature stale、indeterminate response、rescan、duplicate claim、service restart、direct quarantine/public path access、Installer/upgrade hard fail。
-- **Evidence:** `artifacts/v5/P09/`；除统一证据文件外必须包含：`artifacts/v5/P09/clamav/` 和 HTTP/file permission records。
+- **Evidence:** `artifacts/v10/P09/`；除统一证据文件外必须包含：`artifacts/v10/P09/clamav/` 和 HTTP/file permission records。
 - **Exit Conditions:** 所有不确定状态 fail closed，G6 file suite 通过。
 
 ### P10 — Text Sharing
@@ -565,7 +565,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 公开内容进入主站 sitemap。
 - **Deliverables:** Workspace 和 public text surfaces。
 - **Required Tests:** auth/private/public/expired/not-found/noindex/status codes。
-- **Evidence:** `artifacts/v5/P10/`；除统一证据文件外必须包含：API/browser/header records。
+- **Evidence:** `artifacts/v10/P10/`；除统一证据文件外必须包含：API/browser/header records。
 - **Exit Conditions:** CAP-TEXT 和 G7 UGC policy 通过。
 
 ### P11 — Bio
@@ -576,7 +576,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 未批准的 owner opt-in index capability。
 - **Deliverables:** Bio Workspace/public surfaces。
 - **Required Tests:** ownership、risk-blocked link、mobile、noindex、sitemap exclusion。
-- **Evidence:** `artifacts/v5/P11/`；除统一证据文件外必须包含：browser/headers/sitemap diff。
+- **Evidence:** `artifacts/v10/P11/`；除统一证据文件外必须包含：browser/headers/sitemap diff。
 - **Exit Conditions:** CAP-BIO 完整且不扩大索引面。
 
 ### P12 — Workspace, Members and Organization
@@ -587,7 +587,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 前端权限替代服务端检查。
 - **Deliverables:** pages、permission matrix、tenant regression suite、notification center API/UI、event category schema 和 deep-link contract。
 - **Required Tests:** owner/admin/member/viewer、cross-workspace、expired invitation、last-owner protection、notification read/unread/mark-all-read、dedupe、deep-link authorization、secret redaction、API partial/offline。
-- **Evidence:** `artifacts/v5/P12/`；除统一证据文件外必须包含：API/DB/audit/browser results。
+- **Evidence:** `artifacts/v10/P12/`；除统一证据文件外必须包含：API/DB/audit/browser results。
 - **Exit Conditions:** G3/G5/G6 tenant、RBAC 与 notification core 通过。
 
 ### P13 — Billing, Payments and Entitlements
@@ -598,7 +598,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 前端 price card 或 features JSON 直接授权。
 - **Deliverables:** billing lifecycle、entitlement resolver、idempotent callback、invoice/payment UI。
 - **Required Tests:** paid/failed/refund、duplicate callback、currency、upgrade/downgrade/expiry、manual source coexistence。
-- **Evidence:** `artifacts/v5/P13/`；除统一证据文件外必须包含：redacted payment events、DB state、audit、browser。
+- **Evidence:** `artifacts/v10/P13/`；除统一证据文件外必须包含：redacted payment events、DB state、audit、browser。
 - **Exit Conditions:** G3/G6/G10 billing 场景通过。
 
 ### P14 — Support Tickets and Mail
@@ -609,7 +609,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 创建或回复工单即授权。
 - **Deliverables:** support UI、admin ticket UI、mail events、entitlement request linkage。
 - **Required Tests:** requester ownership、attachment safety/ClamAV、Turnstile、mail retry/idempotency、ticket create/reply/close 后仍无 entitlement、request-to-ticket linkage integrity。
-- **Evidence:** `artifacts/v5/P14/`；除统一证据文件外必须包含：ticket/API/mailworker/audit records。
+- **Evidence:** `artifacts/v10/P14/`；除统一证据文件外必须包含：ticket/API/mailworker/audit records。
 - **Exit Conditions:** CAP-TICKETS/CAP-MAIL 完整通过且 request 与 approval 分离。
 
 ### P15 — Authentication, OAuth and Account
@@ -620,7 +620,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 正式 token 存 localStorage。
 - **Deliverables:** auth pages/API、session policies、account security UI。
 - **Required Tests:** CSRF、Origin、rate limit、token expiry/reuse、OAuth state、session revoke。
-- **Evidence:** `artifacts/v5/P15/`；除统一证据文件外必须包含：HTTP headers、API/browser/security logs。
+- **Evidence:** `artifacts/v10/P15/`；除统一证据文件外必须包含：HTTP headers、API/browser/security logs。
 - **Exit Conditions:** G3/G5/G6 auth suite 通过。
 
 ### P16 — Trust, Destination Risk and Abuse
@@ -631,7 +631,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** ClamAV 充当 URL classifier；外部 provider 成为唯一控制。
 - **Deliverables:** worker/queue/admin review/public safety surfaces。
 - **Required Tests:** official/custom parity、all target variants、SSRF、provider failure、manual override invalidation、abuse suspension。
-- **Evidence:** `artifacts/v5/P16/`；除统一证据文件外必须包含：risk records、Redis keys、audit、browser/interstitial captures。
+- **Evidence:** `artifacts/v10/P16/`；除统一证据文件外必须包含：risk records、Redis keys、audit、browser/interstitial captures。
 - **Exit Conditions:** missing/unknown/review/block 均 fail closed，G6 通过。
 
 ### P17 — Admin, Permissions and Audit
@@ -642,18 +642,18 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 所有管理员共享无限权限。
 - **Deliverables:** admin route set、permission catalog、domain-entitlement queue/decision API and UI、API-key service/UI、outbound-webhook service/worker/UI、high-risk confirmations、immutable audit views。所有新增 route/path 以 Page-Level IA 为准。
 - **Required Tests:** permission denial；ticket-manager cannot approve；reason required；approve/deny/suspend/revoke/restore audit；API-key secret-once/rotation/revocation/scope/expiry；webhook signature/rotation/retry/idempotency/disable/SSRF/DNS-rebinding；session/MFA；secret redaction。
-- **Evidence:** `artifacts/v5/P17/`；除统一证据文件外必须包含：role matrix、API/browser/audit records。
+- **Evidence:** `artifacts/v10/P17/`；除统一证据文件外必须包含：role matrix、API/browser/audit records。
 - **Exit Conditions:** 高风险动作可归因、可审查、不可越权；`CAP-DOMAIN-ENTITLEMENT` 管理链与 `CAP-API-KEYS`、`CAP-USER-WEBHOOKS` 分别通过 G3/G6，且均以当前仓库证据证明完成。
 
 ### P18 — Docs and Multilingual Discovery
 
 - **Goal:** 构建英文/简中静态 Docs、搜索和 API 参考。
-- **Entry Conditions:** P17 已完成全部 V5 API 状态与管理员能力；P04 Docs shell 和已验证 capability/route implementation matrix 可用。
+- **Entry Conditions:** P17 已完成全部 V10 API 状态与管理员能力；P04 Docs shell 和已验证 capability/route implementation matrix 可用。
 - **In Scope:** Page-Level IA 定义的英文/简中 Docs route families、Pagefind、breadcrumbs、TOC、next/previous、native self-hosting guide。
 - **Excluded Work:** Docker production guide；把 REQUIRED 写成现有能力。
 - **Deliverables:** static docs build、sitemap child、hreflang sets、content owners。
 - **Required Tests:** raw HTML、search、broken links、code blocks、canonical/hreflang、mobile。
-- **Evidence:** `artifacts/v5/P18/`；除统一证据文件外必须包含：build output、crawl report、screenshots。
+- **Evidence:** `artifacts/v10/P18/`；除统一证据文件外必须包含：build output、crawl report、screenshots。
 - **Exit Conditions:** Docs 无孤儿页、无错误部署指令、G7 通过。
 
 ### P19 — Website and Technical SEO
@@ -664,7 +664,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** thin keyword pages、crawler-only rendering、虚假评分/合规承诺。
 - **Deliverables:** static Website、SEO matrix、asset attribution、social cards。
 - **Required Tests:** raw HTML、status codes、canonical、hreflang、structured data、orphan links、CWV。
-- **Evidence:** `artifacts/v5/P19/`；除统一证据文件外必须包含：crawl/validator/lighthouse-like lab/browser captures。
+- **Evidence:** `artifacts/v10/P19/`；除统一证据文件外必须包含：crawl/validator/lighthouse-like lab/browser captures。
 - **Exit Conditions:** G4/G5/G7/G8/G9 通过。
 
 ### P20 — Whole Product Verification
@@ -675,7 +675,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 新增未排期功能。
 - **Deliverables:** release candidate evidence index、defect closure ledger。
 - **Required Tests:** register→verify→login→link→redirect→analytics→QR→file→text→bio→domain→ticket→billing→notification→admin。
-- **Evidence:** `artifacts/v5/P20/`；除统一证据文件外必须包含：`artifacts/v5/P20/` 全链路时间线和关联 IDs。
+- **Evidence:** `artifacts/v10/P20/`；除统一证据文件外必须包含：`artifacts/v10/P20/` 全链路时间线和关联 IDs。
 - **Exit Conditions:** G0-G10 全部通过，无 P0/P1 未关闭缺陷。
 
 ### P21 — Native Release Package
@@ -686,7 +686,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** Docker/Compose、node_modules、开发服务器、生产凭据。
 - **Deliverables:** versioned archive、checksum、SBOM、package manifest、runbooks。
 - **Required Tests:** clean extraction；八 binary version/commit；Greenfield migration catalog consistency、编号唯一性、空库全量迁移与回滚边界；manifest allowlist/denylist；no Docker/Compose/Node runtime/secret；Nginx/systemd render；checksum/SBOM；upgrade/rollback runbook static validation。
-- **Evidence:** `artifacts/v5/P21/`；除统一证据文件外必须包含：`artifacts/v5/P21/` package inventory。
+- **Evidence:** `artifacts/v10/P21/`；除统一证据文件外必须包含：`artifacts/v10/P21/` package inventory。
 - **Exit Conditions:** G11 证明 `CAP-NATIVE-INSTALL` 完整且 `CAP-NATIVE-ONLY-RELEASE` 完整，安装候选不可变。
 
 ### P22 — Fresh Install and Production Candidate
@@ -697,21 +697,21 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Excluded Work:** 已配置开发机、Docker、手工补丁绕过 installer。
 - **Deliverables:** immutable fresh-install record、dependency matrix、eight-service health、production smoke、backup/restore proof、upgrade record、rollback record、installer lock proof 和 Release Owner decision。
 - **Required Tests:** 每个 mandatory dependency 的单独 hard-fail case；empty database migrations；八 unit enable/start/restart/reboot recovery；Nginx test/reload/revert；DB backup/restore；Redis flush/reconnect/risk-cache rebuild；EICAR/clean file；upgrade failure recovery；database-required rollback；真实 P0 user/admin/payment/mail/OAuth/Turnstile/domain/SEO flows。
-- **Evidence:** `artifacts/v5/P22/`；除统一证据文件外必须包含：`artifacts/v5/P22/` terminal logs、HTTP records、service status、screenshots。
+- **Evidence:** `artifacts/v10/P22/`；除统一证据文件外必须包含：`artifacts/v10/P22/` terminal logs、HTTP records、service status、screenshots。
 - **Exit Conditions:** G12/G13 证明 `CAP-NATIVE-INSTALL` 完整且 `CAP-NATIVE-ONLY-RELEASE` 的 fresh-install/production/rollback 合同完整，并由 Release Owner 批准。
 
 ---
 
 ## 12. G0-G13 验收 Gate
 
-统一证据根目录：`artifacts/v5/gates/Gxx/`。每个 Gate 必须包含 `environment.json`、`source.json`、`commands.log`、机器可读 test/crawl/scan results、`evidence-index.json` 和由下列 Accountable Roles 签名的 `decision.json`。只有 Pass Criteria 全满足且 Hard Failures 为零才能记为 PASS；conditional pass 不允许发布。证据必须可复核、带版本/时间/环境标识并脱敏。
+统一证据根目录：`artifacts/v10/gates/Gxx/`。每个 Gate 必须包含 `environment.json`、`source.json`、`commands.log`、机器可读 test/crawl/scan results、`evidence-index.json` 和由下列 Accountable Roles 签名的 `decision.json`。只有 Pass Criteria 全满足且 Hard Failures 为零才能记为 PASS；conditional pass 不允许发布。证据必须可复核、带版本/时间/环境标识并脱敏。
 
 ### G0 — Scope and Traceability
 
 - **Execution Stage:** P00，P20 复核。
 - **Pass Criteria:** Capability Matrix、Route Registry、源证据、状态和 owner 完整。
 - **Hard Failures:** P0 丢失；REQUIRED 无当前仓库实现证据却宣称完成；节点退出仍有未决项。
-- **Evidence Path:** `artifacts/v5/gates/G0/traceability/`；必须包含 capability/route/specification diff、status/owner coverage。
+- **Evidence Path:** `artifacts/v10/gates/G0/traceability/`；必须包含 capability/route/specification diff、status/owner coverage。
 - **Accountable Roles:** Product Owner + Backend Lead。
 
 ### G1 — Native Architecture
@@ -719,7 +719,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P01、P21、P22。
 - **Pass Criteria:** `CAP-NATIVE-INSTALL` 的 native 入口、PHP Installer 与八服务 systemd apply 完整通过；`CAP-NATIVE-ONLY-RELEASE` 独立构建；Nginx 唯一入口；依赖版本正确。
 - **Hard Failures:** `CAP-NATIVE-INSTALL` native 流程缺失或失败；`CAP-NATIVE-ONLY-RELEASE` 仍允许 production Docker/Compose/Node/PM2；循环依赖；PHP 承担业务 API。
-- **Evidence Path:** `artifacts/v5/gates/G1/native-architecture/`；必须包含 dependency graph、八 unit、Nginx config test、runtime port/process inventory。
+- **Evidence Path:** `artifacts/v10/gates/G1/native-architecture/`；必须包含 dependency graph、八 unit、Nginx config test、runtime port/process inventory。
 - **Accountable Roles:** Platform Lead。
 
 ### G2 — Design System
@@ -727,7 +727,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P03，所有 UI 节点复核。
 - **Pass Criteria:** 只使用权威 token；light/dark、focus、density、responsive、motion 完整。
 - **Hard Failures:** 页面私有颜色/间距；安全状态只靠颜色；冲突 motion 值。
-- **Evidence Path:** `artifacts/v5/gates/G2/design-system/`；必须包含 token lint、component captures、contrast report。
+- **Evidence Path:** `artifacts/v10/gates/G2/design-system/`；必须包含 token lint、component captures、contrast report。
 - **Accountable Roles:** Design System Owner + Accessibility Reviewer。
 
 ### G3 — Functional and API Conformance
@@ -735,7 +735,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** 每个业务节点，P20 汇总。
 - **Pass Criteria:** 真实 API/MySQL/Redis/worker/mail/storage 流程满足 capability contract。
 - **Hard Failures:** mock 冒充；跨租户；缺失 REQUIRED 能力；错误状态码。
-- **Evidence Path:** `artifacts/v5/gates/G3/functional-api/`；必须包含 test logs、request/response、DB/Redis/worker/storage proof。
+- **Evidence Path:** `artifacts/v10/gates/G3/functional-api/`；必须包含 test logs、request/response、DB/Redis/worker/storage proof。
 - **Accountable Roles:** Backend Lead + QA Lead。
 
 ### G4 — Browser and Responsive
@@ -743,7 +743,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P04-P20。
 - **Pass Criteria:** Design System §§6、14 的 breakpoint/viewport/evidence contract 完成 Page-Level IA §16 screenshot/workflow matrix，且真实 browser navigation/state contract 通过。
 - **Hard Failures:** Page-Level IA §15 page-state matrix 中存在未覆盖的适用状态；horizontal overflow、pageerror、console error、nav reload、clipped text、focus broken、layout jump。
-- **Evidence Path:** `artifacts/v5/gates/G4/browser-responsive/`；必须包含 automated browser logs、Design System §14 与 Page-Level IA §16 定义的 screenshot matrix、必要视频。
+- **Evidence Path:** `artifacts/v10/gates/G4/browser-responsive/`；必须包含 automated browser logs、Design System §14 与 Page-Level IA §16 定义的 screenshot matrix、必要视频。
 - **Accountable Roles:** Frontend Lead + QA。
 
 ### G5 — Accessibility
@@ -751,7 +751,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P03-P20。
 - **Pass Criteria:** WCAG 2.2 AA、axe、keyboard、labels、focus、contrast、zoom、reduced motion。
 - **Hard Failures:** 键盘阻塞；不可见焦点；无 label；颜色唯一语义；严重对比度失败。
-- **Evidence Path:** `artifacts/v5/gates/G5/accessibility/`；必须包含 axe results、keyboard script、screen-reader/contrast/zoom/reduced-motion evidence。
+- **Evidence Path:** `artifacts/v10/gates/G5/accessibility/`；必须包含 axe results、keyboard script、screen-reader/contrast/zoom/reduced-motion evidence。
 - **Accountable Roles:** Accessibility Reviewer。
 
 ### G6 — Security
@@ -759,7 +759,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** 所有安全敏感节点，P20/P22 复核。
 - **Pass Criteria:** Auth/RBAC/tenant/CSRF/session/CSP/Turnstile/rate/SSRF/secrets/audit 通过；ClamAV 全部不确定态 fail closed；domain entitlement/ownership/DNS/HTTPS/risk 分层强制；官方和自定义 hostname 的 primary/routing/A-B destination-risk 完全一致。
 - **Hard Failures:** ClamAV 缺失/不健康/超时/过期/indeterminate 仍安装或发布；risk missing/stale/malformed/review/block 仍达目标；无 entitlement direct API/并发请求可注册或绑定；工单自动授权；跨 Workspace；downgrade/abuse policy 错误；敏感日志。
-- **Evidence Path:** `artifacts/v5/gates/G6/security/`；必须包含 EICAR/ClamAV failure matrix、direct-API denial、manual approval audit、domain limit/grace/revalidation、risk parity、fingerprint invalidation。
+- **Evidence Path:** `artifacts/v10/gates/G6/security/`；必须包含 EICAR/ClamAV failure matrix、direct-API denial、manual approval audit、domain limit/grace/revalidation、risk parity、fingerprint invalidation。
 - **Accountable Roles:** Security Reviewer + Backend Lead。
 
 ### G7 — SEO and Indexation
@@ -767,7 +767,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P18/P19/P20/P22。
 - **Pass Criteria:** raw HTML、metadata、canonical、hreflang、status、internal links、sitemap、structured data、noindex matrix 正确。
 - **Hard Failures:** empty shell；200 soft 404；UGC/private URL 入 sitemap；redirect/canonical chain；孤儿 index 页。
-- **Evidence Path:** `artifacts/v5/gates/G7/seo/`；必须包含 crawler output、raw HTTP、headers/status、sitemap/JSON-LD validators、Search Console production evidence。
+- **Evidence Path:** `artifacts/v10/gates/G7/seo/`；必须包含 crawler output、raw HTTP、headers/status、sitemap/JSON-LD validators、Search Console production evidence。
 - **Accountable Roles:** SEO Owner + Frontend Lead。
 
 ### G8 — Visual Quality
@@ -775,7 +775,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P03-P20。
 - **Pass Criteria:** spacing、alignment、responsive、dark、image、icon、motion 符合 Design System。
 - **Hard Failures:** placeholder icon、虚构产品 UI、随机插画、破损图片、失控 motion。
-- **Evidence Path:** `artifacts/v5/gates/G8/visual/`；必须包含 Design System §§1-14 conformance 与 Page-Level IA §16 screenshot matrix/diffs。
+- **Evidence Path:** `artifacts/v10/gates/G8/visual/`；必须包含 Design System §§1-14 conformance 与 Page-Level IA §16 screenshot matrix/diffs。
 - **Accountable Roles:** Design Lead。
 
 ### G9 — Performance
@@ -783,7 +783,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P04、P07、P19、P20。
 - **Pass Criteria:** bundle/CWV/image/font/cache 预算达标。
 - **Hard Failures:** Website 加载 Workspace bundle；LCP/INP/CLS 超预算；未定尺寸主要图片；长主线程任务。
-- **Evidence Path:** `artifacts/v5/gates/G9/performance/`；必须包含 bundle report、lab trace、field data when available、cache/image/font headers。
+- **Evidence Path:** `artifacts/v10/gates/G9/performance/`；必须包含 bundle report、lab trace、field data when available、cache/image/font headers。
 - **Accountable Roles:** Performance Owner。
 
 ### G10 — Full-stack P0
@@ -791,7 +791,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P20。
 - **Pass Criteria:** 完整真实用户与管理员时间线成功，关联 ID 可追踪。
 - **Hard Failures:** 任一 P0 环节依赖 mock、跳过 worker/redirect/payment/risk、证据不可关联。
-- **Evidence Path:** `artifacts/v5/gates/G10/full-stack-p0/`；必须包含 correlated end-to-end timeline、API/DB/Redis/worker/browser records。
+- **Evidence Path:** `artifacts/v10/gates/G10/full-stack-p0/`；必须包含 correlated end-to-end timeline、API/DB/Redis/worker/browser records。
 - **Accountable Roles:** QA Lead + Product Owner。
 
 ### G11 — Native Package
@@ -799,7 +799,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P21。
 - **Pass Criteria:** `CAP-NATIVE-INSTALL` 的 Installer/systemd apply/native upgrade 资产与行为完整；`CAP-NATIVE-ONLY-RELEASE` 的八 binaries、完整 migration catalog、static frontend、PHP Installer、Nginx/systemd/native helpers、runbooks、checksums、SBOM 和 manifest 完整且相互匹配。
 - **Hard Failures:** `CAP-NATIVE-INSTALL` 所需 native 资产缺失或不可执行；`CAP-NATIVE-ONLY-RELEASE` archive 含 Docker/Compose/Node runtime/`node_modules`/生产 secret；缺任一服务或 migration；checksum/SBOM/manifest 不一致；package 依赖构建主机残留。
-- **Evidence Path:** `artifacts/v5/gates/G11/native-package/`；必须包含 archive inventory、allowlist/denylist、eight binary versions、checksum/SBOM verification。
+- **Evidence Path:** `artifacts/v10/gates/G11/native-package/`；必须包含 archive inventory、allowlist/denylist、eight binary versions、checksum/SBOM verification。
 - **Accountable Roles:** Release Engineer。
 
 ### G12 — Fresh Install
@@ -807,7 +807,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P22 clean host。
 - **Pass Criteria:** exact P21 archive 验证 `CAP-NATIVE-INSTALL` Installer/apply 行为，并在声明支持的 clean host 从零满足 `CAP-NATIVE-ONLY-RELEASE` 的 preflight、migration、local-storage permissions、Nginx、Installer lock 和八 unit enable/start/reboot recovery，无手工补丁。
 - **Hard Failures:** `CAP-NATIVE-INSTALL` native 流程失败；`CAP-NATIVE-ONLY-RELEASE` 的任一 mandatory dependency 缺失/错误仍继续；ClamAV 不健康仍完成；复用旧 DB/config/state；手工修补；服务未 enable；Installer 未锁定。
-- **Evidence Path:** `artifacts/v5/gates/G12/fresh-install/`；必须包含 clean-host identity、preflight failure cases、installer/migration/unit/Nginx/HTTP/EICAR logs。
+- **Evidence Path:** `artifacts/v10/gates/G12/fresh-install/`；必须包含 clean-host identity、preflight failure cases、installer/migration/unit/Nginx/HTTP/EICAR logs。
 - **Accountable Roles:** Platform Lead + QA。
 
 ### G13 — Production Validation and Rollback
@@ -815,7 +815,7 @@ P00-P22 必须按下表依赖有向无环图执行；表中列出的全部前置
 - **Execution Stage:** P22 owner-controlled production。
 - **Pass Criteria:** owner-controlled production 验证 `CAP-NATIVE-INSTALL` native upgrade/失败恢复，并完成 `CAP-NATIVE-ONLY-RELEASE` 的八服务 restart、Nginx atomic reload/revert、DB backup/restore、Redis reconnect/risk-cache rebuild、ClamAV、Mail、OAuth、Turnstile、真实支付渠道、SEO production checks，以及包含必要数据库恢复的 upgrade/rollback。
 - **Hard Failures:** `CAP-NATIVE-INSTALL` native upgrade/失败恢复失败；`CAP-NATIVE-ONLY-RELEASE` 无可执行 rollback；只切 binary 而 schema 不兼容；backup 未 restore-test；数据不可恢复；安全依赖降级；生产验证使用测试替身；rollback 后任一 P0 或八服务不健康。
-- **Evidence Path:** `artifacts/v5/gates/G13/production-rollback/`；必须包含 redacted production runbook output、backup restore proof、upgrade/rollback timeline、post-rollback P0、Search Console diagnostics。
+- **Evidence Path:** `artifacts/v10/gates/G13/production-rollback/`；必须包含 redacted production runbook output、backup restore proof、upgrade/rollback timeline、post-rollback P0、Search Console diagnostics。
 - **Accountable Roles:** Release Owner + Security Reviewer + Platform Lead。
 
 ---
