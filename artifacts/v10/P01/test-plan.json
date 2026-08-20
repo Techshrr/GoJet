@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "node": "P01",
+  "specification": "GJ-V10-MP-GREENFIELD-2026-08-20",
+  "issue": "https://github.com/Techshrr/GoJet/issues/8",
+  "cases": [
+    {"id":"P01-T001","name":"clean-frozen-install","precondition":"Exact clean checkout with Node 24.19.0 and pnpm 11.21.0.","command":"pnpm install --frozen-lockfile","driver":"pnpm","oracle":"Checked-in lockfile installs without mutation or resolution drift.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T001.json","owner":"Frontend Lead"},
+    {"id":"P01-T002","name":"strict-typecheck","precondition":"P01-T001 passed.","command":"pnpm run typecheck","driver":"TypeScript/Astro check","oracle":"Shared packages and all four apps pass strict type checks.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T002.json","owner":"Frontend Lead"},
+    {"id":"P01-T003","name":"independent-static-builds","precondition":"P01-T001 passed.","command":"pnpm --filter @gojet/{site,workspace,admin,docs} build (executed independently)","driver":"Vite/Astro","oracle":"Each app independently produces static build output without a production Node server.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T003.json","owner":"Frontend Lead"},
+    {"id":"P01-T004","name":"package-boundaries-and-cycles","precondition":"Workspace manifests and sources exist.","command":"python3 scripts/p01/validate.py --case P01-T004","driver":"Deterministic workspace graph/source import validator","oracle":"No missing/extra boundary, app-to-app dependency, package-to-app dependency, undeclared workspace import, or cycle exists.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T004.json","owner":"Backend Lead"},
+    {"id":"P01-T005","name":"code-splitting-static-output","precondition":"P01-T003 passed.","command":"node scripts/p01/smoke.mjs","driver":"Static output/manifest validator","oracle":"Nginx-deliverable HTML exists and each React app contains a dynamic route chunk.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T005.json","owner":"Frontend Lead"},
+    {"id":"P01-T006","name":"no-production-node-runtime","precondition":"Exact tracked tree and package scripts are available.","command":"python3 scripts/p01/validate.py --case P01-T006","driver":"Tracked-path and package-script validator","oracle":"No production Docker/Compose, PM2, Node server, Vite preview, Astro preview, SSR serve/start path is introduced.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T006.json","owner":"Platform Lead"},
+    {"id":"P01-T007","name":"lockfile-and-dependency-inventory","precondition":"Checked-in pnpm-lock.yaml and all workspace manifests exist.","command":"python3 scripts/p01/validate.py --case P01-T007","driver":"Lockfile/dependency inventory validator","oracle":"Lockfile version, pinned foundation versions and workspace dependency inventory are reproducible and recorded.","expected_exit":0,"evidence_file":"artifacts/v10/P01/results/P01-T007.json","owner":"Release Engineer"}
+  ]
+}

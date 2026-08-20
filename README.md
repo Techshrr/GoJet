@@ -19,9 +19,11 @@ The specification pack defines product behavior before code:
 GoJet V10 is under active implementation. GitHub Issues are the persistent project ledger:
 
 - [Master Development Tracker — Issue #1](https://github.com/Techshrr/GoJet/issues/1)
-- [Current node P00 — Issue #2](https://github.com/Techshrr/GoJet/issues/2)
+- [P00 — Issue #2](https://github.com/Techshrr/GoJet/issues/2) — completed
+- [Current node P01 — Issue #8](https://github.com/Techshrr/GoJet/issues/8)
+- [Current P01 implementation — PR #9](https://github.com/Techshrr/GoJet/pull/9)
 
-The active P00 implementation branch is `develop/p00-bootstrap`. A node or Gate is not considered complete until its specification-defined tests, evidence and accountable review have passed.
+The active implementation branch is `develop/p01-engineering-foundation`. P00/G0 is complete; P01 is building the reproducible frontend engineering foundation. A node or Gate is not considered complete until its specification-defined tests, exact-commit evidence and accountable review have passed.
 
 ## Product surfaces
 
