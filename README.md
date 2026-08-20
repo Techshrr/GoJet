@@ -14,6 +14,15 @@ The specification pack defines product behavior before code:
 2. [`specifications/GoJet_V10_BRAND_DESIGN_SYSTEM_OPTIMIZED.md`](specifications/GoJet_V10_BRAND_DESIGN_SYSTEM_OPTIMIZED.md) — brand, design tokens, components, motion, responsive behavior, accessibility and cross-surface UX patterns.
 3. [`specifications/GoJet_V10_PAGE_LEVEL_IA_OPTIMIZED.md`](specifications/GoJet_V10_PAGE_LEVEL_IA_OPTIMIZED.md) — routes, page composition, states, workflows, responsive behavior and SEO contracts.
 
+## Development status
+
+GoJet V10 is under active implementation. GitHub Issues are the persistent project ledger:
+
+- [Master Development Tracker — Issue #1](https://github.com/Techshrr/GoJet/issues/1)
+- [Current node P00 — Issue #2](https://github.com/Techshrr/GoJet/issues/2)
+
+The active P00 implementation branch is `develop/p00-bootstrap`. A node or Gate is not considered complete until its specification-defined tests, evidence and accountable review have passed.
+
 ## Product surfaces
 
 - Website
