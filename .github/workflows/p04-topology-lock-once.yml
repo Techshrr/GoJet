@@ -57,14 +57,17 @@ jobs:
           corepack install --global pnpm@11.21.0
           pnpm install --lockfile-only
           pnpm install --frozen-lockfile
-      - name: Verify architecture and builds
+      - name: Verify source architecture
         run: |
           set -euo pipefail
           pnpm run typecheck:packages
           pnpm run typecheck:apps
-          pnpm run build:apps
           python3 scripts/p01/validate.py --case P01-T004
           python3 scripts/p03/validate.py --case P03-T003
+      - name: Verify production builds and native installer syntax
+        run: |
+          set -euo pipefail
+          pnpm run build:apps
           php -l installer/src/Shell.php
           php -l installer/public/index.php
       - name: Stage proposed persistent files
