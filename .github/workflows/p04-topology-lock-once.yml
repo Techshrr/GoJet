@@ -30,26 +30,23 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path('scripts/p01/validate.py')
-          text = path.read_text(encoding='utf-8')
-          old = '''                imports = re.findall(r"(?:from\\s+|import\\s*)['\\\"](@gojet/[^'\\\"]+)['\\\"]", text)
-                for dep in imports:
-                    if dep not in declared:
-                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {dep}")
-                    if name in PACKAGES and dep in APPS:
-                        errors.append(f"shared package {name} imports app {dep}")
-'''
-          new = '''                imports = re.findall(r"(?:from\\s+|import\\s*)['\\\"](@gojet/[^'\\\"]+)['\\\"]", text)
-                for imported in imports:
-                    parts = imported.split("/")
-                    dep = "/".join(parts[:2]) if len(parts) >= 2 else imported
-                    if dep not in declared:
-                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {imported}")
-                    if name in PACKAGES and dep in APPS:
-                        errors.append(f"shared package {name} imports app {dep}")
-'''
-          if old not in text:
-              raise SystemExit('Expected P01 import-boundary block not found exactly')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          matches = [i for i, line in enumerate(lines) if line.strip() == 'for dep in imports:' and i > 0 and 'imports = re.findall' in lines[i - 1]]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one P01 workspace import loop, found {len(matches)}')
+          i = matches[0]
+          indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+          replacement = [
+              f'{indent}for imported in imports:',
+              f'{indent}    parts = imported.split("/")',
+              f'{indent}    dep = "/".join(parts[:2]) if len(parts) >= 2 else imported',
+              f'{indent}    if dep not in declared:',
+              f'{indent}        errors.append(f"{{source.relative_to(ROOT)}} imports undeclared workspace dependency {{imported}}")',
+              f'{indent}    if name in PACKAGES and dep in APPS:',
+              f'{indent}        errors.append(f"shared package {{name}} imports app {{dep}}")',
+          ]
+          lines[i:i + 5] = replacement
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
           python3 -m py_compile scripts/p01/validate.py scripts/p04/validate.py
       - name: Refresh dependency lock
