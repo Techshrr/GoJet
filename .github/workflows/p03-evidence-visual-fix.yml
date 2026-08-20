@@ -1,0 +1,63 @@
+name: P03 Evidence Visual Correction
+
+on:
+  push:
+    branches:
+      - develop/p03-design-system
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop/p03-design-system
+          fetch-depth: 1
+      - name: Correct locale font and modal evidence behavior
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/p03/validate.py')
+          s = p.read_text(encoding='utf-8')
+          old = '    title = "设计系统组件证据" if zh else "Design System component evidence"\n'
+          new = old + '    font_family = "--gojet-font-family-cjk" if zh else "--gojet-font-family-latin"\n'
+          if old not in s:
+              raise SystemExit('story title anchor not found')
+          s = s.replace(old, new, 1)
+          old_font = 'font-family:var(--gojet-font-family-latin);'
+          new_font = 'font-family:var({font_family});'
+          if old_font not in s:
+              raise SystemExit('story Latin font declaration not found')
+          s = s.replace(old_font, new_font, 1)
+          old_dialog = '<dialog class="gj-dialog" open>'
+          new_dialog = '<dialog id="evidence-dialog" class="gj-dialog">'
+          if old_dialog not in s:
+              raise SystemExit('evidence dialog anchor not found')
+          s = s.replace(old_dialog, new_dialog, 1)
+          old_close = '<button class="gj-dialog__close" aria-label="Close">×</button>'
+          new_close = '<button id="dialog-close" class="gj-dialog__close" aria-label="Close">×</button>'
+          if old_close not in s:
+              raise SystemExit('evidence dialog close anchor not found')
+          s = s.replace(old_close, new_close, 1)
+          old_script = "<script>document.getElementById('focus-target')?.focus();</script>"
+          new_script = "<script>document.getElementById('evidence-dialog')?.showModal();document.getElementById('dialog-close')?.focus();</script>"
+          if old_script not in s:
+              raise SystemExit('evidence focus script anchor not found')
+          s = s.replace(old_script, new_script, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/p03/validate.py
+      - name: Commit evidence correction
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p03/validate.py
+          git commit -m 'fix(p03): correct locale and modal visual evidence'
+          git push origin HEAD:develop/p03-design-system
