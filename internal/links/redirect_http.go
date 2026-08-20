@@ -12,9 +12,9 @@ import (
 )
 
 type RedirectHandler struct {
-	store                    *MySQLStore
-	risk                     *RedisRiskStore
-	trustTestRoutingHeaders  bool
+	store                   *MySQLStore
+	risk                    *RedisRiskStore
+	trustTestRoutingHeaders bool
 }
 
 type safetyView struct {
@@ -44,10 +44,11 @@ var safetyTemplate = template.Must(template.New("link-safety").Parse(`<!doctype 
 func NewRedirectHandler(store *MySQLStore, risk *RedisRiskStore, trustTestRoutingHeaders bool) http.Handler {
 	handler := &RedirectHandler{store: store, risk: risk, trustTestRoutingHeaders: trustTestRoutingHeaders}
 	mux := http.NewServeMux()
+	// In Go's ServeMux, a GET method pattern also matches HEAD. Registering an
+	// additional generic HEAD /{code} conflicts with the more specific
+	// GET /healthz route, so GET registrations are the single route authority.
 	mux.HandleFunc("GET /healthz", handler.health)
-	mux.HandleFunc("HEAD /healthz", handler.health)
 	mux.HandleFunc("GET /{code}", handler.resolve)
-	mux.HandleFunc("HEAD /{code}", handler.resolve)
 	return redirectSecurityHeaders(mux)
 }
 
@@ -188,11 +189,11 @@ func (h *RedirectHandler) resolveContext(r *http.Request) ResolveContext {
 		seedHost = host
 	}
 	return ResolveContext{
-		Country: country,
-		Device: device,
-		Language: language,
+		Country:        country,
+		Device:         device,
+		Language:       language,
 		SourceHostname: sourceHostname,
-		ABSeed: seedHost + "\n" + r.UserAgent() + "\n" + language,
+		ABSeed:         seedHost + "\n" + r.UserAgent() + "\n" + language,
 	}
 }
 
