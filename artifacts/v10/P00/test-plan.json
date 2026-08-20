@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "node": "P00",
+  "specification": "GJ-V10-MP-GREENFIELD-2026-08-20",
+  "issue": "https://github.com/Techshrr/GoJet/issues/2",
+  "cases": [
+    {
+      "id": "P00-T001",
+      "name": "clean-clone-bootstrap",
+      "precondition": "Fresh checkout of the exact implementation commit with no generated local state.",
+      "command": "python3 scripts/p00/validate.py --case P00-T001",
+      "driver": "Python 3 standard library plus pinned Go/Node/pnpm command probes",
+      "oracle": "Required bootstrap files resolve, repository remote is Techshrr/GoJet, root Go module and pnpm workspace are valid, and pinned tool commands are callable.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T001.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P00-T002",
+      "name": "no-external-or-prior-gojet-implementation-path",
+      "precondition": "Exact implementation checkout with Git metadata available.",
+      "command": "python3 scripts/p00/validate.py --case P00-T002",
+      "driver": "Git tracked-file and gitlink inspection",
+      "oracle": "No gitlink/submodule, prior GoJet repository dependency, production Docker/Compose path, node_modules, or external implementation path is present.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T002.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P00-T003",
+      "name": "specification-identity-and-cross-reference-lint",
+      "precondition": "Three approved V10 specification files and traceability snapshots are present.",
+      "command": "python3 scripts/p00/validate.py --case P00-T003",
+      "driver": "Deterministic document identity/cross-reference scanner",
+      "oracle": "Master/Design/IA IDs and cross-references resolve to V10, route snapshot is bound to the frozen IA blob, and no V5 identity token remains in governed project documents.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T003.json",
+      "owner": "Product Owner"
+    },
+    {
+      "id": "P00-T004",
+      "name": "directory-package-and-traceability-boundary-lint",
+      "precondition": "P00 repository boundary files, capability snapshot and route snapshot are present.",
+      "command": "python3 scripts/p00/validate.py --case P00-T004",
+      "driver": "Repository path/module/workspace/registry boundary scanner",
+      "oracle": "Single root Go module, frontend workspace boundaries and P00 directory anchors are valid; capability snapshot has 38 REQUIRED rows and Route Registry snapshot has 131 registered rows without duplicate IDs.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T004.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P00-T005",
+      "name": "secret-scan",
+      "precondition": "All tracked P00 files are available as text or safely skipped as binary.",
+      "command": "python3 scripts/p00/validate.py --case P00-T005",
+      "driver": "High-confidence credential/private-key pattern scan over tracked files",
+      "oracle": "No private-key material or high-confidence provider/access-token pattern is committed.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T005.json",
+      "owner": "Security Reviewer"
+    },
+    {
+      "id": "P00-T006",
+      "name": "license-inventory",
+      "precondition": "Go and frontend dependency manifests in the exact checkout are readable.",
+      "command": "python3 scripts/p00/validate.py --case P00-T006",
+      "driver": "Manifest inventory generator",
+      "oracle": "Every declared third-party dependency is represented in the generated license inventory; P00 currently introduces no undeclared runtime dependency.",
+      "expected_exit": 0,
+      "evidence_file": "artifacts/v10/P00/results/P00-T006.json",
+      "owner": "Release Engineer"
+    }
+  ]
+}
