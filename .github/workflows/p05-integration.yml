@@ -139,14 +139,16 @@ jobs:
           redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'risk:link:*' | sort > artifacts/v10/P05/runtime/redis-risk-keys.txt
           sha256sum /tmp/gojet-p05/platformapi /tmp/gojet-p05/redirectengine > artifacts/v10/P05/runtime/native-binaries.sha256 2>/dev/null
           ps -o pid=,comm= -p "$(cat artifacts/v10/P05/runtime/platformapi.pid 2>/dev/null)" "$(cat artifacts/v10/P05/runtime/redirectengine.pid 2>/dev/null)" > artifacts/v10/P05/runtime/processes.txt 2>/dev/null
+          true
 
       - name: Stop native P05 services
         if: always()
         shell: bash
         run: |
           set +e
-          kill "$(cat artifacts/v10/P05/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null
-          kill "$(cat artifacts/v10/P05/runtime/redirectengine.pid 2>/dev/null)" 2>/dev/null
+          kill "$(cat artifacts/v10/P05/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P05/runtime/redirectengine.pid 2>/dev/null)" 2>/dev/null || true
+          true
 
       - name: Upload P05 real integration evidence
         if: always()
