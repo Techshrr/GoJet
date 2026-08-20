@@ -57,13 +57,16 @@ jobs:
           corepack install --global pnpm@11.21.0
           pnpm install --lockfile-only
           pnpm install --frozen-lockfile
-      - name: Verify source architecture
+      - name: Verify clean Design System source
         run: |
           set -euo pipefail
           pnpm run typecheck:packages
+          python3 scripts/p03/validate.py --case P03-T003
+      - name: Verify application architecture
+        run: |
+          set -euo pipefail
           pnpm run typecheck:apps
           python3 scripts/p01/validate.py --case P01-T004
-          python3 scripts/p03/validate.py --case P03-T003
       - name: Verify production builds and native installer syntax
         run: |
           set -euo pipefail
