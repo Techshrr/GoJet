@@ -1,30 +1,31 @@
-name: P04 Topology and Lock Refresh Once
+name: P04 Topology Diagnostic
 
 on:
-  push:
+  pull_request:
     branches:
-      - develop/p04-product-shells
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  refresh:
+  diagnostic:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Checkout P04 branch
+      - name: Checkout exact P04 head
         uses: actions/checkout@v4
         with:
-          ref: develop/p04-product-shells
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
+          persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 24.19.0
           check-latest: false
-      - name: Normalize scoped workspace subpath imports
+      - name: Normalize scoped workspace subpath imports in working tree
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -49,7 +50,7 @@ jobs:
           path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
           python3 -m py_compile scripts/p01/validate.py scripts/p04/validate.py
-      - name: Refresh dependency lock
+      - name: Refresh dependency graph in working tree
         run: |
           set -euo pipefail
           corepack enable
@@ -66,12 +67,16 @@ jobs:
           python3 scripts/p03/validate.py --case P03-T003
           php -l installer/src/Shell.php
           php -l installer/public/index.php
-      - name: Commit verified topology and lock
+      - name: Stage proposed persistent files
         run: |
-          set -euo pipefail
-          rm .github/workflows/p04-topology-lock-once.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add scripts/p01/validate.py pnpm-lock.yaml .github/workflows/p04-topology-lock-once.yml
-          git commit -m 'build(p04): restore frozen workspace topology'
-          git push origin HEAD:develop/p04-product-shells
+          mkdir -p artifacts/v10/P04/topology-fix
+          cp scripts/p01/validate.py artifacts/v10/P04/topology-fix/p01-validate.py
+          cp pnpm-lock.yaml artifacts/v10/P04/topology-fix/pnpm-lock.yaml
+          git diff -- scripts/p01/validate.py pnpm-lock.yaml > artifacts/v10/P04/topology-fix/proposed.patch
+      - name: Upload verified topology fix
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p04-topology-fix-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: artifacts/v10/P04/topology-fix/
