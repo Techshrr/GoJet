@@ -2,4 +2,8 @@ packages:
   - 'frontend/apps/*'
   - 'frontend/packages/*'
 
+# pnpm 11 supply-chain policy: only reviewed dependencies may execute install scripts.
+allowBuilds:
+  esbuild: true
+
 # Build-time toolchain only. GoJet production hosts MUST NOT run Node.js.
