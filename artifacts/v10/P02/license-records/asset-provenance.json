@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "node": "P02",
+  "authority": "GJ-V10-DS-GREENFIELD-2026-08-20",
+  "external_assets_bundled": false,
+  "assets": [
+    {"path":"frontend/packages/tokens/brand/assets/logo-full-light.svg","source":"GoJet V10 original","license":"project-owned","derived_from":null},
+    {"path":"frontend/packages/tokens/brand/assets/logo-full-dark.svg","source":"GoJet V10 original","license":"project-owned","derived_from":null},
+    {"path":"frontend/packages/tokens/brand/assets/logo-mark.svg","source":"GoJet V10 original","license":"project-owned","derived_from":null},
+    {"path":"frontend/packages/tokens/brand/assets/favicon.svg","source":"GoJet V10 original","license":"project-owned","derived_from":"logo-mark.svg"},
+    {"path":"frontend/packages/tokens/brand/assets/favicon.ico","source":"GoJet V10 original","license":"project-owned","derived_from":"logo-mark.svg"},
+    {"path":"frontend/packages/tokens/brand/assets/apple-touch-icon.png","source":"GoJet V10 original","license":"project-owned","derived_from":"logo-mark.svg"},
+    {"path":"frontend/packages/tokens/brand/assets/og-brand.png","source":"GoJet V10 original","license":"project-owned","derived_from":null}
+  ]
+}
