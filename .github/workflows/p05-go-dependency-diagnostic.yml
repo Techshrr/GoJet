@@ -1,0 +1,58 @@
+name: P05 Go Dependency Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/links/**'
+      - '.github/workflows/p05-go-dependency-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tidy-and-test:
+    name: Generate reviewable P05 go.sum
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+
+      - name: Generate dependency checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod tidy
+          git diff --exit-code -- go.mod
+          test -s go.sum
+
+      - name: Verify approved direct dependency set
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go list -m -f '{{if not .Indirect}}{{.Path}} {{.Version}}{{end}}' all | grep -E '^(github.com/go-sql-driver/mysql|github.com/redis/go-redis/v9) ' | wc -l)" -eq 2
+          go list -m github.com/go-sql-driver/mysql | grep -Fx 'github.com/go-sql-driver/mysql v1.10.0'
+          go list -m github.com/redis/go-redis/v9 | grep -Fx 'github.com/redis/go-redis/v9 v9.22.0'
+
+      - name: Compile and test Links package
+        run: go test ./internal/links -count=1 -v
+
+      - name: Upload generated go.sum
+        uses: actions/upload-artifact@v4
+        with:
+          name: p05-go-sum-${{ github.event.pull_request.head.sha || github.sha }}
+          path: go.sum
+          if-no-files-found: error
+          retention-days: 7
