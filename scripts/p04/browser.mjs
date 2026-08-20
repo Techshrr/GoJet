@@ -16,6 +16,7 @@ const viewports = {
 const chromeCandidates = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'].filter(Boolean);
 const executablePath = chromeCandidates.find((candidate) => existsSync(candidate));
 if (!executablePath) throw new Error('System Chrome/Chromium is required for P04 evidence');
+
 const targets = [
   { surface: 'website', url: 'http://127.0.0.1:4173/', state: 'normal' },
   { surface: 'auth', url: 'http://127.0.0.1:4173/login', state: 'normal' },
@@ -26,12 +27,17 @@ const targets = [
 ];
 const report = { generated_at: new Date().toISOString(), chrome: executablePath, targets: [], route_transitions: [], overlay: null, console_errors: [], page_errors: [], captures: [] };
 const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
-const installLayoutObserver = async (context) => context.addInitScript(() => {
-  window.__gojetP04LayoutShift = 0;
-  new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__gojetP04LayoutShift += entry.value;
-  }).observe({ type: 'layout-shift', buffered: true });
-});
+
+async function installLayoutObserver(context) {
+  await context.addInitScript(() => {
+    window.__gojetP04LayoutShift = 0;
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (!entry.hadRecentInput) window.__gojetP04LayoutShift += entry.value;
+      }
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
+}
 
 async function inspectTarget(target, viewportName, viewport) {
   const context = await browser.newContext({ viewportSize: viewport });
@@ -40,13 +46,14 @@ async function inspectTarget(target, viewportName, viewport) {
   page.on('console', (message) => { if (message.type() === 'error') report.console_errors.push({ surface: target.surface, text: message.text() }); });
   page.on('pageerror', (error) => report.page_errors.push({ surface: target.surface, text: String(error) }));
   await page.goto(target.url, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(120);
   const metrics = await page.evaluate(() => ({
     rootOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     bodyOverflow: document.body.scrollWidth > document.body.clientWidth,
-    layoutShift: window.__gojetP04LayoutShift || 0,
     title: document.title,
     anchors: [...document.querySelectorAll('a[href]')].map((node) => node.getAttribute('href')).filter(Boolean),
     clippedText: [...document.querySelectorAll('nav a, header a, header button, main h1, main h2')].filter((node) => node.clientWidth > 0 && node.scrollWidth > node.clientWidth).map((node) => node.textContent?.trim()).filter(Boolean),
+    layoutShift: window.__gojetP04LayoutShift || 0,
   }));
   const file = `gjv10__${target.surface}__p04-shell__${target.state}__light__en__${viewportName}.png`;
   await page.screenshot({ path: `${capturesDir}/${file}`, fullPage: false });
@@ -70,7 +77,7 @@ async function verifySpa(url, selector, expectedPath) {
   report.route_transitions.push({ url, selector, expectedPath, ...result, finalUrl: page.url() });
   await context.close();
 }
-await verifySpa('http://127.0.0.1:4173/', 'a[href="/pricing"]', '/pricing');
+await verifySpa('http://127.0.0.1:4173/', 'nav[aria-label="Primary navigation"] a[href="/pricing"]', '/pricing');
 await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings"]', '/app/settings');
 await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/admin/operations');
 
