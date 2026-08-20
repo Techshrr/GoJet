@@ -50,6 +50,15 @@ export type LinkRecord = {
   deleted_at?: string | null;
 };
 
+export type LinkRiskState = 'allow' | 'review' | 'block' | 'missing' | 'malformed' | 'stale';
+
+export type LinkRiskResponse = {
+  link_id: number;
+  fingerprint: string;
+  state: LinkRiskState;
+  current: true;
+};
+
 export type LinkListFilters = {
   q?: string;
   hostname?: string;
@@ -187,6 +196,10 @@ export class GoJetLinksClient {
 
   get(workspaceId: string, linkId: number): Promise<LinkRecord> {
     return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}/links/${linkId}`);
+  }
+
+  risk(workspaceId: string, linkId: number): Promise<LinkRiskResponse> {
+    return this.request(`/api/workspaces/${encodeURIComponent(workspaceId)}/links/${linkId}/risk`);
   }
 
   create(workspaceId: string, input: LinkCreateInput): Promise<LinkRecord> {
