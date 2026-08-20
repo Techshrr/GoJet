@@ -1,6 +1,15 @@
 @import "./styles.css";
 @import "@gojet/tokens/responsive.css";
 
+html:lang(en) {
+  font-family: var(--gojet-font-family-latin);
+}
+
+html:lang(zh-CN),
+html:lang(zh-cn) {
+  font-family: var(--gojet-font-family-cjk);
+}
+
 .gj-layout-grid {
   display: grid;
 }
