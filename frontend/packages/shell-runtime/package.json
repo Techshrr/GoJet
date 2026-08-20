@@ -1,0 +1,10 @@
+{
+  "name": "@gojet/shell-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./src/index.ts"},
+  "types": "./src/index.ts",
+  "dependencies": {"@gojet/tokens": "workspace:*"},
+  "peerDependencies": {"react": "19.2.8"}
+}
