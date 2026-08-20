@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type restoreRequest struct {
@@ -30,14 +31,56 @@ type bulkItemResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// FullHandler layers the additional P05 commands over the core CRUD handler.
-// The nested core mux remains the single implementation for existing routes.
+// FullHandler retains the P05 command surface without a risk dependency. The
+// risk endpoint itself fails closed until a RedisRiskStore is supplied.
 func (a *API) FullHandler() http.Handler {
+	return a.FullHandlerWithRisk(nil)
+}
+
+// FullHandlerWithRisk is the authoritative P05 platform API surface. Applying
+// securityHeaders to the outer mux guarantees bulk/restore/risk routes receive
+// the same no-store/noindex/nosniff contract as the core CRUD routes.
+func (a *API) FullHandlerWithRisk(risk *RedisRiskStore) http.Handler {
 	extended := http.NewServeMux()
 	extended.HandleFunc("POST /api/workspaces/{workspaceId}/links/bulk", a.bulkLinks)
 	extended.HandleFunc("POST /api/workspaces/{workspaceId}/links/{linkId}/restore", a.restoreLink)
+	extended.HandleFunc("GET /api/workspaces/{workspaceId}/links/{linkId}/risk", func(w http.ResponseWriter, r *http.Request) {
+		a.linkRisk(w, r, risk)
+	})
 	extended.Handle("/", a.Handler())
-	return extended
+	return securityHeaders(extended)
+}
+
+func (a *API) linkRisk(w http.ResponseWriter, r *http.Request, risk *RedisRiskStore) {
+	workspaceID := r.PathValue("workspaceId")
+	if _, ok := a.authenticate(w, r, workspaceID, false); !ok {
+		return
+	}
+	id, ok := parsePathID(w, r.PathValue("linkId"))
+	if !ok {
+		return
+	}
+	link, err := a.store.GetByID(r.Context(), workspaceID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if risk == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "risk_dependency_unavailable", "Destination-risk state is unavailable.")
+		return
+	}
+	_, state, err := risk.Resolve(r.Context(), link.ID, link.RiskFingerprint, time.Now().UTC())
+	if err != nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "risk_dependency_unavailable", "Destination-risk state is unavailable.")
+		return
+	}
+	// Do not expose provider evidence, thresholds, policy internals or targets.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"link_id": link.ID,
+		"fingerprint": link.RiskFingerprint,
+		"state": state,
+		"current": true,
+	})
 }
 
 func (a *API) restoreLink(w http.ResponseWriter, r *http.Request) {
