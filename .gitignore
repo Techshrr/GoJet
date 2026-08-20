@@ -21,6 +21,13 @@
 /artifacts/v10/P01/dependency-report.json
 /artifacts/v10/gates/G1/native-architecture/p01-*.json
 
+# GoJet V10 generated P02 evidence
+/artifacts/v10/P02/environment.json
+/artifacts/v10/P02/source.json
+/artifacts/v10/P02/commands.log
+/artifacts/v10/P02/evidence-index.json
+/artifacts/v10/P02/results/
+
 # Local build/tool outputs
 __pycache__/
 *.pyc

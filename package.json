@@ -10,13 +10,14 @@
   "scripts": {
     "p00:validate": "python3 scripts/p00/validate.py",
     "p01:validate": "python3 scripts/p01/validate.py",
+    "p02:validate": "python3 scripts/p02/validate.py",
     "typecheck:packages": "tsc -p tsconfig.packages.json --noEmit",
     "typecheck:apps": "pnpm --filter @gojet/site typecheck && pnpm --filter @gojet/workspace typecheck && pnpm --filter @gojet/admin typecheck && pnpm --filter @gojet/docs typecheck",
     "typecheck": "pnpm run typecheck:packages && pnpm run typecheck:apps",
     "build:apps": "pnpm --filter @gojet/site build && pnpm --filter @gojet/workspace build && pnpm --filter @gojet/admin build && pnpm --filter @gojet/docs build",
     "build": "pnpm run build:apps",
     "test": "node scripts/p01/smoke.mjs",
-    "check": "pnpm run typecheck && pnpm run build && pnpm run test && pnpm run p01:validate"
+    "check": "pnpm run typecheck && pnpm run build && pnpm run test && pnpm run p01:validate && pnpm run p02:validate"
   },
   "devDependencies": {
     "@tanstack/react-query": "5.101.4",

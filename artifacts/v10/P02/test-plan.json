@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "node": "P02",
+  "specification": "GJ-V10-MP-GREENFIELD-2026-08-20",
+  "issue": "https://github.com/Techshrr/GoJet/issues/10",
+  "cases": [
+    {"id":"P02-T001","name":"brand-contract-and-required-assets","expected":"PASS"},
+    {"id":"P02-T002","name":"logo-safe-area-and-svg-integrity","expected":"PASS"},
+    {"id":"P02-T003","name":"brand-role-and-color-projection","expected":"PASS"},
+    {"id":"P02-T004","name":"asset-provenance-and-license-registry","expected":"PASS"},
+    {"id":"P02-T005","name":"jet-path-vocabulary-and-context-rules","expected":"PASS"},
+    {"id":"P02-T006","name":"reduced-motion-contract","expected":"PASS"},
+    {"id":"P02-T007","name":"single-authority-contract","expected":"PASS"},
+    {"id":"P02-T008","name":"raster-and-favicon-integrity","expected":"PASS"}
+  ]
+}
