@@ -1,16 +1,18 @@
 # GoJet
 
-GoJet V5 is a greenfield short-link and resource platform implemented from specification first.
+GoJet V10 is a greenfield short-link and resource platform implemented from specification first.
+
+GoJet V10 is an independent greenfield product. The V10 designation is a standalone product identity; no earlier GoJet release, repository, branch, commit, migration, generated artifact, runtime configuration, or implementation is a dependency, migration source, compatibility baseline, or normative evidence.
 
 ## Greenfield rule
 
-This repository is the only implementation repository for GoJet V5. Prior GoJet repositories, branches, commits, migrations, generated artifacts, Git history, or runtime configuration are not implementation dependencies and are not normative evidence.
+This repository is the only implementation repository for GoJet V10. Prior GoJet repositories, branches, commits, migrations, generated artifacts, Git history, or runtime configuration are not implementation dependencies and are not normative evidence.
 
 The specification pack defines product behavior before code:
 
-1. [`specifications/GoJet_V5_MASTER_PLAN_OPTIMIZED.md`](specifications/GoJet_V5_MASTER_PLAN_OPTIMIZED.md) — architecture, capabilities, security invariants, implementation nodes, Gates and release definition.
-2. [`specifications/GoJet_V5_BRAND_DESIGN_SYSTEM_OPTIMIZED.md`](specifications/GoJet_V5_BRAND_DESIGN_SYSTEM_OPTIMIZED.md) — brand, design tokens, components, motion, responsive behavior, accessibility and cross-surface UX patterns.
-3. [`specifications/GoJet_V5_PAGE_LEVEL_IA_OPTIMIZED.md`](specifications/GoJet_V5_PAGE_LEVEL_IA_OPTIMIZED.md) — routes, page composition, states, workflows, responsive behavior and SEO contracts.
+1. [`specifications/GoJet_V10_MASTER_PLAN_OPTIMIZED.md`](specifications/GoJet_V10_MASTER_PLAN_OPTIMIZED.md) — architecture, capabilities, security invariants, implementation nodes, Gates and release definition.
+2. [`specifications/GoJet_V10_BRAND_DESIGN_SYSTEM_OPTIMIZED.md`](specifications/GoJet_V10_BRAND_DESIGN_SYSTEM_OPTIMIZED.md) — brand, design tokens, components, motion, responsive behavior, accessibility and cross-surface UX patterns.
+3. [`specifications/GoJet_V10_PAGE_LEVEL_IA_OPTIMIZED.md`](specifications/GoJet_V10_PAGE_LEVEL_IA_OPTIMIZED.md) — routes, page composition, states, workflows, responsive behavior and SEO contracts.
 
 ## Product surfaces
 
