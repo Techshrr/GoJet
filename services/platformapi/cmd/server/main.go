@@ -42,6 +42,7 @@ func main() {
 	if testAuth {
 		logger.Warn("test-only auth adapter enabled; never use this setting in production")
 	}
+	api := links.NewAPI(store, testAuth)
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
 	if address == "" {
@@ -49,7 +50,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           links.NewAPI(store, testAuth).Handler(),
+		Handler:           api.FullHandler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
