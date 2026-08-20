@@ -1,0 +1,46 @@
+name: P03 Generated Artifacts Refresh
+
+on:
+  push:
+    branches:
+      - develop/p03-design-system
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop/p03-design-system
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+      - name: Activate pinned pnpm
+        run: |
+          corepack enable
+          corepack install --global pnpm@11.21.0
+      - name: Refresh lockfile and canonical generated artifacts
+        run: |
+          set -euo pipefail
+          pnpm install --lockfile-only
+          python3 scripts/p03/extract_tokens.py
+          python3 scripts/p03/generate_tokens.py
+          python3 -m py_compile scripts/p03/extract_tokens.py scripts/p03/generate_tokens.py
+      - name: Commit generated artifacts
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml frontend/packages/tokens/src/tokens.json frontend/packages/tokens/generated/
+          if git diff --cached --quiet; then
+            echo 'Generated artifacts already current.'
+            exit 0
+          fi
+          git commit -m 'build(p03): refresh canonical token artifacts and lockfile'
+          git push origin HEAD:develop/p03-design-system
