@@ -357,7 +357,7 @@ def t006() -> dict[str, Any]:
     if not p01_started:
         # At the P00 baseline there must be no application dependency inventory yet.
         if count:
-  errors.append("P00 introduced third-party dependencies before P01: " + json.dumps(inventory, ensure_ascii=False))
+            errors.append("P00 introduced third-party dependencies before P01: " + json.dumps(inventory, ensure_ascii=False))
         phase = "P00"
     else:
         # P01 is the first node permitted to introduce frontend build/test dependencies.
@@ -365,24 +365,34 @@ def t006() -> dict[str, Any]:
         # inside the current repository workspace and under P01 lock/evidence governance.
         phase = "P01+"
         required_p01 = [
-  "artifacts/v10/P01/test-plan.json",
-  "scripts/p01/validate.py",
-  ".github/workflows/p01-engineering.yml",
-  "pnpm-lock.yaml",
+            "artifacts/v10/P01/test-plan.json",
+            "scripts/p01/validate.py",
+            ".github/workflows/p01-engineering.yml",
+            "pnpm-lock.yaml",
         ]
         missing_p01 = [item for item in required_p01 if not (ROOT / item).exists()]
         if missing_p01:
-  errors.append("P01 dependency governance files missing: " + ", ".join(missing_p01))
+            errors.append("P01 dependency governance files missing: " + ", ".join(missing_p01))
         if inventory["go"]:
-  errors.append("P01 introduced Go third-party dependencies outside the P01 frontend-engineering scope: " + json.dumps(inventory["go"], ensure_ascii=False))
+            errors.append("P01 introduced Go third-party dependencies outside the P01 frontend-engineering scope: " + json.dumps(inventory["go"], ensure_ascii=False))
         if inventory["npm"] and "pnpm-lock.yaml" not in locks:
-  errors.append("P01 npm dependencies are not governed by checked-in pnpm-lock.yaml")
+            errors.append("P01 npm dependencies are not governed by checked-in pnpm-lock.yaml")
         allowed_manifest = re.compile(r"^(?:package\.json|frontend/(?:apps|packages)/[^/]+/package\.json)$")
-        bad_manifests = sorted({item["manifest"] for item in inventory["npm"] if not allowed_manifest.fullmatch(item["manifest"])})
+        bad_manifests = sorted({
+            item["manifest"]
+            for item in inventory["npm"]
+            if not allowed_manifest.fullmatch(item["manifest"])
+        })
         if bad_manifests:
-  errors.append("npm dependencies declared outside governed P01 workspace manifests: " + ", ".join(bad_manifests))
+            errors.append("npm dependencies declared outside governed P01 workspace manifests: " + ", ".join(bad_manifests))
 
-    return result(errors, phase=phase, inventory=inventory, dependency_count=count, tracked_lockfiles=locks)
+    return result(
+        errors,
+        phase=phase,
+        inventory=inventory,
+        dependency_count=count,
+        tracked_lockfiles=locks,
+    )
 
 
 CASES: dict[str, Callable[[], dict[str, Any]]] = {
