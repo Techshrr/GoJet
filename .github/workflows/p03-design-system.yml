@@ -1,0 +1,87 @@
+name: P03 Design System
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p03-design-system:
+    name: P03 required Design System tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+      - name: Install canonical CJK evidence font
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig
+          mkdir -p "$HOME/.config/fontconfig/conf.d"
+          cat > "$HOME/.config/fontconfig/conf.d/99-gojet-noto-sc.conf" <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig>
+            <alias>
+              <family>Noto Sans SC</family>
+              <prefer><family>Noto Sans CJK SC</family></prefer>
+            </alias>
+          </fontconfig>
+          EOF
+          fc-cache -f
+          resolved="$(fc-match 'Noto Sans SC' --format '%{family}\n' | head -n 1)"
+          echo "Resolved Noto Sans SC as: ${resolved}"
+          if ! printf '%s\n' "$resolved" | grep -Eiq 'Noto Sans( CJK)? SC'; then
+            echo "Noto Sans SC did not resolve to a Simplified Chinese Noto family." >&2
+            fc-list : family | grep -Ei 'Noto Sans.*(SC|CJK)' | head -n 20 || true
+            exit 1
+          fi
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          pnpm --version
+      - name: Compile P03 validators and generators
+        run: |
+          python3 -m py_compile scripts/p03/extract_tokens.py scripts/p03/generate_tokens.py scripts/p03/validate.py
+      - name: Frozen dependency install
+        run: pnpm install --frozen-lockfile
+      - name: Strict package typecheck
+        run: pnpm run typecheck:packages
+      - name: Run P03 required tests
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: python3 scripts/p03/validate.py
+      - name: Upload P03 and G2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p03-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P03/environment.json
+            artifacts/v10/P03/source.json
+            artifacts/v10/P03/commands.log
+            artifacts/v10/P03/test-plan.json
+            artifacts/v10/P03/evidence-index.json
+            artifacts/v10/P03/review.md
+            artifacts/v10/P03/results/
+            artifacts/v10/P03/components/
+            artifacts/v10/gates/G2/design-system/

@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {".": "./src/index.ts"},
-  "types": "./src/index.ts"
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/foundation.css"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@gojet/tokens": "workspace:*",
+    "lucide-react": "1.31.0"
+  },
+  "peerDependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
 }

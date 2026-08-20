@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gojet.invalid/schemas/v10/design-tokens.json",
+  "title": "GoJet V10 canonical design tokens",
+  "type": "object",
+  "required": ["schema_version", "authority", "token_count", "tokens"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "authority": {"const": "GJ-V10-DS-GREENFIELD-2026-08-20"},
+    "token_count": {"type": "integer", "minimum": 80},
+    "tokens": {
+      "type": "object",
+      "minProperties": 80,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["section"],
+        "properties": {
+          "section": {"type": "string"},
+          "value": {},
+          "themes": {
+            "type": "object",
+            "required": ["light", "dark"]
+          },
+          "properties": {"type": "object"},
+          "meta": {"type": "object"}
+        }
+      }
+    }
+  }
+}
