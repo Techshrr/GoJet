@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - .github/workflows/v10-identity-migration.yml
 
 permissions:
   contents: write
@@ -39,8 +37,7 @@ jobs:
 
           specs = root / 'specifications'
           for path in list(specs.glob('*V5*.md')):
-              new_path = path.with_name(path.name.replace('V5', 'V10'))
-              path.rename(new_path)
+              path.rename(path.with_name(path.name.replace('V5', 'V10')))
 
           readme = root / 'README.md'
           text = readme.read_text(encoding='utf-8')
@@ -62,7 +59,6 @@ jobs:
               text = text.replace(marker, marker + identity_rule, 1)
           master.write_text(text, encoding='utf-8')
 
-          # Hard guard: old product-version identity must not remain anywhere in tracked project text or filenames.
           residual = []
           for path in [root / 'README.md', *sorted(specs.glob('*.md'))]:
               content = path.read_text(encoding='utf-8')
