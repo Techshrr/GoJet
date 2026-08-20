@@ -1,0 +1,55 @@
+name: P05 Links Domain Contract
+
+on:
+  pull_request:
+    paths:
+      - 'internal/links/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'docs/architecture/P05_LINKS_VERTICAL_SLICE.md'
+      - 'artifacts/v10/P05/test-plan.json'
+      - '.github/workflows/p05-links-domain-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  domain-contract:
+    name: P05 early domain-contract check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+
+      - name: Verify migration contract is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE links' migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE link_versions' migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE link_audit_events' migrations/000001_links_vertical_slice.sql
+
+      - name: Run Links domain tests
+        run: go test ./internal/links -count=1 -v
+
+      - name: Verify no dependency drift at domain layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n '/^require /,$p' go.mod | wc -l)" -eq 0
+
+      - name: Clarify evidence boundary
+        run: |
+          echo 'PASS here proves only the early P05 pure-domain contract.'
+          echo 'It does not satisfy P05 MySQL/Redis/API/redirect/browser Exit Conditions.'
