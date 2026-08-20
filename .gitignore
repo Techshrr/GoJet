@@ -1,0 +1,16 @@
+# GoJet V10 generated P00 evidence (CI artifacts, tied to exact tested commit)
+/artifacts/v10/P00/environment.json
+/artifacts/v10/P00/source.json
+/artifacts/v10/P00/commands.log
+/artifacts/v10/P00/evidence-index.json
+/artifacts/v10/P00/repository-tree.txt
+/artifacts/v10/P00/spec-checksums.sha256
+/artifacts/v10/P00/dependency-provenance.json
+/artifacts/v10/P00/license-inventory.json
+/artifacts/v10/P00/results/
+/artifacts/v10/gates/G0/traceability/*.json
+
+# Local build/tool outputs
+__pycache__/
+*.pyc
+node_modules/
