@@ -1,0 +1,81 @@
+name: P00 Bootstrap and G0 Traceability
+
+on:
+  push:
+    branches:
+      - main
+      - develop/p00-bootstrap
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p00-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    name: P00 required tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+          cache: ''
+
+      - name: Activate pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          pnpm --version
+
+      - name: Compile P00 validator
+        run: python3 -m py_compile scripts/p00/validate.py
+
+      - name: Run P00 required tests
+        run: python3 scripts/p00/validate.py
+
+      - name: Upload P00 and G0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p00-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P00/environment.json
+            artifacts/v10/P00/source.json
+            artifacts/v10/P00/commands.log
+            artifacts/v10/P00/test-plan.json
+            artifacts/v10/P00/evidence-schema.json
+            artifacts/v10/P00/evidence-index.json
+            artifacts/v10/P00/review.md
+            artifacts/v10/P00/results/
+            artifacts/v10/P00/repository-tree.txt
+            artifacts/v10/P00/spec-checksums.sha256
+            artifacts/v10/P00/dependency-provenance.json
+            artifacts/v10/P00/license-inventory.json
+            artifacts/v10/gates/G0/traceability/
