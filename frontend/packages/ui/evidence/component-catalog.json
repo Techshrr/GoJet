@@ -1,0 +1,26 @@
+{
+  "authority": "GJ-V10-DS-GREENFIELD-2026-08-20",
+  "node": "P03",
+  "components": [
+    {"name":"Button","category":"controls","states":["default","hover","focus-visible","active","disabled","loading"],"keyboard":["Enter","Space"],"semantics":["native button","aria-busy","aria-pressed when toggle"]},
+    {"name":"Link","category":"controls","states":["default","hover","focus-visible","active"],"keyboard":["Enter"],"semantics":["native anchor with href","visible underline"]},
+    {"name":"Input/Textarea","category":"controls","states":["default","hover","focus-visible","active","disabled","loading","read-only","invalid","success"],"keyboard":["native text editing"],"semantics":["visible label","aria-describedby","aria-invalid"]},
+    {"name":"Select","category":"controls","states":["default","hover","focus-visible","active","selected","disabled","read-only","invalid","success"],"keyboard":["native select keyboard"],"semantics":["visible label","native select"]},
+    {"name":"Checkbox/Switch","category":"controls","states":["default","hover","focus-visible","active","selected","disabled"],"keyboard":["Space"],"semantics":["native checkbox","role switch","visible On/Off"]},
+    {"name":"Combobox","category":"controls","states":["default","hover","focus-visible","active","selected","disabled","loading","invalid"],"keyboard":["ArrowDown","ArrowUp","Enter","Escape","Home","End"],"semantics":["role combobox","aria-expanded","aria-controls","aria-activedescendant","role listbox"]},
+    {"name":"Card","category":"layout","states":["default","selected"],"keyboard":[],"semantics":["non-interactive by default","selected uses non-color indicator contract"]},
+    {"name":"Dialog","category":"overlay","states":["default","focus-visible","loading","invalid","success"],"keyboard":["Escape","Tab"],"semantics":["native dialog showModal","aria-labelledby","aria-describedby"]},
+    {"name":"Tooltip","category":"overlay","states":["default","hover","focus-visible"],"keyboard":["Tab"],"semantics":["role tooltip","aria-describedby","focus parity with hover"]},
+    {"name":"Toast","category":"feedback","states":["default","success"],"keyboard":[],"semantics":["aria-live polite","not sole error record"]},
+    {"name":"Tabs","category":"navigation","states":["default","hover","focus-visible","active","selected","disabled"],"keyboard":["ArrowLeft","ArrowRight","Home","End"],"semantics":["role tablist","role tab","aria-selected","roving tabindex"]},
+    {"name":"Pagination","category":"navigation","states":["default","hover","focus-visible","active","selected","disabled"],"keyboard":["Tab","Enter"],"semantics":["nav label","aria-current page"]},
+    {"name":"Breadcrumb","category":"navigation","states":["default","hover","focus-visible","active","selected"],"keyboard":["Tab","Enter"],"semantics":["nav label","aria-current page"]},
+    {"name":"Navigation","category":"navigation","states":["default","hover","focus-visible","active","selected","disabled"],"keyboard":["Tab","Enter"],"semantics":["nav label","aria-current page","unavailable item becomes static text with reason"]},
+    {"name":"Table","category":"data","states":["default","loading","selected","disabled","read-only","invalid","success"],"keyboard":["Tab through controls only"],"semantics":["native table","caption","scrollable data-region label"]},
+    {"name":"ChartFrame","category":"data","states":["default","loading","selected","success"],"keyboard":["equivalent data table path"],"semantics":["visible title","unit","time range","data table equivalent"]},
+    {"name":"EmptyState","category":"feedback","states":["default"],"keyboard":["Tab to real action/help"],"semantics":["specific title","reason","real action only","help link"]},
+    {"name":"ProgressRegion","category":"feedback","states":["default","loading","success"],"keyboard":["Tab to action"],"semantics":["aria-busy","live status","native progress"]},
+    {"name":"SelectionBar","category":"feedback","states":["default","selected","success"],"keyboard":["Tab through bulk actions"],"semantics":["visible selected count","named bulk region"]},
+    {"name":"DestructiveConfirmation/CommandPalette","category":"overlay","states":["default","focus-visible","loading","invalid","success"],"keyboard":["Escape","Tab","Enter"],"semantics":["dialog semantics","named actions","unavailable commands disabled with visible reason"]}
+  ]
+}
