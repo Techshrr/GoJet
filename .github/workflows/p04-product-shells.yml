@@ -1,0 +1,101 @@
+name: P04 Product Shells
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p04-product-shells:
+    name: P04 required shell and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+      - name: Install CJK evidence font
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig
+          mkdir -p "$HOME/.config/fontconfig/conf.d"
+          cat > "$HOME/.config/fontconfig/conf.d/99-gojet-noto-sc.conf" <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig><alias><family>Noto Sans SC</family><prefer><family>Noto Sans CJK SC</family></prefer></alias></fontconfig>
+          EOF
+          fc-cache -f
+          resolved="$(fc-match 'Noto Sans SC' --format '%{family}\n' | head -n 1)"
+          echo "Resolved Noto Sans SC as: ${resolved}"
+          printf '%s\n' "$resolved" | grep -Eiq 'Noto Sans( CJK)? SC'
+      - name: Activate pinned pnpm
+        run: |
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          pnpm --version
+      - name: Compile validators
+        run: |
+          python3 -m py_compile scripts/p04/validate.py
+          node --check scripts/p04/browser.mjs
+      - name: Frozen dependency install
+        run: pnpm install --frozen-lockfile
+      - name: Strict TypeScript
+        run: |
+          pnpm run typecheck:packages
+          pnpm run typecheck:apps
+      - name: Build shell applications
+        run: pnpm run build:apps
+      - name: Validate native installer syntax
+        run: |
+          php -l installer/src/Shell.php
+          php -l installer/public/index.php
+      - name: Start shell preview servers
+        run: |
+          set -euo pipefail
+          nohup pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4173 >/tmp/gojet-site.log 2>&1 &
+          nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 >/tmp/gojet-workspace.log 2>&1 &
+          nohup pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4175 >/tmp/gojet-admin.log 2>&1 &
+          nohup pnpm --filter @gojet/docs exec astro preview --host 127.0.0.1 --port 4176 >/tmp/gojet-docs.log 2>&1 &
+          nohup php -S 127.0.0.1:4177 -t installer/public >/tmp/gojet-installer.log 2>&1 &
+          for url in http://127.0.0.1:4173/ http://127.0.0.1:4174/app http://127.0.0.1:4175/admin http://127.0.0.1:4176/docs/en/ http://127.0.0.1:4177/; do
+            ready=0
+            for attempt in $(seq 1 40); do
+              if curl --fail --silent --show-error "$url" >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Preview did not become ready: $url" >&2
+              cat /tmp/gojet-*.log || true
+              exit 1
+            fi
+          done
+      - name: Generate real browser evidence
+        run: node scripts/p04/browser.mjs
+      - name: Run P04 required tests
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: python3 scripts/p04/validate.py
+      - name: Upload P04 and G4/G9 subset evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p04-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P04/
+            artifacts/v10/gates/G4/browser-responsive/p04-subset.json
+            artifacts/v10/gates/G9/performance/p04-shell-bundle.json
