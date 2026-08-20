@@ -78,7 +78,7 @@ interface FieldMeta {
   success?: string;
 }
 
-function FieldStatus({ id, error, success }: Pick<FieldMeta, 'id' | 'error' | 'success'>) {
+function FieldStatus({ id, error, success }: { id: string; error?: string | undefined; success?: string | undefined }) {
   if (error) {
     return (
       <div id={`${id}--error`} className="gj-field__status" data-status="invalid" role="alert">
