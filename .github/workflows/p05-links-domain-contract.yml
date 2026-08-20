@@ -6,6 +6,8 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
       - 'migrations/000001_links_vertical_slice.sql'
       - 'docs/architecture/P05_LINKS_VERTICAL_SLICE.md'
       - 'artifacts/v10/P05/test-plan.json'
@@ -17,7 +19,7 @@ permissions:
 
 jobs:
   domain-contract:
-    name: P05 Links domain and dependency contract
+    name: P05 Links domain service and dependency contract
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact implementation head
@@ -56,7 +58,14 @@ jobs:
       - name: Run Links package tests
         run: go test ./internal/links -count=1 -v
 
+      - name: Compile P05 service entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build ./services/platformapi/cmd/server
+          go build ./services/redirectengine/cmd/server
+
       - name: Clarify evidence boundary
         run: |
-          echo 'PASS proves the P05 Links domain/storage adapter compile contract and approved dependency closure.'
+          echo 'PASS proves the P05 Links domain/storage adapter tests, service compilation and approved dependency closure.'
           echo 'It does not satisfy P05 real MySQL/Redis/API/redirect/browser Exit Conditions.'
