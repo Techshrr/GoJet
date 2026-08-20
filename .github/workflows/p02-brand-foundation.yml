@@ -1,0 +1,55 @@
+name: P02 Brand Foundation
+
+on:
+  push:
+    branches:
+      - develop/p02-brand-foundation
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p02-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  brand:
+    name: P02 required brand tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Compile P02 validator
+        run: python3 -m py_compile scripts/p02/validate.py
+      - name: Run P02 required tests
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: python3 scripts/p02/validate.py
+      - name: Upload P02 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p02-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P02/environment.json
+            artifacts/v10/P02/source.json
+            artifacts/v10/P02/commands.log
+            artifacts/v10/P02/test-plan.json
+            artifacts/v10/P02/evidence-index.json
+            artifacts/v10/P02/review.md
+            artifacts/v10/P02/results/
+            artifacts/v10/P02/brand-boards/
+            artifacts/v10/P02/license-records/
+            artifacts/v10/P02/reference-captures/
