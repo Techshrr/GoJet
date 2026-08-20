@@ -353,17 +353,13 @@ def t006() -> dict[str, Any]:
     count = len(inventory["go"]) + len(inventory["npm"])
     locks = sorted(rel(p) for p in tracked() if p.name in {"go.sum", "pnpm-lock.yaml"})
     p01_started = (ROOT / "artifacts/v10/P01/test-plan.json").exists()
+    p05_started = (ROOT / "artifacts/v10/P05/test-plan.json").exists()
 
     if not p01_started:
-        # At the P00 baseline there must be no application dependency inventory yet.
         if count:
             errors.append("P00 introduced third-party dependencies before P01: " + json.dumps(inventory, ensure_ascii=False))
         phase = "P00"
     else:
-        # P01 is the first node permitted to introduce frontend build/test dependencies.
-        # Preserve the P00 Greenfield boundary by requiring those dependencies to remain
-        # inside the current repository workspace and under P01 lock/evidence governance.
-        phase = "P01+"
         required_p01 = [
             "artifacts/v10/P01/test-plan.json",
             "scripts/p01/validate.py",
@@ -373,8 +369,6 @@ def t006() -> dict[str, Any]:
         missing_p01 = [item for item in required_p01 if not (ROOT / item).exists()]
         if missing_p01:
             errors.append("P01 dependency governance files missing: " + ", ".join(missing_p01))
-        if inventory["go"]:
-            errors.append("P01 introduced Go third-party dependencies outside the P01 frontend-engineering scope: " + json.dumps(inventory["go"], ensure_ascii=False))
         if inventory["npm"] and "pnpm-lock.yaml" not in locks:
             errors.append("P01 npm dependencies are not governed by checked-in pnpm-lock.yaml")
         allowed_manifest = re.compile(r"^(?:package\.json|frontend/(?:apps|packages)/[^/]+/package\.json)$")
@@ -385,6 +379,28 @@ def t006() -> dict[str, Any]:
         })
         if bad_manifests:
             errors.append("npm dependencies declared outside governed P01 workspace manifests: " + ", ".join(bad_manifests))
+
+        if not p05_started:
+            phase = "P01-P04"
+            if inventory["go"]:
+                errors.append("Go third-party dependencies were introduced before the P05 backend dependency owner: " + json.dumps(inventory["go"], ensure_ascii=False))
+        else:
+            phase = "P05+"
+            required_p05 = [
+                "artifacts/v10/P05/test-plan.json",
+                ".github/workflows/p05-links-domain-contract.yml",
+                "go.sum",
+            ]
+            missing_p05 = [item for item in required_p05 if not (ROOT / item).exists()]
+            if missing_p05:
+                errors.append("P05 Go dependency governance files missing: " + ", ".join(missing_p05))
+            if inventory["go"] and "go.sum" not in locks:
+                errors.append("P05 Go dependencies are not governed by checked-in go.sum")
+            gomod = text("go.mod")
+            if re.search(r"(?m)^\s*replace(?:\s|\()", gomod):
+                errors.append("Go replace directives are prohibited by the current dependency provenance contract")
+            if inventory["go"] and cmd(["go", "mod", "verify"]).returncode:
+                errors.append("P05 Go dependency closure failed go mod verify")
 
     return result(
         errors,
@@ -445,7 +461,7 @@ def emit_evidence(results: dict[str, dict[str, Any]]) -> None:
     })
     write_json(P00 / "license-inventory.json", {
         "generated_at": now(), "implementation_commit": commit, "inventory": inventory,
-        "note": "P00 introduces no third-party application dependency; dependency/license review expands in P01."
+        "note": "P00 baseline introduced no third-party application dependency; current regressions inventory dependencies introduced by their owning nodes and require the owning node's lock/provenance gate."
     })
 
     passed = sum(not r["errors"] for r in results.values())
