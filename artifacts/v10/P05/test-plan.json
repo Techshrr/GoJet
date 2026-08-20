@@ -1,0 +1,219 @@
+{
+  "node": "P05",
+  "title": "Links Vertical Slice",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "environment_contract": {
+    "mysql": "MySQL 8.x, real server",
+    "redis": "Redis, real server",
+    "platformapi": "services/platformapi/cmd/server",
+    "redirectengine": "services/redirectengine/cmd/server",
+    "browser": "system Chrome via Playwright Core",
+    "mock_policy": "Mocks do not satisfy P05 Exit Conditions"
+  },
+  "cases": [
+    {
+      "id": "P05-T001",
+      "name": "migration-and-schema",
+      "precondition": "empty MySQL 8.x database",
+      "driver": "python3 scripts/p05/integration.py --case P05-T001",
+      "oracle": "P05 migration applies once, required constraints/indexes exist, second application is rejected or recorded safely",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T001.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P05-T002",
+      "name": "create-read-update-delete-real-api",
+      "precondition": "migrated MySQL, Redis healthy, platformapi running",
+      "driver": "python3 scripts/p05/integration.py --case P05-T002",
+      "oracle": "create/read/update/delete persists in MySQL with workspace isolation and version increments",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T002.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T003",
+      "name": "custom-code-conflict",
+      "precondition": "workspace has an existing active code",
+      "driver": "python3 scripts/p05/integration.py --case P05-T003",
+      "oracle": "invalid codes are rejected and same-host code uniqueness conflict returns deterministic conflict semantics",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T003.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T004",
+      "name": "risk-fingerprint-target-set",
+      "precondition": "link contains primary, routing and A/B destinations",
+      "driver": "go test ./internal/links -run '^TestRiskFingerprintTargetSet$'",
+      "oracle": "fingerprint is deterministic and includes every reachable normalized target without hostname-policy divergence",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T004.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P05-T005",
+      "name": "target-mutation-invalidates-risk",
+      "precondition": "exact-current fingerprint has allow decision",
+      "driver": "python3 scripts/p05/integration.py --case P05-T005",
+      "oracle": "editing primary/routing/A-B target produces a different fingerprint and prior allow no longer authorizes redirect",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T005.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P05-T006",
+      "name": "allow-redirect",
+      "precondition": "exact-current Redis risk decision is allow",
+      "driver": "python3 scripts/p05/integration.py --case P05-T006",
+      "oracle": "redirectengine returns configured redirect status and Location only after exact-current allow",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T006.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T007",
+      "name": "review-fails-closed",
+      "precondition": "exact-current Redis risk decision is review",
+      "driver": "python3 scripts/p05/integration.py --case P05-T007",
+      "oracle": "user destination is not exposed; redirectengine returns GoJet safety-surface response",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T007.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P05-T008",
+      "name": "block-fails-closed",
+      "precondition": "exact-current Redis risk decision is block",
+      "driver": "python3 scripts/p05/integration.py --case P05-T008",
+      "oracle": "user destination is not exposed; blocked safety response is returned",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T008.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P05-T009",
+      "name": "missing-malformed-stale-fail-closed",
+      "precondition": "risk decision is independently missing, malformed and stale",
+      "driver": "python3 scripts/p05/integration.py --case P05-T009",
+      "oracle": "all three conditions refuse destination access and enter the appropriate safety/unavailable response",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T009.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P05-T010",
+      "name": "risk-precedes-routing-ab-utm-access",
+      "precondition": "link has routing, A/B, UTM and access controls but risk is non-allow",
+      "driver": "python3 scripts/p05/integration.py --case P05-T010",
+      "oracle": "no smart-route/A-B/UTM/password/expiry/click-limit/one-time mutation or target response occurs before risk allow",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T010.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P05-T011",
+      "name": "routing-and-ab-after-allow",
+      "precondition": "risk allow exists for exact target set",
+      "driver": "python3 scripts/p05/integration.py --case P05-T011",
+      "oracle": "routing and weighted A/B resolve only among fingerprinted targets and UTM is applied after target selection",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T011.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T012",
+      "name": "rbac-server-authority",
+      "precondition": "viewer/read-only actor attempts mutation and cross-workspace access",
+      "driver": "python3 scripts/p05/integration.py --case P05-T012",
+      "oracle": "server denies mutations/cross-workspace access independent of frontend visibility",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T012.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P05-T013",
+      "name": "optimistic-concurrency-conflict",
+      "precondition": "two writers hold the same link version",
+      "driver": "python3 scripts/p05/integration.py --case P05-T013",
+      "oracle": "first update succeeds, stale writer receives conflict and cannot overwrite silently",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T013.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T014",
+      "name": "history-restore-audit",
+      "precondition": "link has multiple versions",
+      "driver": "python3 scripts/p05/integration.py --case P05-T014",
+      "oracle": "history records actor/reason/version; restore creates a new version and re-invalidates risk when target set changes",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T014.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T015",
+      "name": "list-search-filter-bulk-export",
+      "precondition": "workspace has varied link fixtures persisted through API",
+      "driver": "python3 scripts/p05/integration.py --case P05-T015",
+      "oracle": "list/count/search/filter/bulk state/export return workspace-scoped deterministic results",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T015.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T016",
+      "name": "redirect-status-and-disabled-states",
+      "precondition": "active, paused, expired, click-limited and deleted links exist",
+      "driver": "python3 scripts/p05/integration.py --case P05-T016",
+      "oracle": "active exact-allow redirects with configured status; disabled states do not reach destination and return registered status semantics",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T016.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P05-T017",
+      "name": "workspace-links-browser-flow",
+      "precondition": "platformapi/redirectengine and Workspace static app are running against real test data",
+      "driver": "node scripts/p05/browser.mjs --case P05-T017",
+      "oracle": "list/search/filter/create/detail/edit/history flow completes without console/page errors or reload regressions",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T017.json",
+      "owner": "Frontend Lead + QA"
+    },
+    {
+      "id": "P05-T018",
+      "name": "mobile-and-accessibility-browser-flow",
+      "precondition": "real Workspace Links flow available",
+      "driver": "node scripts/p05/browser.mjs --case P05-T018",
+      "oracle": "canonical mobile viewport has no root overflow/clipped required text and applicable focus/keyboard/name-role-value contracts pass",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T018.json",
+      "owner": "Accessibility Reviewer + QA"
+    },
+    {
+      "id": "P05-T019",
+      "name": "safety-surface-browser",
+      "precondition": "review/block/missing decisions are configured independently",
+      "driver": "node scripts/p05/browser.mjs --case P05-T019",
+      "oracle": "browser reaches GoJet safety surface, never destination, and no bypass link exposes the unsafe target",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T019.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P05-T020",
+      "name": "p00-p04-regression-and-evidence-index",
+      "precondition": "P05 candidate implementation complete",
+      "driver": "python3 scripts/p05/validate.py --case P05-T020",
+      "oracle": "P00-P04 affected regressions remain green and P05 evidence index is exact-head complete",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P05/results/P05-T020.json",
+      "owner": "QA Lead"
+    }
+  ]
+}
