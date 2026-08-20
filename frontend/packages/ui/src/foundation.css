@@ -1,0 +1,23 @@
+@import "./styles.css";
+@import "@gojet/tokens/responsive.css";
+
+.gj-layout-grid {
+  display: grid;
+}
+
+.gj-sr-only {
+  position: absolute;
+  inline-size: var(--gojet-border-width-default);
+  block-size: var(--gojet-border-width-default);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.gj-table td {
+  height: var(--gojet-density-row-current);
+}
+
+.gj-table th {
+  height: var(--gojet-density-header-current);
+}
