@@ -10,6 +10,14 @@ html:lang(zh-cn) {
   font-family: var(--gojet-font-family-cjk);
 }
 
+.gj-button,
+.gj-input,
+.gj-textarea,
+.gj-select,
+.gj-combobox__input {
+  box-sizing: border-box;
+}
+
 .gj-layout-grid {
   display: grid;
 }
