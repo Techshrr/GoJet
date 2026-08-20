@@ -21,8 +21,13 @@ export type LinkUTM = {
   content?: string;
 };
 
-export type LinkAccess = {
-  password_hash?: string;
+export type LinkAccessState = {
+  password_protected: boolean;
+};
+
+export type LinkAccessInput = {
+  password?: string;
+  clear_password?: boolean;
 };
 
 export type LinkRecord = {
@@ -40,7 +45,7 @@ export type LinkRecord = {
   routing: LinkRoutingRule[];
   ab: LinkABVariant[];
   utm: LinkUTM;
-  access: LinkAccess;
+  access: LinkAccessState;
   expires_at?: string | null;
   click_limit?: number | null;
   click_count: number;
@@ -88,7 +93,7 @@ export type LinkCreateInput = {
   routing: LinkRoutingRule[];
   ab: LinkABVariant[];
   utm: LinkUTM;
-  access: LinkAccess;
+  access: LinkAccessInput;
   expires_at: string | null;
   click_limit: number | null;
   one_time: boolean;
@@ -104,7 +109,7 @@ export type LinkVersionRecord = {
   version: number;
   actor_id: string;
   change_reason: string;
-  snapshot: unknown;
+  snapshot: LinkRecord;
   risk_fingerprint: string;
   created_at: string;
 };
