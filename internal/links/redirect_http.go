@@ -24,6 +24,11 @@ type safetyView struct {
 	Reason  string
 }
 
+type passwordView struct {
+	Code    string
+	Message string
+}
+
 var safetyTemplate = template.Must(template.New("link-safety").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -41,14 +46,38 @@ var safetyTemplate = template.Must(template.New("link-safety").Parse(`<!doctype 
 </body>
 </html>`))
 
+var passwordTemplate = template.Must(template.New("link-password").Parse(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Password required · GoJet</title>
+</head>
+<body>
+<main>
+<h1>Password required</h1>
+<p>This link is protected. Enter its password to continue.</p>
+{{if .Message}}<p role="alert">{{.Message}}</p>{{end}}
+<form method="post" action="">
+<label for="gojet-link-password">Password</label>
+<input id="gojet-link-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="current-password" required>
+<button type="submit">Continue</button>
+</form>
+<p>Reference: <code>{{.Code}}</code></p>
+</main>
+</body>
+</html>`))
+
 func NewRedirectHandler(store *MySQLStore, risk *RedisRiskStore, trustTestRoutingHeaders bool) http.Handler {
 	handler := &RedirectHandler{store: store, risk: risk, trustTestRoutingHeaders: trustTestRoutingHeaders}
 	mux := http.NewServeMux()
 	// In Go's ServeMux, a GET method pattern also matches HEAD. Registering an
 	// additional generic HEAD /{code} conflicts with the more specific
-	// GET /healthz route, so GET registrations are the single route authority.
+	// GET /healthz route, so GET registrations are the single HEAD authority.
 	mux.HandleFunc("GET /healthz", handler.health)
 	mux.HandleFunc("GET /{code}", handler.resolve)
+	mux.HandleFunc("POST /{code}", handler.resolve)
 	return redirectSecurityHeaders(mux)
 }
 
@@ -112,6 +141,8 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Destination risk is the first content authority after link/domain state.
+	// Password verification must never expose or bypass a non-allow decision.
 	_, riskState, riskErr := h.risk.Resolve(r.Context(), link.ID, link.RiskFingerprint, time.Now().UTC())
 	if riskErr != nil {
 		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
@@ -137,6 +168,18 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Access control executes only after exact-current risk allow and target
+	// selection. GET/HEAD never consumes click/one-time counters.
+	if link.Access.PasswordHash != "" {
+		if r.Method != http.MethodPost {
+			h.writePasswordChallenge(w, http.StatusOK, code, "")
+			return
+		}
+		if !h.verifyPasswordAttempt(w, r, link, code) {
+			return
+		}
+	}
+
 	claimed, claimState, err := h.store.ClaimRedirectAccess(
 		r.Context(), link.ID, link.Version, link.RiskFingerprint, time.Now().UTC(),
 	)
@@ -153,10 +196,42 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Exact-current risk allow has been consumed atomically. This is the only
-	// branch that may emit a 3xx Location to a customer destination.
+	// Exact-current risk allow and every applicable access control have now
+	// succeeded. This is the only branch that may emit a customer Location.
 	w.Header().Set("Location", finalDestination)
 	w.WriteHeader(link.RedirectStatus)
+}
+
+func (h *RedirectHandler) verifyPasswordAttempt(w http.ResponseWriter, r *http.Request, link Link, code string) bool {
+	allowed, err := h.risk.AllowPasswordAttempt(r.Context(), link.ID, r.RemoteAddr)
+	if err != nil {
+		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
+		return false
+	}
+	if !allowed {
+		w.Header().Set("Retry-After", "300")
+		h.writePasswordChallenge(w, http.StatusTooManyRequests, code, "Too many password attempts. Try again later.")
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
+		h.writePasswordChallenge(w, http.StatusBadRequest, code, "The password submission was invalid.")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := r.ParseForm(); err != nil {
+		h.writePasswordChallenge(w, http.StatusBadRequest, code, "The password submission was invalid.")
+		return false
+	}
+	password := r.PostForm.Get("password")
+	if !VerifyLinkPassword(link.Access.PasswordHash, password) {
+		h.writePasswordChallenge(w, http.StatusUnauthorized, code, "The password was not accepted.")
+		return false
+	}
+	if err := h.risk.ClearPasswordAttempts(r.Context(), link.ID, r.RemoteAddr); err != nil {
+		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
+		return false
+	}
+	return true
 }
 
 func normalizeRequestHost(raw string) (string, error) {
@@ -258,6 +333,16 @@ func (h *RedirectHandler) writeNotFound(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("<!doctype html><html><head><meta name=\"robots\" content=\"noindex,nofollow\"><title>Not found · GoJet</title></head><body><main><h1>Link not found</h1></main></body></html>"))
+}
+
+func (h *RedirectHandler) writePasswordChallenge(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.WriteHeader(status)
+	if status == http.StatusNoContent || status == http.StatusNotModified || status == http.StatusNotModified {
+		return
+	}
+	_ = passwordTemplate.Execute(w, passwordView{Code: code, Message: message})
 }
 
 func (h *RedirectHandler) writeSafety(w http.ResponseWriter, status int, reason, code string) {
