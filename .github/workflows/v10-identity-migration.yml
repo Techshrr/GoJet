@@ -33,6 +33,7 @@ jobs:
               text = text.replace('GJ-V5-', 'GJ-V10-')
               text = text.replace('GoJet_V5_', 'GoJet_V10_')
               text = re.sub(r'\bV5\b', 'V10', text)
+              text = re.sub(r'\bv5\b', 'v10', text)
               path.write_text(text, encoding='utf-8')
 
           specs = root / 'specifications'
@@ -62,12 +63,12 @@ jobs:
           residual = []
           for path in [root / 'README.md', *sorted(specs.glob('*.md'))]:
               content = path.read_text(encoding='utf-8')
-              if re.search(r'(?<![A-Za-z0-9])V5(?![A-Za-z0-9])|GoJet_V5_|GJ-V5-', content):
+              if re.search(r'(?<![A-Za-z0-9])V5(?![A-Za-z0-9])|(?<![A-Za-z0-9])v5(?![A-Za-z0-9])|GoJet_V5_|GJ-V5-', content):
                   residual.append(str(path))
-              if 'V5' in path.name:
+              if 'V5' in path.name or 'v5' in path.name:
                   residual.append(str(path))
           if residual:
-              raise SystemExit('Residual V5 identity detected: ' + ', '.join(sorted(set(residual))))
+              raise SystemExit('Residual old version identity detected: ' + ', '.join(sorted(set(residual))))
           PY
 
       - name: Commit normalized V10 specification identity
