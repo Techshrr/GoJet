@@ -5,5 +5,5 @@
   "type": "module",
   "scripts": {"build": "astro build", "typecheck": "astro check"},
   "dependencies": {"@astrojs/starlight": "0.41.7", "astro": "7.2.2"},
-  "devDependencies": {"@astrojs/check": "0.9.10", "typescript": "7.0.2"}
+  "devDependencies": {"@astrojs/check": "0.9.10", "typescript": "6.0.3"}
 }

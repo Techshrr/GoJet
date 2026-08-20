@@ -209,7 +209,7 @@ def dependency_case() -> tuple[bool, list[str], dict[str, Any]]:
         lock_sha = digest(lock)
         if "lockfileVersion: '9.0'" not in text:
             errors.append("unexpected pnpm lockfile version")
-        pinned = ["19.2.8", "1.170.29", "5.101.4", "8.2.1", "7.2.2", "0.41.7", "7.0.2"]
+        pinned = ["19.2.8", "1.170.29", "5.101.4", "8.2.1", "7.2.2", "0.41.7", "6.0.3"]
         missing = [item for item in pinned if item not in text]
         if missing:
             errors.append("lockfile missing pinned versions: " + ", ".join(missing))
@@ -264,7 +264,7 @@ def generate_evidence(commit: str, branch: str) -> None:
         "branch": branch,
         "implementation_commit": commit,
         "specification_ids": SPEC_IDS,
-        "toolchain": {"node": environment["node"], "pnpm": environment["pnpm"], "typescript": "7.0.2"},
+        "toolchain": {"node": environment["node"], "pnpm": environment["pnpm"], "typescript": "6.0.3"},
     })
     dep_ok, dep_errors, dep_details = dependency_case()
     write_json(P01 / "dependency-report.json", {"status": "PASS" if dep_ok else "FAIL", "errors": dep_errors, **dep_details})
