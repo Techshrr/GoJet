@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "node": "P04",
+  "authority": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "cases": [
+    {
+      "id": "P04-T001",
+      "precondition": "P03/G2 merged and all six shell implementations are present",
+      "driver": "python3 scripts/p04/validate.py --case P04-T001",
+      "oracle": "Website, Auth, Docs, Workspace, Admin and Installer shell contracts and their exact IA shell-state sets exist without blanket state inheritance",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T001.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P04-T002",
+      "precondition": "React shell apps build from frozen workspace dependencies",
+      "driver": "python3 scripts/p04/validate.py --case P04-T002",
+      "oracle": "primary navigation has real href destinations and browser route transitions do not require document reload in SPA surfaces",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T002.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P04-T003",
+      "precondition": "interactive shell overlays are available",
+      "driver": "python3 scripts/p04/validate.py --case P04-T003",
+      "oracle": "Escape closes one overlay, overlays do not stack, and focus returns to the opening trigger",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T003.json",
+      "owner": "Accessibility Reviewer"
+    },
+    {
+      "id": "P04-T004",
+      "precondition": "canonical Design System viewports and shell CSS are available",
+      "driver": "python3 scripts/p04/validate.py --case P04-T004",
+      "oracle": "six shell families have no root horizontal overflow or clipped required navigation/content at desktop, tablet and mobile canonical viewports",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T004.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P04-T005",
+      "precondition": "shell state registry is frozen from IA §§4 and 15",
+      "driver": "python3 scripts/p04/validate.py --case P04-T005",
+      "oracle": "only applicable shell states are exposed and prohibited blanket loading/empty/quota/permission inheritance is absent",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T005.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P04-T006",
+      "precondition": "all shell builds are produced",
+      "driver": "python3 scripts/p04/validate.py --case P04-T006",
+      "oracle": "Website output has no Workspace/Admin application bundle import or dependency leakage and shell bundle inventory is reviewable",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T006.json",
+      "owner": "Performance Owner"
+    },
+    {
+      "id": "P04-T007",
+      "precondition": "canonical browser driver is available",
+      "driver": "python3 scripts/p04/validate.py --case P04-T007",
+      "oracle": "route/state transitions produce no pageerror, console error or measurable shell layout jump above the P04 threshold",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T007.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P04-T008",
+      "precondition": "canonical browser captures can run with real Simplified Chinese font fallback",
+      "driver": "python3 scripts/p04/validate.py --case P04-T008",
+      "oracle": "responsive capture matrix covers all six shell families at canonical viewports with required locale/theme representatives",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T008.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P04-T009",
+      "precondition": "Installer shell PHP source exists",
+      "driver": "python3 scripts/p04/validate.py --case P04-T009",
+      "oracle": "Installer shell is PHP 8.3 native, exposes only P04 UI states, masks credentials, shows explicit hard-failure/retry/complete boundaries and does not introduce production Node/Docker runtime",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T009.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P04-T010",
+      "precondition": "P04 implementation and evidence are complete",
+      "driver": "python3 scripts/p04/validate.py --case P04-T010",
+      "oracle": "G4 browser-responsive subset and G9 shell-performance subset evidence are internally consistent and exact-head bound",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P04/results/P04-T010.json",
+      "owner": "QA"
+    }
+  ]
+}
