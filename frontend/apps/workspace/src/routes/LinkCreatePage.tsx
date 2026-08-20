@@ -78,7 +78,7 @@ export default function LinkCreatePage() {
               { value: 'custom', label: 'Custom domain — requires P06 authority' },
             ]} />
             <TextField id="link-hostname" label="Hostname" required value={hostname} onChange={(event) => setHostname(event.currentTarget.value)} placeholder="go.example.com" helpText={domainKind === 'custom' ? 'P05 fails closed until P06 confirms entitlement, ownership, DNS, HTTPS and domain risk.' : 'Use an eligible official hostname.'} />
-            <TextField id="link-code" label="Custom code" required value={code} onChange={(event) => setCode(event.currentTarget.value)} placeholder="launch" pattern="[A-Za-z0-9_-]+" />
+            <TextField id="link-code" label="Custom code" required value={code} onChange={(event) => setCode(event.currentTarget.value)} placeholder="launch" pattern="(?:[A-Za-z0-9_]|-)+" />
             <TextField id="link-title" label="Title" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Campaign landing page" />
             <SelectField id="link-redirect-status" label="Redirect status" value={String(redirectStatus)} onChange={(event) => setRedirectStatus(Number(event.currentTarget.value) as LinkCreateInput['redirect_status'])} options={[
               { value: '301', label: '301 — Permanent' },
