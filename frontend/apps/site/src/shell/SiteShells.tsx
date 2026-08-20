@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, InlineMessage } from '@gojet/ui';
-import { useShellViewport } from '@gojet/shell-runtime';
+import { Button, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
 
 const primaryNav = [['Products','/products'],['Solutions','/solutions'],['Developers','/developers'],['Pricing','/pricing']] as const;
