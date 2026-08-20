@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - develop/p01-engineering-foundation
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -16,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -34,7 +37,7 @@ jobs:
       - name: Upload generated lockfile
         uses: actions/upload-artifact@v4
         with:
-          name: p01-pnpm-lock-${{ github.sha }}
+          name: p01-pnpm-lock-${{ github.event.pull_request.head.sha || github.sha }}
           path: pnpm-lock.yaml
           if-no-files-found: error
           retention-days: 7
