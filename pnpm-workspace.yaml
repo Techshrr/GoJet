@@ -2,5 +2,4 @@ packages:
   - 'frontend/apps/*'
   - 'frontend/packages/*'
 
-# GoJet V10 frontend dependencies are build/test inputs only.
-# Production Node runtime is prohibited by the Master Plan.
+# Build-time toolchain only. GoJet production hosts MUST NOT run Node.js.

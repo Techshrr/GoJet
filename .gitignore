@@ -10,7 +10,21 @@
 /artifacts/v10/P00/results/
 /artifacts/v10/gates/G0/traceability/*.json
 
+# GoJet V10 generated P01 evidence
+/artifacts/v10/P01/environment.json
+/artifacts/v10/P01/source.json
+/artifacts/v10/P01/commands.log
+/artifacts/v10/P01/evidence-index.json
+/artifacts/v10/P01/results/
+/artifacts/v10/P01/build-logs/
+/artifacts/v10/P01/bundle-report.json
+/artifacts/v10/P01/dependency-report.json
+/artifacts/v10/gates/G1/native-architecture/p01-*.json
+
 # Local build/tool outputs
 __pycache__/
 *.pyc
 node_modules/
+.pnpm-store/
+frontend/apps/*/dist/
+frontend/apps/docs/.astro/
