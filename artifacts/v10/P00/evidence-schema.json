@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gojet.invalid/schemas/v10/p00-evidence.json",
+  "title": "GoJet V10 P00 Evidence Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "node",
+    "implementation_commit",
+    "specification_ids",
+    "generated_at",
+    "results",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "node": {"const": "P00"},
+    "implementation_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "specification_ids": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "GJ-V10-MP-GREENFIELD-2026-08-20",
+          "GJ-V10-DS-GREENFIELD-2026-08-20",
+          "GJ-V10-IA-GREENFIELD-2026-08-20"
+        ]
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "results": {
+      "type": "object",
+      "required": ["passed", "failed", "total"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 1}
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}
