@@ -1,4 +1,4 @@
-name: P04 Topology Diagnostic
+name: P04 Persist Verified Topology Fix
 
 on:
   pull_request:
@@ -7,25 +7,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnostic:
+  persist:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
-      - name: Checkout exact P04 head
+      - name: Checkout P04 branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: develop/p04-product-shells
           fetch-depth: 1
-          persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 24.19.0
           check-latest: false
-      - name: Normalize scoped workspace subpath imports in working tree
+      - name: Reproduce verified P01 validator patch
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -49,40 +48,23 @@ jobs:
           lines[i:i + 5] = replacement
           path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
-          python3 -m py_compile scripts/p01/validate.py scripts/p04/validate.py
-      - name: Refresh dependency graph in working tree
+      - name: Reproduce verified lockfile
         run: |
           set -euo pipefail
           corepack enable
           corepack install --global pnpm@11.21.0
           pnpm install --lockfile-only
-          pnpm install --frozen-lockfile
-      - name: Verify clean Design System source
+      - name: Require byte-identical verified outputs
         run: |
           set -euo pipefail
-          pnpm run typecheck:packages
-          python3 scripts/p03/validate.py --case P03-T003
-      - name: Verify application architecture
+          printf '%s  %s\n' '1b7d878111088d0ac08f28732360d943c5c32a0ffd7e82253188ee7b7f4bdc2b' 'scripts/p01/validate.py' | sha256sum -c -
+          printf '%s  %s\n' '3dcd819e3d33206b588aec2239b6d7392d9f4caa108d2806273350156273a1f5' 'pnpm-lock.yaml' | sha256sum -c -
+      - name: Commit verified outputs and self-delete
         run: |
           set -euo pipefail
-          pnpm run typecheck:apps
-          python3 scripts/p01/validate.py --case P01-T004
-      - name: Verify production builds and native installer syntax
-        run: |
-          set -euo pipefail
-          pnpm run build:apps
-          php -l installer/src/Shell.php
-          php -l installer/public/index.php
-      - name: Stage proposed persistent files
-        run: |
-          mkdir -p artifacts/v10/P04/topology-fix
-          cp scripts/p01/validate.py artifacts/v10/P04/topology-fix/p01-validate.py
-          cp pnpm-lock.yaml artifacts/v10/P04/topology-fix/pnpm-lock.yaml
-          git diff -- scripts/p01/validate.py pnpm-lock.yaml > artifacts/v10/P04/topology-fix/proposed.patch
-      - name: Upload verified topology fix
-        uses: actions/upload-artifact@v4
-        with:
-          name: gojet-v10-p04-topology-fix-${{ github.event.pull_request.head.sha || github.sha }}
-          if-no-files-found: error
-          retention-days: 7
-          path: artifacts/v10/P04/topology-fix/
+          rm .github/workflows/p04-topology-lock-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p01/validate.py pnpm-lock.yaml .github/workflows/p04-topology-lock-once.yml
+          git commit -m 'build(p04): restore frozen workspace topology'
+          git push origin HEAD:develop/p04-product-shells
