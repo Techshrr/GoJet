@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -17,8 +18,9 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
-	if dsn == "" {
-		logger.Error("required configuration missing", "key", "GOJET_MYSQL_DSN")
+	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
+	if dsn == "" || redisAddr == "" {
+		logger.Error("required configuration missing", "mysql_dsn_present", dsn != "", "redis_addr_present", redisAddr != "")
 		os.Exit(1)
 	}
 
@@ -29,15 +31,33 @@ func main() {
 	}
 	defer db.Close()
 
+	redisDB := 0
+	if raw := strings.TrimSpace(os.Getenv("GOJET_REDIS_DB")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 0 {
+			logger.Error("invalid GOJET_REDIS_DB")
+			os.Exit(1)
+		}
+		redisDB = parsed
+	}
+	redisClient := links.NewRedisClient(redisAddr, os.Getenv("GOJET_REDIS_PASSWORD"), redisDB)
+	defer redisClient.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	if err := db.PingContext(ctx); err != nil {
 		cancel()
 		logger.Error("mysql unavailable", "error", err)
 		os.Exit(1)
 	}
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		cancel()
+		logger.Error("redis unavailable", "error", err)
+		os.Exit(1)
+	}
 	cancel()
 
 	store := links.NewMySQLStore(db)
+	risk := links.NewRedisRiskStore(redisClient)
 	testAuth := os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1"
 	if testAuth {
 		logger.Warn("test-only auth adapter enabled; never use this setting in production")
@@ -50,7 +70,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           api.FullHandler(),
+		Handler:           api.FullHandlerWithRisk(risk),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
