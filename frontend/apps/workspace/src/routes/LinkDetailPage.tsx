@@ -74,6 +74,11 @@ export default function LinkDetailPage() {
     enabled: client !== null && runtime !== null && Number.isSafeInteger(numericId) && numericId > 0,
     queryFn: () => client!.get(runtime!.workspaceId, numericId),
   });
+  const riskQuery = useQuery({
+    queryKey: ['link-risk', runtime?.workspaceId, numericId, draft?.risk_fingerprint],
+    enabled: client !== null && runtime !== null && draft !== null && numericId > 0,
+    queryFn: () => client!.risk(runtime!.workspaceId, numericId),
+  });
   const historyQuery = useQuery({
     queryKey: ['link-history', runtime?.workspaceId, numericId],
     enabled: activeTab === 'history' && client !== null && runtime !== null && numericId > 0,
@@ -94,6 +99,7 @@ export default function LinkDetailPage() {
       setRiskNotice('Reachable-target edits invalidate the previous decision. Redirects remain fail-closed until this exact fingerprint receives allow.');
       await queryClient.invalidateQueries({ queryKey: ['links', runtime?.workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ['link-history', runtime?.workspaceId, numericId] });
+      await queryClient.invalidateQueries({ queryKey: ['link-risk', runtime?.workspaceId, numericId] });
     },
   });
 
@@ -118,6 +124,7 @@ export default function LinkDetailPage() {
       setRiskNotice('Restore created a new version and the restored reachable-target set now requires an exact-current risk decision.');
       await queryClient.invalidateQueries({ queryKey: ['link-history', runtime?.workspaceId, numericId] });
       await queryClient.invalidateQueries({ queryKey: ['links', runtime?.workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['link-risk', runtime?.workspaceId, numericId] });
     },
   });
 
@@ -150,6 +157,7 @@ export default function LinkDetailPage() {
   }
 
   const apiError = saveMutation.error instanceof GoJetApiError ? saveMutation.error : null;
+  const riskState = riskQuery.data?.state;
 
   return (
     <WorkspaceShell state={readOnly && runtime ? 'read-only-role' : 'notification-attention'} sectionLabel="Link detail">
@@ -163,11 +171,19 @@ export default function LinkDetailPage() {
         {linkQuery.isError ? <InlineMessage variant="danger">This link could not be loaded.</InlineMessage> : null}
         {apiError ? <InlineMessage variant={apiError.status === 409 ? 'warning' : 'danger'}>{apiError.message} <strong>{apiError.code}</strong></InlineMessage> : null}
         {riskNotice ? <InlineMessage variant="warning">{riskNotice}</InlineMessage> : null}
+        {riskQuery.isError ? <InlineMessage variant="danger">Destination-risk authority is unavailable. Redirects remain fail-closed.</InlineMessage> : null}
+        {riskState === 'allow' ? <InlineMessage variant="success">The exact-current destination fingerprint is allowed. Redirectengine may proceed to routing and access checks.</InlineMessage> : null}
+        {riskState === 'review' ? <InlineMessage variant="warning">The exact-current destination fingerprint is under review. Customer redirects remain fail-closed.</InlineMessage> : null}
+        {riskState === 'block' ? <InlineMessage variant="danger">The exact-current destination fingerprint is blocked. Customer redirects are denied.</InlineMessage> : null}
+        {riskState === 'missing' ? <InlineMessage variant="warning">No current destination-risk decision exists for this fingerprint. Customer redirects remain fail-closed.</InlineMessage> : null}
+        {riskState === 'malformed' ? <InlineMessage variant="danger">The current destination-risk decision is malformed and is treated as unsafe.</InlineMessage> : null}
+        {riskState === 'stale' ? <InlineMessage variant="warning">The destination-risk decision is stale. A fresh decision is required before redirecting.</InlineMessage> : null}
 
         {draft ? (
           <>
             <Card as="section" className="links-risk-card">
-              <div><strong>Destination safety fingerprint</strong><code>{draft.risk_fingerprint}</code></div>
+              <div><strong>Destination safety state</strong><span className="links-state" data-state={riskState ?? 'unknown'}>{riskQuery.isPending ? 'checking' : riskState ?? 'unavailable'}</span></div>
+              <div><strong>Current fingerprint</strong><code>{draft.risk_fingerprint}</code></div>
               <p>Redirectengine only emits a customer 3xx after an exact-current allow decision for this fingerprint. Domain trust never substitutes for destination trust.</p>
             </Card>
             <Tabs tabs={tabs.map((tab) => ({ ...tab }))} activeId={activeTab} onChange={(id) => setActiveTab(id as TabId)} ariaLabel="Link detail sections" />
