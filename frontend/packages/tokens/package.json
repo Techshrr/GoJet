@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {".": "./src/index.ts"},
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./generated/tokens.ts",
+    "./tokens.css": "./generated/tokens.css",
+    "./design-variables.json": "./generated/design-variables.json"
+  },
   "types": "./src/index.ts"
 }
