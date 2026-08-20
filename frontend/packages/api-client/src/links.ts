@@ -156,7 +156,7 @@ function buildQuery(filters: LinkListFilters): string {
 
 export class GoJetLinksClient {
   private readonly baseUrl: string;
-  private readonly headers?: () => HeadersInit;
+  private readonly headers: (() => HeadersInit) | undefined;
   private readonly doFetch: typeof globalThis.fetch;
 
   constructor(transport: ApiTransport = {}) {
