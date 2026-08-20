@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   GoJetApiError,
   type LinkABVariant,
+  type LinkAccessInput,
   type LinkRecord,
   type LinkRoutingRule,
   type LinkUpdateInput,
@@ -35,7 +36,10 @@ const tabs = [
 
 type TabId = typeof tabs[number]['id'];
 
-function updateInput(link: LinkRecord, reason: string): LinkUpdateInput {
+function updateInput(link: LinkRecord, reason: string, newPassword: string, clearPassword: boolean): LinkUpdateInput {
+  const access: LinkAccessInput = {};
+  if (clearPassword) access.clear_password = true;
+  else if (newPassword) access.password = newPassword;
   return {
     expected_version: link.version,
     hostname: link.hostname,
@@ -48,7 +52,7 @@ function updateInput(link: LinkRecord, reason: string): LinkUpdateInput {
     routing: link.routing,
     ab: link.ab,
     utm: link.utm,
-    access: link.access,
+    access,
     expires_at: link.expires_at ?? null,
     click_limit: link.click_limit ?? null,
     one_time: link.one_time,
@@ -68,6 +72,8 @@ export default function LinkDetailPage() {
   const [draft, setDraft] = useState<LinkRecord | null>(null);
   const [reason, setReason] = useState('Update link');
   const [riskNotice, setRiskNotice] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [clearPassword, setClearPassword] = useState(false);
 
   const linkQuery = useQuery({
     queryKey: ['link', runtime?.workspaceId, numericId],
@@ -92,11 +98,14 @@ export default function LinkDetailPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!client || !runtime || !draft) throw new Error('Link editor unavailable');
-      return client.update(runtime.workspaceId, draft.id, updateInput(draft, reason));
+      return client.update(runtime.workspaceId, draft.id, updateInput(draft, reason, newPassword, clearPassword));
     },
     onSuccess: async (updated) => {
+      const fingerprintChanged = draft !== null && draft.risk_fingerprint !== updated.risk_fingerprint;
       setDraft(updated);
-      setRiskNotice('Reachable-target edits invalidate the previous decision. Redirects remain fail-closed until this exact fingerprint receives allow.');
+      setNewPassword('');
+      setClearPassword(false);
+      setRiskNotice(fingerprintChanged ? 'Reachable-target edits invalidated the previous decision. Redirects remain fail-closed until this exact fingerprint receives allow.' : null);
       await queryClient.invalidateQueries({ queryKey: ['links', runtime?.workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ['link-history', runtime?.workspaceId, numericId] });
       await queryClient.invalidateQueries({ queryKey: ['link-risk', runtime?.workspaceId, numericId] });
@@ -120,8 +129,11 @@ export default function LinkDetailPage() {
       return client.restore(runtime.workspaceId, draft.id, draft.version, restoreVersion, reason);
     },
     onSuccess: async (restored) => {
+      const fingerprintChanged = draft !== null && draft.risk_fingerprint !== restored.risk_fingerprint;
       setDraft(restored);
-      setRiskNotice('Restore created a new version and the restored reachable-target set now requires an exact-current risk decision.');
+      setNewPassword('');
+      setClearPassword(false);
+      setRiskNotice(fingerprintChanged ? 'Restore created a new version with a changed reachable-target set. A new exact-current risk decision is required.' : null);
       await queryClient.invalidateQueries({ queryKey: ['link-history', runtime?.workspaceId, numericId] });
       await queryClient.invalidateQueries({ queryKey: ['links', runtime?.workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ['link-risk', runtime?.workspaceId, numericId] });
@@ -255,10 +267,12 @@ export default function LinkDetailPage() {
                 {activeTab === 'access' ? (
                   <Card as="section" className="links-form-section">
                     <h2>Access</h2>
+                    <InlineMessage variant="info">Password protection is currently <strong>{draft.access.password_protected ? 'enabled' : 'disabled'}</strong>. The stored verifier is never returned to Workspace clients.</InlineMessage>
                     <TextField id="detail-expires" label="Expiration" type="datetime-local" value={draft.expires_at ? draft.expires_at.slice(0, 16) : ''} onChange={(event) => setDraft({ ...draft, expires_at: event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : null })} />
                     <TextField id="detail-click-limit" label="Click limit" type="number" min="1" value={draft.click_limit ?? ''} onChange={(event) => setDraft({ ...draft, click_limit: event.currentTarget.value ? Number(event.currentTarget.value) : null })} />
                     <Checkbox label="One-time link" checked={draft.one_time} onChange={(event) => setDraft({ ...draft, one_time: event.currentTarget.checked })} />
-                    <TextField id="detail-password" label="Password protection" disabled value="" helpText="Not enabled until server-side hashing and challenge verification are implemented. The browser never submits a trusted password_hash value." />
+                    <TextField id="detail-password" label={draft.access.password_protected ? 'Replace password' : 'Add password'} type="password" minLength={8} maxLength={256} autoComplete="new-password" value={newPassword} onChange={(event) => { setNewPassword(event.currentTarget.value); if (event.currentTarget.value) setClearPassword(false); }} helpText="Leave empty to preserve the current setting. A submitted plaintext password is hashed server-side and is never returned." />
+                    <Checkbox label="Remove password protection" checked={clearPassword} disabled={!draft.access.password_protected || Boolean(newPassword)} onChange={(event) => { setClearPassword(event.currentTarget.checked); if (event.currentTarget.checked) setNewPassword(''); }} />
                   </Card>
                 ) : null}
 
@@ -283,6 +297,7 @@ export default function LinkDetailPage() {
                       <article className="links-history-row" key={version.version}>
                         <div><strong>Version {version.version}</strong><span>{version.actor_id}</span></div>
                         <p>{version.change_reason}</p>
+                        <p>Password protection: {version.snapshot.access.password_protected ? 'enabled' : 'disabled'}</p>
                         <Button variant="outline" disabled={readOnly || restoreMutation.isPending || version.version === draft.version || !reason.trim()} onClick={() => restoreMutation.mutate(version.version)}>Restore as new version</Button>
                       </article>
                     ))}
