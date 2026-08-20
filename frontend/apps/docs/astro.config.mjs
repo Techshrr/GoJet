@@ -12,7 +12,23 @@ export default defineConfig({
         en: { label: 'English', lang: 'en' },
         'zh-CN': { label: '简体中文', lang: 'zh-CN' },
       },
-      sidebar: [],
+      sidebar: [
+        {
+          label: 'Start',
+          translations: { 'zh-CN': '开始' },
+          items: [
+            {
+              label: 'Overview',
+              translations: { 'zh-CN': '概览' },
+              slug: 'index',
+            },
+          ],
+        },
+      ],
+      customCss: ['./src/styles/docs-shell.css'],
+      components: {
+        SocialIcons: './src/components/WorkspaceLink.astro',
+      },
     }),
   ],
 });

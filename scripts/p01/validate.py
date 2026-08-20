@@ -139,9 +139,11 @@ def boundary_case() -> tuple[bool, list[str], dict[str, Any]]:
             for source in [*source_root.rglob("*.ts"), *source_root.rglob("*.tsx")]:
                 text = source.read_text(encoding="utf-8")
                 imports = re.findall(r"(?:from\s+|import\s*)['\"](@gojet/[^'\"]+)['\"]", text)
-                for dep in imports:
+                for imported in imports:
+                    parts = imported.split("/")
+                    dep = "/".join(parts[:2]) if len(parts) >= 2 else imported
                     if dep not in declared:
-                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {dep}")
+                        errors.append(f"{source.relative_to(ROOT)} imports undeclared workspace dependency {imported}")
                     if name in PACKAGES and dep in APPS:
                         errors.append(f"shared package {name} imports app {dep}")
 

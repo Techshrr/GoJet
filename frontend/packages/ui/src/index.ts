@@ -59,3 +59,5 @@ export {
   themeBootstrapScript,
 } from './theme';
 export type { ResolvedTheme, ThemePreference } from './theme';
+export { useShellViewport } from './responsive';
+export type { ShellViewport } from './responsive';

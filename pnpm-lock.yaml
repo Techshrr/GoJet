@@ -17,6 +17,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.4
         version: 19.2.4(@types/react@19.2.18)
+      playwright-core:
+        specifier: 1.62.1
+        version: 1.62.1
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -26,6 +29,9 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@gojet/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@gojet/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -63,6 +69,9 @@ importers:
       '@astrojs/starlight':
         specifier: 0.41.7
         version: 0.41.7(astro@7.2.2(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.3)(@types/node@24.13.3)(yaml@2.9.0))(supports-color@7.2.0)(typescript@6.0.3)
+      '@gojet/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
       astro:
         specifier: 7.2.2
         version: 7.2.2(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.3)(@types/node@24.13.3)(yaml@2.9.0)
@@ -79,6 +88,9 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@gojet/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@gojet/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -116,6 +128,9 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@gojet/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@gojet/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -1975,6 +1990,11 @@ packages:
   picomatch@4.0.5:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
+
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   postcss-nested@6.2.0:
     resolution: {integrity: sha512-HQbt28KulC5AJzG+cZtj9kvKB93CFCdLvog1WFLf1D+xmMvPGlBstkpTEZfK5+AN9hfJocyBFCNiqyS48bpgzQ==}
@@ -4779,6 +4799,8 @@ snapshots:
   picomatch@2.3.2: {}
 
   picomatch@4.0.5: {}
+
+  playwright-core@1.62.1: {}
 
   postcss-nested@6.2.0(postcss@8.5.26):
     dependencies:
