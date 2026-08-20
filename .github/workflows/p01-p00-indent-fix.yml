@@ -1,0 +1,97 @@
+name: P01 P00 Validator Indentation Fix
+
+on:
+  push:
+    branches:
+      - develop/p01-engineering-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop/p01-engineering-foundation
+          fetch-depth: 1
+      - name: Rewrite P00 T006 with valid stage-aware semantics
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import textwrap
+
+          path = Path('scripts/p00/validate.py')
+          text = path.read_text(encoding='utf-8')
+          replacement = textwrap.dedent('''\
+          def t006() -> dict[str, Any]:
+              errors: list[str] = []
+              inventory = dependency_inventory()
+              count = len(inventory["go"]) + len(inventory["npm"])
+              locks = sorted(rel(p) for p in tracked() if p.name in {"go.sum", "pnpm-lock.yaml"})
+              p01_started = (ROOT / "artifacts/v10/P01/test-plan.json").exists()
+
+              if not p01_started:
+                  # At the P00 baseline there must be no application dependency inventory yet.
+                  if count:
+                      errors.append("P00 introduced third-party dependencies before P01: " + json.dumps(inventory, ensure_ascii=False))
+                  phase = "P00"
+              else:
+                  # P01 is the first node permitted to introduce frontend build/test dependencies.
+                  # Preserve the P00 Greenfield boundary by requiring those dependencies to remain
+                  # inside the current repository workspace and under P01 lock/evidence governance.
+                  phase = "P01+"
+                  required_p01 = [
+                      "artifacts/v10/P01/test-plan.json",
+                      "scripts/p01/validate.py",
+                      ".github/workflows/p01-engineering.yml",
+                      "pnpm-lock.yaml",
+                  ]
+                  missing_p01 = [item for item in required_p01 if not (ROOT / item).exists()]
+                  if missing_p01:
+                      errors.append("P01 dependency governance files missing: " + ", ".join(missing_p01))
+                  if inventory["go"]:
+                      errors.append("P01 introduced Go third-party dependencies outside the P01 frontend-engineering scope: " + json.dumps(inventory["go"], ensure_ascii=False))
+                  if inventory["npm"] and "pnpm-lock.yaml" not in locks:
+                      errors.append("P01 npm dependencies are not governed by checked-in pnpm-lock.yaml")
+                  allowed_manifest = re.compile(r"^(?:package\\.json|frontend/(?:apps|packages)/[^/]+/package\\.json)$")
+                  bad_manifests = sorted({
+                      item["manifest"]
+                      for item in inventory["npm"]
+                      if not allowed_manifest.fullmatch(item["manifest"])
+                  })
+                  if bad_manifests:
+                      errors.append("npm dependencies declared outside governed P01 workspace manifests: " + ", ".join(bad_manifests))
+
+              return result(
+                  errors,
+                  phase=phase,
+                  inventory=inventory,
+                  dependency_count=count,
+                  tracked_lockfiles=locks,
+              )
+          ''')
+          pattern = re.compile(r'def t006\(\) -> dict\[str, Any\]:.*?\n\nCASES:', re.S)
+          updated, count = pattern.subn(replacement + '\n\nCASES:', text, count=1)
+          if count != 1:
+              raise SystemExit(f'expected one T006 block, replaced {count}')
+          path.write_text(updated, encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/p00/validate.py
+      - name: Commit valid P00 validator
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p00/validate.py
+          if git diff --cached --quiet; then
+            echo 'P00 validator already valid.'
+            exit 0
+          fi
+          git commit -m 'fix(p01): repair P00 stage-aware regression validator'
+          git push origin HEAD:develop/p01-engineering-foundation
