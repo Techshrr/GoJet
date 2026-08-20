@@ -109,7 +109,7 @@ func (a *API) restoreLink(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, restored)
+	writeJSON(w, http.StatusOK, publicLink(restored))
 }
 
 func (a *API) bulkLinks(w http.ResponseWriter, r *http.Request) {
