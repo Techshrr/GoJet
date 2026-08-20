@@ -125,7 +125,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p05/integration.py --case all
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" python3 scripts/p05/integration.py --case all
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          head = os.environ["EXACT_HEAD"]
+          root = Path("artifacts/v10/P05/results")
+          errors = []
+          for number in range(1, 17):
+              case_id = f"P05-T{number:03d}"
+              path = root / f"{case_id}.json"
+              if not path.is_file():
+                  errors.append(f"missing {path}")
+                  continue
+              data = json.loads(path.read_text(encoding="utf-8"))
+              if data.get("implementation_commit") != head:
+                  errors.append(f"{case_id} implementation_commit={data.get('implementation_commit')} expected={head}")
+          if errors:
+              raise SystemExit("\n".join(errors))
+          print(f"P05-T001..T016 evidence bound to exact head {head}")
+          PY
 
       - name: Capture final MySQL Redis and process evidence
         if: always()
