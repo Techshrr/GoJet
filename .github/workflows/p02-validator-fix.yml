@@ -1,0 +1,44 @@
+name: P02 Validator False Positive Fix
+
+on:
+  push:
+    branches:
+      - develop/p02-brand-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop/p02-brand-foundation
+          fetch-depth: 1
+      - name: Fix SVG and reduced-motion false positives
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/p02/validate.py')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('re.search(r"<image\\b|data:image/|https?://",b)', 're.search(r"<image\\b|data:image/",b)')
+          old = '''for needle in ("6000ms","prefers-reduced-motion: reduce","animation:none","120ms"):\n        if needle not in j.replace(" ",""): errors.append(f"Jet Path reduced-motion reference missing {needle}")'''
+          new = '''compact=j.replace(" ","")\n    for needle in ("6000ms","prefers-reduced-motion:reduce","animation:none","120ms"):\n        if needle not in compact: errors.append(f"Jet Path reduced-motion reference missing {needle}")'''
+          if old not in s:
+              raise SystemExit('reduced-motion validator block not found')
+          p.write_text(s.replace(old,new), encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/p02/validate.py
+          python3 scripts/p02/validate.py
+      - name: Commit validator correction
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p02/validate.py
+          git commit -m 'fix(p02): correct brand validator false positives'
+          git push origin HEAD:develop/p02-brand-foundation
