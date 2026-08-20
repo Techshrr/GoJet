@@ -29,9 +29,6 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@gojet/shell-runtime':
-        specifier: workspace:*
-        version: link:../../packages/shell-runtime
       '@gojet/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -91,9 +88,6 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@gojet/shell-runtime':
-        specifier: workspace:*
-        version: link:../../packages/shell-runtime
       '@gojet/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -134,9 +128,6 @@ importers:
       '@gojet/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@gojet/shell-runtime':
-        specifier: workspace:*
-        version: link:../../packages/shell-runtime
       '@gojet/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -187,15 +178,6 @@ importers:
   frontend/packages/icons: {}
 
   frontend/packages/motion: {}
-
-  frontend/packages/shell-runtime:
-    dependencies:
-      '@gojet/tokens':
-        specifier: workspace:*
-        version: link:../tokens
-      react:
-        specifier: 19.2.8
-        version: 19.2.8
 
   frontend/packages/tokens: {}
 
