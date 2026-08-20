@@ -41,15 +41,17 @@ export default function LinksListPage() {
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [exportState, setExportState] = useState<string | null>(null);
 
-  const filters = useMemo<LinkListFilters>(() => ({
-    q: q || undefined,
-    hostname: hostname || undefined,
-    status: status === 'active' || status === 'paused' || status === 'deleted' ? status : undefined,
-    updated_from: dateStart(fromDate),
-    updated_to: dateEnd(toDate),
-    limit: 100,
-    offset: 0,
-  }), [q, hostname, status, fromDate, toDate]);
+  const filters = useMemo<LinkListFilters>(() => {
+    const next: LinkListFilters = { limit: 100, offset: 0 };
+    if (q) next.q = q;
+    if (hostname) next.hostname = hostname;
+    if (status === 'active' || status === 'paused' || status === 'deleted') next.status = status;
+    const updatedFrom = dateStart(fromDate);
+    const updatedTo = dateEnd(toDate);
+    if (updatedFrom) next.updated_from = updatedFrom;
+    if (updatedTo) next.updated_to = updatedTo;
+    return next;
+  }, [q, hostname, status, fromDate, toDate]);
 
   const linksQuery = useQuery({
     queryKey: ['links', runtime?.workspaceId, filters],
