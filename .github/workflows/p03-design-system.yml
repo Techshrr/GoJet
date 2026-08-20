@@ -26,6 +26,18 @@ jobs:
         with:
           node-version: 24.19.0
           check-latest: false
+      - name: Install canonical CJK evidence font
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig
+          fc-cache -f
+          resolved="$(fc-match 'Noto Sans SC' --format '%{family}\n' | head -n 1)"
+          echo "Resolved Noto Sans SC as: ${resolved}"
+          if ! printf '%s\n' "$resolved" | grep -Eiq 'Noto Sans( CJK)? SC'; then
+            echo "Noto Sans SC did not resolve to a Simplified Chinese Noto family." >&2
+            exit 1
+          fi
       - name: Activate pinned pnpm
         run: |
           set -euo pipefail
