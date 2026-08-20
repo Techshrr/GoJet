@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lockfile:
@@ -19,9 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
-          persist-credentials: false
+          persist-credentials: ${{ github.event_name == 'push' }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24.19.0'
@@ -34,6 +34,19 @@ jobs:
           pnpm --version
       - name: Generate lockfile only
         run: pnpm install --lockfile-only --ignore-scripts
+      - name: Commit lockfile to development branch
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- pnpm-lock.yaml && git ls-files --error-unmatch pnpm-lock.yaml >/dev/null 2>&1; then
+            echo 'pnpm-lock.yaml is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml
+          git commit -m 'build(p01): lock frontend dependencies'
+          git push origin HEAD:develop/p01-engineering-foundation
       - name: Upload generated lockfile
         uses: actions/upload-artifact@v4
         with:
