@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 )
 
 const riskFingerprintVersion = "gojet-v10-risk-targets-v1"
@@ -17,6 +18,9 @@ const riskFingerprintVersion = "gojet-v10-risk-targets-v1"
 var (
 	ErrInvalidDestination = errors.New("invalid destination")
 	ErrInvalidABWeights   = errors.New("invalid A/B weights")
+	ErrInvalidInput       = errors.New("invalid link input")
+	ErrNotFound           = errors.New("link not found")
+	ErrConflict           = errors.New("link version conflict")
 )
 
 type RoutingRule struct {
@@ -62,6 +66,13 @@ type Link struct {
 	AB                 []ABVariant   `json:"ab"`
 	UTM                UTMConfig     `json:"utm"`
 	Access             AccessConfig  `json:"access"`
+	ExpiresAt          *time.Time    `json:"expires_at,omitempty"`
+	ClickLimit         *uint64       `json:"click_limit,omitempty"`
+	ClickCount         uint64        `json:"click_count"`
+	OneTime            bool          `json:"one_time"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+	DeletedAt          *time.Time    `json:"deleted_at,omitempty"`
 }
 
 // NormalizeDestination returns the canonical URL representation used by the
@@ -98,6 +109,8 @@ func NormalizeDestination(raw string) (string, error) {
 	}
 	if port != "" {
 		u.Host = net.JoinHostPort(hostname, port)
+	} else if ip := net.ParseIP(hostname); ip != nil && strings.Contains(hostname, ":") {
+		u.Host = "[" + hostname + "]"
 	} else {
 		u.Host = hostname
 	}
