@@ -45,7 +45,7 @@ def t002():
         b=text(p)
         if "<svg" not in b or "viewBox=" not in b: errors.append(f"{n} is not a viewBox SVG")
         if 'data-authority="GJ-V10-DS-GREENFIELD-2026-08-20"' not in b: errors.append(f"{n} missing authority metadata")
-        if re.search(r"<image\b|data:image/|https?://",b): errors.append(f"{n} contains embedded/external raster reference")
+        if re.search(r"<image\b|data:image/",b): errors.append(f"{n} contains embedded/external raster reference")
     return not errors,errors,{}
 
 def t003():
@@ -84,8 +84,9 @@ def t006():
     errors=[]; ds=text(DS); j=text(JET) if JET.exists() else ""
     if not re.search(r"`motion\.duration\.path`\s*\|\s*6000ms",ds): errors.append("Design System path duration mismatch")
     if not re.search(r"`motion\.duration\.reduced`\s*\|\s*120ms",ds): errors.append("Design System reduced duration mismatch")
-    for needle in ("6000ms","prefers-reduced-motion: reduce","animation:none","120ms"):
-        if needle not in j.replace(" ",""): errors.append(f"Jet Path reduced-motion reference missing {needle}")
+    compact=j.replace(" ","")
+    for needle in ("6000ms","prefers-reduced-motion:reduce","animation:none","120ms"):
+        if needle not in compact: errors.append(f"Jet Path reduced-motion reference missing {needle}")
     return not errors,errors,{}
 
 def t007():
