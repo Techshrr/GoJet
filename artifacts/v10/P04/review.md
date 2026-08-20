@@ -5,6 +5,12 @@ Issue: #14
 PR: #15  
 Status: **PENDING**
 
+## Current verification state
+
+- Six shell implementation families are present: Website, Auth, Docs, Workspace, Admin and native PHP Installer.
+- The P04 browser evidence toolchain dependency `playwright-core@1.62.1` is now frozen in `pnpm-lock.yaml`.
+- Browser, G4 subset and G9 subset evidence are not approved until the current human-owned exact head completes the full workflow matrix.
+
 ## Accountable review
 
 - Frontend Lead: PENDING
