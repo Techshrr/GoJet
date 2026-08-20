@@ -1,0 +1,44 @@
+name: P04 Lock and Typecheck Bootstrap
+
+on:
+  push:
+    branches:
+      - develop/p04-product-shells
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop/p04-product-shells
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+      - name: Refresh lock and verify strict TypeScript
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          pnpm install --lockfile-only
+          pnpm install --frozen-lockfile
+          pnpm run typecheck:packages
+          pnpm run typecheck:apps
+      - name: Commit lockfile only after checks pass
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo 'Lockfile already current.'
+            exit 0
+          fi
+          git commit -m 'build(p04): refresh shell workspace lockfile'
+          git push origin HEAD:develop/p04-product-shells
