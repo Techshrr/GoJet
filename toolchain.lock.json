@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "product": "GoJet V10",
+  "frozen_at": "2026-08-20",
+  "source_specification": "GJ-V10-MP-GREENFIELD-2026-08-20",
+  "development": {
+    "go": "1.26.5",
+    "node": "24.19.0",
+    "pnpm": "11.21.0",
+    "php": "8.3"
+  },
+  "production_contract": {
+    "nginx": "required-native",
+    "go_binaries": 8,
+    "php_fpm": "8.3",
+    "mysql": "8.x",
+    "redis": "required",
+    "clamav": "required-fail-closed",
+    "storage": "local-filesystem",
+    "systemd": "required",
+    "docker_compose": "prohibited",
+    "node_runtime": "prohibited"
+  },
+  "notes": [
+    "Go is pinned to the latest stable release verified at P00 freeze time.",
+    "Node is pinned to the LTS line for frontend build/test use only; it is not a production runtime.",
+    "pnpm is pinned to the current stable 11.x release at P00 freeze time; prerelease pnpm 12 is not used."
+  ]
+}
