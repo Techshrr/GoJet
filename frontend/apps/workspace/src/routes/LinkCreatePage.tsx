@@ -22,12 +22,15 @@ export default function LinkCreatePage() {
   const [expiresAt, setExpiresAt] = useState('');
   const [clickLimit, setClickLimit] = useState('');
   const [oneTime, setOneTime] = useState(false);
+  const [password, setPassword] = useState('');
   const [changeReason, setChangeReason] = useState('Create link');
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!client || !runtime) throw new Error('Workspace authority unavailable');
       const limit = clickLimit.trim() ? Number(clickLimit) : null;
+      const access: LinkCreateInput['access'] = {};
+      if (password) access.password = password;
       const input: LinkCreateInput = {
         hostname: hostname.trim(),
         domain_kind: domainKind,
@@ -38,7 +41,7 @@ export default function LinkCreatePage() {
         routing: [],
         ab: [],
         utm: {},
-        access: {},
+        access,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
         click_limit: limit,
         one_time: oneTime,
@@ -47,6 +50,7 @@ export default function LinkCreatePage() {
       return client.create(runtime.workspaceId, input);
     },
     onSuccess: async (created) => {
+      setPassword('');
       await queryClient.invalidateQueries({ queryKey: ['links', runtime?.workspaceId] });
       await navigate({ to: '/app/links/$linkId', params: { linkId: String(created.id) } });
     },
@@ -93,7 +97,7 @@ export default function LinkCreatePage() {
             <TextField id="link-expires" label="Expiration" type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.currentTarget.value)} />
             <TextField id="link-click-limit" label="Click limit" type="number" min="1" step="1" value={clickLimit} onChange={(event) => setClickLimit(event.currentTarget.value)} placeholder="No limit" />
             <Checkbox label="One-time link" checked={oneTime} onChange={(event) => setOneTime(event.currentTarget.checked)} />
-            <TextField id="link-password-owner" label="Password protection" disabled value="" helpText="Server-side password hashing and challenge enforcement must be completed before this control can be enabled; P05 does not send password hashes from the browser." />
+            <TextField id="link-password" label="Password protection" type="password" minLength={8} maxLength={256} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.currentTarget.value)} helpText="Optional. The plaintext is sent only for this mutation; platformapi stores a salted verifier and never returns it." />
             <SelectField id="link-campaign-owner" label="Campaign" disabled value="" options={[{ value: '', label: 'Campaign authority not yet available' }]} helpText="Campaign records are owned by the Campaign/Analytics node." />
             <SelectField id="link-tags-owner" label="Tags" disabled value="" options={[{ value: '', label: 'Tag authority not yet available' }]} helpText="Workspace tag records are owned by P12." />
             <TextField id="link-change-reason" label="Change reason" required value={changeReason} onChange={(event) => setChangeReason(event.currentTarget.value)} helpText="Stored with immutable version and audit history." />
