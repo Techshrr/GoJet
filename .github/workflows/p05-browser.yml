@@ -1,0 +1,192 @@
+name: P05 Workspace Browser
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p05/browser.mjs'
+      - 'artifacts/v10/P05/test-plan.json'
+      - '.github/workflows/p05-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p05-workspace-browser:
+    name: P05 real Workspace browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_TEST_ROUTING_HEADERS: '1'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_REDIRECTENGINE_ADDR: 127.0.0.1:18080
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_REDIRECT_URL: http://127.0.0.1:18080
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_REDIS_HOST: 127.0.0.1
+      GOJET_TEST_REDIS_PORT: '6379'
+      GOJET_TEST_WORKSPACE_ID: ws-p05-browser
+      GOJET_TEST_ACTOR_ID: p05-browser-owner
+      GOJET_TEST_SHORT_HOST: 127.0.0.1
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      VITE_GOJET_TEST_AUTH_ENABLED: '1'
+      VITE_GOJET_TEST_WORKSPACE_ID: ws-p05-browser
+      VITE_GOJET_TEST_ACTOR_ID: p05-browser-owner
+      VITE_GOJET_TEST_WORKSPACE_ROLE: owner
+      VITE_GOJET_TEST_SHORT_HOST: 127.0.0.1
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install integration clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify and install dependencies
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          pnpm install --frozen-lockfile
+          node --check scripts/p05/browser.mjs
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+
+      - name: Apply P05 migration
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
+
+      - name: Build native services and Workspace
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p05-browser artifacts/v10/P05/runtime
+          go build -trimpath -o /tmp/gojet-p05-browser/platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p05-browser/redirectengine ./services/redirectengine/cmd/server
+          pnpm --filter @gojet/workspace build
+
+      - name: Start native services and Workspace preview
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p05-browser/platformapi > artifacts/v10/P05/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P05/runtime/browser-platformapi.pid
+          /tmp/gojet-p05-browser/redirectengine > artifacts/v10/P05/runtime/browser-redirectengine.log 2>&1 &
+          echo $! > artifacts/v10/P05/runtime/browser-redirectengine.pid
+          nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 > artifacts/v10/P05/runtime/browser-workspace.log 2>&1 &
+          echo $! > artifacts/v10/P05/runtime/browser-workspace.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS -o /dev/null http://127.0.0.1:18080/healthz \
+              && curl -fsS http://127.0.0.1:4174/app/links >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P05 browser dependencies did not become healthy' >&2
+          cat artifacts/v10/P05/runtime/browser-platformapi.log || true
+          cat artifacts/v10/P05/runtime/browser-redirectengine.log || true
+          cat artifacts/v10/P05/runtime/browser-workspace.log || true
+          exit 1
+
+      - name: Run P05-T017 through P05-T019 browser evidence
+        run: node scripts/p05/browser.mjs --case all
+
+      - name: Capture browser dependency evidence
+        if: always()
+        run: |
+          set +e
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,hostname,code,status,version,risk_fingerprint,click_count FROM links ORDER BY id" \
+            > artifacts/v10/P05/runtime/browser-mysql-links.tsv 2> artifacts/v10/P05/runtime/browser-mysql-snapshot.err
+          redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'risk:link:*' | sort > artifacts/v10/P05/runtime/browser-redis-risk-keys.txt
+          sha256sum /tmp/gojet-p05-browser/platformapi /tmp/gojet-p05-browser/redirectengine > artifacts/v10/P05/runtime/browser-native-binaries.sha256 2>/dev/null
+
+      - name: Stop browser services
+        if: always()
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P05/runtime/browser-workspace.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P05/runtime/browser-platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P05/runtime/browser-redirectengine.pid 2>/dev/null)" 2>/dev/null || true
+
+      - name: Upload P05 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p05-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P05/results/P05-T017.json
+            artifacts/v10/P05/results/P05-T018.json
+            artifacts/v10/P05/results/P05-T019.json
+            artifacts/v10/P05/browser/
+            artifacts/v10/P05/captures/
+            artifacts/v10/P05/runtime/browser-*
