@@ -121,9 +121,10 @@ func escapeLike(value string) string {
 
 // ClaimRedirectAccess executes only after destination-risk allow. It performs
 // the expiry/click-limit/one-time checks atomically and increments click_count
-// only for an accepted request. It must never be called before risk allow.
-func (s *MySQLStore) ClaimRedirectAccess(ctx context.Context, id, expectedVersion uint64, now time.Time) (Link, AccessClaimState, error) {
-	if id == 0 || expectedVersion == 0 {
+// only for an accepted request. Both the version and fingerprint must still be
+// identical to the state that received risk allow, preventing TOCTOU reuse.
+func (s *MySQLStore) ClaimRedirectAccess(ctx context.Context, id, expectedVersion uint64, expectedFingerprint string, now time.Time) (Link, AccessClaimState, error) {
+	if id == 0 || expectedVersion == 0 || !validateFingerprint(expectedFingerprint) {
 		return Link{}, AccessClaimConflict, ErrInvalidInput
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -140,7 +141,7 @@ func (s *MySQLStore) ClaimRedirectAccess(ctx context.Context, id, expectedVersio
 		}
 		return Link{}, AccessClaimConflict, err
 	}
-	if current.Version != expectedVersion {
+	if current.Version != expectedVersion || current.RiskFingerprint != expectedFingerprint {
 		return current, AccessClaimConflict, nil
 	}
 	if current.Status == "deleted" || current.DeletedAt != nil {
@@ -160,7 +161,11 @@ func (s *MySQLStore) ClaimRedirectAccess(ctx context.Context, id, expectedVersio
 		return current, AccessClaimExhausted, nil
 	}
 
-	result, err := tx.ExecContext(ctx, `UPDATE links SET click_count = click_count + 1 WHERE id = ? AND version = ?`, current.ID, current.Version)
+	result, err := tx.ExecContext(ctx, `
+		UPDATE links SET click_count = click_count + 1
+		WHERE id = ? AND version = ? AND risk_fingerprint = ?`,
+		current.ID, current.Version, expectedFingerprint,
+	)
 	if err != nil {
 		return Link{}, AccessClaimConflict, err
 	}
