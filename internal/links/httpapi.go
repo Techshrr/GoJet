@@ -31,7 +31,7 @@ type createRequest struct {
 	Routing            []RoutingRule `json:"routing"`
 	AB                 []ABVariant   `json:"ab"`
 	UTM                UTMConfig     `json:"utm"`
-	Access             AccessConfig  `json:"access"`
+	Access             accessRequest `json:"access"`
 	ExpiresAt          *time.Time    `json:"expires_at"`
 	ClickLimit         *uint64       `json:"click_limit"`
 	OneTime            bool          `json:"one_time"`
@@ -50,7 +50,7 @@ type updateRequest struct {
 	Routing            []RoutingRule `json:"routing"`
 	AB                 []ABVariant   `json:"ab"`
 	UTM                UTMConfig     `json:"utm"`
-	Access             AccessConfig  `json:"access"`
+	Access             accessRequest `json:"access"`
 	ExpiresAt          *time.Time    `json:"expires_at"`
 	ClickLimit         *uint64       `json:"click_limit"`
 	OneTime            bool          `json:"one_time"`
@@ -172,7 +172,7 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": result.Items,
+		"items": publicLinks(result.Items),
 		"total": result.Total,
 		"filters": map[string]any{
 			"implemented": []string{"q", "hostname", "status", "updated_from", "updated_to"},
@@ -198,17 +198,22 @@ func (a *API) createLink(w http.ResponseWriter, r *http.Request) {
 	if request.RedirectStatus == 0 {
 		request.RedirectStatus = http.StatusFound
 	}
+	access, err := createAccessConfig(request.Access)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	created, err := a.store.Create(r.Context(), CreateInput{
 		WorkspaceID: workspaceID, ActorID: actor.ActorID, CorrelationID: correlationID(r), ChangeReason: request.ChangeReason,
 		Hostname: request.Hostname, DomainKind: request.DomainKind, Code: request.Code, Title: request.Title,
 		PrimaryDestination: request.PrimaryDestination, RedirectStatus: request.RedirectStatus, Routing: request.Routing, AB: request.AB,
-		UTM: request.UTM, Access: request.Access, ExpiresAt: request.ExpiresAt, ClickLimit: request.ClickLimit, OneTime: request.OneTime,
+		UTM: request.UTM, Access: access, ExpiresAt: request.ExpiresAt, ClickLimit: request.ClickLimit, OneTime: request.OneTime,
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, created)
+	writeJSON(w, http.StatusCreated, publicLink(created))
 }
 
 func (a *API) getLink(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +230,7 @@ func (a *API) getLink(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, link)
+	writeJSON(w, http.StatusOK, publicLink(link))
 }
 
 func (a *API) updateLink(w http.ResponseWriter, r *http.Request) {
@@ -246,18 +251,32 @@ func (a *API) updateLink(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusConflict, "domain_unavailable", "Custom-domain binding requires the P06 entitlement and domain-trust authority.")
 		return
 	}
+	current, err := a.store.GetByID(r.Context(), workspaceID, id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if current.Version != request.ExpectedVersion {
+		writeStoreError(w, ErrConflict)
+		return
+	}
+	access, err := updateAccessConfig(current.Access, request.Access)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	updated, err := a.store.Update(r.Context(), id, UpdateInput{
 		WorkspaceID: workspaceID, ActorID: actor.ActorID, CorrelationID: correlationID(r), ChangeReason: request.ChangeReason,
 		ExpectedVersion: request.ExpectedVersion, Hostname: request.Hostname, DomainKind: request.DomainKind, Code: request.Code,
 		Title: request.Title, PrimaryDestination: request.PrimaryDestination, RedirectStatus: request.RedirectStatus, Status: request.Status,
-		Routing: request.Routing, AB: request.AB, UTM: request.UTM, Access: request.Access, ExpiresAt: request.ExpiresAt,
+		Routing: request.Routing, AB: request.AB, UTM: request.UTM, Access: access, ExpiresAt: request.ExpiresAt,
 		ClickLimit: request.ClickLimit, OneTime: request.OneTime,
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, publicLink(updated))
 }
 
 func (a *API) deleteLink(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +314,12 @@ func (a *API) history(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": versions})
+	publicVersions, err := publicHistory(versions)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": publicVersions})
 }
 
 func (a *API) exportLinks(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +385,7 @@ func optionalTime(value string) (*time.Time, error) {
 
 func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidDestination), errors.Is(err, ErrInvalidABWeights):
+	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidDestination), errors.Is(err, ErrInvalidABWeights), errors.Is(err, ErrInvalidPassword):
 		writeAPIError(w, http.StatusBadRequest, "invalid_input", "Request validation failed.")
 	case errors.Is(err, ErrNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", "Link not found.")
