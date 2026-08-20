@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "node": "P03",
+  "gate": "G2",
+  "authority": "GJ-V10-DS-GREENFIELD-2026-08-20",
+  "cases": [
+    {"id":"P03-T001","name":"canonical-token-sync-and-reproducibility"},
+    {"id":"P03-T002","name":"token-authority-schema-and-normalization"},
+    {"id":"P03-T003","name":"raw-visual-value-lint"},
+    {"id":"P03-T004","name":"light-dark-and-theme-resolution"},
+    {"id":"P03-T005","name":"focus-and-keyboard-contract"},
+    {"id":"P03-T006","name":"wcag-contrast-report"},
+    {"id":"P03-T007","name":"non-color-state-semantics"},
+    {"id":"P03-T008","name":"density-and-responsive-foundation"},
+    {"id":"P03-T009","name":"motion-and-reduced-motion"},
+    {"id":"P03-T010","name":"component-capture-evidence"}
+  ],
+  "exit_rule": "All ten cases must pass on one exact head, G2 evidence must be reviewable, Design System Owner and Accessibility Reviewer must sign, and the signed exact head must pass P00/P01/P02/P03 workflows."
+}
