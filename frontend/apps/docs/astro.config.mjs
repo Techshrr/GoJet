@@ -13,7 +13,17 @@ export default defineConfig({
         'zh-CN': { label: '简体中文', lang: 'zh-CN' },
       },
       sidebar: [
-        { label: 'Start', items: [{ label: 'Overview', slug: 'en' }] },
+        {
+          label: 'Start',
+          translations: { 'zh-CN': '开始' },
+          items: [
+            {
+              label: 'Overview',
+              translations: { 'zh-CN': '概览' },
+              slug: 'index',
+            },
+          ],
+        },
       ],
       customCss: ['./src/styles/docs-shell.css'],
       components: {
