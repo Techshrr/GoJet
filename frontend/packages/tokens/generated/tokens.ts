@@ -1,4 +1,6 @@
 // GENERATED from src/tokens.json — do not edit.
+export const TOKEN_AUTHORITY = "GJ-V10-DS-GREENFIELD-2026-08-20" as const;
+export const TOKEN_COUNT = 284 as const;
 export const TOKENS = {
   "simple": {
     "asset.logo.product.height": "28px",

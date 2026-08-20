@@ -365,6 +365,8 @@
   --gojet-viewport-mobile-slug: mobile;
   --gojet-viewport-tablet-dimensions: 1024×768;
   --gojet-viewport-tablet-slug: tablet;
+  --gojet-density-row-current: var(--gojet-density-default-row-height);
+  --gojet-density-header-current: var(--gojet-density-default-header-height);
 }
 :root[data-theme="dark"] {
   --gojet-action-destructive: #B91C1C;
@@ -427,4 +429,16 @@
   --gojet-text-placeholder: #94A3B8;
   --gojet-text-primary: #F8FAFC;
   --gojet-text-secondary: #CBD5E1;
+}
+[data-density="compact"] {
+  --gojet-density-row-current: var(--gojet-density-compact-row-height);
+  --gojet-density-header-current: var(--gojet-density-compact-header-height);
+}
+[data-density="default"] {
+  --gojet-density-row-current: var(--gojet-density-default-row-height);
+  --gojet-density-header-current: var(--gojet-density-default-header-height);
+}
+[data-density="relaxed"] {
+  --gojet-density-row-current: var(--gojet-density-relaxed-row-height);
+  --gojet-density-header-current: var(--gojet-density-relaxed-header-height);
 }
