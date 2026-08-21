@@ -1,0 +1,232 @@
+{
+  "node": "P07",
+  "title": "Analytics",
+  "base_integration_commit": "3aa80b566d144963130b8f61fa63a4ee677ebc99",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "environment_contract": {
+    "mysql": "Real MySQL 8.x persistence for analytics source events, aggregates and reconciliation evidence.",
+    "redis": "Real Redis event transport/consumer state; mocks do not satisfy event-consumption Exit evidence.",
+    "redirectengine": "Current native P05/P06 redirectengine is the click/event source under test; P07 must not change destination-risk/authority ordering.",
+    "analyticsworker": "Native Go analyticsworker at services/analyticsworker/cmd/worker.",
+    "analyticsreconciler": "Native Go analyticsreconciler at services/analyticsreconciler/cmd/reconciler.",
+    "platformapi": "Native Go platformapi serves authoritative Workspace analytics APIs and permission checks.",
+    "browser": "System Chrome/Chromium via Playwright Core against real platform API state.",
+    "mock_policy": "Mocks and UI-only fixtures do not satisfy authoritative Redis event, MySQL aggregate, reconciliation, permission or browser Exit evidence where deterministic real dependencies are available."
+  },
+  "cases": [
+    {
+      "id": "P07-T001",
+      "name": "redirect-analytics-event-contract",
+      "precondition": "P05 redirect path is available with real Redis and MySQL",
+      "driver": "python3 scripts/p07/integration.py --case P07-T001",
+      "oracle": "successful eligible redirect emits one deterministic analytics event after safety/authority checks without changing redirect result or exposing destination data",
+      "evidence": "artifacts/v10/P07/results/P07-T001.json",
+      "expected_exit": 0,
+      "owner": "Backend + Analytics"
+    },
+    {
+      "id": "P07-T002",
+      "name": "redis-worker-consumption-and-persistence",
+      "precondition": "real Redis stream/queue and MySQL are available",
+      "driver": "python3 scripts/p07/integration.py --case P07-T002",
+      "oracle": "analyticsworker consumes accepted Redis event and persists authoritative event/aggregate state with reviewable correlation",
+      "evidence": "artifacts/v10/P07/results/P07-T002.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T003",
+      "name": "duplicate-delivery-logical-once",
+      "precondition": "worker consumer and deduplication identity are active",
+      "driver": "python3 scripts/p07/integration.py --case P07-T003",
+      "oracle": "re-delivery of the same event identity does not double-count authoritative aggregates",
+      "evidence": "artifacts/v10/P07/results/P07-T003.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T004",
+      "name": "worker-restart-retry-no-loss",
+      "precondition": "real Redis pending/retry behavior is available",
+      "driver": "python3 scripts/p07/integration.py --case P07-T004",
+      "oracle": "worker interruption/restart/retry preserves accepted events without silent loss or double count",
+      "evidence": "artifacts/v10/P07/results/P07-T004.json",
+      "expected_exit": 0,
+      "owner": "Analytics + Reliability"
+    },
+    {
+      "id": "P07-T005",
+      "name": "aggregate-time-buckets",
+      "precondition": "known timestamp fixtures exist in MySQL/Redis",
+      "driver": "python3 scripts/p07/integration.py --case P07-T005",
+      "oracle": "authoritative totals aggregate into deterministic supported time buckets with exact boundary semantics",
+      "evidence": "artifacts/v10/P07/results/P07-T005.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T006",
+      "name": "measured-dimensions",
+      "precondition": "known geo/device/referrer/source/campaign fixtures exist",
+      "driver": "python3 scripts/p07/integration.py --case P07-T006",
+      "oracle": "click, geo, device, referrer/source and campaign dimensions reconcile to the same authoritative event set without invented values",
+      "evidence": "artifacts/v10/P07/results/P07-T006.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T007",
+      "name": "workspace-link-tenant-isolation",
+      "precondition": "two workspaces with overlapping-looking fixtures exist",
+      "driver": "python3 scripts/p07/integration.py --case P07-T007",
+      "oracle": "analytics queries and aggregates cannot cross workspace or link ownership boundaries",
+      "evidence": "artifacts/v10/P07/results/P07-T007.json",
+      "expected_exit": 0,
+      "owner": "Backend + Security + QA"
+    },
+    {
+      "id": "P07-T008",
+      "name": "analytics-permission-server-authority",
+      "precondition": "test auth adapter exposes owner/member/viewer analytics permission fixtures",
+      "driver": "python3 scripts/p07/integration.py --case P07-T008",
+      "oracle": "analytics permission is enforced server-side; crafted API requests cannot bypass denial and denied responses leak no cross-tenant totals",
+      "evidence": "artifacts/v10/P07/results/P07-T008.json",
+      "expected_exit": 0,
+      "owner": "Backend + Security"
+    },
+    {
+      "id": "P07-T009",
+      "name": "timezone-day-boundaries",
+      "precondition": "events straddle UTC and named-zone calendar boundaries",
+      "driver": "python3 scripts/p07/integration.py --case P07-T009",
+      "oracle": "timezone/date-range filters produce deterministic non-overlapping totals and do not mutate stored event identity",
+      "evidence": "artifacts/v10/P07/results/P07-T009.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T010",
+      "name": "overview-detail-filter-parity",
+      "precondition": "known event set spans links, dimensions and ranges",
+      "driver": "python3 scripts/p07/integration.py --case P07-T010",
+      "oracle": "overview/detail/filter APIs reconcile to the same exact event totals for equivalent scopes",
+      "evidence": "artifacts/v10/P07/results/P07-T010.json",
+      "expected_exit": 0,
+      "owner": "Backend + Analytics + QA"
+    },
+    {
+      "id": "P07-T011",
+      "name": "campaign-conversion-association",
+      "precondition": "workspace-safe campaign/conversion fixtures are available",
+      "driver": "python3 scripts/p07/integration.py --case P07-T011",
+      "oracle": "campaign conversion measurement associates only authorized workspace resources and remains count-consistent with analytics totals",
+      "evidence": "artifacts/v10/P07/results/P07-T011.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T012",
+      "name": "retention-contract",
+      "precondition": "events exist inside and outside configured retention windows",
+      "driver": "python3 scripts/p07/integration.py --case P07-T012",
+      "oracle": "retention behavior is deterministic and queries surface retention-limited state rather than silently presenting incomplete history as complete",
+      "evidence": "artifacts/v10/P07/results/P07-T012.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T013",
+      "name": "empty-partial-stale-state-semantics",
+      "precondition": "API can observe complete-empty, partial and stale persisted states",
+      "driver": "python3 scripts/p07/integration.py --case P07-T013",
+      "oracle": "complete zero, partial data and stale data are distinct server states with safe remediation metadata",
+      "evidence": "artifacts/v10/P07/results/P07-T013.json",
+      "expected_exit": 0,
+      "owner": "Backend + Analytics + QA"
+    },
+    {
+      "id": "P07-T014",
+      "name": "reconcile-known-mismatch-repair",
+      "precondition": "real MySQL aggregate mismatch is introduced without changing source event truth",
+      "driver": "python3 scripts/p07/integration.py --case P07-T014",
+      "oracle": "analyticsreconciler detects and repairs the known mismatch deterministically from authoritative source data",
+      "evidence": "artifacts/v10/P07/results/P07-T014.json",
+      "expected_exit": 0,
+      "owner": "Analytics + Reliability + QA"
+    },
+    {
+      "id": "P07-T015",
+      "name": "reconcile-idempotency",
+      "precondition": "T014 repaired state is available",
+      "driver": "python3 scripts/p07/integration.py --case P07-T015",
+      "oracle": "second and subsequent reconciler runs are idempotent with no count drift or duplicate repair effects",
+      "evidence": "artifacts/v10/P07/results/P07-T015.json",
+      "expected_exit": 0,
+      "owner": "Analytics + Reliability"
+    },
+    {
+      "id": "P07-T016",
+      "name": "known-event-total-closure",
+      "precondition": "deterministic redirect events, worker output and reconciler output exist",
+      "driver": "python3 scripts/p07/integration.py --case P07-T016",
+      "oracle": "known accepted event totals equal authoritative MySQL totals after worker/reconciliation and all accounting deltas are explained",
+      "evidence": "artifacts/v10/P07/results/P07-T016.json",
+      "expected_exit": 0,
+      "owner": "Analytics + QA"
+    },
+    {
+      "id": "P07-T017",
+      "name": "native-services-observability-recovery-runbook",
+      "precondition": "native analyticsworker and analyticsreconciler binaries are built",
+      "driver": "python3 scripts/p07/integration.py --case P07-T017",
+      "oracle": "native processes expose reviewable startup/health/log/correlation evidence and recovery procedure is repeatable without Docker or production Node",
+      "evidence": "artifacts/v10/P07/results/P07-T017.json",
+      "expected_exit": 0,
+      "owner": "Reliability + Analytics + QA"
+    },
+    {
+      "id": "P07-T018",
+      "name": "workspace-analytics-browser-states",
+      "precondition": "real analytics API exposes success, empty, partial, stale, retention-limited and error fixtures",
+      "driver": "node scripts/p07/browser.mjs --case P07-T018",
+      "oracle": "/app/analytics renders authoritative measured data and each required persistent state without Toast-only degradation or client-generated totals",
+      "evidence": "artifacts/v10/P07/results/P07-T018.json",
+      "expected_exit": 0,
+      "owner": "Frontend + QA"
+    },
+    {
+      "id": "P07-T019",
+      "name": "mobile-accessibility-and-performance-browser",
+      "precondition": "P07 Workspace Analytics flow is available against real API state",
+      "driver": "node scripts/p07/browser.mjs --case P07-T019",
+      "oracle": "canonical mobile viewport has no root/body overflow or clipped required text, keyboard/name-role-value/non-color-only contracts pass, and P07-owned G9 budgets/evidence are reviewable",
+      "evidence": "artifacts/v10/P07/results/P07-T019.json",
+      "expected_exit": 0,
+      "owner": "Frontend + Accessibility + Performance + QA"
+    },
+    {
+      "id": "P07-T020",
+      "name": "p00-p07-regression-and-evidence-index",
+      "precondition": "P07-T001..T019 evidence and all required affected workflows exist for one exact signed head",
+      "driver": "python3 scripts/p07/validate.py --case P07-T020",
+      "oracle": "all required P00-P07 affected workflows are green on the same exact head, T001..T019 are PASS with errors=[] on that head, evidence index hashes are internally consistent, accountable review is signed, P0/P1=0 and DECISION REQUIRED=0",
+      "evidence": "artifacts/v10/P07/results/P07-T020.json",
+      "expected_exit": 0,
+      "owner": "QA + Release"
+    }
+  ],
+  "closure_contract": {
+    "version": 1,
+    "same_exact_head_required": true,
+    "required_case_range": "P07-T001..P07-T020",
+    "required_regression_scope": "P00-P06 affected regressions plus P07 Analytics Contract, P07 Real Integration, P07 Workspace Browser and P07 Closure on the same signed exact head.",
+    "review_required": true,
+    "p0_max": 0,
+    "p1_max": 0,
+    "decision_required_max": 0
+  }
+}
