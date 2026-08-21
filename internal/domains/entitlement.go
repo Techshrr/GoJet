@@ -57,20 +57,20 @@ type AccessRequest struct {
 }
 
 type ResolvedEntitlement struct {
-	Capability              string                `json:"capability"`
-	Source                  EntitlementSourceKind `json:"source"`
-	Status                  EntitlementStatus     `json:"status"`
-	DomainLimit             uint32                `json:"domain_limit"`
-	StartsAt                *time.Time            `json:"starts_at,omitempty"`
-	ExpiresAt               *time.Time            `json:"expires_at,omitempty"`
-	GrantedBy               string                `json:"granted_by,omitempty"`
-	SupportTicketID         string                `json:"support_ticket_id,omitempty"`
-	DecisionReason          string                `json:"decision_reason"`
-	GracePeriod             bool                  `json:"grace_period"`
-	GraceUntil              *time.Time            `json:"grace_until,omitempty"`
-	MutationAllowed         bool                  `json:"mutation_allowed"`
-	ExistingRoutingAllowed  bool                  `json:"existing_routing_allowed"`
-	ValidSources            []EntitlementSource   `json:"valid_sources"`
+	Capability             string                `json:"capability"`
+	Source                 EntitlementSourceKind `json:"source"`
+	Status                 EntitlementStatus     `json:"status"`
+	DomainLimit            uint32                `json:"domain_limit"`
+	StartsAt               *time.Time            `json:"starts_at,omitempty"`
+	ExpiresAt              *time.Time            `json:"expires_at,omitempty"`
+	GrantedBy              string                `json:"granted_by,omitempty"`
+	SupportTicketID        string                `json:"support_ticket_id,omitempty"`
+	DecisionReason         string                `json:"decision_reason"`
+	GracePeriod            bool                  `json:"grace_period"`
+	GraceUntil             *time.Time             `json:"grace_until,omitempty"`
+	MutationAllowed        bool                  `json:"mutation_allowed"`
+	ExistingRoutingAllowed bool                  `json:"existing_routing_allowed"`
+	ValidSources           []EntitlementSource   `json:"valid_sources"`
 }
 
 func ValidateEntitlementSource(source EntitlementSource) error {
@@ -128,17 +128,26 @@ func ResolveEntitlement(now time.Time, sources []EntitlementSource, request *Acc
 		if source.Status != EntitlementActive || now.Before(source.StartsAt.UTC()) {
 			continue
 		}
-		if source.ExpiresAt != nil && !now.Before(source.ExpiresAt.UTC()) {
-			continue
-		}
+
+		// A degraded plan carries the explicit normal-downgrade grace authority.
+		// Once degradation begins, that seven-day window is evaluated before the
+		// plan's ordinary expiry so a downgrade event cannot accidentally truncate
+		// the frozen grace contract. At the exact grace deadline the source stops
+		// contributing authority. Before degradation, normal expiry still applies.
 		if source.DegradedAt != nil {
 			if now.Before(source.DegradedAt.UTC()) {
-				regular = append(regular, source)
+				if source.ExpiresAt == nil || now.Before(source.ExpiresAt.UTC()) {
+					regular = append(regular, source)
+				}
 				continue
 			}
 			if now.Before(source.GraceUntil.UTC()) {
 				grace = append(grace, source)
 			}
+			continue
+		}
+
+		if source.ExpiresAt != nil && !now.Before(source.ExpiresAt.UTC()) {
 			continue
 		}
 		regular = append(regular, source)
