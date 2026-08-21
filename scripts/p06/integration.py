@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 10))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 11))
 
 
 def exact_head() -> str:
@@ -25,6 +25,9 @@ def run_driver(case_id: str) -> dict[str, Any]:
     if case_id == "P06-T009":
         command = ["go", "run", "./scripts/p06/ownership_driver", "--case", case_id]
         driver = "scripts/p06/ownership_driver/main.go"
+    elif case_id == "P06-T010":
+        command = ["go", "run", "./scripts/p06/dns_driver", "--case", case_id]
+        driver = "scripts/p06/dns_driver/main.go"
     else:
         command = ["go", "run", "./scripts/p06/integration_driver.go", "--case", case_id]
         driver = "scripts/p06/integration_driver.go"
@@ -115,7 +118,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real-MySQL integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T009 real-MySQL evidence PASS on exact head {head}")
+    print(f"P06-T001..T010 real-MySQL evidence PASS on exact head {head}")
     return 0
 
 
