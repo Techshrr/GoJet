@@ -24,6 +24,7 @@ on:
       - 'scripts/p06/mutation_driver/**'
       - 'scripts/p06/link_assignment_driver/**'
       - 'scripts/p06/redirect_driver/**'
+      - 'scripts/p06/parity_driver/**'
       - 'artifacts/v10/P06/test-plan.json'
       - '.github/workflows/p06-integration.yml'
   workflow_dispatch:
@@ -114,6 +115,7 @@ jobs:
           go test ./scripts/p06/mutation_driver
           go test ./scripts/p06/link_assignment_driver
           go test ./scripts/p06/redirect_driver
+          go test ./scripts/p06/parity_driver
           python3 -m py_compile scripts/p06/integration.py
 
       - name: Apply P05 and P06 migrations
@@ -124,7 +126,7 @@ jobs:
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'custom_domain%'" | sort
 
-      - name: Run P06-T001 through P06-T019 against real authority dependencies
+      - name: Run P06-T001 through P06-T020 against real authority dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -137,7 +139,7 @@ jobs:
           head = os.environ['EXACT_HEAD']
           root = Path('artifacts/v10/P06/results')
           errors = []
-          for number in range(1, 20):
+          for number in range(1, 21):
               case_id = f'P06-T{number:03d}'
               path = root / f'{case_id}.json'
               if not path.is_file():
@@ -152,7 +154,7 @@ jobs:
                   errors.append(f"{case_id} errors={data.get('errors')}")
           if errors:
               raise SystemExit('\n'.join(errors))
-          print(f'P06-T001..T019 PASS and bound to exact head {head}')
+          print(f'P06-T001..T020 PASS and bound to exact head {head}')
           PY
 
       - name: Capture MySQL authority evidence
@@ -198,6 +200,7 @@ jobs:
             artifacts/v10/P06/results/P06-T017.json
             artifacts/v10/P06/results/P06-T018.json
             artifacts/v10/P06/results/P06-T019.json
+            artifacts/v10/P06/results/P06-T020.json
             artifacts/v10/P06/runtime/
           if-no-files-found: warn
           retention-days: 30
