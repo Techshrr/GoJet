@@ -80,7 +80,7 @@ type Domain struct {
 	HTTPSCheckedAt          *time.Time       `json:"https_checked_at,omitempty"`
 	RiskCheckedAt           *time.Time       `json:"risk_checked_at,omitempty"`
 	RiskPolicyVersion       string           `json:"risk_policy_version,omitempty"`
-	RiskEvidenceRef         string           `json:"risk_evidence_ref,omitempty"`
+	RiskEvidenceRef         string           `json:"-"`
 	GraceStartedAt          *time.Time       `json:"grace_started_at,omitempty"`
 	GraceUntil              *time.Time       `json:"grace_until,omitempty"`
 	SecurityCategory        string           `json:"security_category,omitempty"`
