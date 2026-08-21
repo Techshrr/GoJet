@@ -88,7 +88,7 @@ export default function DomainsListPage() {
           <EmptyState
             title={canAdd ? 'No custom domains yet' : 'No custom domains available'}
             reason={canAdd ? 'Add a hostname to begin the seven-step authority flow.' : 'The current Workspace authority does not permit creating a domain.'}
-            action={canAdd ? <Link to="/app/domains/new" className="domains-primary-link">Add domain</Link> : undefined}
+            action={canAdd ? <Link to="/app/domains/new" className="domains-primary-link">Add your first domain</Link> : undefined}
           />
         ) : null}
 
