@@ -21,6 +21,26 @@ type NormalizedHostname struct {
 	Display string `json:"display"`
 }
 
+var goJetHostnamePolicy = mustHostnamePolicy([]string{
+	"gojet.cc",
+	"gojet.cn",
+})
+
+// GoJetHostnamePolicy returns the server-owned hostname authority used by P06
+// domain mutations. Client requests provide only the candidate hostname; they
+// cannot provide, replace or weaken the platform-host exclusion set.
+func GoJetHostnamePolicy() HostnamePolicy {
+	return goJetHostnamePolicy
+}
+
+func mustHostnamePolicy(platformHostnames []string) HostnamePolicy {
+	policy, err := NewHostnamePolicy(platformHostnames)
+	if err != nil {
+		panic("invalid server-owned GoJet platform hostname authority: " + err.Error())
+	}
+	return policy
+}
+
 func NewHostnamePolicy(platformHostnames []string) (HostnamePolicy, error) {
 	policy := HostnamePolicy{platformHosts: map[string]struct{}{}}
 	for _, raw := range platformHostnames {
@@ -38,8 +58,10 @@ func (p HostnamePolicy) Normalize(raw string) (NormalizedHostname, error) {
 	if err != nil {
 		return NormalizedHostname{}, err
 	}
-	if _, blocked := p.platformHosts[normalized.ASCII]; blocked {
-		return NormalizedHostname{}, ErrInvalidHostname
+	for platformHost := range p.platformHosts {
+		if normalized.ASCII == platformHost || strings.HasSuffix(normalized.ASCII, "."+platformHost) {
+			return NormalizedHostname{}, ErrInvalidHostname
+		}
 	}
 	return normalized, nil
 }
