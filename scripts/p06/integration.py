@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 19))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 20))
 
 
 def exact_head() -> str:
@@ -31,6 +31,7 @@ def run_driver(case_id: str) -> dict[str, Any]:
         "P06-T016": "security_driver",
         "P06-T017": "mutation_driver",
         "P06-T018": "link_assignment_driver",
+        "P06-T019": "redirect_driver",
     }
     if case_id in driver_map:
         package = driver_map[case_id]
@@ -74,6 +75,7 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
         "driver": f"scripts/p06/integration.py -> {result.get('driver', 'unknown')}",
         "environment": {
             "mysql": "real MySQL service via GOJET_MYSQL_DSN",
+            "redis": "real Redis service via GOJET_REDIS_ADDR for redirect destination-risk authority from T019 onward",
             "dns": "real local authoritative UDP DNS for T010/T011/T014",
             "tls": "real local TCP/TLS handshake endpoint for T012/T014",
             "domain_risk": "server-owned evaluator with real MySQL persistence for T013/T014",
@@ -81,6 +83,7 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
             "safety_authority": "server-side allowlisted abuse/fraud/security/ownership-loss state with real MySQL persistence for T016",
             "workspace_permission": "server-owned permission checker seam exercised before resolver/probe/database mutation checkpoints in T017",
             "link_assignment": "real Links HTTP create/update over P05 persistence with same-transaction P06 custom-domain row lock and current entitlement/trust checks in T018",
+            "redirect_authority": "real RedirectHandler + MySQL current custom-domain routing authority + Redis exact-fingerprint destination-risk decision with final transactional recheck in T019",
             "migrations": [
                 "migrations/000001_links_vertical_slice.sql",
                 "migrations/000002_custom_domains.sql",
@@ -123,7 +126,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T018 real authority evidence PASS on exact head {head}")
+    print(f"P06-T001..T019 real authority evidence PASS on exact head {head}")
     return 0
 
 
