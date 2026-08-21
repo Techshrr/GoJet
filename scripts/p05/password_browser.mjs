@@ -198,13 +198,19 @@ async function run() {
     assert(!wrongResponse.headers().location, 'wrong-password response exposed Location header');
 
     await page.getByLabel('Password').fill(PASSWORD_TWO);
-    const correctResponsePromise = page.waitForResponse((response) =>
-      response.request().method() === 'POST' && new URL(response.url()).pathname === `/${CODE}`);
+    const destinationRequestPromise = page.waitForRequest((request) =>
+      request.isNavigationRequest() && request.url() === DESTINATION);
     await page.getByRole('button', { name: 'Continue' }).click();
-    const correctResponse = await correctResponsePromise;
+    const destinationRequest = await destinationRequestPromise;
+    await page.waitForURL((url) => url.origin === new URL(WORKSPACE_URL).origin && url.pathname === '/app/links');
+    const passwordPostRequest = destinationRequest.redirectedFrom();
+    assert(passwordPostRequest, 'successful destination navigation has no redirect source request');
+    assert(passwordPostRequest.method() === 'POST', `password redirect source method was ${passwordPostRequest.method()}`);
+    assert(new URL(passwordPostRequest.url()).pathname === `/${CODE}`, `password redirect source URL was ${passwordPostRequest.url()}`);
+    const correctResponse = await passwordPostRequest.response();
+    assert(correctResponse, 'password POST redirect response is unavailable from redirect chain');
     assert(correctResponse.status() === 302, `replacement password returned ${correctResponse.status()} instead of 302`);
     assert(correctResponse.headers().location === DESTINATION, `password redirect Location mismatch: ${correctResponse.headers().location}`);
-    await page.waitForURL((url) => url.origin === new URL(WORKSPACE_URL).origin && url.pathname === '/app/links');
 
     await page.goto(`${WORKSPACE_URL}/app/links/${linkId}`, { waitUntil: 'networkidle' });
     await page.getByRole('tab', { name: 'Access' }).click();

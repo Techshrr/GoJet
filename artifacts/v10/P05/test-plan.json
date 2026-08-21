@@ -215,5 +215,22 @@
       "evidence": "artifacts/v10/P05/results/P05-T020.json",
       "owner": "QA Lead"
     }
-  ]
+  ],
+  "closure_contract": {
+    "version": 1,
+    "aggregator_workflow": "P05 Closure",
+    "validator": "scripts/p05/validate.py",
+    "same_exact_head_required": true,
+    "required_workflows": [
+      "P00 Bootstrap and G0 Traceability",
+      "P01 Engineering Foundation",
+      "P02 Brand Foundation",
+      "P03 Design System",
+      "P04 Product Shells",
+      "P05 Links Domain Contract",
+      "P05 Real Integration",
+      "P05 Workspace Browser"
+    ],
+    "required_case_range": "P05-T001..P05-T020"
+  }
 }

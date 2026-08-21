@@ -346,7 +346,7 @@ def case_t010() -> dict[str, Any]:
             {"id": "b", "destination": "https://b.example/path", "weight": 50, "enabled": True},
         ],
         utm={"source": "gojet", "campaign": "p05"},
-        access={"password_hash": "test-only-non-secret-hash"},
+        access={"password": "P05-Ordering-Password-2026!"},
         click_limit=1,
         one_time=True,
     )
