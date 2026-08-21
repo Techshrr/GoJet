@@ -43,7 +43,7 @@ func main() {
 		failFatal(fmt.Sprintf("ping MySQL: %v", err))
 	}
 
-	caseIDs := []string{"P06-T001", "P06-T002", "P06-T003", "P06-T004", "P06-T005", "P06-T006", "P06-T007"}
+	caseIDs := []string{"P06-T001", "P06-T002", "P06-T003", "P06-T004", "P06-T005", "P06-T006", "P06-T007", "P06-T008"}
 	if *caseFlag != "all" {
 		caseIDs = []string{*caseFlag}
 	}
@@ -78,6 +78,8 @@ func runCase(ctx context.Context, db *sql.DB, caseID string) caseResult {
 		err = caseT006(ctx, db, &result)
 	case "P06-T007":
 		err = caseT007(ctx, db, &result)
+	case "P06-T008":
+		err = caseT008(ctx, db, &result)
 	default:
 		err = fmt.Errorf("unsupported case %s", caseID)
 	}
@@ -185,7 +187,7 @@ func caseT002(ctx context.Context, db *sql.DB, out *caseResult) error {
 		return fmt.Errorf("support request incorrectly became authority: %+v", resolved)
 	}
 	_, err = store.CreateDomain(ctx, domains.CreateDomainInput{
-		WorkspaceID: workspace, ActorID: "actor-t002", CorrelationID: "corr-p06-t002-create", Reason: "crafted create while requested", Hostname: "requested-t002.example", Now: now,
+		WorkspaceID: workspace, ActorID: "actor-t002", CorrelationID: "corr-p06-t002-create", Reason: "crafted create while requested", Hostname: "requested-t002.example.com", Now: now,
 	})
 	if !errors.Is(err, domains.ErrEntitlementRequired) {
 		return fmt.Errorf("requested create error=%v, want entitlement required", err)
@@ -317,7 +319,7 @@ func caseT006(ctx context.Context, db *sql.DB, out *caseResult) error {
 	store := domains.NewMySQLStore(db)
 	now := fixedNow()
 	_, err := store.CreateDomain(ctx, domains.CreateDomainInput{
-		WorkspaceID: workspace, ActorID: "crafted-client-t006", CorrelationID: "corr-p06-t006", Reason: "crafted bypass", Hostname: "inactive-t006.example", Now: now,
+		WorkspaceID: workspace, ActorID: "crafted-client-t006", CorrelationID: "corr-p06-t006", Reason: "crafted bypass", Hostname: "inactive-t006.example.com", Now: now,
 	})
 	if !errors.Is(err, domains.ErrEntitlementRequired) {
 		return fmt.Errorf("inactive create error=%v, want entitlement required", err)
@@ -373,7 +375,7 @@ func caseT007(ctx context.Context, db *sql.DB, out *caseResult) error {
 		go func() {
 			defer wg.Done()
 			<-start
-			host := fmt.Sprintf("limit-%d-t007.example", index+1)
+			host := fmt.Sprintf("limit-%d-t007.example.com", index+1)
 			_, createErr := store.CreateDomain(ctx, domains.CreateDomainInput{
 				WorkspaceID: workspace, ActorID: fmt.Sprintf("actor-t007-%d", index+1), CorrelationID: fmt.Sprintf("corr-p06-t007-%d", index+1),
 				Reason: "concurrent allocation", Hostname: host, Now: now,
@@ -416,6 +418,109 @@ func caseT007(ctx context.Context, db *sql.DB, out *caseResult) error {
 		return fmt.Errorf("domain limit over-allocated: allocated=%d domain_count=%d", allocated, domainCount)
 	}
 	out.Details = map[string]any{"domain_limit": 1, "successes": successes, "domain_limit_denials": limitDenials, "allocated_count": allocated, "domain_rows": domainCount, "outcomes": resultStrings}
+	return nil
+}
+
+func caseT008(ctx context.Context, db *sql.DB, out *caseResult) error {
+	workspaceA := "p06-t008-owner-a"
+	workspaceB := "p06-t008-owner-b"
+	store := domains.NewMySQLStore(db)
+	now := fixedNow()
+	for _, fixture := range []struct {
+		workspace string
+		key       string
+		corr      string
+	}{
+		{workspace: workspaceA, key: "subscription-business-t008-a", corr: "corr-p06-t008-plan-a"},
+		{workspace: workspaceB, key: "subscription-business-t008-b", corr: "corr-p06-t008-plan-b"},
+	} {
+		if _, err := store.UpsertPlanSource(ctx, domains.PlanSourceInput{
+			WorkspaceID: fixture.workspace, SourceKey: fixture.key, Status: domains.EntitlementActive,
+			DomainLimit: 2, StartsAt: now.Add(-24 * time.Hour), DecisionReason: "T008 active entitlement fixture",
+		}, fixture.corr); err != nil {
+			return err
+		}
+	}
+
+	created, err := store.CreateDomain(ctx, domains.CreateDomainInput{
+		WorkspaceID: workspaceA, ActorID: "actor-t008-a", CorrelationID: "corr-p06-t008-create-a",
+		Reason: "claim canonical IDNA hostname", Hostname: "bücher.example.com", Now: now,
+	})
+	if err != nil {
+		return err
+	}
+	if created.Domain.HostnameASCII != "xn--bcher-kva.example.com" || created.Domain.DisplayHostname != "bücher.example.com" {
+		return fmt.Errorf("unexpected canonical hostname identity: ascii=%q display=%q", created.Domain.HostnameASCII, created.Domain.DisplayHostname)
+	}
+
+	_, err = store.CreateDomain(ctx, domains.CreateDomainInput{
+		WorkspaceID: workspaceB, ActorID: "actor-t008-b", CorrelationID: "corr-p06-t008-conflict",
+		Reason: "attempt IDNA alias conflict", Hostname: "XN--BCHER-KVA.EXAMPLE.COM.", Now: now,
+	})
+	if !errors.Is(err, domains.ErrHostnameConflict) {
+		return fmt.Errorf("cross-workspace IDNA alias create error=%v, want hostname conflict", err)
+	}
+	workspaceBDomains, err := scalarInt(ctx, db, "SELECT COUNT(*) FROM custom_domains WHERE workspace_id = ?", workspaceB)
+	if err != nil {
+		return err
+	}
+	allocatedB, _, err := store.Usage(ctx, workspaceB)
+	if err != nil {
+		return err
+	}
+	if workspaceBDomains != 0 || allocatedB != 0 {
+		return fmt.Errorf("conflict mutated losing workspace allocation: domains=%d allocated=%d", workspaceBDomains, allocatedB)
+	}
+
+	var conflictReason, conflictMetadata string
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(reason, ''), CAST(metadata_json AS CHAR)
+		FROM custom_domain_audit_events
+		WHERE workspace_id = ? AND correlation_id = ? AND action = 'domain.create' AND result = 'conflict'
+		ORDER BY id DESC LIMIT 1`, workspaceB, "corr-p06-t008-conflict").Scan(&conflictReason, &conflictMetadata); err != nil {
+		return err
+	}
+	var conflictPayload map[string]any
+	if err := json.Unmarshal([]byte(conflictMetadata), &conflictPayload); err != nil {
+		return fmt.Errorf("parse conflict metadata: %w", err)
+	}
+	if conflictReason != "hostname unavailable" || len(conflictPayload) != 1 || conflictPayload["code"] != "hostname_unavailable" {
+		return fmt.Errorf("conflict response/audit is not allowlisted and generic: reason=%q metadata=%v", conflictReason, conflictPayload)
+	}
+	if strings.Contains(conflictMetadata, workspaceA) || strings.Contains(strings.ToLower(conflictMetadata), "provider") || strings.Contains(conflictMetadata, created.Domain.HostnameASCII) {
+		return fmt.Errorf("conflict audit leaked tenant/provider/hostname evidence: %s", conflictMetadata)
+	}
+
+	_, err = store.CreateDomain(ctx, domains.CreateDomainInput{
+		WorkspaceID: workspaceB, ActorID: "actor-t008-b", CorrelationID: "corr-p06-t008-platform",
+		Reason: "attempt platform-host claim", Hostname: "assets.gojet.cc", Now: now,
+	})
+	if !errors.Is(err, domains.ErrInvalidHostname) {
+		return fmt.Errorf("platform hostname create error=%v, want invalid hostname", err)
+	}
+	platformDenials, err := scalarInt(ctx, db, `
+		SELECT COUNT(*) FROM custom_domain_audit_events
+		WHERE workspace_id = ? AND correlation_id = ? AND action='domain.create' AND result='denied'
+		AND JSON_UNQUOTE(JSON_EXTRACT(metadata_json, '$.code'))='invalid_hostname'`, workspaceB, "corr-p06-t008-platform")
+	if err != nil {
+		return err
+	}
+	if platformDenials != 1 {
+		return fmt.Errorf("platform-host rejection audit count=%d, want 1", platformDenials)
+	}
+
+	out.Details = map[string]any{
+		"unicode_input":                    "bücher.example.com",
+		"canonical_ascii":                 created.Domain.HostnameASCII,
+		"safe_display":                    created.Domain.DisplayHostname,
+		"punycode_alias_conflict":          true,
+		"losing_workspace_domain_rows":     workspaceBDomains,
+		"losing_workspace_allocated_count": allocatedB,
+		"conflict_code":                    conflictPayload["code"],
+		"cross_tenant_details_disclosed":   false,
+		"platform_descendant_rejected":     true,
+		"platform_rejection_audited":       platformDenials == 1,
+	}
 	return nil
 }
 
