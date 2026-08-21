@@ -24,7 +24,8 @@ type RotatedOwnershipSecret struct {
 
 // RotateOwnershipSecret replaces the persisted verifier under a row lock and
 // returns the new TXT material exactly once. The plaintext secret is never
-// persisted or written to audit metadata.
+// persisted or written to audit metadata. Safety suspension and current
+// entitlement are re-checked before any new secret material is generated.
 func (s *MySQLStore) RotateOwnershipSecret(ctx context.Context, input RotateOwnershipSecretInput) (RotatedOwnershipSecret, error) {
 	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
 	input.ActorID = strings.TrimSpace(input.ActorID)
@@ -44,6 +45,18 @@ func (s *MySQLStore) RotateOwnershipSecret(ctx context.Context, input RotateOwne
 	domain, err := loadDomainByIDForUpdate(ctx, tx, input.WorkspaceID, input.DomainID)
 	if err != nil {
 		return RotatedOwnershipSecret{}, err
+	}
+	if strings.TrimSpace(domain.SecurityCategory) != "" || domain.OwnershipStatus == OwnershipLost || domain.RoutingState == RoutingRevoked || domain.RoutingState == RoutingRemoved {
+		if auditErr := appendDomainAuditTx(ctx, tx, input.WorkspaceID, &domain.ID, nil, input.ActorID, "domain.ownership.rotate", "denied", "domain safety suspension active", input.CorrelationID, map[string]any{
+			"code":                    "security_suspended",
+			"ownership_token_version": domain.OwnershipTokenVersion,
+		}); auditErr != nil {
+			return RotatedOwnershipSecret{}, auditErr
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return RotatedOwnershipSecret{}, commitErr
+		}
+		return RotatedOwnershipSecret{}, ErrDomainSecuritySuspended
 	}
 	entitlement, err := s.resolveEntitlementTx(ctx, tx, input.WorkspaceID, now)
 	if err != nil {
