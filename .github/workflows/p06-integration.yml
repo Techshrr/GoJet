@@ -14,6 +14,7 @@ on:
       - 'scripts/p06/dns_driver/**'
       - 'scripts/p06/ingress_driver/**'
       - 'scripts/p06/tls_driver/**'
+      - 'scripts/p06/risk_driver/**'
       - 'artifacts/v10/P06/test-plan.json'
       - '.github/workflows/p06-integration.yml'
   workflow_dispatch:
@@ -83,6 +84,7 @@ jobs:
           go test ./scripts/p06/dns_driver
           go test ./scripts/p06/ingress_driver
           go test ./scripts/p06/tls_driver
+          go test ./scripts/p06/risk_driver
           python3 -m py_compile scripts/p06/integration.py
 
       - name: Apply P05 and P06 migrations
@@ -91,10 +93,9 @@ jobs:
           set -euo pipefail
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
-          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SHOW TABLES LIKE 'custom_domain%'" | sort
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'custom_domain%'" | sort
 
-      - name: Run P06-T001 through P06-T012 against real MySQL, DNS and TLS
+      - name: Run P06-T001 through P06-T013 against real MySQL, DNS, TLS and risk authority
         shell: bash
         run: |
           set -euo pipefail
@@ -104,11 +105,10 @@ jobs:
           import json
           import os
           from pathlib import Path
-
           head = os.environ['EXACT_HEAD']
           root = Path('artifacts/v10/P06/results')
           errors = []
-          for number in range(1, 13):
+          for number in range(1, 14):
               case_id = f'P06-T{number:03d}'
               path = root / f'{case_id}.json'
               if not path.is_file():
@@ -123,7 +123,7 @@ jobs:
                   errors.append(f"{case_id} errors={data.get('errors')}")
           if errors:
               raise SystemExit('\n'.join(errors))
-          print(f'P06-T001..T012 PASS and bound to exact head {head}')
+          print(f'P06-T001..T013 PASS and bound to exact head {head}')
           PY
 
       - name: Capture MySQL authority evidence
@@ -133,24 +133,12 @@ jobs:
           set +e
           mkdir -p artifacts/v10/P06/runtime
           export MYSQL_PWD=root
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE 'custom_domain%' ORDER BY table_name" \
-            > artifacts/v10/P06/runtime/mysql-domain-tables.tsv 2> artifacts/v10/P06/runtime/mysql-domain-tables.err
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT workspace_id,source,source_key,status,domain_limit,starts_at,expires_at,degraded_at,grace_until,security_category FROM custom_domain_entitlement_sources ORDER BY workspace_id,id" \
-            > artifacts/v10/P06/runtime/mysql-entitlement-sources.tsv 2> artifacts/v10/P06/runtime/mysql-entitlement-sources.err
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT workspace_id,allocated_count,version FROM custom_domain_usage ORDER BY workspace_id" \
-            > artifacts/v10/P06/runtime/mysql-domain-usage.tsv 2> artifacts/v10/P06/runtime/mysql-domain-usage.err
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT id,workspace_id,hostname_ascii,routing_state,ownership_status,ingress_dns_status,https_status,risk_status,ownership_token_version FROM custom_domains ORDER BY id" \
-            > artifacts/v10/P06/runtime/mysql-domains.tsv 2> artifacts/v10/P06/runtime/mysql-domains.err
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT workspace_id,domain_id,action,result,reason,correlation_id FROM custom_domain_audit_events ORDER BY id" \
-            > artifacts/v10/P06/runtime/mysql-domain-audit.tsv 2> artifacts/v10/P06/runtime/mysql-domain-audit.err
-          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
-            -e "SELECT workspace_id,domain_id,axis,result,policy_version,correlation_id FROM custom_domain_revalidations ORDER BY id" \
-            > artifacts/v10/P06/runtime/mysql-domain-revalidations.tsv 2> artifacts/v10/P06/runtime/mysql-domain-revalidations.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE 'custom_domain%' ORDER BY table_name" > artifacts/v10/P06/runtime/mysql-domain-tables.tsv 2> artifacts/v10/P06/runtime/mysql-domain-tables.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,source,source_key,status,domain_limit,starts_at,expires_at,degraded_at,grace_until,security_category FROM custom_domain_entitlement_sources ORDER BY workspace_id,id" > artifacts/v10/P06/runtime/mysql-entitlement-sources.tsv 2> artifacts/v10/P06/runtime/mysql-entitlement-sources.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,allocated_count,version FROM custom_domain_usage ORDER BY workspace_id" > artifacts/v10/P06/runtime/mysql-domain-usage.tsv 2> artifacts/v10/P06/runtime/mysql-domain-usage.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,hostname_ascii,routing_state,ownership_status,ingress_dns_status,https_status,risk_status,ownership_token_version FROM custom_domains ORDER BY id" > artifacts/v10/P06/runtime/mysql-domains.tsv 2> artifacts/v10/P06/runtime/mysql-domains.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,domain_id,action,result,reason,correlation_id FROM custom_domain_audit_events ORDER BY id" > artifacts/v10/P06/runtime/mysql-domain-audit.tsv 2> artifacts/v10/P06/runtime/mysql-domain-audit.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,domain_id,axis,result,policy_version,evidence_ref,correlation_id FROM custom_domain_revalidations ORDER BY id" > artifacts/v10/P06/runtime/mysql-domain-revalidations.tsv 2> artifacts/v10/P06/runtime/mysql-domain-revalidations.err
           true
 
       - name: Upload P06 early real integration evidence
@@ -171,6 +159,7 @@ jobs:
             artifacts/v10/P06/results/P06-T010.json
             artifacts/v10/P06/results/P06-T011.json
             artifacts/v10/P06/results/P06-T012.json
+            artifacts/v10/P06/results/P06-T013.json
             artifacts/v10/P06/runtime/
           if-no-files-found: warn
           retention-days: 30
