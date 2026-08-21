@@ -18,7 +18,9 @@ on:
       - 'scripts/p05/browser.mjs'
       - 'scripts/p05/password_browser.mjs'
       - 'artifacts/v10/P05/test-plan.json'
-      - '.github/workflows/p05-browser.yml'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
