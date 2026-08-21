@@ -43,6 +43,7 @@ func TestHostnamePolicyRejectsUnsafeOrUnregistrableNames(t *testing.T) {
 		"co.uk",
 		"gojet.cc",
 		"www.gojet.cc",
+		"assets.gojet.cc",
 		"bad_label.example.com",
 	}
 	for _, input := range invalid {
@@ -67,5 +68,21 @@ func TestHostnamePolicyCanonicalIdentityMakesUnicodeAndPunycodeEqual(t *testing.
 	}
 	if unicodeHost.ASCII != punycodeHost.ASCII {
 		t.Fatalf("IDNA aliases have different persisted identity: %q vs %q", unicodeHost.ASCII, punycodeHost.ASCII)
+	}
+}
+
+func TestGoJetHostnamePolicyRejectsPlatformRootsAndDescendants(t *testing.T) {
+	policy := GoJetHostnamePolicy()
+	for _, input := range []string{
+		"gojet.cc",
+		"www.gojet.cc",
+		"api.gojet.cc",
+		"gojet.cn",
+		"www.gojet.cn",
+		"redirect.gojet.cn",
+	} {
+		if got, err := policy.Normalize(input); err == nil {
+			t.Fatalf("GoJet platform hostname %q accepted as %+v", input, got)
+		}
 	}
 }
