@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 )
 
@@ -56,7 +57,8 @@ func main() {
 	}
 	cancel()
 
-	store := links.NewMySQLStore(db)
+	domainStore := domains.NewMySQLStore(db)
+	store := links.NewMySQLStoreWithCustomDomainAuthority(db, domainStore)
 	risk := links.NewRedisRiskStore(redisClient)
 	testAuth := os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1"
 	if testAuth {
