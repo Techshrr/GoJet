@@ -1,0 +1,48 @@
+name: P06 Custom Domains
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: P06 frozen contract
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Compile P06 validator
+        run: python3 -m py_compile scripts/p06/validate_contract.py
+
+      - name: Validate frozen P06 contract
+        run: python3 scripts/p06/validate_contract.py
+
+      - name: Verify contract-only evidence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f artifacts/v10/P06/test-plan.json
+          test -f artifacts/v10/P06/review.md
+          test ! -e artifacts/v10/P06/results/P06-T024.json
+          grep -F 'Status: **PENDING' artifacts/v10/P06/review.md
+          echo 'P06 contract freeze complete; implementation evidence is intentionally not claimed yet.'
+
+      - name: Upload P06 contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p06-contract-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P06/test-plan.json
+            artifacts/v10/P06/review.md
+          if-no-files-found: error
+          retention-days: 30
