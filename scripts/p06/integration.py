@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 16))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 17))
 
 
 def exact_head() -> str:
@@ -28,6 +28,7 @@ def run_driver(case_id: str) -> dict[str, Any]:
         "P06-T013": "risk_driver",
         "P06-T014": "revalidation_driver",
         "P06-T015": "downgrade_driver",
+        "P06-T016": "security_driver",
     }
     if case_id in driver_map:
         package = driver_map[case_id]
@@ -74,7 +75,8 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
             "dns": "real local authoritative UDP DNS for T010/T011/T014",
             "tls": "real local TCP/TLS handshake endpoint for T012/T014",
             "domain_risk": "server-owned evaluator with real MySQL persistence for T013/T014",
-            "time_authority": "deterministic UTC boundary instants for exact downgrade grace in T015",
+            "time_authority": "deterministic UTC boundary instants for exact downgrade grace in T015 and immediate safety suspension in T016",
+            "safety_authority": "server-side allowlisted abuse/fraud/security/ownership-loss state with real MySQL persistence for T016",
             "migrations": [
                 "migrations/000001_links_vertical_slice.sql",
                 "migrations/000002_custom_domains.sql",
@@ -117,7 +119,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T015 real authority evidence PASS on exact head {head}")
+    print(f"P06-T001..T016 real authority evidence PASS on exact head {head}")
     return 0
 
 
