@@ -108,12 +108,20 @@ async function run() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const expectedHttpErrors = [];
+  const expectedConsoleErrors = [];
   const unexpectedConsoleErrors = [];
   const pageErrors = [];
   const requestFailures = [];
 
   page.on('console', (message) => {
-    if (message.type() === 'error') unexpectedConsoleErrors.push({ text: message.text(), location: message.location() });
+    if (message.type() !== 'error') return;
+    const entry = { text: message.text(), location: message.location() };
+    const expected401Text = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+    if (entry.text === expected401Text && entry.location?.url === `${REDIRECT_URL}/${CODE}`) {
+      expectedConsoleErrors.push(entry);
+      return;
+    }
+    unexpectedConsoleErrors.push(entry);
   });
   page.on('pageerror', (error) => pageErrors.push(String(error)));
   page.on('requestfailed', (request) => requestFailures.push({ url: request.url(), failure: request.failure() }));
@@ -235,6 +243,7 @@ async function run() {
     // final URL proves the public GET no longer rendered the password challenge.
     await page.waitForURL((url) => url.origin === new URL(WORKSPACE_URL).origin && url.pathname === '/app/links');
 
+    assert(expectedConsoleErrors.length === 1, `expected exactly one wrong-password 401 console diagnostic: ${JSON.stringify(expectedConsoleErrors)}`);
     assert(unexpectedConsoleErrors.length === 0, `password browser console errors: ${JSON.stringify(unexpectedConsoleErrors)}`);
     assert(pageErrors.length === 0, `password browser page errors: ${JSON.stringify(pageErrors)}`);
     assert(requestFailures.length === 0, `password browser request failures: ${JSON.stringify(requestFailures)}`);
@@ -266,6 +275,7 @@ async function run() {
       noindex: true,
       csp_form_action_self: true,
       csp_form_action_http_https: true,
+      expected_wrong_password_console_401_observed: expectedConsoleErrors.length === 1,
       correct_password_location: correctResponse.headers().location,
       clear_removed_public_challenge: true,
       capture: `artifacts/v10/P05/captures/${challengeCapture}`,
