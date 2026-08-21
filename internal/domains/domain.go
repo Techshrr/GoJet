@@ -16,6 +16,7 @@ var (
 	ErrDomainLimitReached    = errors.New("custom-domain limit reached")
 	ErrHostnameConflict      = errors.New("custom-domain hostname unavailable")
 	ErrDomainNotFound        = errors.New("custom domain not found")
+	ErrOwnershipDNSLookup    = errors.New("custom-domain ownership DNS lookup failed")
 )
 
 type RoutingState string
