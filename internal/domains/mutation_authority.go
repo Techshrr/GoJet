@@ -25,9 +25,9 @@ type DomainMutationAuthority struct {
 
 // CheckDomainMutationAuthority centralizes the server-side checkpoint semantics
 // reused by activation/restoration/rotation/link-assignment handlers. It never
-// trusts client feature flags or cached UI state. A persisted security category
-// is checked before entitlement or axis readiness so no mutation can act as a
-// self-reactivation path for abuse/fraud/security/ownership-loss suspension.
+// trusts client feature flags or cached UI state. Persisted safety suspension
+// and ownership loss are checked before entitlement or axis readiness so no
+// mutation can act as a self-reactivation path.
 func (s *MySQLStore) CheckDomainMutationAuthority(ctx context.Context, workspaceID string, domainID uint64, kind DomainMutationKind, now time.Time) (DomainMutationAuthority, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if s == nil || s.db == nil || workspaceID == "" || domainID == 0 || now.IsZero() {
@@ -48,7 +48,7 @@ func (s *MySQLStore) CheckDomainMutationAuthority(ctx context.Context, workspace
 	}
 	decision := DomainMutationAuthority{Domain: domain, Entitlement: entitlement, Kind: kind, Allowed: false}
 
-	if strings.TrimSpace(domain.SecurityCategory) != "" || domain.RoutingState == RoutingRevoked || domain.RoutingState == RoutingRemoved {
+	if strings.TrimSpace(domain.SecurityCategory) != "" || domain.OwnershipStatus == OwnershipLost || domain.RoutingState == RoutingRevoked || domain.RoutingState == RoutingRemoved {
 		decision.Code = "security_suspended"
 		return decision, ErrDomainSecuritySuspended
 	}
