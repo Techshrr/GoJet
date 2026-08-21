@@ -3,17 +3,19 @@ package domains
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"time"
 )
 
 var (
-	ErrInvalidHostname     = errors.New("invalid custom-domain hostname")
-	ErrEntitlementRequired = errors.New("custom-domain entitlement required")
-	ErrDomainLimitReached  = errors.New("custom-domain limit reached")
-	ErrHostnameConflict    = errors.New("custom-domain hostname unavailable")
-	ErrDomainNotFound      = errors.New("custom domain not found")
+	ErrInvalidHostname       = errors.New("invalid custom-domain hostname")
+	ErrInvalidDomainMutation = errors.New("invalid custom-domain mutation")
+	ErrEntitlementRequired   = errors.New("custom-domain entitlement required")
+	ErrDomainLimitReached    = errors.New("custom-domain limit reached")
+	ErrHostnameConflict      = errors.New("custom-domain hostname unavailable")
+	ErrDomainNotFound        = errors.New("custom domain not found")
 )
 
 type RoutingState string
@@ -120,7 +122,7 @@ func NewOwnershipSecret() (plaintext string, hash [32]byte, err error) {
 
 func OwnershipSecretMatches(plaintext string, expected [32]byte) bool {
 	actual := sha256.Sum256([]byte(plaintext))
-	return actual == expected
+	return subtle.ConstantTimeCompare(actual[:], expected[:]) == 1
 }
 
 func OwnershipTXTName(hostnameASCII string) string {
