@@ -1,0 +1,160 @@
+name: P06 Real Integration
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/domains/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'migrations/000002_custom_domains.sql'
+      - 'scripts/p06/integration.py'
+      - 'scripts/p06/integration_driver.go'
+      - 'artifacts/v10/P06/test-plan.json'
+      - '.github/workflows/p06-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-integration:
+    name: P06 real MySQL entitlement and domain authority
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify dependency and driver closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go test ./internal/domains
+          go vet ./internal/domains
+          go test ./scripts/p06/integration_driver.go
+          python3 -m py_compile scripts/p06/integration.py
+
+      - name: Apply P05 and P06 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SHOW TABLES LIKE 'custom_domain%'" | sort
+
+      - name: Run P06-T001 through P06-T007 against real MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p06/integration.py --case all
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P06/results')
+          errors = []
+          for number in range(1, 8):
+              case_id = f'P06-T{number:03d}'
+              path = root / f'{case_id}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head:
+                  errors.append(f"{case_id} implementation_commit={data.get('implementation_commit')} expected={head}")
+              if data.get('status') != 'PASS':
+                  errors.append(f"{case_id} status={data.get('status')} expected=PASS")
+              if data.get('errors'):
+                  errors.append(f"{case_id} errors={data.get('errors')}")
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print(f'P06-T001..T007 PASS and bound to exact head {head}')
+          PY
+
+      - name: Capture MySQL authority evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P06/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE 'custom_domain%' ORDER BY table_name" \
+            > artifacts/v10/P06/runtime/mysql-domain-tables.tsv 2> artifacts/v10/P06/runtime/mysql-domain-tables.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,source,source_key,status,domain_limit,starts_at,expires_at,degraded_at,grace_until,security_category FROM custom_domain_entitlement_sources ORDER BY workspace_id,id" \
+            > artifacts/v10/P06/runtime/mysql-entitlement-sources.tsv 2> artifacts/v10/P06/runtime/mysql-entitlement-sources.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,allocated_count,version FROM custom_domain_usage ORDER BY workspace_id" \
+            > artifacts/v10/P06/runtime/mysql-domain-usage.tsv 2> artifacts/v10/P06/runtime/mysql-domain-usage.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,hostname_ascii,routing_state,ownership_status,ingress_dns_status,https_status,risk_status,ownership_token_version FROM custom_domains ORDER BY id" \
+            > artifacts/v10/P06/runtime/mysql-domains.tsv 2> artifacts/v10/P06/runtime/mysql-domains.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,domain_id,action,result,reason,correlation_id FROM custom_domain_audit_events ORDER BY id" \
+            > artifacts/v10/P06/runtime/mysql-domain-audit.tsv 2> artifacts/v10/P06/runtime/mysql-domain-audit.err
+          true
+
+      - name: Upload P06 early real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p06-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P06/results/P06-T001.json
+            artifacts/v10/P06/results/P06-T002.json
+            artifacts/v10/P06/results/P06-T003.json
+            artifacts/v10/P06/results/P06-T004.json
+            artifacts/v10/P06/results/P06-T005.json
+            artifacts/v10/P06/results/P06-T006.json
+            artifacts/v10/P06/results/P06-T007.json
+            artifacts/v10/P06/runtime/
+          if-no-files-found: warn
+          retention-days: 30
