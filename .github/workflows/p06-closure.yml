@@ -1,0 +1,201 @@
+name: P06 Closure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'migrations/000002_custom_domains.sql'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p06/**'
+      - 'artifacts/v10/P06/test-plan.json'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  closure:
+    name: P06 exact-head closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify closure validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p06/validate.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P00-P06 regression matrix
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P06
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = (
+              "P00 Bootstrap and G0 Traceability",
+              "P01 Engineering Foundation",
+              "P02 Brand Foundation",
+              "P03 Design System",
+              "P04 Product Shells",
+              "P05 Links Domain Contract",
+              "P05 Real Integration",
+              "P05 Workspace Browser",
+              "P05 Closure",
+              "P06 Custom Domains",
+              "P06 Real Integration",
+              "P06 Workspace Domains Browser",
+          )
+          sha = os.environ["EXACT_HEAD"]
+          repository = os.environ["REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          manifest_path = Path("artifacts/v10/P06/regression-manifest.json")
+
+          def fetch_runs():
+              query = urllib.parse.urlencode({"head_sha": sha, "event": "pull_request", "per_page": 100})
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}/actions/runs?{query}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)["workflow_runs"]
+
+          latest = {}
+          deadline = time.time() + 20 * 60
+          while time.time() < deadline:
+              runs = fetch_runs()
+              latest = {}
+              for run in runs:
+                  name = run.get("name")
+                  if name not in required:
+                      continue
+                  previous = latest.get(name)
+                  if previous is None or int(run.get("id", 0)) > int(previous.get("id", 0)):
+                      latest[name] = run
+
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get("status") != "completed"]
+              failed = [
+                  name for name in required
+                  if name in latest
+                  and latest[name].get("status") == "completed"
+                  and latest[name].get("conclusion") != "success"
+              ]
+
+              manifest = {
+                  "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                  "implementation_commit": sha,
+                  "required_workflows": {
+                      name: {
+                          "run_id": int(latest[name]["id"]),
+                          "run_number": int(latest[name].get("run_number", 0)),
+                          "head_sha": latest[name].get("head_sha"),
+                          "status": latest[name].get("status"),
+                          "conclusion": latest[name].get("conclusion"),
+                          "html_url": latest[name].get("html_url"),
+                      }
+                      for name in required if name in latest
+                  },
+                  "missing": missing,
+                  "pending": pending,
+                  "failed": failed,
+              }
+              manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+              if failed:
+                  raise SystemExit("required exact-head workflows failed: " + ", ".join(failed))
+              if not missing and not pending:
+                  print(f"P00-P06 exact-head regression matrix is green for {sha}")
+                  break
+              print(f"Waiting for exact-head matrix: missing={missing} pending={pending}")
+              time.sleep(10)
+          else:
+              raise SystemExit(f"timed out waiting for exact-head workflows for {sha}")
+          PY
+
+      - name: Download exact-head P06 integration and browser evidence
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          integration_run="$(python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P06/regression-manifest.json'))
+          print(data['required_workflows']['P06 Real Integration']['run_id'])
+          PY
+          )"
+          browser_run="$(python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P06/regression-manifest.json'))
+          print(data['required_workflows']['P06 Workspace Domains Browser']['run_id'])
+          PY
+          )"
+          rm -rf /tmp/p06-integration /tmp/p06-browser
+          mkdir -p /tmp/p06-integration /tmp/p06-browser artifacts/v10/P06/results
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p06-integration-$EXACT_HEAD" --dir /tmp/p06-integration
+          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p06-browser-$EXACT_HEAD" --dir /tmp/p06-browser
+          find /tmp/p06-integration -type f -name 'P06-T*.json' -print -exec cp '{}' artifacts/v10/P06/results/ ';'
+          find /tmp/p06-browser -type f -name 'P06-T*.json' -print -exec cp '{}' artifacts/v10/P06/results/ ';'
+          test "$(find artifacts/v10/P06/results -maxdepth 1 -type f -name 'P06-T*.json' | wc -l)" -eq 23
+
+      - name: Run P06-T024 exact-head closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p06/validate.py --case P06-T024
+
+      - name: Upload P06 closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p06-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P06/regression-manifest.json
+            artifacts/v10/P06/evidence-index.json
+            artifacts/v10/P06/results/P06-T*.json
+            artifacts/v10/P06/test-plan.json
+            artifacts/v10/P06/review.md
