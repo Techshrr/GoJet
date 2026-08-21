@@ -21,7 +21,7 @@ const tabs = [
 
 type TabId = typeof tabs[number]['id'];
 
-function Axis({ label, value, ready, checkedAt }: { label: string; value: string; ready: boolean; checkedAt?: string }) {
+function Axis({ label, value, ready, checkedAt }: { label: string; value: string; ready: boolean; checkedAt: string | undefined }) {
   return (
     <Card as="section" className="domains-axis-card" data-axis={label.toLowerCase().replaceAll(' ', '-')} data-ready={ready ? 'true' : 'false'}>
       <div><h3>{label}</h3><span className="domains-state" data-state={value}>{value}</span></div>
