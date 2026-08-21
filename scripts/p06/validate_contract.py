@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the frozen GoJet V10 P06 contract before implementation begins."""
+"""Validate the frozen GoJet V10 P06 contract and review state."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,15 @@ EXPECTED_SPECS = {
     "GJ-V10-IA-GREENFIELD-2026-08-20",
 }
 BASE_SHA = "ed82747f9f7ddb7696534cdda110f2f7f594b46a"
+PENDING_STATUS = "Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**"
+SIGNED_STATUS = "Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**"
+REVIEW_ROLES = ("Backend Lead", "QA Lead", "Frontend Lead", "Accessibility Reviewer", "Security Reviewer")
+P06_GATES = (
+    "G3 P06 functional/API subset",
+    "G4 P06 browser/responsive subset",
+    "G5 P06 accessibility subset",
+    "G6 P06 domain authority/security subset",
+)
 
 
 def require(condition: bool, message: str, errors: list[str]) -> None:
@@ -37,6 +47,55 @@ def load_json(path: Path, errors: list[str]) -> dict[str, Any]:
         errors.append(f"root JSON value must be object: {path.relative_to(ROOT)}")
         return {}
     return value
+
+
+def validate_review(review: str, errors: list[str]) -> None:
+    pending = PENDING_STATUS in review
+    signed = SIGNED_STATUS in review
+    require(pending != signed, "P06 review must be exactly one complete PENDING or SIGNED state", errors)
+
+    for invariant in ("support ticket", "seven calendar days", "zero grace", "never falls back"):
+        require(invariant.lower() in review.lower(), f"review missing frozen invariant: {invariant}", errors)
+
+    if pending:
+        for role in REVIEW_ROLES:
+            require(f"- {role}: PENDING" in review, f"review missing pending role: {role}", errors)
+        for gate in P06_GATES:
+            require(f"- {gate}: PENDING" in review, f"review missing pending gate: {gate}", errors)
+        return
+
+    if signed:
+        for role in REVIEW_ROLES:
+            require(f"- {role}: APPROVED" in review, f"review missing approved role: {role}", errors)
+        for gate in P06_GATES:
+            require(f"- {gate}: PASS — P06 subset" in review, f"review missing passed P06 gate subset: {gate}", errors)
+        for marker in ("- P0 defects: 0", "- P1 defects: 0", "- `DECISION REQUIRED`: 0", "P06-T024: PASS"):
+            require(marker in review, f"signed review missing closure marker: {marker}", errors)
+        require(
+            bool(re.search(r"- exact implementation SHA: `[0-9a-f]{40}`", review)),
+            "signed review missing pre-sign exact implementation SHA",
+            errors,
+        )
+        require(
+            bool(re.search(r"- P06 Closure run: `[1-9][0-9]*`", review)),
+            "signed review missing pre-sign P06 Closure run",
+            errors,
+        )
+        require(
+            bool(re.search(r"- closure artifact ID: `[1-9][0-9]*`", review)),
+            "signed review missing pre-sign closure artifact ID",
+            errors,
+        )
+        require(
+            bool(re.search(r"- closure artifact digest: `sha256:[0-9a-f]{64}`", review)),
+            "signed review missing pre-sign closure artifact digest",
+            errors,
+        )
+        require(
+            "signed revision is merge-authoritative only after P06-T001..T024 pass again" in review,
+            "signed review must require a complete same-revision P06-T001..T024 rerun",
+            errors,
+        )
 
 
 def main() -> int:
@@ -96,19 +155,14 @@ def main() -> int:
 
     require(REVIEW.is_file(), "missing artifacts/v10/P06/review.md", errors)
     if REVIEW.is_file():
-        review = REVIEW.read_text(encoding="utf-8")
-        require("Status: **PENDING" in review, "initial P06 review must remain PENDING", errors)
-        for role in ("Backend Lead", "QA Lead", "Frontend Lead", "Accessibility Reviewer", "Security Reviewer"):
-            require(f"- {role}: PENDING" in review, f"review missing pending role: {role}", errors)
-        for invariant in ("support ticket", "seven calendar days", "zero grace", "never falls back"):
-            require(invariant.lower() in review.lower(), f"review missing frozen invariant: {invariant}", errors)
+        validate_review(REVIEW.read_text(encoding="utf-8"), errors)
 
     if errors:
         for error in errors:
             print(f"P06 contract: {error}")
         return 1
 
-    print("P06 contract: PASS — 24/24 frozen cases, authority invariants and exact-head closure contract validated")
+    print("P06 contract: PASS — 24/24 frozen cases, authority invariants, review state and exact-head closure contract validated")
     return 0
 
 

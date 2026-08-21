@@ -67,11 +67,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          review='artifacts/v10/P06/review.md'
           test -f artifacts/v10/P06/test-plan.json
-          test -f artifacts/v10/P06/review.md
+          test -f "$review"
           test ! -e artifacts/v10/P06/results/P06-T024.json
-          grep -F 'Status: **PENDING' artifacts/v10/P06/review.md
-          echo 'P06 contract/schema/resolver checks pass; real integration and browser Exit evidence is not claimed yet.'
+          if grep -Fq 'Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**' "$review"; then
+            echo 'P06 review is still in the frozen PENDING state; generated closure evidence is not committed.'
+          elif grep -Fq 'Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**' "$review"; then
+            grep -Fq -- '- P0 defects: 0' "$review"
+            grep -Fq -- '- P1 defects: 0' "$review"
+            grep -Fq -- '- `DECISION REQUIRED`: 0' "$review"
+            grep -Fq 'P06-T024: PASS' "$review"
+            echo 'P06 technical review is signed; this exact signed revision must still pass Real/Browser/Closure workflows.'
+          else
+            echo 'P06 review is neither the complete PENDING state nor the complete signed state' >&2
+            exit 1
+          fi
 
       - name: Upload P06 contract evidence
         uses: actions/upload-artifact@v4
