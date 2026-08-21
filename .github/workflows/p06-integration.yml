@@ -10,6 +10,7 @@ on:
       - 'migrations/000002_custom_domains.sql'
       - 'scripts/p06/integration.py'
       - 'scripts/p06/integration_driver.go'
+      - 'scripts/p06/ownership_driver/**'
       - 'artifacts/v10/P06/test-plan.json'
       - '.github/workflows/p06-integration.yml'
   workflow_dispatch:
@@ -75,6 +76,7 @@ jobs:
           go test ./internal/domains
           go vet ./internal/domains
           go test ./scripts/p06/integration_driver.go
+          go test ./scripts/p06/ownership_driver
           python3 -m py_compile scripts/p06/integration.py
 
       - name: Apply P05 and P06 migrations
@@ -86,7 +88,7 @@ jobs:
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
             -e "SHOW TABLES LIKE 'custom_domain%'" | sort
 
-      - name: Run P06-T001 through P06-T008 against real MySQL
+      - name: Run P06-T001 through P06-T009 against real MySQL
         shell: bash
         run: |
           set -euo pipefail
@@ -100,7 +102,7 @@ jobs:
           head = os.environ['EXACT_HEAD']
           root = Path('artifacts/v10/P06/results')
           errors = []
-          for number in range(1, 9):
+          for number in range(1, 10):
               case_id = f'P06-T{number:03d}'
               path = root / f'{case_id}.json'
               if not path.is_file():
@@ -115,7 +117,7 @@ jobs:
                   errors.append(f"{case_id} errors={data.get('errors')}")
           if errors:
               raise SystemExit('\n'.join(errors))
-          print(f'P06-T001..T008 PASS and bound to exact head {head}')
+          print(f'P06-T001..T009 PASS and bound to exact head {head}')
           PY
 
       - name: Capture MySQL authority evidence
@@ -156,6 +158,7 @@ jobs:
             artifacts/v10/P06/results/P06-T006.json
             artifacts/v10/P06/results/P06-T007.json
             artifacts/v10/P06/results/P06-T008.json
+            artifacts/v10/P06/results/P06-T009.json
             artifacts/v10/P06/runtime/
           if-no-files-found: warn
           retention-days: 30
