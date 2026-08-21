@@ -339,7 +339,7 @@ func (h *RedirectHandler) writePasswordChallenge(w http.ResponseWriter, status i
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
-	if status == http.StatusNoContent || status == http.StatusNotModified || status == http.StatusNotModified {
+	if status == http.StatusNoContent || status == http.StatusNotModified {
 		return
 	}
 	_ = passwordTemplate.Execute(w, passwordView{Code: code, Message: message})
