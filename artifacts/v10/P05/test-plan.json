@@ -108,9 +108,9 @@
     {
       "id": "P05-T010",
       "name": "risk-precedes-routing-ab-utm-access",
-      "precondition": "link has routing, A/B, UTM and access controls but risk is non-allow",
-      "driver": "python3 scripts/p05/integration.py --case P05-T010",
-      "oracle": "no smart-route/A-B/UTM/password/expiry/click-limit/one-time mutation or target response occurs before risk allow",
+      "precondition": "link has routing, A/B, UTM, password and lifecycle access controls",
+      "driver": "python3 scripts/p05/integration.py --case P05-T010 && python3 scripts/p05/password_evidence.py",
+      "oracle": "risk non-allow is handled before password/access; after allow the password challenge is no-store/noindex and target-free, verifier/plaintext never leave internal persistence, wrong guesses fail closed and rate-limit, correct password alone may proceed to lifecycle claim, password-only mutations preserve the risk fingerprint, and restore recovers password state without verifier disclosure",
       "expected_exit": 0,
       "evidence": "artifacts/v10/P05/results/P05-T010.json",
       "owner": "Security Reviewer + Backend Lead"
@@ -178,9 +178,9 @@
     {
       "id": "P05-T017",
       "name": "workspace-links-browser-flow",
-      "precondition": "platformapi/redirectengine and Workspace static app are running against real test data",
-      "driver": "node scripts/p05/browser.mjs --case P05-T017",
-      "oracle": "list/search/filter/create/detail/edit/history flow completes without console/page errors or reload regressions",
+      "precondition": "platformapi/redirectengine and Workspace static app are running against real MySQL/Redis data",
+      "driver": "node scripts/p05/browser.mjs --case P05-T017 && node scripts/p05/password_browser.mjs",
+      "oracle": "list/search/filter/create/detail/edit/history flow completes without console/page errors or reload regressions; Workspace can create, replace and clear password protection while never echoing plaintext/verifier, and password-only mutations preserve the destination-risk fingerprint",
       "expected_exit": 0,
       "evidence": "artifacts/v10/P05/results/P05-T017.json",
       "owner": "Frontend Lead + QA"
@@ -197,10 +197,10 @@
     },
     {
       "id": "P05-T019",
-      "name": "safety-surface-browser",
-      "precondition": "review/block/missing decisions are configured independently",
-      "driver": "node scripts/p05/browser.mjs --case P05-T019",
-      "oracle": "browser reaches GoJet safety surface, never destination, and no bypass link exposes the unsafe target",
+      "name": "safety-and-password-surface-browser",
+      "precondition": "review/block/missing decisions and an exact-allow password-protected link are configured independently",
+      "driver": "node scripts/p05/browser.mjs --case P05-T019 && node scripts/p05/password_browser.mjs",
+      "oracle": "review/block/missing browser flows stay on target-free GoJet safety surfaces with no bypass; exact-allow password protection renders an accessible no-store/noindex challenge, rejects wrong password without target disclosure, redirects only after the current password is accepted, and disappears after owner-authorized password clearing",
       "expected_exit": 0,
       "evidence": "artifacts/v10/P05/results/P05-T019.json",
       "owner": "Security Reviewer + QA"
