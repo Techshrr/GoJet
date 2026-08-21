@@ -120,7 +120,8 @@ func caseT019(ctx context.Context, db *sql.DB, redisClient *redis.Client, out *c
 		AB: []links.ABVariant{},
 		UTM: links.UTMConfig{},
 		Access: links.AccessConfig{},
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	officialLink, err := linkStore.Create(ctx, links.CreateInput{
@@ -138,7 +139,8 @@ func caseT019(ctx context.Context, db *sql.DB, redisClient *redis.Client, out *c
 		AB: []links.ABVariant{},
 		UTM: links.UTMConfig{},
 		Access: links.AccessConfig{},
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	if _, err := riskStore.PutDecision(ctx, customLink.ID, customLink.RiskFingerprint, links.RiskAllow, "t019-destination-policy", 30*time.Minute); err != nil {
