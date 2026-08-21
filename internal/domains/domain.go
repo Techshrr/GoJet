@@ -5,17 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"net"
-	"strings"
 	"time"
 )
 
 var (
-	ErrInvalidHostname      = errors.New("invalid custom-domain hostname")
-	ErrEntitlementRequired  = errors.New("custom-domain entitlement required")
-	ErrDomainLimitReached   = errors.New("custom-domain limit reached")
-	ErrHostnameConflict     = errors.New("custom-domain hostname unavailable")
-	ErrDomainNotFound       = errors.New("custom domain not found")
+	ErrInvalidHostname     = errors.New("invalid custom-domain hostname")
+	ErrEntitlementRequired = errors.New("custom-domain entitlement required")
+	ErrDomainLimitReached  = errors.New("custom-domain limit reached")
+	ErrHostnameConflict    = errors.New("custom-domain hostname unavailable")
+	ErrDomainNotFound      = errors.New("custom domain not found")
 )
 
 type RoutingState string
@@ -57,29 +55,29 @@ const (
 )
 
 type Domain struct {
-	ID                      uint64            `json:"id"`
-	WorkspaceID             string            `json:"workspace_id"`
-	HostnameASCII           string            `json:"hostname_ascii"`
-	DisplayHostname         string            `json:"display_hostname"`
-	RoutingState            RoutingState      `json:"routing_state"`
-	OwnershipStatus         OwnershipStatus    `json:"ownership_status"`
-	IngressDNSStatus        IngressDNSStatus   `json:"ingress_dns_status"`
-	HTTPSStatus             HTTPSStatus        `json:"https_status"`
-	RiskStatus              DomainRiskStatus   `json:"risk_status"`
-	OwnershipTokenVersion   uint64             `json:"ownership_token_version"`
-	OwnershipSecretIssuedAt time.Time          `json:"ownership_secret_issued_at"`
-	OwnershipVerifiedAt     *time.Time         `json:"ownership_verified_at,omitempty"`
-	IngressDNSCheckedAt     *time.Time         `json:"ingress_dns_checked_at,omitempty"`
-	HTTPSCheckedAt          *time.Time         `json:"https_checked_at,omitempty"`
-	RiskCheckedAt           *time.Time         `json:"risk_checked_at,omitempty"`
-	RiskPolicyVersion       string             `json:"risk_policy_version,omitempty"`
-	RiskEvidenceRef         string             `json:"risk_evidence_ref,omitempty"`
-	GraceStartedAt          *time.Time         `json:"grace_started_at,omitempty"`
-	GraceUntil              *time.Time         `json:"grace_until,omitempty"`
-	SecurityCategory        string             `json:"security_category,omitempty"`
-	CreatedAt               time.Time          `json:"created_at"`
-	UpdatedAt               time.Time          `json:"updated_at"`
-	RemovedAt               *time.Time         `json:"removed_at,omitempty"`
+	ID                      uint64           `json:"id"`
+	WorkspaceID             string           `json:"workspace_id"`
+	HostnameASCII           string           `json:"hostname_ascii"`
+	DisplayHostname         string           `json:"display_hostname"`
+	RoutingState            RoutingState     `json:"routing_state"`
+	OwnershipStatus         OwnershipStatus  `json:"ownership_status"`
+	IngressDNSStatus        IngressDNSStatus `json:"ingress_dns_status"`
+	HTTPSStatus             HTTPSStatus      `json:"https_status"`
+	RiskStatus              DomainRiskStatus `json:"risk_status"`
+	OwnershipTokenVersion   uint64           `json:"ownership_token_version"`
+	OwnershipSecretIssuedAt time.Time        `json:"ownership_secret_issued_at"`
+	OwnershipVerifiedAt     *time.Time       `json:"ownership_verified_at,omitempty"`
+	IngressDNSCheckedAt     *time.Time       `json:"ingress_dns_checked_at,omitempty"`
+	HTTPSCheckedAt          *time.Time       `json:"https_checked_at,omitempty"`
+	RiskCheckedAt           *time.Time       `json:"risk_checked_at,omitempty"`
+	RiskPolicyVersion       string           `json:"risk_policy_version,omitempty"`
+	RiskEvidenceRef         string           `json:"risk_evidence_ref,omitempty"`
+	GraceStartedAt          *time.Time       `json:"grace_started_at,omitempty"`
+	GraceUntil              *time.Time       `json:"grace_until,omitempty"`
+	SecurityCategory        string           `json:"security_category,omitempty"`
+	CreatedAt               time.Time        `json:"created_at"`
+	UpdatedAt               time.Time        `json:"updated_at"`
+	RemovedAt               *time.Time       `json:"removed_at,omitempty"`
 }
 
 type DomainReadiness struct {
@@ -108,34 +106,6 @@ func (d Domain) Readiness(entitlement ResolvedEntitlement) DomainReadiness {
 		ReadyForNewLinks: entitlement.MutationAllowed && trust,
 		ReadyForRouting:  entitlement.ExistingRoutingAllowed && trust,
 	}
-}
-
-func NormalizeASCIIHostname(raw string) (string, error) {
-	host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
-	if host == "" || len(host) > 253 || strings.HasPrefix(host, "*.") || net.ParseIP(host) != nil || host == "localhost" {
-		return "", ErrInvalidHostname
-	}
-	for _, r := range host {
-		if r > 127 {
-			return "", ErrInvalidHostname
-		}
-	}
-	labels := strings.Split(host, ".")
-	if len(labels) < 2 {
-		return "", ErrInvalidHostname
-	}
-	for _, label := range labels {
-		if len(label) < 1 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return "", ErrInvalidHostname
-		}
-		for _, r := range label {
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-				continue
-			}
-			return "", ErrInvalidHostname
-		}
-	}
-	return host, nil
 }
 
 func NewOwnershipSecret() (plaintext string, hash [32]byte, err error) {
