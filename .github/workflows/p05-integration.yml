@@ -10,6 +10,7 @@ on:
       - 'services/redirectengine/**'
       - 'migrations/000001_links_vertical_slice.sql'
       - 'scripts/p05/integration.py'
+      - 'scripts/p05/password_evidence.py'
       - 'artifacts/v10/P05/test-plan.json'
       - '.github/workflows/p05-integration.yml'
   workflow_dispatch:
@@ -84,14 +85,14 @@ jobs:
           mysql --version
           redis-cli --version
 
-      - name: Verify dependency closure and integration driver
+      - name: Verify dependency closure and integration drivers
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-          python3 -m py_compile scripts/p05/integration.py
+          python3 -m py_compile scripts/p05/integration.py scripts/p05/password_evidence.py
 
       - name: Build native P05 service binaries
         shell: bash
@@ -127,6 +128,7 @@ jobs:
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
           GITHUB_SHA="$exact_head" python3 scripts/p05/integration.py --case all
+          GITHUB_SHA="$exact_head" python3 scripts/p05/password_evidence.py
           EXACT_HEAD="$exact_head" python3 - <<'PY'
           import json
           import os
@@ -144,9 +146,11 @@ jobs:
               data = json.loads(path.read_text(encoding="utf-8"))
               if data.get("implementation_commit") != head:
                   errors.append(f"{case_id} implementation_commit={data.get('implementation_commit')} expected={head}")
+              if data.get("status") != "PASS":
+                  errors.append(f"{case_id} status={data.get('status')} expected=PASS")
           if errors:
               raise SystemExit("\n".join(errors))
-          print(f"P05-T001..T016 evidence bound to exact head {head}")
+          print(f"P05-T001..T016 evidence PASS and bound to exact head {head}")
           PY
 
       - name: Capture final MySQL Redis and process evidence
@@ -159,6 +163,7 @@ jobs:
             -e "SELECT id,workspace_id,hostname,code,status,version,risk_fingerprint,click_count FROM links ORDER BY id" \
             > artifacts/v10/P05/runtime/mysql-links.tsv 2> artifacts/v10/P05/runtime/mysql-snapshot.err
           redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'risk:link:*' | sort > artifacts/v10/P05/runtime/redis-risk-keys.txt
+          redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'access:password:*' | sort > artifacts/v10/P05/runtime/redis-password-attempt-keys.txt
           sha256sum /tmp/gojet-p05/platformapi /tmp/gojet-p05/redirectengine > artifacts/v10/P05/runtime/native-binaries.sha256 2>/dev/null
           ps -o pid=,comm= -p "$(cat artifacts/v10/P05/runtime/platformapi.pid 2>/dev/null)" "$(cat artifacts/v10/P05/runtime/redirectengine.pid 2>/dev/null)" > artifacts/v10/P05/runtime/processes.txt 2>/dev/null
           true
