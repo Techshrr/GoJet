@@ -17,8 +17,11 @@ on:
       - 'frontend/packages/ui/**'
       - 'frontend/packages/tokens/**'
       - 'scripts/p06/browser.mjs'
+      - 'scripts/p06/validate.py'
       - 'artifacts/v10/P06/test-plan.json'
-      - '.github/workflows/p06-browser.yml'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
