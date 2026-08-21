@@ -252,7 +252,7 @@ async function caseT021(browser) {
     resetWorkspace();
     scenario.seed();
     await page.goto(`${WORKSPACE_URL}/app/domains`, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Custom domains' }).waitFor();
+    await page.getByRole('heading', { name: 'Custom domains', exact: true }).waitFor();
     const authority = page.locator('.domains-entitlement');
     await authority.getByText(scenario.name, { exact: true }).waitFor();
     assert(await page.getByRole('link', { name: 'Add domain' }).count() === 0, `${scenario.name} exposed forbidden Add domain`);
@@ -341,7 +341,7 @@ async function caseT022(browser) {
   await page.getByText('active', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Continue to risk' }).click();
   await page.getByRole('heading', { name: 'Domain risk' }).waitFor();
-  await page.getByText('allow', { exact: true }).waitFor();
+  await page.locator('.domains-axis-detail').getByText('allow', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Continue to Ready' }).click();
   await page.getByRole('heading', { name: 'Ready' }).waitFor();
   await page.getByText('All current mutation authorities are ready for new Link assignment.').waitFor();
@@ -422,7 +422,7 @@ async function caseT023(browser) {
   attachDiagnostics(page, report);
 
   await page.goto(`${WORKSPACE_URL}/app/domains`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: 'Custom domains' }).waitFor();
+  await page.getByRole('heading', { name: 'Custom domains', exact: true }).waitFor();
   const listLayout = await mobileLayout(page);
   assert(listLayout.viewport.width === viewports.mobile.width && listLayout.viewport.height === viewports.mobile.height, `mobile viewport mismatch: ${JSON.stringify(listLayout.viewport)}`);
   assert(!listLayout.root_overflow && !listLayout.body_overflow, `domains list root/body overflow: ${JSON.stringify(listLayout)}`);
