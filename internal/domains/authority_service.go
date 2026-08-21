@@ -19,13 +19,26 @@ type DomainAuthorityService struct {
 	store       *MySQLStore
 	permissions WorkspacePermissionChecker
 	ownership   *OwnershipVerifier
+	ingress     *IngressDNSVerifier
+	https       *HTTPSVerifier
+	risk        *DomainRiskVerifier
 }
 
-func NewDomainAuthorityService(store *MySQLStore, permissions WorkspacePermissionChecker, ownership *OwnershipVerifier) (*DomainAuthorityService, error) {
-	if store == nil || store.db == nil || permissions == nil || ownership == nil || ownership.store != store {
+func NewDomainAuthorityService(
+	store *MySQLStore,
+	permissions WorkspacePermissionChecker,
+	ownership *OwnershipVerifier,
+	ingress *IngressDNSVerifier,
+	https *HTTPSVerifier,
+	risk *DomainRiskVerifier,
+) (*DomainAuthorityService, error) {
+	if store == nil || store.db == nil || permissions == nil || ownership == nil || ingress == nil || https == nil || risk == nil ||
+		ownership.store != store || ingress.store != store || https.store != store || risk.store != store {
 		return nil, ErrInvalidDomainMutation
 	}
-	return &DomainAuthorityService{store: store, permissions: permissions, ownership: ownership}, nil
+	return &DomainAuthorityService{
+		store: store, permissions: permissions, ownership: ownership, ingress: ingress, https: https, risk: risk,
+	}, nil
 }
 
 func (s *DomainAuthorityService) requireManage(ctx context.Context, workspaceID, actorID string) error {
@@ -44,14 +57,35 @@ func (s *DomainAuthorityService) requireManage(ctx context.Context, workspaceID,
 	return nil
 }
 
-// VerifyOwnershipTXT checks Workspace manage permission before any resolver
-// traffic. The underlying verifier then independently re-checks entitlement and
-// the current ownership verifier under the existing transactional authority.
+// Permission is checked before any external resolver/probe/evaluator traffic.
+// Each underlying verifier then independently re-checks entitlement and its
+// prerequisite domain axes under the existing transactional authority.
 func (s *DomainAuthorityService) VerifyOwnershipTXT(ctx context.Context, input VerifyOwnershipTXTInput) (OwnershipVerificationResult, error) {
 	if err := s.requireManage(ctx, input.WorkspaceID, input.ActorID); err != nil {
 		return OwnershipVerificationResult{}, err
 	}
 	return s.ownership.VerifyTXT(ctx, input)
+}
+
+func (s *DomainAuthorityService) VerifyIngressDNS(ctx context.Context, input VerifyIngressDNSInput) (IngressDNSVerificationResult, error) {
+	if err := s.requireManage(ctx, input.WorkspaceID, input.ActorID); err != nil {
+		return IngressDNSVerificationResult{}, err
+	}
+	return s.ingress.Verify(ctx, input)
+}
+
+func (s *DomainAuthorityService) VerifyHTTPS(ctx context.Context, input VerifyHTTPSInput) (HTTPSVerificationResult, error) {
+	if err := s.requireManage(ctx, input.WorkspaceID, input.ActorID); err != nil {
+		return HTTPSVerificationResult{}, err
+	}
+	return s.https.Verify(ctx, input)
+}
+
+func (s *DomainAuthorityService) VerifyDomainRisk(ctx context.Context, input VerifyDomainRiskInput) (DomainRiskVerificationResult, error) {
+	if err := s.requireManage(ctx, input.WorkspaceID, input.ActorID); err != nil {
+		return DomainRiskVerificationResult{}, err
+	}
+	return s.risk.Verify(ctx, input)
 }
 
 // RotateOwnershipSecret checks current Workspace permission at the service
