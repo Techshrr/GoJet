@@ -52,9 +52,9 @@ func (s *MySQLStore) AuthorizeCustomDomainAssignmentTx(ctx context.Context, tx *
 
 // AuthorizeCustomDomainRoutingTx is the runtime redirect authority. Unlike new
 // Link assignment, it intentionally consumes ExistingRoutingAllowed so a normal
-// plan downgrade may keep already-active custom-host routing alive only during
-// the exact billing grace window. Security/ownership/DNS/HTTPS/domain-risk
-// failures never inherit that grace and therefore fail closed immediately.
+// plan downgrade may keep an already-enabled custom host alive only during the
+// exact billing grace window. Pending domains do not become routable merely
+// because their trust axes are ready; activate remains a distinct authority.
 func (s *MySQLStore) AuthorizeCustomDomainRoutingTx(ctx context.Context, tx *sql.Tx, workspaceID, hostname string, now time.Time) (string, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if s == nil || s.db == nil || tx == nil || workspaceID == "" || now.IsZero() {
@@ -72,7 +72,7 @@ func (s *MySQLStore) AuthorizeCustomDomainRoutingTx(ctx context.Context, tx *sql
 	if err != nil {
 		return "", err
 	}
-	if !domain.Readiness(entitlement).ReadyForRouting {
+	if domain.RoutingState != RoutingEnabled || strings.TrimSpace(domain.SecurityCategory) != "" || domain.OwnershipStatus != OwnershipVerified || domain.IngressDNSStatus != IngressValid || domain.HTTPSStatus != HTTPSActive || domain.RiskStatus != RiskAllow || !entitlement.ExistingRoutingAllowed {
 		return "", ErrDomainSecuritySuspended
 	}
 	return normalized.ASCII, nil
