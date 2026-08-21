@@ -11,6 +11,7 @@ on:
       - 'scripts/p06/integration.py'
       - 'scripts/p06/integration_driver.go'
       - 'scripts/p06/ownership_driver/**'
+      - 'scripts/p06/dns_driver/**'
       - 'artifacts/v10/P06/test-plan.json'
       - '.github/workflows/p06-integration.yml'
   workflow_dispatch:
@@ -77,6 +78,7 @@ jobs:
           go vet ./internal/domains
           go test ./scripts/p06/integration_driver.go
           go test ./scripts/p06/ownership_driver
+          go test ./scripts/p06/dns_driver
           python3 -m py_compile scripts/p06/integration.py
 
       - name: Apply P05 and P06 migrations
@@ -88,7 +90,7 @@ jobs:
           MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
             -e "SHOW TABLES LIKE 'custom_domain%'" | sort
 
-      - name: Run P06-T001 through P06-T009 against real MySQL
+      - name: Run P06-T001 through P06-T010 against real MySQL and DNS
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +104,7 @@ jobs:
           head = os.environ['EXACT_HEAD']
           root = Path('artifacts/v10/P06/results')
           errors = []
-          for number in range(1, 10):
+          for number in range(1, 11):
               case_id = f'P06-T{number:03d}'
               path = root / f'{case_id}.json'
               if not path.is_file():
@@ -117,7 +119,7 @@ jobs:
                   errors.append(f"{case_id} errors={data.get('errors')}")
           if errors:
               raise SystemExit('\n'.join(errors))
-          print(f'P06-T001..T009 PASS and bound to exact head {head}')
+          print(f'P06-T001..T010 PASS and bound to exact head {head}')
           PY
 
       - name: Capture MySQL authority evidence
@@ -142,6 +144,9 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
             -e "SELECT workspace_id,domain_id,action,result,reason,correlation_id FROM custom_domain_audit_events ORDER BY id" \
             > artifacts/v10/P06/runtime/mysql-domain-audit.tsv 2> artifacts/v10/P06/runtime/mysql-domain-audit.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,domain_id,axis,result,policy_version,correlation_id FROM custom_domain_revalidations ORDER BY id" \
+            > artifacts/v10/P06/runtime/mysql-domain-revalidations.tsv 2> artifacts/v10/P06/runtime/mysql-domain-revalidations.err
           true
 
       - name: Upload P06 early real integration evidence
@@ -159,6 +164,7 @@ jobs:
             artifacts/v10/P06/results/P06-T007.json
             artifacts/v10/P06/results/P06-T008.json
             artifacts/v10/P06/results/P06-T009.json
+            artifacts/v10/P06/results/P06-T010.json
             artifacts/v10/P06/runtime/
           if-no-files-found: warn
           retention-days: 30
