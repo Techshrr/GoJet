@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   contract:
-    name: P06 frozen contract
+    name: P06 frozen contract and authority domain
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact implementation head
@@ -21,13 +21,47 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Compile P06 validator
         run: python3 -m py_compile scripts/p06/validate_contract.py
 
       - name: Validate frozen P06 contract
         run: python3 scripts/p06/validate_contract.py
 
-      - name: Verify contract-only evidence boundary
+      - name: Verify P06 migration authority shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='migrations/000002_custom_domains.sql'
+          test -f "$migration"
+          grep -F 'CREATE TABLE custom_domain_entitlement_sources' "$migration"
+          grep -F 'CREATE TABLE custom_domain_entitlement_requests' "$migration"
+          grep -F 'CREATE TABLE custom_domain_usage' "$migration"
+          grep -F 'CREATE TABLE custom_domains' "$migration"
+          grep -F 'CREATE TABLE custom_domain_revalidations' "$migration"
+          grep -F 'CREATE TABLE custom_domain_audit_events' "$migration"
+          grep -F "ownership_status ENUM('pending', 'verified', 'failed', 'lost')" "$migration"
+          grep -F "ingress_dns_status ENUM('pending', 'valid', 'invalid')" "$migration"
+          grep -F "https_status ENUM('pending', 'active', 'error')" "$migration"
+          grep -F "risk_status ENUM('missing', 'allow', 'review', 'block', 'malformed', 'stale')" "$migration"
+          if grep -Eq '(^|[^a-zA-Z_])verified[[:space:]]+TINYINT|is_verified' "$migration"; then
+            echo 'P06 migration must not collapse domain authority into a verified boolean' >&2
+            exit 1
+          fi
+
+      - name: Test entitlement authority resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/domains
+          go vet ./internal/domains
+
+      - name: Verify implementation evidence boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -35,7 +69,7 @@ jobs:
           test -f artifacts/v10/P06/review.md
           test ! -e artifacts/v10/P06/results/P06-T024.json
           grep -F 'Status: **PENDING' artifacts/v10/P06/review.md
-          echo 'P06 contract freeze complete; implementation evidence is intentionally not claimed yet.'
+          echo 'P06 contract/schema/resolver checks pass; real integration and browser Exit evidence is not claimed yet.'
 
       - name: Upload P06 contract evidence
         uses: actions/upload-artifact@v4
