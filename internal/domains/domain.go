@@ -15,12 +15,14 @@ var (
 	ErrEntitlementRequired   = errors.New("custom-domain entitlement required")
 	ErrOwnershipRequired     = errors.New("custom-domain ownership verification required")
 	ErrIngressDNSRequired    = errors.New("custom-domain ingress DNS verification required")
+	ErrHTTPSRequired         = errors.New("custom-domain active HTTPS required")
 	ErrDomainLimitReached    = errors.New("custom-domain limit reached")
 	ErrHostnameConflict      = errors.New("custom-domain hostname unavailable")
 	ErrDomainNotFound        = errors.New("custom domain not found")
 	ErrOwnershipDNSLookup    = errors.New("custom-domain ownership DNS lookup failed")
 	ErrIngressDNSLookup      = errors.New("custom-domain ingress DNS lookup failed")
 	ErrHTTPSProbe            = errors.New("custom-domain HTTPS readiness probe failed")
+	ErrDomainRiskEvaluation  = errors.New("custom-domain risk evaluation failed")
 )
 
 type RoutingState string
