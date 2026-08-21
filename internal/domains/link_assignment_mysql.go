@@ -50,6 +50,34 @@ func (s *MySQLStore) AuthorizeCustomDomainAssignmentTx(ctx context.Context, tx *
 	return normalized.ASCII, nil
 }
 
+// AuthorizeCustomDomainRoutingTx is the runtime redirect authority. Unlike new
+// Link assignment, it intentionally consumes ExistingRoutingAllowed so a normal
+// plan downgrade may keep already-active custom-host routing alive only during
+// the exact billing grace window. Security/ownership/DNS/HTTPS/domain-risk
+// failures never inherit that grace and therefore fail closed immediately.
+func (s *MySQLStore) AuthorizeCustomDomainRoutingTx(ctx context.Context, tx *sql.Tx, workspaceID, hostname string, now time.Time) (string, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if s == nil || s.db == nil || tx == nil || workspaceID == "" || now.IsZero() {
+		return "", ErrInvalidDomainMutation
+	}
+	normalized, err := GoJetHostnamePolicy().Normalize(hostname)
+	if err != nil {
+		return "", err
+	}
+	domain, err := loadDomainByHostnameForUpdate(ctx, tx, workspaceID, normalized.ASCII)
+	if err != nil {
+		return "", err
+	}
+	entitlement, err := s.resolveEntitlementTx(ctx, tx, workspaceID, now.UTC())
+	if err != nil {
+		return "", err
+	}
+	if !domain.Readiness(entitlement).ReadyForRouting {
+		return "", ErrDomainSecuritySuspended
+	}
+	return normalized.ASCII, nil
+}
+
 func loadDomainByHostnameForUpdate(ctx context.Context, tx *sql.Tx, workspaceID, hostnameASCII string) (Domain, error) {
 	row := tx.QueryRowContext(ctx, `
 		SELECT id, workspace_id, hostname_ascii, display_hostname, routing_state,
