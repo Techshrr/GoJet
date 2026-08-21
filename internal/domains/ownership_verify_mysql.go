@@ -25,6 +25,16 @@ func (r NetTXTResolver) LookupTXT(ctx context.Context, name string) ([]string, e
 	if resolver == nil {
 		resolver = net.DefaultResolver
 	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrInvalidDomainMutation
+	}
+	// Ownership names are already canonical ASCII hostnames. Query them as an
+	// absolute FQDN so the host resolver cannot append local search suffixes and
+	// send ownership probes to unrelated DNS namespaces.
+	if !strings.HasSuffix(name, ".") {
+		name += "."
+	}
 	return resolver.LookupTXT(ctx, name)
 }
 
@@ -67,10 +77,11 @@ func NewOwnershipVerifier(store *MySQLStore, resolver TXTResolver) *OwnershipVer
 	return &OwnershipVerifier{store: store, resolver: resolver}
 }
 
-// VerifyTXT performs a real resolver lookup before entering the mutation
-// transaction. The transaction then row-locks the domain and re-reads the
-// current verifier and entitlement so a concurrent secret rotation cannot make
-// an old DNS response authoritative.
+// VerifyTXT performs an entitlement-authorized real resolver lookup. It checks
+// entitlement once before any DNS traffic, then row-locks the domain and
+// re-checks the current verifier and entitlement before persisting the result.
+// A concurrent downgrade or secret rotation therefore cannot make a stale DNS
+// response authoritative.
 func (v *OwnershipVerifier) VerifyTXT(ctx context.Context, input VerifyOwnershipTXTInput) (OwnershipVerificationResult, error) {
 	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
 	input.ActorID = strings.TrimSpace(input.ActorID)
@@ -81,7 +92,7 @@ func (v *OwnershipVerifier) VerifyTXT(ctx context.Context, input VerifyOwnership
 	}
 	now := input.Now.UTC()
 
-	snapshot, err := v.store.GetDomain(ctx, input.WorkspaceID, input.DomainID)
+	snapshot, err := v.preflightOwnershipVerification(ctx, input, now)
 	if err != nil {
 		return OwnershipVerificationResult{}, err
 	}
@@ -106,6 +117,9 @@ func (v *OwnershipVerifier) VerifyTXT(ctx context.Context, input VerifyOwnership
 	domain, err := loadDomainByIDForUpdate(ctx, tx, input.WorkspaceID, input.DomainID)
 	if err != nil {
 		return OwnershipVerificationResult{}, err
+	}
+	if domain.HostnameASCII != snapshot.HostnameASCII {
+		return OwnershipVerificationResult{}, ErrInvalidDomainMutation
 	}
 	entitlement, err := v.store.resolveEntitlementTx(ctx, tx, input.WorkspaceID, now)
 	if err != nil {
@@ -177,6 +191,39 @@ func (v *OwnershipVerifier) VerifyTXT(ctx context.Context, input VerifyOwnership
 	}
 
 	return OwnershipVerificationResult{Domain: updated, Outcome: outcome, RecordsObserved: len(records)}, nil
+}
+
+func (v *OwnershipVerifier) preflightOwnershipVerification(ctx context.Context, input VerifyOwnershipTXTInput, now time.Time) (Domain, error) {
+	tx, err := v.store.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return Domain{}, err
+	}
+	defer tx.Rollback()
+
+	domain, err := loadDomainByIDForUpdate(ctx, tx, input.WorkspaceID, input.DomainID)
+	if err != nil {
+		return Domain{}, err
+	}
+	entitlement, err := v.store.resolveEntitlementTx(ctx, tx, input.WorkspaceID, now)
+	if err != nil {
+		return Domain{}, err
+	}
+	if !entitlement.MutationAllowed {
+		if auditErr := appendDomainAuditTx(ctx, tx, input.WorkspaceID, &domain.ID, nil, input.ActorID, "domain.ownership.verify", "denied", entitlement.DecisionReason, input.CorrelationID, map[string]any{
+			"code":                    "entitlement_required",
+			"ownership_token_version": domain.OwnershipTokenVersion,
+		}); auditErr != nil {
+			return Domain{}, auditErr
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return Domain{}, commitErr
+		}
+		return Domain{}, ErrEntitlementRequired
+	}
+	if err := tx.Commit(); err != nil {
+		return Domain{}, err
+	}
+	return domain, nil
 }
 
 func classifyOwnershipTXT(records []string, verifier [32]byte) (OwnershipVerificationOutcome, OwnershipStatus) {
