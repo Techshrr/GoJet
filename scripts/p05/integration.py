@@ -204,7 +204,7 @@ def update_payload(link: dict[str, Any], **overrides: Any) -> dict[str, Any]:
         "routing": link.get("routing") or [],
         "ab": link.get("ab") or [],
         "utm": link.get("utm") or {},
-        "access": link.get("access") or {},
+        "access": {},
         "expires_at": link.get("expires_at"),
         "click_limit": link.get("click_limit"),
         "one_time": bool(link.get("one_time")),
