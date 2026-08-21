@@ -85,7 +85,7 @@ func caseT019(ctx context.Context, db *sql.DB, redisClient *redis.Client, out *c
 		SourceKey: "business-t019",
 		Status: domains.EntitlementActive,
 		DomainLimit: 4,
-		StartsAt: now.Add(-48 * time.Hour),
+		StartsAt: now.Add(-30 * 24 * time.Hour),
 		DecisionReason: "T019 active entitlement fixture",
 	}, "corr-p06-t019-plan"); err != nil {
 		return err
