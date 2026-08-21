@@ -54,12 +54,14 @@ jobs:
             exit 1
           fi
 
-      - name: Test entitlement authority resolver
+      - name: Test affected P06 authority packages
         shell: bash
         run: |
           set -euo pipefail
           go test ./internal/domains
           go vet ./internal/domains
+          go test ./internal/links
+          go vet ./internal/links
 
       - name: Verify implementation evidence boundary
         shell: bash
