@@ -16,6 +16,7 @@ on:
       - 'frontend/packages/ui/**'
       - 'frontend/packages/tokens/**'
       - 'scripts/p05/browser.mjs'
+      - 'scripts/p05/password_browser.mjs'
       - 'artifacts/v10/P05/test-plan.json'
       - '.github/workflows/p05-browser.yml'
   workflow_dispatch:
@@ -116,6 +117,7 @@ jobs:
           git diff --exit-code -- go.mod go.sum
           pnpm install --frozen-lockfile
           node --check scripts/p05/browser.mjs
+          node --check scripts/p05/password_browser.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
 
@@ -156,7 +158,23 @@ jobs:
           exit 1
 
       - name: Run P05-T017 through P05-T019 browser evidence
-        run: node scripts/p05/browser.mjs --case all
+        run: |
+          set -euo pipefail
+          node scripts/p05/browser.mjs --case all
+          node scripts/p05/password_browser.mjs
+          EXACT_HEAD="$(git rev-parse HEAD)" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const head = process.env.EXACT_HEAD;
+          const errors = [];
+          for (const number of [17, 18, 19]) {
+            const caseId = `P05-T${String(number).padStart(3, '0')}`;
+            const data = JSON.parse(readFileSync(`artifacts/v10/P05/results/${caseId}.json`, 'utf8'));
+            if (data.implementation_commit !== head) errors.push(`${caseId} implementation_commit=${data.implementation_commit} expected=${head}`);
+            if (data.status !== 'PASS') errors.push(`${caseId} status=${data.status} expected=PASS`);
+          }
+          if (errors.length) throw new Error(errors.join('\n'));
+          console.log(`P05-T017..T019 evidence PASS and bound to exact head ${head}`);
+          NODE
 
       - name: Capture browser dependency evidence
         if: always()
@@ -166,6 +184,7 @@ jobs:
             -e "SELECT id,workspace_id,hostname,code,status,version,risk_fingerprint,click_count FROM links ORDER BY id" \
             > artifacts/v10/P05/runtime/browser-mysql-links.tsv 2> artifacts/v10/P05/runtime/browser-mysql-snapshot.err
           redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'risk:link:*' | sort > artifacts/v10/P05/runtime/browser-redis-risk-keys.txt
+          redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'access:password:*' | sort > artifacts/v10/P05/runtime/browser-redis-password-attempt-keys.txt
           sha256sum /tmp/gojet-p05-browser/platformapi /tmp/gojet-p05-browser/redirectengine > artifacts/v10/P05/runtime/browser-native-binaries.sha256 2>/dev/null
 
       - name: Stop browser services
