@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 12))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 13))
 
 
 def exact_head() -> str:
@@ -31,6 +31,9 @@ def run_driver(case_id: str) -> dict[str, Any]:
     elif case_id == "P06-T011":
         command = ["go", "run", "./scripts/p06/ingress_driver", "--case", case_id]
         driver = "scripts/p06/ingress_driver/main.go"
+    elif case_id == "P06-T012":
+        command = ["go", "run", "./scripts/p06/tls_driver", "--case", case_id]
+        driver = "scripts/p06/tls_driver/main.go"
     else:
         command = ["go", "run", "./scripts/p06/integration_driver.go", "--case", case_id]
         driver = "scripts/p06/integration_driver.go"
@@ -76,6 +79,7 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
         "environment": {
             "mysql": "real MySQL service via GOJET_MYSQL_DSN",
             "dns": "real local authoritative UDP DNS for T010/T011",
+            "tls": "real local TCP/TLS handshake endpoint for T012",
             "migrations": [
                 "migrations/000001_links_vertical_slice.sql",
                 "migrations/000002_custom_domains.sql",
@@ -120,9 +124,9 @@ def main() -> int:
             failed.append(case_id)
 
     if failed:
-        print(f"P06 early real-MySQL integration failed: {', '.join(failed)}")
+        print(f"P06 early real integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T011 real-MySQL/DNS evidence PASS on exact head {head}")
+    print(f"P06-T001..T012 real-MySQL/DNS/TLS evidence PASS on exact head {head}")
     return 0
 
 
