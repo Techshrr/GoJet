@@ -32,10 +32,6 @@ func (s *MySQLStore) CreateDomain(ctx context.Context, input CreateDomainInput) 
 	if input.WorkspaceID == "" || input.ActorID == "" || input.CorrelationID == "" || input.Reason == "" || input.Now.IsZero() {
 		return CreatedDomain{}, ErrInvalidHostname
 	}
-	hostname, err := NormalizeASCIIHostname(input.Hostname)
-	if err != nil {
-		return CreatedDomain{}, err
-	}
 	now := input.Now.UTC()
 
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -58,6 +54,19 @@ func (s *MySQLStore) CreateDomain(ctx context.Context, input CreateDomainInput) 
 			return CreatedDomain{}, err
 		}
 		return CreatedDomain{}, ErrEntitlementRequired
+	}
+
+	hostname, err := GoJetHostnamePolicy().Normalize(input.Hostname)
+	if err != nil {
+		if auditErr := appendDomainAuditTx(ctx, tx, input.WorkspaceID, nil, nil, input.ActorID, "domain.create", "denied", "hostname rejected", input.CorrelationID, map[string]any{
+			"code": "invalid_hostname",
+		}); auditErr != nil {
+			return CreatedDomain{}, auditErr
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return CreatedDomain{}, commitErr
+		}
+		return CreatedDomain{}, ErrInvalidHostname
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -99,7 +108,7 @@ func (s *MySQLStore) CreateDomain(ctx context.Context, input CreateDomainInput) 
 			ownership_status, ingress_dns_status, https_status, risk_status,
 			ownership_token_version, ownership_secret_hash, ownership_secret_issued_at
 		) VALUES (?, ?, ?, 'pending', 'pending', 'pending', 'pending', 'missing', 1, ?, ?)`,
-		input.WorkspaceID, hostname, hostname, hash[:], now,
+		input.WorkspaceID, hostname.ASCII, hostname.Display, hash[:], now,
 	)
 	if err != nil {
 		if isDuplicateKey(err) {
