@@ -1,5 +1,6 @@
 name: P05 Browser Console Fix
 
+# One-shot exact evidence-classification patch; self-deletes after success.
 on:
   pull_request:
     branches:
