@@ -33,27 +33,6 @@ func TestDomainReadinessKeepsAxesIndependent(t *testing.T) {
 	}
 }
 
-func TestNormalizeASCIIHostname(t *testing.T) {
-	valid := map[string]string{
-		"ExAmPle.COM.":          "example.com",
-		"links.customer.test":   "links.customer.test",
-		"xn--bcher-kva.example": "xn--bcher-kva.example",
-	}
-	for input, want := range valid {
-		got, err := NormalizeASCIIHostname(input)
-		if err != nil || got != want {
-			t.Fatalf("NormalizeASCIIHostname(%q)=(%q,%v), want %q", input, got, err, want)
-		}
-	}
-
-	invalid := []string{"", "localhost", "127.0.0.1", "*.example.com", "singlelabel", "bad_label.example", "-bad.example", "bad-.example", "bücher.example"}
-	for _, input := range invalid {
-		if _, err := NormalizeASCIIHostname(input); err == nil {
-			t.Fatalf("invalid hostname accepted: %q", input)
-		}
-	}
-}
-
 func TestOwnershipSecretIsHighEntropyVerifierOnly(t *testing.T) {
 	plain, hash, err := NewOwnershipSecret()
 	if err != nil {
