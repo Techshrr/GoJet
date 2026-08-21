@@ -13,7 +13,8 @@ import (
 )
 
 type MySQLStore struct {
-	db *sql.DB
+	db                    *sql.DB
+	customDomainAuthority CustomDomainAssignmentAuthority
 }
 
 type CreateInput struct {
@@ -246,6 +247,11 @@ func (s *MySQLStore) Create(ctx context.Context, input CreateInput) (Link, error
 	}
 	defer tx.Rollback()
 
+	in.Hostname, err = s.authorizeCustomDomainTx(ctx, tx, in.WorkspaceID, in.Hostname, in.DomainKind)
+	if err != nil {
+		return Link{}, err
+	}
+
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO links (
 			workspace_id, hostname, domain_kind, code, title, primary_destination,
@@ -343,12 +349,17 @@ func (s *MySQLStore) Update(ctx context.Context, id uint64, input UpdateInput) (
 	}
 	defer tx.Rollback()
 
-	current, err := s.getByIDTx(ctx, tx, strings.TrimSpace(input.WorkspaceID), id, true)
+	workspaceID := strings.TrimSpace(input.WorkspaceID)
+	current, err := s.getByIDTx(ctx, tx, workspaceID, id, true)
 	if err != nil {
 		return Link{}, err
 	}
 	if current.Version != input.ExpectedVersion {
 		return Link{}, ErrConflict
+	}
+	hostname, err = s.authorizeCustomDomainTx(ctx, tx, workspaceID, hostname, input.DomainKind)
+	if err != nil {
+		return Link{}, err
 	}
 
 	result, err := tx.ExecContext(ctx, `
@@ -362,7 +373,7 @@ func (s *MySQLStore) Update(ctx context.Context, id uint64, input UpdateInput) (
 		input.RedirectStatus, input.Status, fingerprint,
 		routingJSON, abJSON, utmJSON, accessJSON, input.ExpiresAt,
 		input.ClickLimit, input.OneTime,
-		strings.TrimSpace(input.WorkspaceID), id, input.ExpectedVersion,
+		workspaceID, id, input.ExpectedVersion,
 	)
 	if err != nil {
 		if isDuplicateKey(err) {
@@ -378,7 +389,7 @@ func (s *MySQLStore) Update(ctx context.Context, id uint64, input UpdateInput) (
 		return Link{}, ErrConflict
 	}
 
-	updated, err := s.getByIDTx(ctx, tx, strings.TrimSpace(input.WorkspaceID), id, false)
+	updated, err := s.getByIDTx(ctx, tx, workspaceID, id, false)
 	if err != nil {
 		return Link{}, err
 	}

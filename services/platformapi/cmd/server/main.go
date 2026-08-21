@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 )
 
@@ -56,13 +57,25 @@ func main() {
 	}
 	cancel()
 
-	store := links.NewMySQLStore(db)
+	domainStore := domains.NewMySQLStore(db)
+	store := links.NewMySQLStoreWithCustomDomainAuthority(db, domainStore)
 	risk := links.NewRedisRiskStore(redisClient)
 	testAuth := os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1"
 	if testAuth {
 		logger.Warn("test-only auth adapter enabled; never use this setting in production")
 	}
-	api := links.NewAPI(store, testAuth)
+	linksAPI := links.NewAPI(store, testAuth)
+	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
+	domainsHandler := domainsAPI.Handler()
+
+	// Keep the established P05 Links surface as the fallback while mounting the
+	// P06 Domains routes explicitly. Each inner handler retains its own security
+	// headers and test-only auth boundary.
+	root := http.NewServeMux()
+	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
+	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/domains/{domainId}", domainsHandler)
+	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
 	if address == "" {
@@ -70,7 +83,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           api.FullHandlerWithRisk(risk),
+		Handler:           root,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

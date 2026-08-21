@@ -191,10 +191,6 @@ func (a *API) createLink(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request) {
 		return
 	}
-	if request.DomainKind == "custom" {
-		writeAPIError(w, http.StatusConflict, "domain_unavailable", "Custom-domain binding requires the P06 entitlement and domain-trust authority.")
-		return
-	}
 	if request.RedirectStatus == 0 {
 		request.RedirectStatus = http.StatusFound
 	}
@@ -245,10 +241,6 @@ func (a *API) updateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	var request updateRequest
 	if !decodeJSON(w, r, &request) {
-		return
-	}
-	if request.DomainKind == "custom" {
-		writeAPIError(w, http.StatusConflict, "domain_unavailable", "Custom-domain binding requires the P06 entitlement and domain-trust authority.")
 		return
 	}
 	current, err := a.store.GetByID(r.Context(), workspaceID, id)
@@ -387,6 +379,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidInput), errors.Is(err, ErrInvalidDestination), errors.Is(err, ErrInvalidABWeights), errors.Is(err, ErrInvalidPassword):
 		writeAPIError(w, http.StatusBadRequest, "invalid_input", "Request validation failed.")
+	case errors.Is(err, ErrCustomDomainUnavailable):
+		writeAPIError(w, http.StatusConflict, "domain_unavailable", "Custom-domain binding is not currently authorized.")
 	case errors.Is(err, ErrNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", "Link not found.")
 	case errors.Is(err, ErrConflict):

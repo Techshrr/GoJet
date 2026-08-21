@@ -1,0 +1,269 @@
+{
+  "node": "P06",
+  "title": "Custom Domains",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "base_integration_commit": "ed82747f9f7ddb7696534cdda110f2f7f594b46a",
+  "environment_contract": {
+    "mysql": "MySQL 8.x, real server",
+    "redis": "Redis, real server",
+    "platformapi": "services/platformapi/cmd/server",
+    "redirectengine": "services/redirectengine/cmd/server",
+    "dns": "deterministic local authoritative DNS harness with real DNS queries and captured records",
+    "tls": "deterministic local TLS endpoint/probe with real handshake/readiness evidence",
+    "browser": "system Chrome via Playwright Core",
+    "mock_policy": "Mocks or UI-only states do not satisfy P06 Exit Conditions for entitlement, DNS, TLS, redirect or persistence evidence"
+  },
+  "cases": [
+    {
+      "id": "P06-T001",
+      "name": "migration-and-domain-axis-schema",
+      "precondition": "empty MySQL 8.x database with P05 schema available",
+      "driver": "python3 scripts/p06/integration.py --case P06-T001",
+      "oracle": "P06 migration creates entitlement/domain/revalidation/audit structures with separate entitlement, ownership, ingress DNS, HTTPS and risk axes, required uniqueness and concurrency constraints, and no collapsed verified authority",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T001.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P06-T002",
+      "name": "entitlement-none-requested-not-active",
+      "precondition": "workspace has neither valid plan entitlement nor manual approval; optionally has a custom-domain-access support-ticket projection",
+      "driver": "python3 scripts/p06/integration.py --case P06-T002",
+      "oracle": "resolver returns source=none and inactive/requested state; support ticket reference alone never resolves active entitlement",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T002.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T003",
+      "name": "business-plan-entitlement",
+      "precondition": "workspace has active business subscription fixture in good standing with structured positive domain_limit",
+      "driver": "python3 scripts/p06/integration.py --case P06-T003",
+      "oracle": "resolver returns source=plan,status=active and server-enforced positive domain_limit from structured entitlement data rather than feature text",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T003.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P06-T004",
+      "name": "manual-approval-authority",
+      "precondition": "workspace lacks active plan source and has an existing support ticket reference",
+      "driver": "python3 scripts/p06/integration.py --case P06-T004",
+      "oracle": "reasoned manual_approval with domain_limit, starts_at, expires_at and support_ticket_id resolves active only inside its validity window; malformed or expired approval is rejected",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T004.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T005",
+      "name": "plan-manual-source-coexistence",
+      "precondition": "workspace has simultaneously valid plan and manual_approval sources",
+      "driver": "python3 scripts/p06/integration.py --case P06-T005",
+      "oracle": "resolver preserves both source records and derives current authority without weakening stricter security/suspension state or inventing feature-text authority",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T005.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T006",
+      "name": "inactive-entitlement-create-bypass-denial",
+      "precondition": "workspace manage actor has inactive entitlement",
+      "driver": "python3 scripts/p06/integration.py --case P06-T006",
+      "oracle": "direct/crafted POST domain creation returns explicit entitlement denial before creating a domain row, ownership secret/token, DNS state or audit success event",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T006.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P06-T007",
+      "name": "atomic-domain-limit-concurrency",
+      "precondition": "active entitlement has one remaining domain slot",
+      "driver": "python3 scripts/p06/integration.py --case P06-T007",
+      "oracle": "concurrent create attempts cannot allocate beyond domain_limit; exactly the allowed allocation commits and losers receive deterministic domain_limit_reached semantics",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T007.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P06-T008",
+      "name": "hostname-normalization-cross-tenant-conflict-privacy",
+      "precondition": "normalized hostname already belongs to another Workspace",
+      "driver": "python3 scripts/p06/integration.py --case P06-T008",
+      "oracle": "hostname normalization is deterministic; second Workspace cannot claim it and denial reveals no other Workspace identity/provider evidence or ownership existence detail beyond allowlisted conflict semantics",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T008.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T009",
+      "name": "ownership-secret-hash-and-rotation",
+      "precondition": "active entitled Workspace creates a domain",
+      "driver": "python3 scripts/p06/integration.py --case P06-T009",
+      "oracle": "TXT ownership secret is shown only through the intended one-time contract, persistence stores a non-reversible verifier/hash, rotation invalidates the prior secret and is fully audited",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T009.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T010",
+      "name": "txt-ownership-verification",
+      "precondition": "local authoritative DNS exposes independently correct, missing and incorrect TXT records",
+      "driver": "python3 scripts/p06/integration.py --case P06-T010",
+      "oracle": "real DNS queries advance ownership only for the current expected TXT proof; missing/wrong/old-rotated values remain pending/failed without leaking secret material",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T010.json",
+      "owner": "Backend Lead + Security Reviewer"
+    },
+    {
+      "id": "P06-T011",
+      "name": "ingress-dns-valid-invalid-drift",
+      "precondition": "ownership is verified and local authoritative DNS can switch ingress records",
+      "driver": "python3 scripts/p06/integration.py --case P06-T011",
+      "oracle": "expected ingress target resolves valid; wrong/missing/drifted ingress remains a distinct non-ready axis and revalidation records the transition",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T011.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P06-T012",
+      "name": "https-readiness-handshake",
+      "precondition": "domain has verified ownership and valid ingress; deterministic TLS endpoint can expose pending/error/active conditions",
+      "driver": "python3 scripts/p06/integration.py --case P06-T012",
+      "oracle": "real TLS readiness evidence distinguishes pending/error/active; only current active HTTPS satisfies the ready/link-assignment authority",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T012.json",
+      "owner": "Backend Lead + Security Reviewer"
+    },
+    {
+      "id": "P06-T013",
+      "name": "domain-risk-axis-fail-closed",
+      "precondition": "entitlement/ownership/DNS/HTTPS are otherwise ready and domain-risk states are varied independently",
+      "driver": "python3 scripts/p06/integration.py --case P06-T013",
+      "oracle": "only current allow satisfies domain-risk readiness; review/block/missing/malformed/stale remain distinct fail-closed states and never become ownership/DNS/HTTPS status",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T013.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P06-T014",
+      "name": "periodic-revalidation-history",
+      "precondition": "domain has reached ready and DNS/TLS/risk observations can subsequently change",
+      "driver": "python3 scripts/p06/integration.py --case P06-T014",
+      "oracle": "revalidation performs current authority checks, records previous/next policy-check metadata and append-only audit/history correlation, and stale prior evidence cannot keep an axis ready",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T014.json",
+      "owner": "Backend Lead + QA"
+    },
+    {
+      "id": "P06-T015",
+      "name": "normal-downgrade-seven-day-grace",
+      "precondition": "existing active domain loses only normal plan entitlement and has no other valid source",
+      "driver": "python3 scripts/p06/integration.py --case P06-T015",
+      "oracle": "new create/activation/restoration/rotation/new-link-assignment are denied immediately; existing active routing derives grace_period until exactly seven calendar days after downgrade and expires at the deadline absent another valid source",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T015.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T016",
+      "name": "security-ownership-loss-immediate-suspension",
+      "precondition": "ready domain independently enters abuse/fraud/security suspension or loses ownership",
+      "driver": "python3 scripts/p06/integration.py --case P06-T016",
+      "oracle": "security/abuse/ownership-loss authority suspends immediately with zero grace, safe reason category and no unsafe self-reactivation path",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T016.json",
+      "owner": "Security Reviewer + QA"
+    },
+    {
+      "id": "P06-T017",
+      "name": "mutation-checkpoint-server-enforcement",
+      "precondition": "domain entitlement/ownership axes are varied across verify/activate/restore/rotate operations",
+      "driver": "python3 scripts/p06/integration.py --case P06-T017",
+      "oracle": "verify/activate/restore/rotate enforce current Workspace permission, entitlement and required axis authority server-side; denial creates no forbidden state advance",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T017.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T018",
+      "name": "custom-domain-link-assignment-guard",
+      "precondition": "Links API attempts create/update against domains with each required axis independently non-ready then fully ready",
+      "driver": "python3 scripts/p06/integration.py --case P06-T018",
+      "oracle": "custom-domain Link assignment succeeds only with current entitlement/authorization + ownership verified + ingress DNS valid + HTTPS active + domain risk allow; crafted API cannot bypass and denied writes do not mutate Link",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T018.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T019",
+      "name": "custom-host-redirect-fail-closed-no-fallback",
+      "precondition": "custom-host Link exists and entitlement/trust axes are varied after assignment",
+      "driver": "python3 scripts/p06/integration.py --case P06-T019",
+      "oracle": "redirectengine resolves customer destination only while current entitlement/grace policy and domain trust are valid and target fingerprint is allow; every non-ready authority fails closed to GoJet unavailable/safety surface with no destination exposure and no official-host fallback",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T019.json",
+      "owner": "Security Reviewer + Backend Lead + QA"
+    },
+    {
+      "id": "P06-T020",
+      "name": "official-custom-destination-risk-parity",
+      "precondition": "equivalent official-host and ready custom-host Links contain primary, routing and A/B reachable targets",
+      "driver": "python3 scripts/p06/integration.py --case P06-T020",
+      "oracle": "official and custom hosts use the same normalized reachable target fingerprint and destination-risk ordering for primary/routing/A-B targets; custom-domain authority is an additional gate, never a bypass or alternate risk policy",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T020.json",
+      "owner": "Security Reviewer + Backend Lead"
+    },
+    {
+      "id": "P06-T021",
+      "name": "workspace-domains-entitlement-state-browser",
+      "precondition": "Workspace API exposes deterministic locked/requested/active/grace/suspended/expired/revoked/partial-axis fixtures backed by real persistence",
+      "driver": "node scripts/p06/browser.mjs --case P06-T021",
+      "oracle": "/app/domains renders authoritative state, source/domain_limit/remaining/deadline as applicable, persistent remediation and no forbidden Add domain control in denied states; deep-link /app/domains/new never mounts/prefills wizard when authority is denied",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T021.json",
+      "owner": "Frontend Lead + Accessibility Reviewer + QA"
+    },
+    {
+      "id": "P06-T022",
+      "name": "add-domain-wizard-and-detail-browser",
+      "precondition": "active entitled workspace and deterministic DNS/TLS/risk integration harness are available",
+      "driver": "node scripts/p06/browser.mjs --case P06-T022",
+      "oracle": "route-backed seven-step wizard exposes entitlement, hostname, TXT ownership, ingress DNS, HTTPS, risk and Ready axes separately; detail page shows Overview/Entitlement/Ownership/DNS/HTTPS/Risk/Assigned resources/Revalidation/Settings state without collapsing authority or leaking secrets",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T022.json",
+      "owner": "Frontend Lead + QA"
+    },
+    {
+      "id": "P06-T023",
+      "name": "mobile-accessibility-and-persistent-state-browser",
+      "precondition": "P06 Workspace domain flows are available against real API state",
+      "driver": "node scripts/p06/browser.mjs --case P06-T023",
+      "oracle": "canonical mobile viewport has no root/body overflow or clipped required text, keyboard and name-role-value contracts pass, status is never color-only and persistent DNS/TLS/risk/entitlement problems remain in-page rather than Toast-only",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T023.json",
+      "owner": "Accessibility Reviewer + QA"
+    },
+    {
+      "id": "P06-T024",
+      "name": "p00-p05-regression-and-evidence-index",
+      "precondition": "P06 candidate implementation complete",
+      "driver": "python3 scripts/p06/validate.py --case P06-T024",
+      "oracle": "P00-P05 affected regressions and P06 domain/integration/browser workflows are all success on the same exact implementation head; P06-T001..T023 evidence is PASS/exact-head and the closure index is internally consistent",
+      "expected_exit": 0,
+      "evidence": "artifacts/v10/P06/results/P06-T024.json",
+      "owner": "QA Lead"
+    }
+  ],
+  "closure_contract": {
+    "version": 1,
+    "same_exact_head_required": true,
+    "required_case_range": "P06-T001..P06-T024",
+    "required_regression_scope": "P00-P05 plus P06 Domain Contract, P06 Real Integration and P06 Workspace Browser",
+    "release_gate_note": "P06-owned G3/G4/G5/G6 evidence may pass without closing release-wide Gates"
+  }
+}

@@ -40,3 +40,24 @@ export type {
   LinkUTM,
   LinkVersionRecord,
 } from './links';
+
+export { GoJetDomainsClient } from './domains';
+export type {
+  CreatedDomainRecord,
+  CreatedWorkspaceDomain,
+  CreateWorkspaceDomainInput,
+  DomainAssignedLink,
+  DomainEntitlementSource,
+  DomainEntitlementStatus,
+  DomainHTTPSStatus,
+  DomainIngressDNSStatus,
+  DomainOwnershipStatus,
+  DomainRevalidationRecord,
+  DomainRiskStatus,
+  DomainRoutingState,
+  WorkspaceDomainDetailResponse,
+  WorkspaceDomainEntitlement,
+  WorkspaceDomainRecord,
+  WorkspaceDomainsResponse,
+  WorkspaceDomainViewState,
+} from './domains';

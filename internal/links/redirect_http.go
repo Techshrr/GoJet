@@ -116,20 +116,17 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.store.GetByHostCode(r.Context(), host, code)
+	link, err := h.store.GetByHostCodeForRedirect(r.Context(), host, code, time.Now().UTC())
 	if errors.Is(err, ErrNotFound) {
 		h.writeNotFound(w)
 		return
 	}
-	if err != nil {
-		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
+	if errors.Is(err, ErrCustomDomainUnavailable) {
+		h.writeSafety(w, http.StatusServiceUnavailable, "domain-unavailable", code)
 		return
 	}
-
-	// Domain trust is a separate authority. Until P06 provides its resolver,
-	// custom domains fail closed rather than inheriting official-host behavior.
-	if link.DomainKind == "custom" {
-		h.writeSafety(w, http.StatusServiceUnavailable, "domain-unavailable", code)
+	if err != nil {
+		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
 		return
 	}
 	if link.Status == "deleted" || link.DeletedAt != nil {
@@ -180,7 +177,7 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	claimed, claimState, err := h.store.ClaimRedirectAccess(
+	claimed, claimState, err := h.store.ClaimRedirectAccessCurrentAuthority(
 		r.Context(), link.ID, link.Version, link.RiskFingerprint, time.Now().UTC(),
 	)
 	if err != nil {
@@ -196,8 +193,9 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Exact-current risk allow and every applicable access control have now
-	// succeeded. This is the only branch that may emit a customer Location.
+	// Exact-current domain authority, destination-risk allow and every applicable
+	// access control have now succeeded. This is the only branch that may emit a
+	// customer Location. There is deliberately no official-host retry/fallback.
 	w.Header().Set("Location", finalDestination)
 	w.WriteHeader(link.RedirectStatus)
 }
@@ -314,6 +312,8 @@ func (h *RedirectHandler) writeRiskSafety(w http.ResponseWriter, state RiskState
 
 func (h *RedirectHandler) writeClaimSafety(w http.ResponseWriter, state AccessClaimState, code string) {
 	switch state {
+	case AccessClaimDomainUnavailable:
+		h.writeSafety(w, http.StatusServiceUnavailable, "domain-unavailable", code)
 	case AccessClaimExpired:
 		h.writeSafety(w, http.StatusGone, "expired", code)
 	case AccessClaimExhausted:

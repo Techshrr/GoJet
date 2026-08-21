@@ -12,7 +12,9 @@ on:
       - 'scripts/p05/integration.py'
       - 'scripts/p05/password_evidence.py'
       - 'artifacts/v10/P05/test-plan.json'
-      - '.github/workflows/p05-integration.yml'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
