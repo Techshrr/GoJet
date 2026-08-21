@@ -11,7 +11,9 @@ on:
       - 'migrations/000001_links_vertical_slice.sql'
       - 'docs/architecture/P05_LINKS_VERTICAL_SLICE.md'
       - 'artifacts/v10/P05/test-plan.json'
-      - '.github/workflows/p05-links-domain-contract.yml'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
