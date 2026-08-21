@@ -55,7 +55,11 @@ func (s *MySQLStore) authorizeCustomDomainRoutingTx(ctx context.Context, tx *sql
 	if s == nil || s.customDomainAuthority == nil || now.IsZero() {
 		return "", ErrCustomDomainUnavailable
 	}
-	canonical, err := s.customDomainAuthority.AuthorizeCustomDomainRoutingTx(ctx, tx, workspaceID, hostname, now.UTC())
+	routingAuthority, ok := s.customDomainAuthority.(CustomDomainRoutingAuthority)
+	if !ok || routingAuthority == nil {
+		return "", ErrCustomDomainUnavailable
+	}
+	canonical, err := routingAuthority.AuthorizeCustomDomainRoutingTx(ctx, tx, workspaceID, hostname, now.UTC())
 	if err != nil || canonical == "" {
 		return "", ErrCustomDomainUnavailable
 	}
