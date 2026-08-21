@@ -9,9 +9,9 @@ import (
 type DomainMutationKind string
 
 const (
-	DomainMutationActivate DomainMutationKind = "activate"
-	DomainMutationRestore  DomainMutationKind = "restore"
-	DomainMutationRotate   DomainMutationKind = "rotate"
+	DomainMutationActivate   DomainMutationKind = "activate"
+	DomainMutationRestore    DomainMutationKind = "restore"
+	DomainMutationRotate     DomainMutationKind = "rotate"
 	DomainMutationAssignLink DomainMutationKind = "assign_link"
 )
 
@@ -25,7 +25,9 @@ type DomainMutationAuthority struct {
 
 // CheckDomainMutationAuthority centralizes the server-side checkpoint semantics
 // reused by activation/restoration/rotation/link-assignment handlers. It never
-// trusts client feature flags or cached UI state.
+// trusts client feature flags or cached UI state. A persisted security category
+// is checked before entitlement or axis readiness so no mutation can act as a
+// self-reactivation path for abuse/fraud/security/ownership-loss suspension.
 func (s *MySQLStore) CheckDomainMutationAuthority(ctx context.Context, workspaceID string, domainID uint64, kind DomainMutationKind, now time.Time) (DomainMutationAuthority, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if s == nil || s.db == nil || workspaceID == "" || domainID == 0 || now.IsZero() {
@@ -45,6 +47,11 @@ func (s *MySQLStore) CheckDomainMutationAuthority(ctx context.Context, workspace
 		return DomainMutationAuthority{}, err
 	}
 	decision := DomainMutationAuthority{Domain: domain, Entitlement: entitlement, Kind: kind, Allowed: false}
+
+	if strings.TrimSpace(domain.SecurityCategory) != "" || domain.RoutingState == RoutingRevoked || domain.RoutingState == RoutingRemoved {
+		decision.Code = "security_suspended"
+		return decision, ErrDomainSecuritySuspended
+	}
 	if !entitlement.MutationAllowed {
 		decision.Code = "entitlement_required"
 		return decision, ErrEntitlementRequired
