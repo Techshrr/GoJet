@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 20))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 21))
 
 
 def exact_head() -> str:
@@ -32,6 +32,7 @@ def run_driver(case_id: str) -> dict[str, Any]:
         "P06-T017": "mutation_driver",
         "P06-T018": "link_assignment_driver",
         "P06-T019": "redirect_driver",
+        "P06-T020": "parity_driver",
     }
     if case_id in driver_map:
         package = driver_map[case_id]
@@ -84,6 +85,7 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
             "workspace_permission": "server-owned permission checker seam exercised before resolver/probe/database mutation checkpoints in T017",
             "link_assignment": "real Links HTTP create/update over P05 persistence with same-transaction P06 custom-domain row lock and current entitlement/trust checks in T018",
             "redirect_authority": "real RedirectHandler + MySQL current custom-domain routing authority + Redis exact-fingerprint destination-risk decision with final transactional recheck in T019",
+            "risk_parity": "equivalent official/custom Links use the same normalized reachable-target fingerprint and Redis risk ordering; custom-domain authority is only an additional gate in T020",
             "migrations": [
                 "migrations/000001_links_vertical_slice.sql",
                 "migrations/000002_custom_domains.sql",
@@ -126,7 +128,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T019 real authority evidence PASS on exact head {head}")
+    print(f"P06-T001..T020 real authority evidence PASS on exact head {head}")
     return 0
 
 
