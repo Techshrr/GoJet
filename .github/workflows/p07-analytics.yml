@@ -1,0 +1,82 @@
+name: P07 Analytics Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/links/**'
+      - 'internal/domains/**'
+      - 'services/redirectengine/**'
+      - 'services/platformapi/**'
+      - 'services/analyticsworker/**'
+      - 'services/analyticsreconciler/**'
+      - 'migrations/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p07/**'
+      - 'artifacts/v10/P07/**'
+      - '.github/workflows/p07-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: P07 frozen analytics contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P07 contract validator
+        run: python3 -m py_compile scripts/p07/validate_contract.py
+
+      - name: Validate frozen P07 contract
+        run: python3 scripts/p07/validate_contract.py
+
+      - name: Verify P05/P06 analytics source baseline still compiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test ./internal/links ./internal/domains
+          go vet ./internal/links ./internal/domains
+          go test ./services/redirectengine/cmd/server ./services/platformapi/cmd/server
+
+      - name: Verify implementation evidence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f artifacts/v10/P07/test-plan.json
+          test -f artifacts/v10/P07/review.md
+          test ! -e artifacts/v10/P07/results/P07-T020.json
+          grep -F 'Status: **PENDING' artifacts/v10/P07/review.md
+          echo 'P07 contract is frozen; real Redis/MySQL worker/reconciler/browser Exit evidence is not claimed yet.'
+
+      - name: Upload P07 contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p07-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P07/test-plan.json
+            artifacts/v10/P07/review.md
