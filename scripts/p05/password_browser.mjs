@@ -180,7 +180,7 @@ async function run() {
     const challengeResponse = await page.goto(`${REDIRECT_URL}/${CODE}`, { waitUntil: 'networkidle' });
     assert(challengeResponse?.status() === 200, `password challenge returned ${challengeResponse?.status()}`);
     await page.getByRole('heading', { name: 'Password required' }).waitFor();
-    assert(await page.getByLabel('Password').isVisible(), 'password challenge input is not accessible by label');
+    assert(await page.getByRole('textbox', { name: 'Password', exact: true }).isVisible(), 'password challenge input is not accessible by label');
     const challengeBody = await page.textContent('body');
     assert(!challengeBody.includes(DESTINATION), 'password challenge leaked destination');
     assert((await page.locator('a[href]').count()) === 0, 'password challenge exposes bypass links');
@@ -194,7 +194,7 @@ async function run() {
     const challengeCapture = 'gjv10__redirect-access__p05-password-challenge__protected__light__en__desktop.png';
     await page.screenshot({ path: `${capturesDir}/${challengeCapture}`, fullPage: false });
 
-    await page.getByLabel('Password').fill(PASSWORD_ONE);
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill(PASSWORD_ONE);
     const wrongResponsePromise = page.waitForResponse((response) =>
       response.request().method() === 'POST' && new URL(response.url()).pathname === `/${CODE}`);
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -205,7 +205,7 @@ async function run() {
     assert(!wrongBody.includes(DESTINATION), 'wrong-password response leaked destination');
     assert(!wrongResponse.headers().location, 'wrong-password response exposed Location header');
 
-    await page.getByLabel('Password').fill(PASSWORD_TWO);
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill(PASSWORD_TWO);
     const destinationRequestPromise = page.waitForRequest((request) =>
       request.isNavigationRequest() && request.url() === DESTINATION);
     await page.getByRole('button', { name: 'Continue' }).click();
