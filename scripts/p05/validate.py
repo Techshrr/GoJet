@@ -174,6 +174,7 @@ def validate_password_browser(t017: dict[str, Any], t019: dict[str, Any], errors
             "no_referrer": True,
             "noindex": True,
             "csp_form_action_self": True,
+            "csp_form_action_http_https": True,
             "clear_removed_public_challenge": True,
         }
         for key, value in expected_public.items():

@@ -337,7 +337,7 @@ func (h *RedirectHandler) writeNotFound(w http.ResponseWriter) {
 
 func (h *RedirectHandler) writePasswordChallenge(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' http: https:; base-uri 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
 	if status == http.StatusNoContent || status == http.StatusNotModified {
 		return

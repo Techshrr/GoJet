@@ -181,7 +181,7 @@ async function run() {
     assert(challengeResponse.headers()['referrer-policy'] === 'no-referrer', 'password challenge missing no-referrer');
     assert(challengeResponse.headers()['x-robots-tag'] === 'noindex, nofollow', 'password challenge missing noindex');
     const challengeCsp = challengeResponse.headers()['content-security-policy'] ?? '';
-    assert(challengeCsp.includes("default-src 'none'") && challengeCsp.includes("form-action 'self'"), `password challenge CSP invalid: ${challengeCsp}`);
+    assert(challengeCsp.includes("default-src 'none'") && challengeCsp.includes("form-action 'self' http: https:"), `password challenge CSP invalid: ${challengeCsp}`);
 
     const challengeCapture = 'gjv10__redirect-access__p05-password-challenge__protected__light__en__desktop.png';
     await page.screenshot({ path: `${capturesDir}/${challengeCapture}`, fullPage: false });
@@ -265,6 +265,7 @@ async function run() {
       no_referrer: true,
       noindex: true,
       csp_form_action_self: true,
+      csp_form_action_http_https: true,
       correct_password_location: correctResponse.headers().location,
       clear_removed_public_challenge: true,
       capture: `artifacts/v10/P05/captures/${challengeCapture}`,
