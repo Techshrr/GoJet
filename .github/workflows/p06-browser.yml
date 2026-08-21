@@ -1,0 +1,210 @@
+name: P06 Workspace Domains Browser
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'migrations/000002_custom_domains.sql'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p06/browser.mjs'
+      - 'artifacts/v10/P06/test-plan.json'
+      - '.github/workflows/p06-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p06-workspace-domains-browser:
+    name: P06 real Workspace Domains browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_WORKSPACE_ID: ws-p06-browser
+      GOJET_TEST_ACTOR_ID: p06-browser-owner
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      VITE_GOJET_TEST_AUTH_ENABLED: '1'
+      VITE_GOJET_TEST_WORKSPACE_ID: ws-p06-browser
+      VITE_GOJET_TEST_ACTOR_ID: p06-browser-owner
+      VITE_GOJET_TEST_WORKSPACE_ROLE: owner
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install MySQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify browser dependency closure
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go test ./internal/domains ./internal/links ./services/platformapi/cmd/server
+          go vet ./internal/domains ./internal/links
+          pnpm install --frozen-lockfile
+          node --check scripts/p06/browser.mjs
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+
+      - name: Apply P05 and P06 migrations
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
+          MYSQL_PWD=root mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
+
+      - name: Build native platform API and Workspace
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p06-browser artifacts/v10/P06/runtime
+          go build -trimpath -o /tmp/gojet-p06-browser/platformapi ./services/platformapi/cmd/server
+          pnpm --filter @gojet/workspace build
+
+      - name: Start native platform API and Workspace preview
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p06-browser/platformapi > artifacts/v10/P06/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P06/runtime/browser-platformapi.pid
+          nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 > artifacts/v10/P06/runtime/browser-workspace.log 2>&1 &
+          echo $! > artifacts/v10/P06/runtime/browser-workspace.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:4174/app/domains >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P06 browser dependencies did not become healthy' >&2
+          cat artifacts/v10/P06/runtime/browser-platformapi.log || true
+          cat artifacts/v10/P06/runtime/browser-workspace.log || true
+          exit 1
+
+      - name: Run P06-T021 through P06-T023 browser evidence
+        run: |
+          set -euo pipefail
+          node scripts/p06/browser.mjs --case all
+          EXACT_HEAD="$(git rev-parse HEAD)" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const head = process.env.EXACT_HEAD;
+          const errors = [];
+          for (const number of [21, 22, 23]) {
+            const caseId = `P06-T${String(number).padStart(3, '0')}`;
+            const data = JSON.parse(readFileSync(`artifacts/v10/P06/results/${caseId}.json`, 'utf8'));
+            if (data.implementation_commit !== head) errors.push(`${caseId} implementation_commit=${data.implementation_commit} expected=${head}`);
+            if (data.status !== 'PASS') errors.push(`${caseId} status=${data.status} expected=PASS`);
+            if (Array.isArray(data.errors) && data.errors.length) errors.push(`${caseId} errors=${JSON.stringify(data.errors)}`);
+          }
+          if (errors.length) throw new Error(errors.join('\n'));
+          console.log(`P06-T021..T023 browser evidence PASS and bound to exact head ${head}`);
+          NODE
+
+      - name: Capture persisted domain authority evidence
+        if: always()
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P06/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,source,source_key,status,domain_limit,starts_at,expires_at,degraded_at,grace_until,security_category FROM custom_domain_entitlement_sources WHERE workspace_id='ws-p06-browser' ORDER BY id" \
+            > artifacts/v10/P06/runtime/browser-entitlement.tsv 2> artifacts/v10/P06/runtime/browser-entitlement.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,hostname_ascii,routing_state,ownership_status,ingress_dns_status,https_status,risk_status,ownership_token_version,risk_policy_version,security_category FROM custom_domains WHERE workspace_id='ws-p06-browser' ORDER BY id" \
+            > artifacts/v10/P06/runtime/browser-domains.tsv 2> artifacts/v10/P06/runtime/browser-domains.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT domain_id,axis,result,policy_version,checked_at,next_due_at FROM custom_domain_revalidations WHERE workspace_id='ws-p06-browser' ORDER BY id" \
+            > artifacts/v10/P06/runtime/browser-revalidations.tsv 2> artifacts/v10/P06/runtime/browser-revalidations.err
+          sha256sum /tmp/gojet-p06-browser/platformapi > artifacts/v10/P06/runtime/browser-native-binaries.sha256 2>/dev/null
+
+      - name: Stop browser services
+        if: always()
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P06/runtime/browser-workspace.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P06/runtime/browser-platformapi.pid 2>/dev/null)" 2>/dev/null || true
+
+      - name: Upload P06 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p06-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P06/results/P06-T021.json
+            artifacts/v10/P06/results/P06-T022.json
+            artifacts/v10/P06/results/P06-T023.json
+            artifacts/v10/P06/browser/
+            artifacts/v10/P06/captures/
+            artifacts/v10/P06/runtime/browser-*
