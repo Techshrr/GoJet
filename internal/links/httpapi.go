@@ -172,7 +172,7 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": result.Items,
+		"items": publicLinks(result.Items),
 		"total": result.Total,
 		"filters": map[string]any{
 			"implemented": []string{"q", "hostname", "status", "updated_from", "updated_to"},
