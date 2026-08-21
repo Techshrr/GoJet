@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 8))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 9))
 
 
 def exact_head() -> str:
@@ -109,7 +109,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real-MySQL integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T007 real-MySQL evidence PASS on exact head {head}")
+    print(f"P06-T001..T008 real-MySQL evidence PASS on exact head {head}")
     return 0
 
 
