@@ -18,7 +18,9 @@ on:
       - 'scripts/p05/**'
       - 'artifacts/v10/P05/test-plan.json'
       - 'artifacts/v10/P05/review.md'
+      - 'artifacts/v10/P06/review.md'
       - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
