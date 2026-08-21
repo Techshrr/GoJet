@@ -25,8 +25,11 @@ on:
       - 'scripts/p06/link_assignment_driver/**'
       - 'scripts/p06/redirect_driver/**'
       - 'scripts/p06/parity_driver/**'
+      - 'scripts/p06/validate.py'
       - 'artifacts/v10/P06/test-plan.json'
-      - '.github/workflows/p06-integration.yml'
+      - 'artifacts/v10/P06/review.md'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
   workflow_dispatch:
 
 permissions:
