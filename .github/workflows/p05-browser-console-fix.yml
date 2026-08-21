@@ -1,0 +1,129 @@
+name: P05 Browser Console Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p05-browser-console-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-self-delete:
+    if: github.event_name == 'pull_request' && github.head_ref == 'develop/p05-links-vertical-slice'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout P05 branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p05-links-vertical-slice
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Patch exact expected 401 console classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/p05/password_browser.mjs')
+          text = path.read_text(encoding='utf-8')
+
+          old = """  const expectedHttpErrors = [];
+  const unexpectedConsoleErrors = [];
+  const pageErrors = [];
+  const requestFailures = [];
+
+  page.on('console', (message) => {
+    if (message.type() === 'error') unexpectedConsoleErrors.push({ text: message.text(), location: message.location() });
+  });
+"""
+          new = """  const expectedHttpErrors = [];
+  const expectedConsoleErrors = [];
+  const unexpectedConsoleErrors = [];
+  const pageErrors = [];
+  const requestFailures = [];
+  let expectWrongPasswordConsole401 = false;
+
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    const entry = { text: message.text(), location: message.location() };
+    const expected401Text = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+    if (expectWrongPasswordConsole401 && entry.text === expected401Text && entry.location?.url === `${REDIRECT_URL}/${CODE}`) {
+      expectedConsoleErrors.push(entry);
+      return;
+    }
+    unexpectedConsoleErrors.push(entry);
+  });
+"""
+          if old not in text:
+              raise SystemExit('console listener pattern not found')
+          text = text.replace(old, new, 1)
+
+          old = """    await page.getByLabel('Password').fill(PASSWORD_ONE);
+    const wrongResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === `/${CODE}`);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const wrongResponse = await wrongResponsePromise;
+    assert(wrongResponse.status() === 401, `old password returned ${wrongResponse.status()} instead of 401`);
+    await page.getByRole('alert').getByText(/not accepted/i).waitFor();
+    const wrongBody = await page.textContent('body');
+"""
+          new = """    await page.getByLabel('Password').fill(PASSWORD_ONE);
+    const wrongResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === `/${CODE}`);
+    expectWrongPasswordConsole401 = true;
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const wrongResponse = await wrongResponsePromise;
+    assert(wrongResponse.status() === 401, `old password returned ${wrongResponse.status()} instead of 401`);
+    await page.getByRole('alert').getByText(/not accepted/i).waitFor();
+    await page.waitForTimeout(50);
+    expectWrongPasswordConsole401 = false;
+    assert(expectedConsoleErrors.length === 1, `expected exactly one wrong-password 401 console diagnostic, got ${JSON.stringify(expectedConsoleErrors)}`);
+    const wrongBody = await page.textContent('body');
+"""
+          if old not in text:
+              raise SystemExit('wrong-password flow pattern not found')
+          text = text.replace(old, new, 1)
+
+          old = """      csp_form_action_self: true,
+      csp_form_action_http_https: true,
+      correct_password_location: correctResponse.headers().location,
+"""
+          new = """      csp_form_action_self: true,
+      csp_form_action_http_https: true,
+      expected_wrong_password_console_401_observed: expectedConsoleErrors.length === 1,
+      correct_password_location: correctResponse.headers().location,
+"""
+          if old not in text:
+              raise SystemExit('T019 details pattern not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          validator = Path('scripts/p05/validate.py')
+          vtext = validator.read_text(encoding='utf-8')
+          old = '            "csp_form_action_http_https": True,\n            "clear_removed_public_challenge": True,'
+          new = '            "csp_form_action_http_https": True,\n            "expected_wrong_password_console_401_observed": True,\n            "clear_removed_public_challenge": True,'
+          if old not in vtext:
+              raise SystemExit('T020 expected public fields pattern not found')
+          validator.write_text(vtext.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          node --check scripts/p05/password_browser.mjs
+          python3 -m py_compile scripts/p05/validate.py
+          rm .github/workflows/p05-browser-console-fix.yml
+          git diff --check
+
+      - name: Commit evidence-classification fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p05/password_browser.mjs scripts/p05/validate.py .github/workflows/p05-browser-console-fix.yml
+          git commit -m 'test(p05): classify expected wrong-password 401 console diagnostic'
+          git push origin HEAD:develop/p05-links-vertical-slice
