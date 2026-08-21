@@ -3,8 +3,6 @@ package domains
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"net"
 	"strings"
 	"time"
 )
@@ -279,12 +277,4 @@ func (r *PeriodicRevalidator) Run(ctx context.Context, input PeriodicRevalidatio
 		return PeriodicRevalidationResult{}, err
 	}
 	return PeriodicRevalidationResult{Domain: updated, Entitlement: entitlement, Axes: axes}, nil
-}
-
-func periodicDNSLookupError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var dnsErr *net.DNSError
-	return errors.As(err, &dnsErr)
 }
