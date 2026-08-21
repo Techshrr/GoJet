@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "artifacts" / "v10" / "P06" / "results"
-SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 9))
+SUPPORTED = tuple(f"P06-T{number:03d}" for number in range(1, 10))
 
 
 def exact_head() -> str:
@@ -22,7 +22,12 @@ def exact_head() -> str:
 
 
 def run_driver(case_id: str) -> dict[str, Any]:
-    command = ["go", "run", "./scripts/p06/integration_driver.go", "--case", case_id]
+    if case_id == "P06-T009":
+        command = ["go", "run", "./scripts/p06/ownership_driver", "--case", case_id]
+        driver = "scripts/p06/ownership_driver/main.go"
+    else:
+        command = ["go", "run", "./scripts/p06/integration_driver.go", "--case", case_id]
+        driver = "scripts/p06/integration_driver.go"
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -45,6 +50,7 @@ def run_driver(case_id: str) -> dict[str, Any]:
     result = payload.get(case_id)
     if not isinstance(result, dict):
         raise RuntimeError(f"driver result missing {case_id}: {payload!r}")
+    result.setdefault("driver", driver)
     if completed.returncode != 0 and result.get("status") != "FAIL":
         raise RuntimeError(
             f"driver exited {completed.returncode} without FAIL result for {case_id}: {result!r}"
@@ -60,7 +66,7 @@ def write_evidence(case_id: str, result: dict[str, Any], head: str) -> None:
         "case_id": case_id,
         "implementation_commit": head,
         "status": result.get("status", "FAIL"),
-        "driver": "scripts/p06/integration.py -> scripts/p06/integration_driver.go",
+        "driver": f"scripts/p06/integration.py -> {result.get('driver', 'unknown')}",
         "environment": {
             "mysql": "real MySQL service via GOJET_MYSQL_DSN",
             "migrations": [
@@ -109,7 +115,7 @@ def main() -> int:
     if failed:
         print(f"P06 early real-MySQL integration failed: {', '.join(failed)}")
         return 1
-    print(f"P06-T001..T008 real-MySQL evidence PASS on exact head {head}")
+    print(f"P06-T001..T009 real-MySQL evidence PASS on exact head {head}")
     return 0
 
 
