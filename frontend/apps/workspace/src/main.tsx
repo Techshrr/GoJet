@@ -6,6 +6,15 @@ import { createGoJetQueryClient } from '@gojet/api-client';
 import { router } from './router';
 import '@gojet/ui/styles.css';
 import './shell/shell.css';
-const container=document.getElementById('root'); if(!container) throw new Error('GoJet application root is missing');
-const queryClient=createGoJetQueryClient();
-createRoot(container).render(<StrictMode><QueryClientProvider client={queryClient}><RouterProvider router={router}/></QueryClientProvider></StrictMode>);
+import './links/links.css';
+
+const container = document.getElementById('root');
+if (!container) throw new Error('GoJet application root is missing');
+const queryClient = createGoJetQueryClient();
+createRoot(container).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </StrictMode>,
+);

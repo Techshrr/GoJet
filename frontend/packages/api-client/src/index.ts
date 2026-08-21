@@ -18,3 +18,25 @@ export function createGoJetQueryClient(): QueryClient {
     },
   });
 }
+
+export {
+  GoJetApiError,
+  GoJetLinksClient,
+} from './links';
+export type {
+  ApiTransport,
+  BulkLinkAction,
+  BulkLinkResponse,
+  BulkLinkResult,
+  LinkABVariant,
+  LinkAccessInput,
+  LinkAccessState,
+  LinkCreateInput,
+  LinkListFilters,
+  LinkListResponse,
+  LinkRecord,
+  LinkRoutingRule,
+  LinkUpdateInput,
+  LinkUTM,
+  LinkVersionRecord,
+} from './links';

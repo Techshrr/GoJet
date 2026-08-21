@@ -14,7 +14,13 @@ const groups = [
 
 type OverlayName = 'create' | 'command' | 'notifications';
 
-export function WorkspaceShell({ children, state = 'loading-workspace' }: { children: ReactNode; state?: ShellState<'workspace'> }) {
+type WorkspaceShellProps = {
+  children: ReactNode;
+  state?: ShellState<'workspace'>;
+  sectionLabel?: string;
+};
+
+export function WorkspaceShell({ children, state = 'loading-workspace', sectionLabel = 'Overview' }: WorkspaceShellProps) {
   const [overlay, setOverlay] = useState<OverlayName | null>(null);
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   const viewport = useShellViewport();
@@ -42,7 +48,7 @@ export function WorkspaceShell({ children, state = 'loading-workspace' }: { chil
       </aside>
       <div className="workspace-main">
         <header className="workspace-header">
-          <nav aria-label="Breadcrumb">Workspace / Overview</nav>
+          <nav aria-label="Breadcrumb">Workspace / {sectionLabel}</nav>
           <div>
             <Button variant="ghost" onClick={(event) => openOverlay('command', event)}>Command</Button>
             <a href="/docs/en/">Help</a>

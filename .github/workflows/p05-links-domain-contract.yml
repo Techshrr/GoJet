@@ -1,0 +1,71 @@
+name: P05 Links Domain Contract
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'migrations/000001_links_vertical_slice.sql'
+      - 'docs/architecture/P05_LINKS_VERTICAL_SLICE.md'
+      - 'artifacts/v10/P05/test-plan.json'
+      - '.github/workflows/p05-links-domain-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  domain-contract:
+    name: P05 Links domain service and dependency contract
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          check-latest: false
+
+      - name: Verify migration contract is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE links' migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE link_versions' migrations/000001_links_vertical_slice.sql
+          grep -q 'CREATE TABLE link_audit_events' migrations/000001_links_vertical_slice.sql
+
+      - name: Verify approved Go dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s go.sum
+          go mod verify
+          go list -m github.com/go-sql-driver/mysql | grep -Fx 'github.com/go-sql-driver/mysql v1.10.0'
+          go list -m github.com/redis/go-redis/v9 | grep -Fx 'github.com/redis/go-redis/v9 v9.22.0'
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Run Links package tests
+        run: go test ./internal/links -count=1 -v
+
+      - name: Compile P05 service entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build ./services/platformapi/cmd/server
+          go build ./services/redirectengine/cmd/server
+
+      - name: Clarify evidence boundary
+        run: |
+          echo 'PASS proves the P05 Links domain/storage adapter tests, service compilation and approved dependency closure.'
+          echo 'It does not satisfy P05 real MySQL/Redis/API/redirect/browser Exit Conditions.'
