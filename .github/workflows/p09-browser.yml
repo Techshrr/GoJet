@@ -270,7 +270,12 @@ jobs:
         run: |
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
-          GITHUB_SHA="$exact_head" node scripts/p09/browser.mjs --case all
+          for case_id in P09-T021 P09-T022 P09-T023 P09-T024 P09-T025; do
+            echo "START ${case_id} on ${exact_head}"
+            GITHUB_SHA="$exact_head" timeout --signal=TERM --kill-after=10s 180s \
+              node scripts/p09/browser.mjs --case "$case_id"
+            echo "PASS ${case_id} on ${exact_head}"
+          done
 
       - name: Verify exact-head P09-T021 through P09-T025 evidence
         if: always()
