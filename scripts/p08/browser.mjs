@@ -154,7 +154,7 @@ function attachDiagnostics(page, report) {
   page.on('response', (response) => {
     if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({ status: response.status(), url: response.url(), resourceType: response.request().resourceType() });
   });
-  page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() });
+  page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() }));
 }
 function allowedMatch(entry, rules) {
   return rules.some((rule) => entry.url.includes(rule.includes) && (rule.status === undefined || entry.status === rule.status));
