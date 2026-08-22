@@ -34,6 +34,10 @@ func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	if root == "" {
 		return nil, false, fmt.Errorf("GOJET_FILE_STORAGE_ROOT is required when files are enabled")
 	}
+	publicAuthSecret := strings.TrimSpace(os.Getenv("GOJET_FILE_PUBLIC_AUTH_SECRET"))
+	if len(publicAuthSecret) < 32 {
+		return nil, false, fmt.Errorf("GOJET_FILE_PUBLIC_AUTH_SECRET must be at least 32 bytes when files are enabled")
+	}
 	policyRaw := strings.TrimSpace(os.Getenv("GOJET_FILE_TYPE_ALLOWLIST"))
 	if policyRaw == "" {
 		return nil, false, fmt.Errorf("GOJET_FILE_TYPE_ALLOWLIST is required when files are enabled")
@@ -50,7 +54,7 @@ func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file store: %w", err)
 	}
-	api, err := files.NewAPI(store, storage, policy, testAuth, maxUpload)
+	api, err := files.NewAPI(store, storage, policy, testAuth, maxUpload, []byte(publicAuthSecret))
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file API: %w", err)
 	}

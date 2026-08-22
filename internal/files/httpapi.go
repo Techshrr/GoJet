@@ -8,11 +8,12 @@ import (
 )
 
 type API struct {
-	store           *ResourceStore
-	storage         *NativeStorage
-	policy          *TypePolicy
-	testAuthEnabled bool
-	maxUploadBytes  int64
+	store            *ResourceStore
+	storage          *NativeStorage
+	policy           *TypePolicy
+	testAuthEnabled  bool
+	maxUploadBytes   int64
+	publicAuthSecret []byte
 }
 
 type actorContext struct {
@@ -36,11 +37,14 @@ type policyPatchRequest struct {
 	ChangeReason        string     `json:"change_reason"`
 }
 
-func NewAPI(store *ResourceStore, storage *NativeStorage, policy *TypePolicy, testAuthEnabled bool, maxUploadBytes int64) (*API, error) {
-	if store == nil || storage == nil || policy == nil || maxUploadBytes <= 0 {
+func NewAPI(store *ResourceStore, storage *NativeStorage, policy *TypePolicy, testAuthEnabled bool, maxUploadBytes int64, publicAuthSecret []byte) (*API, error) {
+	if store == nil || storage == nil || policy == nil || maxUploadBytes <= 0 || len(publicAuthSecret) < 32 {
 		return nil, ErrInvalidInput
 	}
-	return &API{store: store, storage: storage, policy: policy, testAuthEnabled: testAuthEnabled, maxUploadBytes: maxUploadBytes}, nil
+	return &API{
+		store: store, storage: storage, policy: policy, testAuthEnabled: testAuthEnabled,
+		maxUploadBytes: maxUploadBytes, publicAuthSecret: append([]byte(nil), publicAuthSecret...),
+	}, nil
 }
 
 func (a *API) Handler() http.Handler {
@@ -53,6 +57,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/workspaces/{workspaceId}/files/{fileId}/publish", a.publish)
 	mux.HandleFunc("POST /api/workspaces/{workspaceId}/files/{fileId}/rescan", a.rescan)
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/files/{fileId}/download", a.download)
+	mux.HandleFunc("GET /f/{slug}", a.publicPageGet)
+	mux.HandleFunc("POST /f/{slug}", a.publicPagePost)
+	mux.HandleFunc("GET /api/public/files/{slug}", a.publicDownload)
 	return fileSecurityHeaders(mux)
 }
 
@@ -62,6 +69,7 @@ func fileSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }

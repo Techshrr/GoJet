@@ -19,6 +19,7 @@ var (
 	ErrConflict           = errors.New("file state conflict")
 	ErrExpired            = errors.New("file expired")
 	ErrDownloadLimit      = errors.New("file download limit reached")
+	ErrPasswordRequired   = errors.New("file password authorization required")
 )
 
 type ScanState string
