@@ -133,7 +133,8 @@ export async function action(id, name) {
     method: 'POST',
     body: JSON.stringify({ change_reason: `P09 browser ${name}` }),
   });
-  assert(result.response.status === 200, `${name} file ${id} failed: ${result.response.status} ${JSON.stringify(result.body)}`);
+  const expectedStatus = name === 'rescan' ? 202 : 200;
+  assert(result.response.status === expectedStatus, `${name} file ${id} failed: ${result.response.status} ${JSON.stringify(result.body)}`);
   return result.body;
 }
 export function workerEnv(address = REAL_CLAMD, overrides = {}) {

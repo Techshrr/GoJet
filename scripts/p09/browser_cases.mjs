@@ -97,7 +97,7 @@ export async function caseT022(browser) {
   const rescanResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/${safe.id}/rescan`));
   await page.getByRole('button', { name: 'Rescan', exact: true }).click();
   const rescanResponse = await rescanResponsePromise;
-  assert(rescanResponse.status() === 200, `rescan UI status ${rescanResponse.status()}`);
+  assert(rescanResponse.status() === 202, `rescan UI status ${rescanResponse.status()}`);
   await waitPageState(page, '[data-page="file-detail"]', 'quarantined');
   await page.goto(`${WORKSPACE_URL}/f/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' });
   assert(await page.locator('[data-file-state="scan-pending"]').isVisible(), 'rescan did not fail public page closed');
