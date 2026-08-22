@@ -1,4 +1,4 @@
-name: P08 Evidence Coherence
+name: P08 Closure
 
 on:
   pull_request:
@@ -19,6 +19,9 @@ on:
       - 'frontend/packages/tokens/**'
       - 'scripts/p08/**'
       - 'artifacts/v10/P08/**'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
+      - '.github/workflows/p07-*.yml'
       - '.github/workflows/p08-*.yml'
   workflow_dispatch:
 
@@ -27,14 +30,14 @@ permissions:
   actions: read
 
 concurrency:
-  group: p08-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  group: p08-closure-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  coherence:
-    name: P08 exact-head evidence coherence
+  closure:
+    name: P08 exact-head signed closure
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -43,17 +46,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify P08 evidence validator
+      - name: Verify P08 closure validator
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/p08/validate.py scripts/p08/validate_coherence.py scripts/p08/validate_closure.py scripts/p08/validate_contract.py
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
-      - name: Wait for exact-head P08 evidence producers
+      - name: Wait for exact-head affected P00-P08 matrix
         shell: bash
         env:
           EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -71,14 +74,32 @@ jobs:
           from pathlib import Path
 
           required = (
+              "P00 Bootstrap and G0 Traceability",
+              "P01 Engineering Foundation",
+              "P02 Brand Foundation",
+              "P03 Design System",
+              "P04 Product Shells",
+              "P05 Links Domain Contract",
+              "P05 Real Integration",
+              "P05 Workspace Browser",
+              "P05 Closure",
+              "P06 Custom Domains",
+              "P06 Real Integration",
+              "P06 Workspace Domains Browser",
+              "P06 Closure",
+              "P07 Analytics Contract",
+              "P07 Real Integration",
+              "P07 Workspace Analytics Browser",
+              "P07 Closure",
               "P08 QR Contract",
               "P08 Real QR Integration",
               "P08 Workspace QR Browser",
+              "P08 Evidence Coherence",
           )
           sha = os.environ["EXACT_HEAD"]
           repository = os.environ["REPOSITORY"]
           token = os.environ["GH_TOKEN"]
-          path = Path("artifacts/v10/P08/evidence-producer-manifest.json")
+          manifest_path = Path("artifacts/v10/P08/regression-manifest.json")
 
           def fetch_runs():
               query = urllib.parse.urlencode({"head_sha": sha, "event": "pull_request", "per_page": 100})
@@ -93,7 +114,7 @@ jobs:
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)["workflow_runs"]
 
-          deadline = time.time() + 25 * 60
+          deadline = time.time() + 30 * 60
           while time.time() < deadline:
               runs = fetch_runs()
               latest = {}
@@ -125,96 +146,93 @@ jobs:
                   "pending": pending,
                   "failed": failed,
               }
-              path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+              manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
               if failed:
-                  raise SystemExit("required P08 evidence producer failed: " + ", ".join(failed))
+                  raise SystemExit("required exact-head workflows failed: " + ", ".join(failed))
               if not missing and not pending:
-                  print(f"P08 exact-head evidence producers are green for {sha}")
+                  print(f"P00-P08 affected exact-head matrix is green for {sha}")
                   break
-              print(f"Waiting for P08 evidence producers: missing={missing} pending={pending}")
+              print(f"Waiting for exact-head matrix: missing={missing} pending={pending}")
               time.sleep(10)
           else:
-              raise SystemExit(f"timed out waiting for P08 evidence producers for {sha}")
+              raise SystemExit(f"timed out waiting for exact-head workflows for {sha}")
           PY
 
-      - name: Download exact-head integration and browser evidence
+      - name: Download exact-head P08 coherence evidence
         shell: bash
         env:
           EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          integration_run="$(python3 - <<'PY'
+          evidence_run="$(python3 - <<'PY'
           import json
-          data=json.load(open('artifacts/v10/P08/evidence-producer-manifest.json'))
-          print(data['required_workflows']['P08 Real QR Integration']['run_id'])
+          data=json.load(open('artifacts/v10/P08/regression-manifest.json'))
+          print(data['required_workflows']['P08 Evidence Coherence']['run_id'])
           PY
           )"
-          browser_run="$(python3 - <<'PY'
-          import json
-          data=json.load(open('artifacts/v10/P08/evidence-producer-manifest.json'))
-          print(data['required_workflows']['P08 Workspace QR Browser']['run_id'])
-          PY
-          )"
-          rm -rf /tmp/p08-integration /tmp/p08-browser
-          mkdir -p /tmp/p08-integration /tmp/p08-browser artifacts/v10/P08/results artifacts/v10/P08/scanner artifacts/v10/P08/browser artifacts/v10/P08/captures
-          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p08-integration-$EXACT_HEAD" --dir /tmp/p08-integration
-          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p08-browser-$EXACT_HEAD" --dir /tmp/p08-browser
+          rm -rf /tmp/p08-evidence
+          mkdir -p /tmp/p08-evidence artifacts/v10/P08/results artifacts/v10/P08/scanner artifacts/v10/P08/captures
+          gh run download "$evidence_run" --repo "$REPOSITORY" --name "gojet-v10-p08-evidence-$EXACT_HEAD" --dir /tmp/p08-evidence
 
-          for number in 001 002 004 005 006 007 008 009 010; do
-            source="$(find /tmp/p08-integration -type f -name "P08-T${number}.json" -print -quit)"
+          for number in 001 002 004 005 006 007 008 009 010 011 012 013 014 015; do
+            source="$(find /tmp/p08-evidence -type f -name "P08-T${number}.json" -print -quit)"
             test -n "$source"
             cp "$source" "artifacts/v10/P08/results/P08-T${number}.json"
           done
-          source="$(find /tmp/p08-integration -type f -name 'P08-T003.json' -print -quit)"
+          source="$(find /tmp/p08-evidence -type f -name 'P08-T003.json' -print -quit)"
           test -n "$source"
           cp "$source" artifacts/v10/P08/scanner/P08-T003.json
           for name in P08-T003-source.png P08-T003-source.svg P08-T003-source-from-svg.png P08-T003-expected.json; do
-            source="$(find /tmp/p08-integration -type f -name "$name" -print -quit)"
+            source="$(find /tmp/p08-evidence -type f -name "$name" -print -quit)"
             test -n "$source"
             cp "$source" "artifacts/v10/P08/scanner/$name"
           done
+          find /tmp/p08-evidence -type f -name 'gjv10__*.png' -print -exec cp '{}' artifacts/v10/P08/captures/ ';'
 
-          for number in 011 012 013 014; do
-            source="$(find /tmp/p08-browser -type f -name "P08-T${number}.json" -print -quit)"
-            test -n "$source"
-            cp "$source" "artifacts/v10/P08/results/P08-T${number}.json"
-          done
-          find /tmp/p08-browser -type f -name 'gjv10__*.png' -print -exec cp '{}' artifacts/v10/P08/captures/ ';'
-
-          test "$(find artifacts/v10/P08/results -maxdepth 1 -type f -name 'P08-T*.json' | wc -l)" -eq 13
+          test "$(find artifacts/v10/P08/results -maxdepth 1 -type f -name 'P08-T*.json' | wc -l)" -eq 14
           test -f artifacts/v10/P08/scanner/P08-T003.json
-          test -f artifacts/v10/P08/scanner/P08-T003-source.png
-          test -f artifacts/v10/P08/scanner/P08-T003-source.svg
+          test -f artifacts/v10/P08/results/P08-T015.json
 
-      - name: Run P08-T015 exact-head evidence coherence
+      - name: Run P08-T016 exact-head closure
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p08/validate.py --case P08-T015
+          python3 scripts/p08/validate.py --case P08-T016 --closure
           python3 - <<'PY'
           import json
           import subprocess
-          data=json.load(open('artifacts/v10/P08/results/P08-T015.json'))
+          data=json.load(open('artifacts/v10/P08/results/P08-T016.json'))
+          closure=json.load(open('artifacts/v10/P08/closure.json'))
           head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
           assert data['implementation_commit'] == head, (data['implementation_commit'], head)
           assert data['status'] == 'PASS', data
           assert data['errors'] == [], data['errors']
-          assert data['details']['input_evidence_count'] == 14, data['details']
-          assert data['details']['same_exact_head'] is True, data['details']
-          print(f"P08-T015 exact-head coherence PASS on {head}")
+          assert closure['implementation_commit'] == head, closure
+          assert closure['status'] == 'PASS', closure
+          if closure['phase'] == 'pre-sign':
+              assert closure['merge_authoritative'] is False, closure
+              assert closure['defects'] == {'p0': None, 'p1': None, 'decision_required': None}, closure['defects']
+              print(f"P08-T016 pre-sign closure PASS on {head}; merge-authoritative=false")
+          elif closure['phase'] == 'signed':
+              assert closure['merge_authoritative'] is True, closure
+              assert closure['defects'] == {'p0': 0, 'p1': 0, 'decision_required': 0}, closure['defects']
+              print(f"P08-T016 signed closure PASS on {head}; merge-authoritative=true")
+          else:
+              raise AssertionError(closure)
           PY
 
-      - name: Upload P08 coherence evidence
+      - name: Upload P08 closure evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-v10-p08-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: gojet-v10-p08-closure-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            artifacts/v10/P08/evidence-producer-manifest.json
+            artifacts/v10/P08/regression-manifest.json
             artifacts/v10/P08/evidence-index.json
+            artifacts/v10/P08/closure.json
             artifacts/v10/P08/results/P08-T*.json
             artifacts/v10/P08/scanner/
             artifacts/v10/P08/captures/
