@@ -500,7 +500,7 @@ def case_t008() -> dict[str, Any]:
     matrix["changed_fingerprint"] = {"status": changed_status, "old_allow_still_present": True, "new_allow_present": False}
 
     custom_ws = "ws-p08-custom"
-    custom_host = "qr.custom.p08.test"
+    custom_host = "qr-custom-p08.example.com"
     install_ready_custom_domain_fixture(custom_ws, custom_host)
     custom_link = create_link("custom", "https://customer.example/custom", workspace=custom_ws, hostname=custom_host, domain_kind="custom")
     set_risk(custom_link, "allow")
