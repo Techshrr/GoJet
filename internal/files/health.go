@@ -46,8 +46,19 @@ type HealthAuthority struct {
 }
 
 func NewHealthAuthority(storageRoot string, clamav *ClamAVClient) (*HealthAuthority, error) {
+	if clamav == nil {
+		return nil, ErrInvalidInput
+	}
+	return newHealthAuthority(storageRoot, clamav)
+}
+
+func NewUnavailableHealthAuthority(storageRoot string) (*HealthAuthority, error) {
+	return newHealthAuthority(storageRoot, nil)
+}
+
+func newHealthAuthority(storageRoot string, clamav *ClamAVClient) (*HealthAuthority, error) {
 	storageRoot = strings.TrimSpace(storageRoot)
-	if storageRoot == "" || !filepath.IsAbs(storageRoot) || clamav == nil {
+	if storageRoot == "" || !filepath.IsAbs(storageRoot) {
 		return nil, ErrInvalidInput
 	}
 	return &HealthAuthority{storageRoot: filepath.Clean(storageRoot), clamav: clamav, now: time.Now}, nil
@@ -63,10 +74,16 @@ func (a *HealthAuthority) Check(ctx context.Context) DependencyHealthReport {
 		Storage: StorageHealth{State: DependencyUnavailable},
 		ClamAV:  ScannerHealth{State: DependencyUnavailable, CheckedAt: now},
 	}
-	if a == nil || a.clamav == nil || a.storageRoot == "" {
+	if a == nil || a.storageRoot == "" {
 		return report
 	}
 	report.Storage = checkStorageHealth(a.storageRoot)
+	if a.clamav == nil {
+		if report.Storage.State == DependencyPermissionError {
+			report.Status = DependencyPermissionError
+		}
+		return report
+	}
 	report.ClamAV = checkScannerHealth(ctx, a.clamav, now)
 	report.Ready = report.Storage.State == DependencyHealthy && report.ClamAV.State == DependencyHealthy
 	if report.Ready {

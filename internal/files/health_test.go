@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,5 +78,18 @@ func TestStorageHealthRejectsPermissionDrift(t *testing.T) {
 	health := checkStorageHealth(root)
 	if health.State != DependencyPermissionError || health.Writable {
 		t.Fatalf("permission drift must fail closed: %+v", health)
+	}
+}
+
+func TestHealthAPIFailsClosedWithoutAdminAuthDependency(t *testing.T) {
+	api := &HealthAPI{authority: &HealthAuthority{}, testAuthEnabled: false}
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/platform/storage", nil)
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("production auth dependency absence must fail closed: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "storageRoot") || strings.Contains(recorder.Body.String(), "clamav") {
+		t.Fatalf("auth failure leaked health internals: %s", recorder.Body.String())
 	}
 }

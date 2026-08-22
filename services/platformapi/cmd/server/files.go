@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Techshrr/GoJet/internal/files"
 )
@@ -42,6 +43,10 @@ func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	if policyRaw == "" {
 		return nil, false, fmt.Errorf("GOJET_FILE_TYPE_ALLOWLIST is required when files are enabled")
 	}
+	healthAuthority, err := buildFilesHealthAuthority(root)
+	if err != nil {
+		return nil, false, err
+	}
 	storage, err := files.NewNativeStorage(root)
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file storage: %w", err)
@@ -58,7 +63,47 @@ func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file API: %w", err)
 	}
-	return api.Handler(), true, nil
+	healthAPI, err := files.NewHealthAPI(healthAuthority, testAuth)
+	if err != nil {
+		return nil, false, fmt.Errorf("configure file health API: %w", err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/admin/platform/storage", healthAPI.Handler())
+	mux.Handle("/", api.Handler())
+	return mux, true, nil
+}
+
+func buildFilesHealthAuthority(root string) (*files.HealthAuthority, error) {
+	clamNetwork := strings.TrimSpace(os.Getenv("GOJET_CLAMAV_NETWORK"))
+	clamAddress := strings.TrimSpace(os.Getenv("GOJET_CLAMAV_ADDRESS"))
+	if clamNetwork == "" || clamAddress == "" {
+		authority, err := files.NewUnavailableHealthAuthority(root)
+		if err != nil {
+			return nil, fmt.Errorf("configure unavailable file health authority: %w", err)
+		}
+		return authority, nil
+	}
+	dialTimeout, err := optionalDurationEnv("GOJET_CLAMAV_DIAL_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	scanTimeout, err := optionalDurationEnv("GOJET_CLAMAV_SCAN_TIMEOUT", 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	maxSignatureAge, err := optionalDurationEnv("GOJET_CLAMAV_MAX_SIGNATURE_AGE", 48*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	clamav, err := files.NewClamAVClient(clamNetwork, clamAddress, dialTimeout, scanTimeout, maxSignatureAge)
+	if err != nil {
+		return nil, fmt.Errorf("configure ClamAV health client: %w", err)
+	}
+	authority, err := files.NewHealthAuthority(root, clamav)
+	if err != nil {
+		return nil, fmt.Errorf("configure file health authority: %w", err)
+	}
+	return authority, nil
 }
 
 func requiredUint64Env(name string) (uint64, error) {
@@ -75,6 +120,18 @@ func requiredInt64Env(name string) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if raw == "" || err != nil || value <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return value, nil
+}
+
+func optionalDurationEnv(name string, fallback time.Duration) (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := time.ParseDuration(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration", name)
 	}
 	return value, nil
 }

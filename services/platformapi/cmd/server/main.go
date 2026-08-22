@@ -119,6 +119,7 @@ func main() {
 		root.Handle("GET /f/{slug}", filesHandler)
 		root.Handle("POST /f/{slug}", filesHandler)
 		root.Handle("GET /api/public/files/{slug}", filesHandler)
+		root.Handle("GET /api/admin/platform/storage", filesHandler)
 	}
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
