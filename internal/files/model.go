@@ -15,6 +15,10 @@ var (
 	ErrStorageUnavailable = errors.New("file storage unavailable")
 	ErrSignatureStale     = errors.New("clamav signatures stale")
 	ErrScanIndeterminate  = errors.New("clamav scan indeterminate")
+	ErrNotSafe            = errors.New("file is not safe")
+	ErrConflict           = errors.New("file state conflict")
+	ErrExpired            = errors.New("file expired")
+	ErrDownloadLimit      = errors.New("file download limit reached")
 )
 
 type ScanState string
@@ -28,27 +32,28 @@ const (
 )
 
 type Resource struct {
-	ID             uint64     `json:"id"`
-	WorkspaceID    string     `json:"workspace_id"`
-	PublicSlug     string     `json:"public_slug"`
-	OriginalName   string     `json:"original_name"`
-	StorageKey     string     `json:"-"`
-	SizeBytes      uint64     `json:"size_bytes"`
-	ContentSHA256  string     `json:"content_sha256"`
-	DeclaredMIME   string     `json:"declared_mime"`
-	DetectedMIME   string     `json:"detected_mime"`
-	ScanState      ScanState  `json:"scan_state"`
-	ScanGeneration uint64     `json:"scan_generation"`
-	Published      bool       `json:"published"`
-	PublishedAt    *time.Time `json:"published_at,omitempty"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
-	RetentionUntil *time.Time `json:"retention_until,omitempty"`
-	DownloadLimit  *uint64    `json:"download_limit,omitempty"`
-	DownloadCount  uint64     `json:"download_count"`
-	CreatedBy      string     `json:"created_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
+	ID               uint64     `json:"id"`
+	WorkspaceID      string     `json:"workspace_id"`
+	PublicSlug       string     `json:"public_slug"`
+	OriginalName     string     `json:"original_name"`
+	StorageKey       string     `json:"-"`
+	SizeBytes        uint64     `json:"size_bytes"`
+	ContentSHA256    string     `json:"content_sha256"`
+	DeclaredMIME     string     `json:"declared_mime"`
+	DetectedMIME     string     `json:"detected_mime"`
+	ScanState        ScanState  `json:"scan_state"`
+	ScanGeneration   uint64     `json:"scan_generation"`
+	Published        bool       `json:"published"`
+	PublishedAt      *time.Time `json:"published_at,omitempty"`
+	PasswordRequired bool       `json:"password_required"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	RetentionUntil   *time.Time `json:"retention_until,omitempty"`
+	DownloadLimit    *uint64    `json:"download_limit,omitempty"`
+	DownloadCount    uint64     `json:"download_count"`
+	CreatedBy        string     `json:"created_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 }
 
 type ScanJob struct {
