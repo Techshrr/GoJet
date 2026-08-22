@@ -19,6 +19,7 @@ import {
   Tabs,
   TextField,
 } from '@gojet/ui';
+import { LinkAnalyticsPanel } from '../analytics/LinkAnalyticsPanel';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
 import { createWorkspaceLinksClient, isReadOnly, readWorkspaceRuntime } from '../links/runtime';
 
@@ -213,7 +214,7 @@ export default function LinkDetailPage() {
                   </Card>
                 ) : null}
 
-                {activeTab === 'analytics' ? <EmptyState title="Analytics is owned by P07" reason="P05 does not fabricate click-series or reconciliation data. The link click counter remains available in Overview and list evidence." /> : null}
+                {activeTab === 'analytics' ? <LinkAnalyticsPanel linkId={numericId} /> : null}
 
                 {activeTab === 'routing' ? (
                   <Card as="section" className="links-form-section">
