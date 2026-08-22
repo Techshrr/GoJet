@@ -7,7 +7,7 @@
 }
 
 .analytics-page-header {
-  display: grid;
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gojet-space-4);
@@ -56,19 +56,18 @@
 
 .analytics-filter-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: end;
   gap: var(--gojet-space-3);
 }
 
 .analytics-filter-form .gj-button {
   justify-self: start;
-  inline-size: 100%;
 }
 
 .analytics-metrics {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gojet-space-3);
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -95,7 +94,7 @@
 }
 
 .analytics-section-heading {
-  display: grid;
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gojet-space-3);
@@ -106,7 +105,6 @@
 
 .analytics-state-label {
   flex: 0 0 auto;
-  justify-self: start;
   padding: var(--gojet-space-1) var(--gojet-space-2);
   border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
   border-radius: var(--gojet-radius-pill);
@@ -160,7 +158,7 @@
 
 .analytics-dimensions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gojet-space-3);
 }
 
@@ -188,7 +186,7 @@
 
 .analytics-provenance-card dl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gojet-space-3);
   margin: 0;
 }
@@ -238,30 +236,28 @@
   box-sizing: border-box;
 }
 
-@media (min-width: 640px) {
-  .analytics-page-header,
-  .analytics-section-heading {
-    display: flex;
-  }
-
-  .analytics-filter-form,
-  .analytics-metrics,
-  .analytics-dimensions,
-  .analytics-provenance-card dl {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .analytics-filter-form .gj-button {
-    inline-size: auto;
-  }
+.workspace-shell[data-viewport="tablet"] .analytics-filter-form,
+.workspace-shell[data-viewport="tablet"] .analytics-metrics,
+.workspace-shell[data-viewport="tablet"] .analytics-dimensions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@media (min-width: 1024px) {
-  .analytics-filter-form {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.workspace-shell[data-viewport="mobile"] .analytics-page-header,
+.workspace-shell[data-viewport="mobile"] .analytics-section-heading {
+  display: grid;
+}
 
-  .analytics-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.workspace-shell[data-viewport="mobile"] .analytics-filter-form,
+.workspace-shell[data-viewport="mobile"] .analytics-metrics,
+.workspace-shell[data-viewport="mobile"] .analytics-dimensions,
+.workspace-shell[data-viewport="mobile"] .analytics-provenance-card dl {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-filter-form .gj-button {
+  inline-size: 100%;
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-state-label {
+  justify-self: start;
 }
