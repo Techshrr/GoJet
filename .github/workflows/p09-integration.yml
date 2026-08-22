@@ -158,7 +158,7 @@ jobs:
           go mod verify
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-          python3 -m py_compile scripts/p09/integration.py scripts/p09/clamd_fault_server.py scripts/p09/validate_contract.py
+          python3 -m py_compile scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p09/validate_contract.py
           find internal/files services/platformapi/cmd/server services/platformapi/cmd/fileworker -type f -name '*.go' -print0 \
             | xargs -0 gofmt -d | tee /tmp/p09-gofmt.diff
           test ! -s /tmp/p09-gofmt.diff

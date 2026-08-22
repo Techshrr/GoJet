@@ -1,4 +1,5 @@
 from integration_common import *
+from integration_cases_a import clean_with_real
 
 def case_t007():
     reset_case()

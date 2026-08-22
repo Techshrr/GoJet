@@ -81,5 +81,5 @@ def case_t006():
     pstatus, _, pbody = public_binary(row["public_slug"])
     expect(pstatus == 403 and EICAR not in pbody, f"blocked bytes leaked status={pstatus}")
     return {"file_id": rid, "scan_state": row["scan_state"], "scan_status": scan["status"],
-            "verdict_code": scan["verdict_code"], "engine_version": scan["engine_version"], "public_status": pstatus}
+            "verdict_code": scan["verdict_code"], "engine_version": scan["engine_version"], "signature_version": scan["signature_version"], "public_status": pstatus}
 
