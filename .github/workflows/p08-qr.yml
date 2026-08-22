@@ -1,0 +1,76 @@
+name: P08 QR Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/v10/P08/**'
+      - 'scripts/p08/**'
+      - '.github/workflows/p08-qr.yml'
+      - 'internal/qr/**'
+      - 'internal/links/**'
+      - 'internal/domains/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p08-qr-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Contract freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P08 contract validator
+        run: python3 -m py_compile scripts/p08/validate_contract.py
+
+      - name: Validate frozen P08 contract
+        run: python3 scripts/p08/validate_contract.py | tee /tmp/p08-contract.json
+
+      - name: Preserve P05/P06 source-authority compile boundary
+        run: go test ./internal/links/... ./internal/domains/...
+
+      - name: Compile and test P08 backend slice
+        run: go test ./internal/qr/... ./services/platformapi/...
+
+      - name: Record exact-head contract evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p08-contract-evidence
+          cp /tmp/p08-contract.json /tmp/p08-contract-evidence/contract.json 2>/dev/null || true
+          git rev-parse HEAD > /tmp/p08-contract-evidence/implementation_commit.txt
+          printf '%s\n' '04941afc59db763e6c7db8a67721dea542c72a43' > /tmp/p08-contract-evidence/base_integration_commit.txt
+          printf '%s\n' 'P08-T001..P08-T016' > /tmp/p08-contract-evidence/case_range.txt
+
+      - name: Upload contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p08-qr-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/p08-contract-evidence
+          if-no-files-found: error
+          retention-days: 14

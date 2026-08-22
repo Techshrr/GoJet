@@ -13,7 +13,6 @@ import {
   Button,
   Card,
   Checkbox,
-  EmptyState,
   InlineMessage,
   SelectField,
   Tabs,
@@ -22,6 +21,7 @@ import {
 import { LinkAnalyticsPanel } from '../analytics/LinkAnalyticsPanel';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
 import { createWorkspaceLinksClient, isReadOnly, readWorkspaceRuntime } from '../links/runtime';
+import { LinkQRPanel } from '../qr/LinkQRPanel';
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
@@ -277,7 +277,7 @@ export default function LinkDetailPage() {
                   </Card>
                 ) : null}
 
-                {activeTab === 'qr' ? <EmptyState title="QR is owned by P08" reason="P05 does not fabricate QR artifacts. QR generation will also be denied whenever this source Link is pending, review or blocked." /> : null}
+                {activeTab === 'qr' ? <LinkQRPanel linkId={numericId} /> : null}
 
                 {activeTab === 'settings' ? (
                   <Card as="section" className="links-form-section">

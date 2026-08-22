@@ -15,6 +15,7 @@ import (
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
+	qrcodes "github.com/Techshrr/GoJet/internal/qr"
 )
 
 func main() {
@@ -66,15 +67,28 @@ func main() {
 	if testAuth {
 		logger.Warn("test-only auth adapter enabled; never use this setting in production")
 	}
+
+	qrQuota := uint64(100)
+	if raw := strings.TrimSpace(os.Getenv("GOJET_QR_WORKSPACE_QUOTA")); raw != "" {
+		parsed, parseErr := strconv.ParseUint(raw, 10, 64)
+		if parseErr != nil || parsed == 0 || parsed > 100000 {
+			logger.Error("invalid GOJET_QR_WORKSPACE_QUOTA")
+			os.Exit(1)
+		}
+		qrQuota = parsed
+	}
+
 	linksAPI := links.NewAPI(store, testAuth)
 	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
 	analyticsAPI := analytics.NewAPI(analytics.NewStore(db), testAuth, analyticsEnabled)
+	qrAPI := qrcodes.NewAPI(qrcodes.NewStore(db, qrQuota), store, risk, testAuth)
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
+	qrHandler := qrAPI.Handler()
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains and P07 Analytics routes explicitly. Each inner handler retains
-	// its own security headers and test-only auth boundary.
+	// P06 Domains, P07 Analytics and P08 QR routes explicitly. Each inner handler
+	// retains its own security headers and test-only auth boundary.
 	root := http.NewServeMux()
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -82,6 +96,12 @@ func main() {
 	root.Handle("GET /api/workspaces/{workspaceId}/analytics/overview", analyticsHandler)
 	root.Handle("GET /api/workspaces/{workspaceId}/analytics/links/{linkId}", analyticsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/analytics/conversions", analyticsHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes", qrHandler)
+	root.Handle("POST /api/workspaces/{workspaceId}/qr-codes", qrHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes/{qrId}", qrHandler)
+	root.Handle("DELETE /api/workspaces/{workspaceId}/qr-codes/{qrId}", qrHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes/{qrId}/preview", qrHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes/{qrId}/download", qrHandler)
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
@@ -108,7 +128,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
