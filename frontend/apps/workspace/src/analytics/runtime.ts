@@ -1,4 +1,4 @@
-import { GoJetAnalyticsClient } from '@gojet/api-client';
+import { GoJetAnalyticsClient, type AnalyticsQueryInput } from '@gojet/api-client';
 import { readWorkspaceRuntime, type WorkspaceRuntime } from '../links/runtime';
 
 export type AnalyticsRuntime = WorkspaceRuntime & {
@@ -23,4 +23,15 @@ export function createWorkspaceAnalyticsClient(runtime: AnalyticsRuntime): GoJet
       'X-GoJet-Test-Analytics-Permission': runtime.analyticsPermission,
     }),
   });
+}
+
+export function defaultAnalyticsQuery(now = new Date()): AnalyticsQueryInput {
+  const to = new Date(now);
+  const from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    granularity: 'day',
+  };
 }
