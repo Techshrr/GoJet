@@ -39,8 +39,12 @@
 .analytics-report,
 .analytics-filter-form,
 .analytics-dimensions,
-.analytics-provenance-card dl {
+.analytics-provenance-card dl,
+.analytics-buckets-card,
+.analytics-dimension-card,
+.analytics-provenance-card {
   min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .analytics-filter-card,
@@ -69,6 +73,7 @@
 .analytics-metric-card {
   display: grid;
   gap: var(--gojet-space-2);
+  min-inline-size: 0;
 }
 
 .analytics-metric-card span,
@@ -88,6 +93,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gojet-space-3);
+  min-inline-size: 0;
 }
 
 .analytics-state-label {
@@ -109,7 +115,9 @@
 }
 
 .analytics-table-region {
+  inline-size: 100%;
   max-inline-size: 100%;
+  min-inline-size: 0;
   overflow: auto;
   border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
   border-radius: var(--gojet-radius-md);
@@ -185,6 +193,27 @@
   min-block-size: 8rem;
   display: grid;
   align-items: center;
+}
+
+/* Link Detail has nine tabs. The tab strip and measured-data table own their
+   horizontal scrolling; neither is allowed to widen the Workspace page root. */
+.links-page .gj-tabs {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.links-page .gj-tab {
+  flex: 0 0 auto;
+}
+
+.links-form,
+.links-tab-panel,
+.links-tab-panel .analytics-report,
+.links-tab-panel .analytics-report > * {
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 @media (max-width: 900px) {
