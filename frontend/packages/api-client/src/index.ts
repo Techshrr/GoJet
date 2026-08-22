@@ -73,3 +73,14 @@ export type {
   AnalyticsReport,
   AnalyticsState,
 } from './analytics';
+
+export { GoJetQRClient } from './qr';
+export type {
+  QRArtifact,
+  QRCreateInput,
+  QRListResponse,
+  QRRiskState,
+  QRRecord,
+  QRSource,
+  QRState,
+} from './qr';
