@@ -85,10 +85,15 @@ func main() {
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
 	qrHandler := qrAPI.Handler()
+	filesHandler, filesEnabled, err := buildFilesHandler(db, testAuth)
+	if err != nil {
+		logger.Error("configure files", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains, P07 Analytics and P08 QR routes explicitly. Each inner handler
-	// retains its own security headers and test-only auth boundary.
+	// P06 Domains, P07 Analytics, P08 QR and conditionally enabled P09 Files routes
+	// explicitly. Each inner handler retains its own security headers and test-only auth boundary.
 	root := http.NewServeMux()
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -102,6 +107,16 @@ func main() {
 	root.Handle("DELETE /api/workspaces/{workspaceId}/qr-codes/{qrId}", qrHandler)
 	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes/{qrId}/preview", qrHandler)
 	root.Handle("GET /api/workspaces/{workspaceId}/qr-codes/{qrId}/download", qrHandler)
+	if filesEnabled {
+		root.Handle("GET /api/workspaces/{workspaceId}/files", filesHandler)
+		root.Handle("POST /api/workspaces/{workspaceId}/files", filesHandler)
+		root.Handle("GET /api/workspaces/{workspaceId}/files/{fileId}", filesHandler)
+		root.Handle("PATCH /api/workspaces/{workspaceId}/files/{fileId}", filesHandler)
+		root.Handle("DELETE /api/workspaces/{workspaceId}/files/{fileId}", filesHandler)
+		root.Handle("POST /api/workspaces/{workspaceId}/files/{fileId}/publish", filesHandler)
+		root.Handle("POST /api/workspaces/{workspaceId}/files/{fileId}/rescan", filesHandler)
+		root.Handle("GET /api/workspaces/{workspaceId}/files/{fileId}/download", filesHandler)
+	}
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
@@ -128,7 +143,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
