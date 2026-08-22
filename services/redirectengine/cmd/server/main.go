@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 )
@@ -60,6 +61,7 @@ func main() {
 	domainStore := domains.NewMySQLStore(db)
 	store := links.NewMySQLStoreWithCustomDomainAuthority(db, domainStore)
 	risk := links.NewRedisRiskStore(redisClient)
+	analyticsPublisher := analytics.NewRedisStreamPublisher(redisClient)
 	trustTestHeaders := os.Getenv("GOJET_TEST_ROUTING_HEADERS") == "1"
 	if trustTestHeaders {
 		logger.Warn("test-only routing headers enabled; never use this setting in production")
@@ -71,7 +73,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           links.NewRedirectHandler(store, risk, trustTestHeaders),
+		Handler:           links.NewRedirectHandlerWithAnalytics(store, risk, analyticsPublisher, trustTestHeaders),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -89,7 +91,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("redirectengine listening", "address", address)
+	logger.Info("redirectengine listening", "address", address, "analytics_stream", analytics.ClickStreamKey)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("redirectengine failed", "error", err)
 		os.Exit(1)
