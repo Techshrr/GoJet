@@ -68,14 +68,22 @@ func (c *RedisStreamConsumer) EnsureGroup(ctx context.Context) error {
 	return err
 }
 
+func (c *RedisStreamConsumer) ReadPending(ctx context.Context, count int64) ([]StreamMessage, error) {
+	return c.read(ctx, "0", count, 0)
+}
+
 func (c *RedisStreamConsumer) Read(ctx context.Context, count int64, block time.Duration) ([]StreamMessage, error) {
-	if count <= 0 || count > 1000 || block < 0 {
+	return c.read(ctx, ">", count, block)
+}
+
+func (c *RedisStreamConsumer) read(ctx context.Context, id string, count int64, block time.Duration) ([]StreamMessage, error) {
+	if count <= 0 || count > 1000 || block < 0 || (id != "0" && id != ">") {
 		return nil, ErrInvalidEvent
 	}
 	streams, err := c.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    c.group,
 		Consumer: c.consumer,
-		Streams:  []string{ClickStreamKey, ">"},
+		Streams:  []string{ClickStreamKey, id},
 		Count:    count,
 		Block:    block,
 	}).Result()
