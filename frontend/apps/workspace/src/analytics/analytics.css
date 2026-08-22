@@ -1,0 +1,218 @@
+.analytics-page {
+  display: grid;
+  gap: var(--gojet-space-5);
+  min-inline-size: 0;
+  max-inline-size: var(--gojet-content-wide);
+  margin-inline: auto;
+}
+
+.analytics-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gojet-space-4);
+}
+
+.analytics-page-header h1,
+.analytics-section-heading h2,
+.analytics-dimension-card h3,
+.analytics-provenance-card h3 {
+  margin-block: 0;
+}
+
+.analytics-page-header p,
+.analytics-section-heading p,
+.analytics-filter-card p,
+.analytics-provenance-card p {
+  margin-block: var(--gojet-space-1) 0;
+}
+
+.analytics-eyebrow {
+  margin: 0;
+  color: var(--gojet-text-muted);
+  font-size: var(--gojet-type-product-meta-size);
+  font-weight: var(--gojet-type-label-weight);
+  letter-spacing: 0.08em;
+}
+
+.analytics-filter-card,
+.analytics-report,
+.analytics-filter-form,
+.analytics-dimensions,
+.analytics-provenance-card dl {
+  min-inline-size: 0;
+}
+
+.analytics-filter-card,
+.analytics-report {
+  display: grid;
+  gap: var(--gojet-space-4);
+}
+
+.analytics-filter-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--gojet-space-3);
+}
+
+.analytics-filter-form .gj-button {
+  justify-self: start;
+}
+
+.analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+}
+
+.analytics-metric-card {
+  display: grid;
+  gap: var(--gojet-space-2);
+}
+
+.analytics-metric-card span,
+.analytics-muted,
+.analytics-section-heading p,
+.analytics-provenance-card dt {
+  color: var(--gojet-text-muted);
+}
+
+.analytics-metric-card strong {
+  font-size: var(--gojet-type-product-title-size);
+  line-height: var(--gojet-type-product-title-line-height);
+}
+
+.analytics-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gojet-space-3);
+}
+
+.analytics-state-label {
+  flex: 0 0 auto;
+  padding: var(--gojet-space-1) var(--gojet-space-2);
+  border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+  border-radius: var(--gojet-radius-pill);
+  background: var(--gojet-surface-muted);
+  color: var(--gojet-text-secondary);
+  font-size: var(--gojet-type-product-meta-size);
+  font-weight: var(--gojet-type-label-weight);
+}
+
+.analytics-buckets-card,
+.analytics-dimension-card,
+.analytics-provenance-card {
+  display: grid;
+  gap: var(--gojet-space-3);
+}
+
+.analytics-table-region {
+  max-inline-size: 100%;
+  overflow: auto;
+  border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+  border-radius: var(--gojet-radius-md);
+}
+
+.analytics-table {
+  inline-size: 100%;
+  min-inline-size: 28rem;
+  border-collapse: collapse;
+}
+
+.analytics-table caption,
+.analytics-table th,
+.analytics-table td {
+  padding: var(--gojet-space-3);
+  text-align: start;
+}
+
+.analytics-table th,
+.analytics-table td {
+  border-block-end: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+}
+
+.analytics-table th {
+  background: var(--gojet-surface-muted);
+}
+
+.analytics-dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+}
+
+.analytics-dimension-list {
+  display: grid;
+  gap: var(--gojet-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-dimension-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gojet-space-3);
+  min-inline-size: 0;
+}
+
+.analytics-dimension-list li span {
+  overflow-wrap: anywhere;
+}
+
+.analytics-provenance-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+  margin: 0;
+}
+
+.analytics-provenance-card dl div {
+  display: grid;
+  gap: var(--gojet-space-1);
+  min-inline-size: 0;
+}
+
+.analytics-provenance-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.analytics-loading {
+  min-block-size: 8rem;
+  display: grid;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .analytics-filter-form,
+  .analytics-metrics,
+  .analytics-dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .analytics-page-header,
+  .analytics-section-heading {
+    display: grid;
+  }
+
+  .analytics-filter-form,
+  .analytics-metrics,
+  .analytics-dimensions,
+  .analytics-provenance-card dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analytics-filter-form .gj-button {
+    inline-size: 100%;
+  }
+
+  .analytics-state-label {
+    justify-self: start;
+  }
+}
