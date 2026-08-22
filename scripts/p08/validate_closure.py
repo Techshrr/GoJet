@@ -192,9 +192,12 @@ def validate_review(errors: list[str]) -> dict[str, Any]:
     if not REVIEW.is_file():
         return {"phase": "missing", "merge_authoritative": False, "defects": None}
     text = REVIEW.read_text(encoding="utf-8")
-    signed = SIGNED_STATUS in text
-    pending = PENDING_STATUS in text
-    require(signed ^ pending, "review must be exactly one of pending or signed status", errors)
+    status_match = re.search(r"^Status:\s*.+$", text, flags=re.MULTILINE)
+    require(status_match is not None, "review status line missing", errors)
+    status_line = status_match.group(0).strip() if status_match else ""
+    signed = status_line == SIGNED_STATUS
+    pending = status_line == PENDING_STATUS
+    require(signed ^ pending, f"review current status is not an allowed exact status: {status_line}", errors)
     require("## 7. Signed-revision rule" in text or "## Signed-revision rule" in text, "review signed-revision rule missing", errors)
     require("release-wide G10" in text, "review must preserve release-wide G10 scope", errors)
 
