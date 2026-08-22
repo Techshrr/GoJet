@@ -209,7 +209,7 @@ async function waitDetailState(page, expected) {
 async function ensureCreateOpen(page) {
   const source = page.getByLabel('Source Link', { exact: true });
   if (await source.isVisible()) return;
-  const trigger = page.getByRole('button', { name: 'Create QR', exact: true });
+  const trigger = page.locator('.qr-page-header').getByRole('button', { name: 'Create QR', exact: true });
   await trigger.waitFor();
   await trigger.click();
   await page.getByRole('heading', { name: 'Create QR', exact: true }).waitFor();
@@ -223,7 +223,7 @@ async function createThroughUI(page, link, label) {
   await ensureCreateOpen(page);
   await page.getByLabel('Source Link', { exact: true }).selectOption(String(link.id));
   await page.getByLabel('Label', { exact: true }).fill(label);
-  const submit = page.getByRole('button', { name: 'Create QR', exact: true });
+  const submit = page.locator('.qr-create-form').getByRole('button', { name: 'Create QR', exact: true });
   const responsePromise = page.waitForResponse(isCollectionPost);
   await submit.click();
   const response = await responsePromise;
@@ -299,7 +299,7 @@ async function caseT011(browser) {
     await sleep(250);
     const requestPromise = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === `/api/workspaces/${WORKSPACE}/qr-codes`);
     const responsePromise = page.waitForResponse(isCollectionPost);
-    await page.getByRole('button', { name: 'Create QR', exact: true }).click();
+    await page.locator('.qr-create-form').getByRole('button', { name: 'Create QR', exact: true }).click();
     await requestPromise;
     assert(new URL(page.url()).pathname === '/app/qr', `fabricated success/navigation before server confirmation: ${page.url()}`);
     assert(mysql(`SELECT COUNT(*) FROM qr_codes WHERE workspace_id=${sqlLiteral(WORKSPACE)}`) === '0', 'QR row appeared before locked server transaction completed');
@@ -325,7 +325,7 @@ async function caseT011(browser) {
     await ensureCreateOpen(page);
     await page.getByLabel('Source Link', { exact: true }).selectOption(String(reviewLink.id));
     const responsePromise = page.waitForResponse(isCollectionPost);
-    await page.getByRole('button', { name: 'Create QR', exact: true }).click();
+    await page.locator('.qr-create-form').getByRole('button', { name: 'Create QR', exact: true }).click();
     const response = await responsePromise;
     assert(response.status() === 409, `T011 review create status=${response.status()}`);
     await page.getByRole('status').filter({ hasText: 'under review' }).waitFor();
@@ -561,7 +561,7 @@ async function caseT014(browser) {
   attachDiagnostics(page, report);
 
   await goto(page, '/app/qr');
-  const headerCreate = page.getByRole('button', { name: 'Create QR', exact: true });
+  const headerCreate = page.locator('.qr-page-header').getByRole('button', { name: 'Create QR', exact: true });
   const tabsToCreate = await tabUntil(page, headerCreate, 40);
   const focus = await focusEvidence(headerCreate);
   assert(focus.active, 'Create QR is not active after keyboard traversal');
@@ -579,7 +579,7 @@ async function caseT014(browser) {
   const label = page.getByLabel('Label', { exact: true });
   const tabsToLabel = await tabUntil(page, label, 10);
   await page.keyboard.type('Keyboard QR');
-  const submit = page.getByRole('button', { name: 'Create QR', exact: true });
+  const submit = page.locator('.qr-create-form').getByRole('button', { name: 'Create QR', exact: true });
   const tabsToSubmit = await tabUntil(page, submit, 10);
   const createResponsePromise = page.waitForResponse(isCollectionPost);
   await submit.press('Enter');
