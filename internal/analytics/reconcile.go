@@ -144,3 +144,31 @@ func (s *Store) AuthoritativeTotals(ctx context.Context) (outboxAccepted, consum
 	}
 	return
 }
+
+func (s *Store) RefreshWorkspaceCompleteness(ctx context.Context, complete bool, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" || len(reason) > 160 {
+		return ErrInvalidQuery
+	}
+	status := DatasetPartial
+	if complete {
+		status = DatasetComplete
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO analytics_workspace_state (
+			workspace_id, status, data_through_at, retention_days, state_reason
+		)
+		SELECT workspaces.workspace_id, ?, MAX(events.occurred_at), 90, ?
+		FROM (
+			SELECT workspace_id FROM analytics_outbox
+			UNION
+			SELECT workspace_id FROM analytics_events
+		) AS workspaces
+		LEFT JOIN analytics_events AS events ON events.workspace_id = workspaces.workspace_id
+		GROUP BY workspaces.workspace_id
+		ON DUPLICATE KEY UPDATE
+			status = VALUES(status),
+			data_through_at = VALUES(data_through_at),
+			state_reason = VALUES(state_reason)`, status, reason)
+	return err
+}
