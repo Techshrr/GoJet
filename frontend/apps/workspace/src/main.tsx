@@ -8,6 +8,7 @@ import '@gojet/ui/styles.css';
 import './shell/shell.css';
 import './links/links.css';
 import './domains/domains.css';
+import './analytics/analytics.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('GoJet application root is missing');

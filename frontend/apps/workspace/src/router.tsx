@@ -8,6 +8,7 @@ const LinkDetailPage = lazy(() => import('./routes/LinkDetailPage'));
 const DomainsListPage = lazy(() => import('./routes/DomainsListPage'));
 const DomainCreatePage = lazy(() => import('./routes/DomainCreatePage'));
 const DomainDetailPage = lazy(() => import('./routes/DomainDetailPage'));
+const AnalyticsPage = lazy(() => import('./routes/AnalyticsPage'));
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -24,7 +25,8 @@ const linkDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/a
 const domainsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/domains', component: DomainsListPage });
 const domainCreateRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/domains/new', component: DomainCreatePage });
 const domainDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/domains/$domainId', component: DomainDetailPage });
-const sectionRoutes = ['qr', 'files', 'analytics', 'developer', 'members', 'settings'].map((section) =>
+const analyticsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/analytics', component: AnalyticsPage });
+const sectionRoutes = ['qr', 'files', 'developer', 'members', 'settings'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
 );
 const routeTree = rootRoute.addChildren([
@@ -35,6 +37,7 @@ const routeTree = rootRoute.addChildren([
   domainsRoute,
   domainCreateRoute,
   domainDetailRoute,
+  analyticsRoute,
   ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });

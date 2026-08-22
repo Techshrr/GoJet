@@ -1,0 +1,263 @@
+.analytics-page {
+  display: grid;
+  gap: var(--gojet-space-5);
+  min-inline-size: 0;
+  max-inline-size: var(--gojet-content-wide);
+  margin-inline: auto;
+}
+
+.analytics-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gojet-space-4);
+}
+
+.analytics-page-header h1,
+.analytics-section-heading h2,
+.analytics-dimension-card h3,
+.analytics-provenance-card h3 {
+  margin-block: 0;
+}
+
+.analytics-page-header p,
+.analytics-section-heading p,
+.analytics-filter-card p,
+.analytics-provenance-card p {
+  margin-block: var(--gojet-space-1) 0;
+}
+
+.analytics-eyebrow {
+  margin: 0;
+  color: var(--gojet-text-muted);
+  font-size: var(--gojet-type-product-meta-size);
+  font-weight: var(--gojet-type-label-weight);
+  letter-spacing: 0.08em;
+}
+
+.analytics-filter-card,
+.analytics-report,
+.analytics-filter-form,
+.analytics-dimensions,
+.analytics-provenance-card dl,
+.analytics-buckets-card,
+.analytics-dimension-card,
+.analytics-provenance-card {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+.analytics-filter-card,
+.analytics-report {
+  display: grid;
+  gap: var(--gojet-space-4);
+}
+
+.analytics-filter-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--gojet-space-3);
+}
+
+.analytics-filter-form .gj-button {
+  justify-self: start;
+}
+
+.analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+.analytics-metric-card {
+  display: grid;
+  gap: var(--gojet-space-2);
+  min-inline-size: 0;
+  box-sizing: border-box;
+}
+
+.analytics-metric-card span,
+.analytics-muted,
+.analytics-section-heading p,
+.analytics-provenance-card dt {
+  color: var(--gojet-text-muted);
+}
+
+.analytics-metric-card strong {
+  font-size: var(--gojet-type-product-title-size);
+  line-height: var(--gojet-type-product-title-line-height);
+}
+
+.analytics-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gojet-space-3);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+.analytics-state-label {
+  flex: 0 0 auto;
+  padding: var(--gojet-space-1) var(--gojet-space-2);
+  border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+  border-radius: var(--gojet-radius-pill);
+  background: var(--gojet-surface-muted);
+  color: var(--gojet-text-secondary);
+  font-size: var(--gojet-type-product-meta-size);
+  font-weight: var(--gojet-type-label-weight);
+  box-sizing: border-box;
+}
+
+.analytics-buckets-card,
+.analytics-dimension-card,
+.analytics-provenance-card {
+  display: grid;
+  gap: var(--gojet-space-3);
+}
+
+.analytics-table-region {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow: auto;
+  border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+  border-radius: var(--gojet-radius-md);
+  box-sizing: border-box;
+}
+
+.analytics-table {
+  inline-size: 100%;
+  min-inline-size: 28rem;
+  border-collapse: collapse;
+  box-sizing: border-box;
+}
+
+.analytics-table caption,
+.analytics-table th,
+.analytics-table td {
+  padding: var(--gojet-space-3);
+  text-align: start;
+  box-sizing: border-box;
+}
+
+.analytics-table th,
+.analytics-table td {
+  border-block-end: var(--gojet-border-width-default) solid var(--gojet-border-divider);
+}
+
+.analytics-table th {
+  background: var(--gojet-surface-muted);
+}
+
+.analytics-dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+}
+
+.analytics-dimension-list {
+  display: grid;
+  gap: var(--gojet-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.analytics-dimension-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gojet-space-3);
+  min-inline-size: 0;
+}
+
+.analytics-dimension-list li span {
+  overflow-wrap: anywhere;
+}
+
+.analytics-provenance-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gojet-space-3);
+  margin: 0;
+}
+
+.analytics-provenance-card dl div {
+  display: grid;
+  gap: var(--gojet-space-1);
+  min-inline-size: 0;
+  box-sizing: border-box;
+}
+
+.analytics-provenance-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.analytics-loading {
+  min-block-size: 8rem;
+  display: grid;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* Link Detail has nine tabs. The tab strip and measured-data table own their
+   horizontal scrolling; neither is allowed to widen the Workspace page root. */
+.links-page .gj-tabs {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  box-sizing: border-box;
+}
+
+.links-page .gj-tab {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.links-form,
+.links-tab-panel,
+.links-tab-panel .analytics-report,
+.links-tab-panel .analytics-report > * {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+.workspace-shell[data-viewport="tablet"] .analytics-filter-form,
+.workspace-shell[data-viewport="tablet"] .analytics-metrics,
+.workspace-shell[data-viewport="tablet"] .analytics-dimensions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-page-header,
+.workspace-shell[data-viewport="mobile"] .analytics-section-heading {
+  display: grid;
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-filter-form,
+.workspace-shell[data-viewport="mobile"] .analytics-metrics,
+.workspace-shell[data-viewport="mobile"] .analytics-dimensions,
+.workspace-shell[data-viewport="mobile"] .analytics-provenance-card dl {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-filter-form .gj-button {
+  inline-size: 100%;
+}
+
+.workspace-shell[data-viewport="mobile"] .analytics-state-label {
+  justify-self: start;
+}

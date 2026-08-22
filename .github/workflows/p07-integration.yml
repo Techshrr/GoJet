@@ -1,0 +1,249 @@
+name: P07 Real Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/analytics/**'
+      - 'internal/links/**'
+      - 'internal/domains/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'services/analyticsworker/**'
+      - 'services/analyticsreconciler/**'
+      - 'migrations/**'
+      - 'scripts/p07/**'
+      - 'docs/operations/analytics-recovery.md'
+      - 'artifacts/v10/P07/**'
+      - '.github/workflows/p07-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-integration:
+    name: P07 real Redis MySQL analytics tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_TEST_ROUTING_HEADERS: '1'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_REDIRECTENGINE_ADDR: 127.0.0.1:18080
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_REDIS_HOST: 127.0.0.1
+      GOJET_TEST_REDIS_PORT: '6379'
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_REDIRECT_URL: http://127.0.0.1:18080
+      GOJET_TEST_ANALYTICS_WORKER_BIN: /tmp/gojet-p07/analyticsworker
+      GOJET_TEST_ANALYTICS_RECONCILER_BIN: /tmp/gojet-p07/analyticsreconciler
+      GOJET_TEST_ANALYTICS_FIXTURE_BIN: /tmp/gojet-p07/analyticsfixture
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install integration clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify dependency closure and P07 drivers
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          python3 -m py_compile scripts/p07/integration.py
+          go test ./internal/analytics ./internal/links ./internal/domains
+          go vet ./internal/analytics ./internal/links ./internal/domains ./services/analyticsworker/cmd/worker ./services/analyticsreconciler/cmd/reconciler ./scripts/p07/fixture_driver
+
+      - name: Apply P05 P06 and P07 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000003_analytics.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'analytics_%'" | sort
+
+      - name: Build native P07 service binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p07 artifacts/v10/P07/runtime artifacts/v10/P07/results
+          go build -trimpath -o /tmp/gojet-p07/platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p07/redirectengine ./services/redirectengine/cmd/server
+          go build -trimpath -o /tmp/gojet-p07/analyticsworker ./services/analyticsworker/cmd/worker
+          go build -trimpath -o /tmp/gojet-p07/analyticsreconciler ./services/analyticsreconciler/cmd/reconciler
+          go build -trimpath -o /tmp/gojet-p07/analyticsfixture ./scripts/p07/fixture_driver
+          file /tmp/gojet-p07/platformapi /tmp/gojet-p07/redirectengine /tmp/gojet-p07/analyticsworker /tmp/gojet-p07/analyticsreconciler /tmp/gojet-p07/analyticsfixture
+
+      - name: Start native platform and redirect services
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p07/platformapi > artifacts/v10/P07/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P07/runtime/platformapi.pid
+          /tmp/gojet-p07/redirectengine > artifacts/v10/P07/runtime/redirectengine.log 2>&1 &
+          echo $! > artifacts/v10/P07/runtime/redirectengine.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null && curl -fsS -o /dev/null http://127.0.0.1:18080/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P07 platform/redirect services did not become healthy' >&2
+          cat artifacts/v10/P07/runtime/platformapi.log || true
+          cat artifacts/v10/P07/runtime/redirectengine.log || true
+          exit 1
+
+      - name: Run P07-T001 through P07-T017 real evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" python3 scripts/p07/integration.py --case all
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          head = os.environ["EXACT_HEAD"]
+          root = Path("artifacts/v10/P07/results")
+          errors = []
+          for number in range(1, 18):
+              case_id = f"P07-T{number:03d}"
+              path = root / f"{case_id}.json"
+              if not path.is_file():
+                  errors.append(f"missing {path}")
+                  continue
+              data = json.loads(path.read_text(encoding="utf-8"))
+              if data.get("implementation_commit") != head:
+                  errors.append(f"{case_id} implementation_commit={data.get('implementation_commit')} expected={head}")
+              if data.get("status") != "PASS":
+                  errors.append(f"{case_id} status={data.get('status')}")
+              if data.get("errors") != []:
+                  errors.append(f"{case_id} errors={data.get('errors')}")
+          if errors:
+              raise SystemExit("\n".join(errors))
+          print(f"P07-T001..T017 evidence PASS and bound to exact head {head}")
+          PY
+
+      - name: Capture analytics runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P07/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT event_id,workspace_id,link_id,click_sequence,occurred_at,country_code,device,language,source_hostname,campaign_id,published_at,published_stream_id,publish_attempts,last_publish_error FROM analytics_outbox ORDER BY created_at,event_id" \
+            > artifacts/v10/P07/runtime/mysql-outbox.tsv 2> artifacts/v10/P07/runtime/mysql-outbox.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT event_id,workspace_id,link_id,click_sequence,occurred_at,country_code,device,language,source_hostname,campaign_id,stream_id,consumed_at FROM analytics_events ORDER BY occurred_at,event_id" \
+            > artifacts/v10/P07/runtime/mysql-events.tsv 2> artifacts/v10/P07/runtime/mysql-events.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,link_id,bucket_start,country_code,device,language,source_hostname,campaign_id,clicks FROM analytics_hourly_aggregates ORDER BY bucket_start,link_id" \
+            > artifacts/v10/P07/runtime/mysql-hourly.tsv 2> artifacts/v10/P07/runtime/mysql-hourly.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,status,data_through_at,retention_days,state_reason,updated_at FROM analytics_workspace_state ORDER BY workspace_id" \
+            > artifacts/v10/P07/runtime/mysql-workspace-state.tsv 2> artifacts/v10/P07/runtime/mysql-workspace-state.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,conversion_id,campaign_id,link_id,occurred_at FROM analytics_conversions ORDER BY id" \
+            > artifacts/v10/P07/runtime/mysql-conversions.tsv 2> artifacts/v10/P07/runtime/mysql-conversions.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT run_id,scope,source_event_total,aggregate_total_before,aggregate_total_after,repaired,created_at FROM analytics_reconciliation_runs ORDER BY id" \
+            > artifacts/v10/P07/runtime/mysql-reconciliation.tsv 2> artifacts/v10/P07/runtime/mysql-reconciliation.err
+          redis-cli -h 127.0.0.1 -p 6379 --raw XLEN gojet:analytics:clicks:v1 > artifacts/v10/P07/runtime/redis-stream-length.txt 2>&1
+          redis-cli -h 127.0.0.1 -p 6379 --raw XINFO GROUPS gojet:analytics:clicks:v1 > artifacts/v10/P07/runtime/redis-stream-groups.txt 2>&1
+          sha256sum /tmp/gojet-p07/platformapi /tmp/gojet-p07/redirectengine /tmp/gojet-p07/analyticsworker /tmp/gojet-p07/analyticsreconciler /tmp/gojet-p07/analyticsfixture > artifacts/v10/P07/runtime/native-binaries.sha256 2>/dev/null
+          ps -o pid=,comm= -p "$(cat artifacts/v10/P07/runtime/platformapi.pid 2>/dev/null)" "$(cat artifacts/v10/P07/runtime/redirectengine.pid 2>/dev/null)" > artifacts/v10/P07/runtime/processes.txt 2>/dev/null
+          cp docs/operations/analytics-recovery.md artifacts/v10/P07/runtime/analytics-recovery.md
+          true
+
+      - name: Stop native P07 services
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P07/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P07/runtime/redirectengine.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload P07 real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p07-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P07/results/P07-T001.json
+            artifacts/v10/P07/results/P07-T002.json
+            artifacts/v10/P07/results/P07-T003.json
+            artifacts/v10/P07/results/P07-T004.json
+            artifacts/v10/P07/results/P07-T005.json
+            artifacts/v10/P07/results/P07-T006.json
+            artifacts/v10/P07/results/P07-T007.json
+            artifacts/v10/P07/results/P07-T008.json
+            artifacts/v10/P07/results/P07-T009.json
+            artifacts/v10/P07/results/P07-T010.json
+            artifacts/v10/P07/results/P07-T011.json
+            artifacts/v10/P07/results/P07-T012.json
+            artifacts/v10/P07/results/P07-T013.json
+            artifacts/v10/P07/results/P07-T014.json
+            artifacts/v10/P07/results/P07-T015.json
+            artifacts/v10/P07/results/P07-T016.json
+            artifacts/v10/P07/results/P07-T017.json
+            artifacts/v10/P07/runtime/
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,217 @@
+name: P07 Workspace Analytics Browser
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/analytics/**'
+      - 'internal/links/**'
+      - 'services/platformapi/**'
+      - 'migrations/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p07/**'
+      - 'artifacts/v10/P07/**'
+      - '.github/workflows/p07-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p07-workspace-analytics-browser:
+    name: P07 real Workspace Analytics browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_WORKSPACE_ID: ws-p07-browser
+      GOJET_TEST_ACTOR_ID: p07-browser-owner
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      VITE_GOJET_TEST_AUTH_ENABLED: '1'
+      VITE_GOJET_TEST_WORKSPACE_ID: ws-p07-browser
+      VITE_GOJET_TEST_ACTOR_ID: p07-browser-owner
+      VITE_GOJET_TEST_WORKSPACE_ROLE: owner
+      VITE_GOJET_TEST_ANALYTICS_PERMISSION: allow
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install MySQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify browser dependency closure
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go test ./internal/analytics ./internal/links ./services/platformapi/cmd/server
+          go vet ./internal/analytics ./internal/links
+          pnpm install --frozen-lockfile
+          node --check scripts/p07/browser.mjs
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+
+      - name: Apply P05 P06 and P07 migrations
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000001_links_vertical_slice.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000002_custom_domains.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < migrations/000003_analytics.sql
+
+      - name: Build native platform API and Workspace
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p07-browser artifacts/v10/P07/runtime artifacts/v10/P07/results artifacts/v10/P07/captures artifacts/v10/P07/browser artifacts/v10/gates/G9
+          go build -trimpath -o /tmp/gojet-p07-browser/platformapi ./services/platformapi/cmd/server
+          pnpm --filter @gojet/workspace build
+
+      - name: Start native platform API and Workspace preview
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p07-browser/platformapi > artifacts/v10/P07/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P07/runtime/browser-platformapi.pid
+          nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 > artifacts/v10/P07/runtime/browser-workspace.log 2>&1 &
+          echo $! > artifacts/v10/P07/runtime/browser-workspace.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:4174/app/analytics >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P07 browser dependencies did not become healthy' >&2
+          cat artifacts/v10/P07/runtime/browser-platformapi.log || true
+          cat artifacts/v10/P07/runtime/browser-workspace.log || true
+          exit 1
+
+      - name: Run P07-T018 and P07-T019 browser evidence
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p07/browser.mjs --case all
+          EXACT_HEAD="$exact_head" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const head = process.env.EXACT_HEAD;
+          const errors = [];
+          for (const number of [18, 19]) {
+            const caseId = `P07-T${String(number).padStart(3, '0')}`;
+            const data = JSON.parse(readFileSync(`artifacts/v10/P07/results/${caseId}.json`, 'utf8'));
+            if (data.implementation_commit !== head) errors.push(`${caseId} implementation_commit=${data.implementation_commit} expected=${head}`);
+            if (data.status !== 'PASS') errors.push(`${caseId} status=${data.status} expected=PASS`);
+            if (!Array.isArray(data.errors) || data.errors.length) errors.push(`${caseId} errors=${JSON.stringify(data.errors)}`);
+          }
+          const g9 = JSON.parse(readFileSync('artifacts/v10/gates/G9/p07-analytics.json', 'utf8'));
+          if (g9.implementation_commit !== head || g9.status !== 'PASS') errors.push(`G9 P07 evidence is not PASS on exact head ${head}`);
+          if (errors.length) throw new Error(errors.join('\n'));
+          console.log(`P07-T018..T019 and P07 G9 evidence PASS on exact head ${head}`);
+          NODE
+
+      - name: Capture persisted analytics browser evidence
+        if: always()
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P07/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,status,data_through_at,retention_days,state_reason,updated_at FROM analytics_workspace_state WHERE workspace_id='ws-p07-browser'" \
+            > artifacts/v10/P07/runtime/browser-workspace-state.tsv 2> artifacts/v10/P07/runtime/browser-workspace-state.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT event_id,workspace_id,link_id,click_sequence,occurred_at,country_code,device,language,source_hostname,campaign_id FROM analytics_events WHERE workspace_id='ws-p07-browser' ORDER BY occurred_at,event_id" \
+            > artifacts/v10/P07/runtime/browser-events.tsv 2> artifacts/v10/P07/runtime/browser-events.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,conversion_id,campaign_id,link_id,occurred_at FROM analytics_conversions WHERE workspace_id='ws-p07-browser' ORDER BY id" \
+            > artifacts/v10/P07/runtime/browser-conversions.tsv 2> artifacts/v10/P07/runtime/browser-conversions.err
+          find frontend/apps/workspace/dist -type f -printf '%P\t%s\n' | sort > artifacts/v10/P07/runtime/browser-workspace-build-files.tsv 2>/dev/null
+          sha256sum /tmp/gojet-p07-browser/platformapi > artifacts/v10/P07/runtime/browser-native-binaries.sha256 2>/dev/null
+
+      - name: Stop browser services
+        if: always()
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P07/runtime/browser-workspace.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P07/runtime/browser-platformapi.pid 2>/dev/null)" 2>/dev/null || true
+
+      - name: Upload P07 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p07-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P07/results/P07-T018.json
+            artifacts/v10/P07/results/P07-T019.json
+            artifacts/v10/P07/browser/
+            artifacts/v10/P07/captures/
+            artifacts/v10/P07/runtime/browser-*
+            artifacts/v10/gates/G9/p07-analytics.json
