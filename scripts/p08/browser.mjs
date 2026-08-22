@@ -4,9 +4,8 @@ import { chromium } from 'playwright-core';
 
 const root = process.cwd();
 const resultsDir = `${root}/artifacts/v10/P08/results`;
-const browserDir = `${root}/artifacts/v10/P08/browser`;
 const capturesDir = `${root}/artifacts/v10/P08/captures`;
-for (const path of [resultsDir, browserDir, capturesDir]) mkdirSync(path, { recursive: true });
+for (const path of [resultsDir, capturesDir]) mkdirSync(path, { recursive: true });
 
 const WORKSPACE_URL = process.env.GOJET_TEST_WORKSPACE_URL ?? 'http://127.0.0.1:4174';
 const PLATFORM_URL = process.env.GOJET_TEST_PLATFORM_URL ?? 'http://127.0.0.1:18081';
@@ -37,8 +36,10 @@ const expectedViewports = {
   mobile: { width: 390, height: 844 },
 };
 for (const name of Object.keys(expectedViewports)) {
-  if (viewports[name].width !== expectedViewports[name].width || viewports[name].height !== expectedViewports[name].height) {
-    throw new Error(`P08 canonical ${name} viewport drift: ${JSON.stringify(viewports[name])}`);
+  const actual = viewports[name];
+  const expected = expectedViewports[name];
+  if (actual.width !== expected.width || actual.height !== expected.height) {
+    throw new Error(`P08 canonical ${name} viewport drift: ${JSON.stringify(actual)}`);
   }
 }
 
@@ -69,7 +70,7 @@ function holdQRWriteLock(seconds = 3) {
     child.on('error', reject);
     child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`QR write lock exited ${code}: ${stderr}`)));
   });
-  return { child, done };
+  return { done };
 }
 
 function resetWorkspace() {
@@ -86,7 +87,8 @@ function resetWorkspace() {
 }
 function authHeaders() {
   return {
-    Accept: 'application/json', 'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
     'X-GoJet-Test-Actor': ACTOR,
     'X-GoJet-Test-Workspace': WORKSPACE,
     'X-GoJet-Test-Workspace-Role': 'owner',
@@ -112,18 +114,22 @@ async function createLink(code, destination = `https://destination.example/${cod
   assert(result.response.status === 201, `create Link failed: ${result.response.status} ${JSON.stringify(result.body)}`);
   return result.body;
 }
+function riskKey(link) { return `risk:link:${link.id}:${link.risk_fingerprint}`; }
 function setRisk(link, state, { stale = false, malformed = false } = {}) {
-  const key = `risk:link:${link.id}:${link.risk_fingerprint}`;
+  const key = riskKey(link);
   redis('DEL', key);
   if (malformed) { redis('SET', key, '{not-json', 'EX', '300'); return; }
   const now = Date.now();
   const checked = new Date(now - (stale ? 600_000 : 1_000));
   const validUntil = new Date(stale ? now - 1_000 : now + 300_000);
-  const payload = JSON.stringify({
-    schema_version: 1, decision: state, fingerprint: link.risk_fingerprint,
-    checked_at: checked.toISOString(), valid_until: validUntil.toISOString(), policy_version: 'p08-browser-v1',
-  });
-  redis('SET', key, payload, 'EX', '300');
+  redis('SET', key, JSON.stringify({
+    schema_version: 1,
+    decision: state,
+    fingerprint: link.risk_fingerprint,
+    checked_at: checked.toISOString(),
+    valid_until: validUntil.toISOString(),
+    policy_version: 'p08-browser-v1',
+  }), 'EX', '300');
 }
 async function createQR(link, label = `P08 QR ${link.code}`) {
   const result = await api(`/api/workspaces/${encodeURIComponent(WORKSPACE)}/qr-codes`, {
@@ -144,25 +150,45 @@ async function seedReady(code = 'browser-ready', label = 'Browser ready QR') {
 function diagnostics() { return { console_errors: [], page_errors: [], http_errors: [], request_failures: [] }; }
 function attachDiagnostics(page, report) {
   page.on('console', (message) => { if (message.type() === 'error') report.console_errors.push({ text: message.text(), location: message.location() }); });
-  page.on('pageerror', (error) => report.page_errors.push(String(error)));
+  page.on('pageerror', (error) => report.page_errors.push(String(error));
   page.on('response', (response) => {
     if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({ status: response.status(), url: response.url(), resourceType: response.request().resourceType() });
   });
-  page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() }));
+  page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() });
 }
-function unexpectedHTTP(report, allowed) {
-  return report.http_errors.filter((entry) => !allowed.some((rule) => rule.status === entry.status && entry.url.includes(rule.includes)));
+function allowedMatch(entry, rules) {
+  return rules.some((rule) => entry.url.includes(rule.includes) && (rule.status === undefined || entry.status === rule.status));
+}
+function assertDiagnostics(report, label, { allowedHttp = [], allowedFailures = [] } = {}) {
+  const unexpectedHttp = report.http_errors.filter((entry) => !allowedMatch(entry, allowedHttp));
+  const unexpectedConsole = report.console_errors.filter((entry) => {
+    const url = entry.location?.url ?? '';
+    return !allowedHttp.some((rule) => url.includes(rule.includes) && (rule.status === undefined || String(entry.text).includes(String(rule.status))));
+  });
+  const unexpectedFailures = report.request_failures.filter((entry) => !allowedFailures.some((part) => entry.url.includes(part)));
+  assert(unexpectedHttp.length === 0, `${label} unexpected HTTP errors: ${JSON.stringify(unexpectedHttp)}`);
+  assert(unexpectedConsole.length === 0, `${label} unexpected console errors: ${JSON.stringify(unexpectedConsole)}`);
+  assert(report.page_errors.length === 0, `${label} page errors: ${JSON.stringify(report.page_errors)}`);
+  assert(unexpectedFailures.length === 0, `${label} request failures: ${JSON.stringify(unexpectedFailures)}`);
 }
 function writeResult(caseId, status, details, errors = []) {
   writeFileSync(`${resultsDir}/${caseId}.json`, `${JSON.stringify({
-    node: 'P08', case_id: caseId, status, generated_at: new Date().toISOString(), implementation_commit: implementationCommit(),
+    node: 'P08',
+    case_id: caseId,
+    status,
+    generated_at: new Date().toISOString(),
+    implementation_commit: implementationCommit(),
     environment: {
-      browser: executablePath, workspace: WORKSPACE_URL, platformapi: PLATFORM_URL,
-      mysql: `${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`, redis: `${REDIS_HOST}:${REDIS_PORT}`,
+      browser: executablePath,
+      workspace: WORKSPACE_URL,
+      platformapi: PLATFORM_URL,
+      mysql: `${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`,
+      redis: `${REDIS_HOST}:${REDIS_PORT}`,
       canonical_viewports: viewports,
       authority: 'real built Workspace + native Go platformapi + real MySQL/Redis; no request interception or static browser fixture',
     },
-    details, errors,
+    details,
+    errors,
   }, null, 2)}\n`);
 }
 async function newPage(browser, viewport, options = {}) {
@@ -170,8 +196,41 @@ async function newPage(browser, viewport, options = {}) {
   const page = await context.newPage();
   return { context, page };
 }
-async function goto(page, path, waitUntil = 'networkidle') {
-  await page.goto(`${WORKSPACE_URL}${path}`, { waitUntil });
+async function goto(page, path, waitUntil = 'networkidle') { await page.goto(`${WORKSPACE_URL}${path}`, { waitUntil }); }
+async function waitPath(page, pattern) {
+  await page.waitForFunction((source) => new RegExp(source).test(location.pathname), pattern.source);
+}
+async function waitDetailState(page, expected) {
+  const section = page.locator('[data-page="qr-detail"]');
+  await section.waitFor();
+  await page.waitForFunction((state) => document.querySelector('[data-page="qr-detail"]')?.getAttribute('data-state') === state, expected);
+  assert(await section.getAttribute('data-state') === expected, `detail state expected ${expected}`);
+}
+async function ensureCreateOpen(page) {
+  const source = page.getByLabel('Source Link', { exact: true });
+  if (await source.isVisible()) return;
+  const trigger = page.getByRole('button', { name: 'Create QR', exact: true });
+  await trigger.waitFor();
+  await trigger.click();
+  await page.getByRole('heading', { name: 'Create QR', exact: true }).waitFor();
+  await source.waitFor();
+}
+function isCollectionPost(response) {
+  const url = new URL(response.url());
+  return response.request().method() === 'POST' && url.pathname === `/api/workspaces/${WORKSPACE}/qr-codes`;
+}
+async function createThroughUI(page, link, label) {
+  await ensureCreateOpen(page);
+  await page.getByLabel('Source Link', { exact: true }).selectOption(String(link.id));
+  await page.getByLabel('Label', { exact: true }).fill(label);
+  const submit = page.getByRole('button', { name: 'Create QR', exact: true });
+  const responsePromise = page.waitForResponse(isCollectionPost);
+  await submit.click();
+  const response = await responsePromise;
+  assert(response.status() === 201, `UI create returned ${response.status()}`);
+  await waitPath(page, /^\/app\/qr\/\d+$/);
+  await waitDetailState(page, 'ready');
+  return Number(new URL(page.url()).pathname.split('/').at(-1));
 }
 async function layoutEvidence(page) {
   return page.evaluate(() => {
@@ -206,27 +265,6 @@ function assertLayout(layout, label) {
   assert(layout.clipped_required_controls_or_text.length === 0, `${label} clipped required content: ${JSON.stringify(layout.clipped_required_controls_or_text)}`);
   assert(layout.unnamed_visible_controls.length === 0, `${label} unnamed controls: ${JSON.stringify(layout.unnamed_visible_controls)}`);
 }
-async function waitDetailState(page, expected) {
-  const section = page.locator('[data-page="qr-detail"]');
-  await section.waitFor();
-  await page.waitForFunction((state) => document.querySelector('[data-page="qr-detail"]')?.getAttribute('data-state') === state, expected);
-  assert(await section.getAttribute('data-state') === expected, `detail state expected ${expected}`);
-}
-async function showCreate(page) {
-  const button = page.getByRole('button', { name: 'Create QR', exact: true }).first();
-  if (await button.isVisible()) await button.click();
-  await page.getByRole('heading', { name: 'Create QR', exact: true }).waitFor();
-  await page.getByLabel('Source Link', { exact: true }).waitFor();
-}
-async function createThroughUI(page, link, label) {
-  await showCreate(page);
-  await page.getByLabel('Source Link', { exact: true }).selectOption(String(link.id));
-  await page.getByLabel('Label', { exact: true }).fill(label);
-  await page.getByRole('button', { name: 'Create QR', exact: true }).last().click();
-  await page.waitForURL(/\/app\/qr\/\d+$/);
-  await waitDetailState(page, 'ready');
-  return Number(new URL(page.url()).pathname.split('/').at(-1));
-}
 
 async function caseT011(browser) {
   const observed = {};
@@ -241,6 +279,7 @@ async function caseT011(browser) {
     await page.getByRole('status').filter({ hasText: 'Loading QR resources…' }).waitFor();
     observed.loading = { visible: true, route: new URL(page.url()).pathname };
     await lock.done;
+    await page.getByRole('heading', { name: 'No QR codes yet', exact: true }).waitFor();
     await context.close();
   }
 
@@ -252,21 +291,28 @@ async function caseT011(browser) {
     await goto(page, '/app/qr');
     await page.getByRole('heading', { name: 'No QR codes yet', exact: true }).waitFor();
     observed.empty = { visible: true };
-    await showCreate(page);
+    await ensureCreateOpen(page);
     observed.create_form = { source_picker: true, raw_destination_input_absent: await page.locator('input[type="url"]').count() === 0 };
     await page.getByLabel('Source Link', { exact: true }).selectOption(String(createLinkFixture.id));
     await page.getByLabel('Label', { exact: true }).fill('T011 created through UI');
     const lock = holdQRWriteLock(3);
     await sleep(250);
-    const createButton = page.getByRole('button', { name: 'Create QR', exact: true }).last();
-    await createButton.click();
-    await page.locator('button[aria-busy="true"]').filter({ hasText: 'Create QR' }).waitFor();
+    const requestPromise = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === `/api/workspaces/${WORKSPACE}/qr-codes`);
+    const responsePromise = page.waitForResponse(isCollectionPost);
+    await page.getByRole('button', { name: 'Create QR', exact: true }).click();
+    await requestPromise;
     assert(new URL(page.url()).pathname === '/app/qr', `fabricated success/navigation before server confirmation: ${page.url()}`);
     assert(mysql(`SELECT COUNT(*) FROM qr_codes WHERE workspace_id=${sqlLiteral(WORKSPACE)}`) === '0', 'QR row appeared before locked server transaction completed');
     await lock.done;
-    await page.waitForURL(/\/app\/qr\/\d+$/);
+    const response = await responsePromise;
+    assert(response.status() === 201, `T011 server-confirmed create status=${response.status()}`);
+    await waitPath(page, /^\/app\/qr\/\d+$/);
     await waitDetailState(page, 'ready');
-    observed.create_confirmed = { server_row_count: Number(mysql(`SELECT COUNT(*) FROM qr_codes WHERE workspace_id=${sqlLiteral(WORKSPACE)}`)), detail_ready: true };
+    observed.create_confirmed = {
+      server_confirmation_status: response.status(),
+      server_row_count: Number(mysql(`SELECT COUNT(*) FROM qr_codes WHERE workspace_id=${sqlLiteral(WORKSPACE)}`)),
+      detail_ready: true,
+    };
     await context.close();
   }
 
@@ -276,12 +322,15 @@ async function caseT011(browser) {
   {
     const { context, page } = await newPage(browser, viewports.desktop);
     await goto(page, '/app/qr');
-    await showCreate(page);
+    await ensureCreateOpen(page);
     await page.getByLabel('Source Link', { exact: true }).selectOption(String(reviewLink.id));
-    await page.getByRole('button', { name: 'Create QR', exact: true }).last().click();
+    const responsePromise = page.waitForResponse(isCollectionPost);
+    await page.getByRole('button', { name: 'Create QR', exact: true }).click();
+    const response = await responsePromise;
+    assert(response.status() === 409, `T011 review create status=${response.status()}`);
     await page.getByRole('status').filter({ hasText: 'under review' }).waitFor();
     assert(mysql(`SELECT COUNT(*) FROM qr_codes WHERE workspace_id=${sqlLiteral(WORKSPACE)}`) === '0', 'risk-denied create persisted QR');
-    observed.risk_denied = { message: 'under review', row_count: 0 };
+    observed.risk_denied = { message: 'under review', response_status: response.status(), row_count: 0 };
     await context.close();
   }
 
@@ -294,7 +343,8 @@ async function caseT011(browser) {
     const { context, page } = await newPage(browser, viewports.desktop);
     await goto(page, '/app/qr');
     await page.getByRole('status').filter({ hasText: 'quota reached' }).waitFor();
-    assert(await page.getByRole('button', { name: 'Create QR', exact: true }).isDisabled(), 'quota-reached create button must be disabled');
+    const createButton = page.getByRole('button', { name: 'Create QR', exact: true });
+    assert(await createButton.isDisabled(), 'quota-reached create button must be disabled');
     observed.quota_reached = { used: 2, limit: 2, create_disabled: true };
     await context.close();
   }
@@ -309,17 +359,17 @@ async function caseT011(browser) {
       await goto(page, '/app/qr', 'domcontentloaded');
       await page.getByRole('alert').filter({ hasText: 'QR resources could not be loaded' }).waitFor();
       observed.error = { visible: true };
+      await page.waitForTimeout(150);
       await context.close();
     } finally {
       mysql('RENAME TABLE qr_codes_p08_browser_error TO qr_codes');
     }
-    const expected = report.http_errors.filter((entry) => entry.status === 500 && entry.url.includes('/qr-codes'));
-    assert(expected.length >= 1, `T011 expected real QR API 500 not observed: ${JSON.stringify(report.http_errors)}`);
-    assert(unexpectedHTTP(report, [{ status: 500, includes: '/qr-codes' }]).length === 0, `T011 unexpected HTTP: ${JSON.stringify(report.http_errors)}`);
-    assert(report.page_errors.length === 0 && report.request_failures.length === 0, `T011 runtime errors: ${JSON.stringify(report)}`);
+    const allowedHttp = [{ status: 500, includes: `/api/workspaces/${WORKSPACE}/qr-codes` }];
+    assert(report.http_errors.some((entry) => allowedMatch(entry, allowedHttp)), `T011 expected real QR API 500 not observed: ${JSON.stringify(report.http_errors)}`);
+    assertDiagnostics(report, 'T011', { allowedHttp });
   }
 
-  return { observed_states: observed, route_backed: true, request_interception: false };
+  return { observed_states: observed, route_backed: true, server_confirmation_boundary: true, request_interception: false };
 }
 
 async function caseT012(browser) {
@@ -370,14 +420,19 @@ async function caseT012(browser) {
   setRisk(fixture.link, 'allow');
   await goto(page, `/app/qr/${fixture.qr.id}`);
   await waitDetailState(page, 'ready');
+  const deleteResponsePromise = page.waitForResponse((response) => response.request().method() === 'DELETE' && new URL(response.url()).pathname === `/api/workspaces/${WORKSPACE}/qr-codes/${fixture.qr.id}`);
   await page.getByRole('button', { name: 'Delete QR', exact: true }).click();
-  await page.waitForURL(/\/app\/qr$/);
+  const deleteResponse = await deleteResponsePromise;
+  assert(deleteResponse.status() === 204, `T012 delete status=${deleteResponse.status()}`);
+  await waitPath(page, /^\/app\/qr$/);
   assert(mysql(`SELECT deleted_at IS NOT NULL FROM qr_codes WHERE id=${Number(fixture.qr.id)}`) === '1', 'browser delete did not persist');
-  observed.delete_action = { persisted: true, navigation: '/app/qr' };
+  observed.delete_action = { persisted: true, response_status: deleteResponse.status(), navigation: '/app/qr' };
+
   await goto(page, `/app/qr/${fixture.qr.id}`, 'domcontentloaded');
   await waitDetailState(page, 'deleted');
   await page.getByRole('status').filter({ hasText: 'was deleted' }).waitFor();
   observed.deleted = { state: 'deleted' };
+  await page.waitForTimeout(150);
 
   const errorFixture = await seedReady('t012-error', 'T012 error QR');
   mysql('RENAME TABLE qr_codes TO qr_codes_p08_browser_error');
@@ -386,24 +441,36 @@ async function caseT012(browser) {
     await waitDetailState(page, 'error');
     await page.getByRole('alert').filter({ hasText: 'could not be loaded' }).waitFor();
     observed.error = { state: 'error' };
+    await page.waitForTimeout(250);
   } finally {
     mysql('RENAME TABLE qr_codes_p08_browser_error TO qr_codes');
   }
 
   const allowedHttp = [
-    { status: 410, includes: `/qr-codes/${fixture.qr.id}` },
-    { status: 500, includes: `/qr-codes/${errorFixture.qr.id}` },
+    { status: 410, includes: `/api/workspaces/${WORKSPACE}/qr-codes/${fixture.qr.id}` },
+    { status: 500, includes: `/api/workspaces/${WORKSPACE}/qr-codes/${errorFixture.qr.id}` },
   ];
-  const unexpected = unexpectedHTTP(report, allowedHttp);
-  assert(unexpected.length === 0, `T012 unexpected HTTP errors: ${JSON.stringify(unexpected)}`);
-  assert(report.page_errors.length === 0 && report.request_failures.length === 0, `T012 runtime errors: ${JSON.stringify(report)}`);
+  assert(report.http_errors.some((entry) => entry.status === 410), 'T012 deleted 410 was not observed');
+  assert(report.http_errors.some((entry) => entry.status === 500), 'T012 controlled error 500 was not observed');
+  assertDiagnostics(report, 'T012', {
+    allowedHttp,
+    allowedFailures: [`/api/workspaces/${WORKSPACE}/qr-codes/${fixture.qr.id}`],
+  });
+
   const capture = 'gjv10__workspace-qr-detail__p08-t012-ready__normal__light__en__desktop.png';
   setRisk(errorFixture.link, 'allow');
   await goto(page, `/app/qr/${errorFixture.qr.id}`);
   await waitDetailState(page, 'ready');
   await page.screenshot({ path: `${capturesDir}/${capture}`, fullPage: false });
   await context.close();
-  return { observed_states: observed, real_preview_download_delete: true, link_detail_same_authority: true, capture: `artifacts/v10/P08/captures/${capture}`, diagnostics: report };
+  return {
+    observed_states: observed,
+    real_preview_download_delete: true,
+    link_detail_same_authority: true,
+    expected_error_responses: { deleted_410: true, controlled_500: true },
+    capture: `artifacts/v10/P08/captures/${capture}`,
+    diagnostics: report,
+  };
 }
 
 async function caseT013(browser) {
@@ -415,15 +482,18 @@ async function caseT013(browser) {
     const report = diagnostics();
     const { context, page } = await newPage(browser, viewport);
     attachDiagnostics(page, report);
+
     await goto(page, '/app/qr');
     await page.getByRole('heading', { name: 'No QR codes yet', exact: true }).waitFor();
-    await showCreate(page);
+    await ensureCreateOpen(page);
     const listCreateLayout = await layoutEvidence(page);
     assertLayout(listCreateLayout, `T013 ${name} list/create`);
+
     const qrId = await createThroughUI(page, link, `T013 ${name} QR`);
     await page.getByRole('img', { name: /QR code for/ }).waitFor();
     const detailLayout = await layoutEvidence(page);
     assertLayout(detailLayout, `T013 ${name} detail/preview`);
+
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download PNG', exact: true }).click();
     const download = await downloadPromise;
@@ -438,23 +508,34 @@ async function caseT013(browser) {
     setRisk(link, 'allow');
     await goto(page, `/app/qr/${qrId}`);
     await waitDetailState(page, 'ready');
+    const deleteResponsePromise = page.waitForResponse((response) => response.request().method() === 'DELETE' && new URL(response.url()).pathname === `/api/workspaces/${WORKSPACE}/qr-codes/${qrId}`);
     await page.getByRole('button', { name: 'Delete QR', exact: true }).click();
-    await page.waitForURL(/\/app\/qr$/);
+    const deleteResponse = await deleteResponsePromise;
+    assert(deleteResponse.status() === 204, `T013 ${name} delete status=${deleteResponse.status()}`);
+    await waitPath(page, /^\/app\/qr$/);
     const afterDeleteLayout = await layoutEvidence(page);
     assertLayout(afterDeleteLayout, `T013 ${name} post-delete list`);
 
     const capture = `gjv10__workspace-qr__p08-t013-${name}__normal__light__en__${name}.png`;
     await page.screenshot({ path: `${capturesDir}/${capture}`, fullPage: false });
-    const unexpected = unexpectedHTTP(report, []);
-    assert(unexpected.length === 0, `T013 ${name} HTTP errors: ${JSON.stringify(unexpected)}`);
-    assert(report.console_errors.length === 0 && report.page_errors.length === 0 && report.request_failures.length === 0, `T013 ${name} runtime errors: ${JSON.stringify(report)}`);
+    assertDiagnostics(report, `T013 ${name}`);
     perViewport[name] = {
-      viewport, list_create: listCreateLayout, detail_preview: detailLayout, risk_denied: deniedLayout,
-      post_delete: afterDeleteLayout, download_filename: download.suggestedFilename(), capture: `artifacts/v10/P08/captures/${capture}`,
+      viewport,
+      list_create: listCreateLayout,
+      detail_preview: detailLayout,
+      risk_denied: deniedLayout,
+      post_delete: afterDeleteLayout,
+      download_filename: download.suggestedFilename(),
+      capture: `artifacts/v10/P08/captures/${capture}`,
     };
     await context.close();
   }
-  return { canonical_viewports: perViewport, root_body_overflow_zero: true, clipped_required_content: false, shared_workspace_responsive_system: true };
+  return {
+    canonical_viewports: perViewport,
+    root_body_overflow_zero: true,
+    clipped_required_content: false,
+    shared_workspace_responsive_system: true,
+  };
 }
 
 async function tabUntil(page, locator, max = 30) {
@@ -478,30 +559,36 @@ async function caseT014(browser) {
   const report = diagnostics();
   const { context, page } = await newPage(browser, { width: 320, height: 800 }, { reducedMotion: 'reduce' });
   attachDiagnostics(page, report);
+
   await goto(page, '/app/qr');
-  const headerCreate = page.getByRole('button', { name: 'Create QR', exact: true }).first();
+  const headerCreate = page.getByRole('button', { name: 'Create QR', exact: true });
   const tabsToCreate = await tabUntil(page, headerCreate, 40);
   const focus = await focusEvidence(headerCreate);
   assert(focus.active, 'Create QR is not active after keyboard traversal');
   assert(focus.outline_width !== '0px' || focus.box_shadow !== 'none', `Create QR has no visible focus treatment: ${JSON.stringify(focus)}`);
-  await page.keyboard.press('Enter');
+  await headerCreate.press('Enter');
   await page.getByRole('heading', { name: 'Create QR', exact: true }).waitFor();
 
   const source = page.getByLabel('Source Link', { exact: true });
   const tabsToSource = await tabUntil(page, source, 20);
   assert(await source.getAttribute('required') !== null, 'Source Link required semantics missing');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter');
+  await source.press('ArrowDown');
+  await source.press('Enter');
   assert(await source.inputValue() === String(link.id), `keyboard source selection failed: ${await source.inputValue()}`);
+
   const label = page.getByLabel('Label', { exact: true });
   const tabsToLabel = await tabUntil(page, label, 10);
   await page.keyboard.type('Keyboard QR');
-  const submit = page.getByRole('button', { name: 'Create QR', exact: true }).last();
+  const submit = page.getByRole('button', { name: 'Create QR', exact: true });
   const tabsToSubmit = await tabUntil(page, submit, 10);
-  await page.keyboard.press('Enter');
-  await page.waitForURL(/\/app\/qr\/\d+$/);
+  const createResponsePromise = page.waitForResponse(isCollectionPost);
+  await submit.press('Enter');
+  const createResponse = await createResponsePromise;
+  assert(createResponse.status() === 201, `T014 keyboard create status=${createResponse.status()}`);
+  await waitPath(page, /^\/app\/qr\/\d+$/);
   await waitDetailState(page, 'ready');
   const qrId = Number(new URL(page.url()).pathname.split('/').at(-1));
+
   const reflow = await layoutEvidence(page);
   assertLayout(reflow, 'T014 320px reflow');
   const reduced = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -512,35 +599,52 @@ async function caseT014(browser) {
   setRisk(link, 'review');
   await goto(page, `/app/qr/${qrId}`);
   await waitDetailState(page, 'source-link-review');
-  await page.getByRole('status').filter({ hasText: 'under safety review' }).waitFor();
+  const reviewMessage = page.getByRole('status').filter({ hasText: 'under safety review' });
+  await reviewMessage.waitFor();
   await page.getByText('Source under review', { exact: true }).waitFor();
-  const reviewRole = await page.getByRole('status').filter({ hasText: 'under safety review' }).getAttribute('role');
+  const reviewRole = await reviewMessage.getAttribute('role');
   assert(reviewRole === 'status', `review message role=${reviewRole}`);
 
   setRisk(link, 'block');
   await goto(page, `/app/qr/${qrId}`);
   await waitDetailState(page, 'source-link-block');
-  await page.getByRole('alert').filter({ hasText: 'not currently eligible for QR distribution' }).waitFor();
+  const blockMessage = page.getByRole('alert').filter({ hasText: 'not currently eligible for QR distribution' });
+  await blockMessage.waitFor();
   await page.getByText('Source blocked', { exact: true }).waitFor();
-  const blockRole = await page.getByRole('alert').filter({ hasText: 'not currently eligible for QR distribution' }).getAttribute('role');
+  const blockRole = await blockMessage.getAttribute('role');
   assert(blockRole === 'alert', `block message role=${blockRole}`);
 
   const deniedStatus = page.getByRole('status').filter({ hasText: 'QR artifact distribution is unavailable' });
   await deniedStatus.waitFor();
   const nonColor = {
-    review_text: 'Source under review', block_text: 'Source blocked',
-    review_role: reviewRole, block_role: blockRole, denied_artifact_status: await deniedStatus.textContent(),
+    review_text: 'Source under review',
+    block_text: 'Source blocked',
+    review_role: reviewRole,
+    block_role: blockRole,
+    denied_artifact_status: await deniedStatus.textContent(),
   };
-  assert(report.http_errors.length === 0, `T014 HTTP errors: ${JSON.stringify(report.http_errors)}`);
-  assert(report.console_errors.length === 0 && report.page_errors.length === 0 && report.request_failures.length === 0, `T014 runtime errors: ${JSON.stringify(report)}`);
+  assertDiagnostics(report, 'T014');
+
   const capture = 'gjv10__workspace-qr__p08-t014-keyboard-reflow__reduced__light__en__mobile.png';
   await page.screenshot({ path: `${capturesDir}/${capture}`, fullPage: false });
   await context.close();
   return {
-    keyboard: { tabs_to_header_create: tabsToCreate, tabs_to_source: tabsToSource, tabs_to_label: tabsToLabel, tabs_to_submit: tabsToSubmit, focus },
-    accessible_names_roles_values: true, required_source: true, status_and_alert_roles: true,
-    non_color_safety_meaning: nonColor, reduced_motion: reduced, reflow_320: reflow,
-    capture: `artifacts/v10/P08/captures/${capture}`, diagnostics: report,
+    keyboard: {
+      tabs_to_header_create: tabsToCreate,
+      tabs_to_source: tabsToSource,
+      tabs_to_label: tabsToLabel,
+      tabs_to_submit: tabsToSubmit,
+      focus,
+      server_confirmation_status: createResponse.status(),
+    },
+    accessible_names_roles_values: true,
+    required_source: true,
+    status_and_alert_roles: true,
+    non_color_safety_meaning: nonColor,
+    reduced_motion: reduced,
+    reflow_320: reflow,
+    capture: `artifacts/v10/P08/captures/${capture}`,
+    diagnostics: report,
   };
 }
 
