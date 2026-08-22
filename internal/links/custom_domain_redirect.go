@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/Techshrr/GoJet/internal/analytics"
 )
 
 const AccessClaimDomainUnavailable AccessClaimState = "domain_unavailable"
@@ -42,51 +44,74 @@ func (s *MySQLStore) GetByHostCodeForRedirect(ctx context.Context, hostname, cod
 	return link, nil
 }
 
-// ClaimRedirectAccessCurrentAuthority is the final authority gate immediately
-// before a redirect may emit Location. It re-locks the Link, requires the exact
-// version/fingerprint that received destination-risk allow, and re-checks
-// current custom-domain routing authority in the same transaction as the
-// click/one-time claim. A domain suspension that races the request therefore
-// cannot reuse an earlier successful domain check.
+// ClaimRedirectAccessCurrentAuthority is retained for P05/P06 compatibility.
+// P07 production wiring uses ClaimRedirectAccessCurrentAuthorityWithAnalytics,
+// which adds a durable analytics outbox record in the same transaction as the
+// accepted click claim.
 func (s *MySQLStore) ClaimRedirectAccessCurrentAuthority(ctx context.Context, id, expectedVersion uint64, expectedFingerprint string, now time.Time) (Link, AccessClaimState, error) {
+	current, state, _, err := s.claimRedirectAccessCurrentAuthority(ctx, id, expectedVersion, expectedFingerprint, now, nil)
+	return current, state, err
+}
+
+// ClaimRedirectAccessCurrentAuthorityWithAnalytics performs the exact P05/P06
+// final authority gate and, only after the click claim is allowed, writes one
+// deterministic analytics outbox event before the transaction commits. This
+// makes the accepted click and recoverable analytics intent atomic in MySQL.
+func (s *MySQLStore) ClaimRedirectAccessCurrentAuthorityWithAnalytics(
+	ctx context.Context,
+	id, expectedVersion uint64,
+	expectedFingerprint string,
+	now time.Time,
+	dimensions analytics.Dimensions,
+) (Link, AccessClaimState, *analytics.Event, error) {
+	return s.claimRedirectAccessCurrentAuthority(ctx, id, expectedVersion, expectedFingerprint, now, &dimensions)
+}
+
+func (s *MySQLStore) claimRedirectAccessCurrentAuthority(
+	ctx context.Context,
+	id, expectedVersion uint64,
+	expectedFingerprint string,
+	now time.Time,
+	dimensions *analytics.Dimensions,
+) (Link, AccessClaimState, *analytics.Event, error) {
 	if id == 0 || expectedVersion == 0 || !validateFingerprint(expectedFingerprint) || now.IsZero() {
-		return Link{}, AccessClaimConflict, ErrInvalidInput
+		return Link{}, AccessClaimConflict, nil, ErrInvalidInput
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		return Link{}, AccessClaimConflict, err
+		return Link{}, AccessClaimConflict, nil, err
 	}
 	defer tx.Rollback()
 
 	current, err := scanLink(tx.QueryRowContext(ctx, linkSelect+` WHERE id = ? FOR UPDATE`, id))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return Link{}, AccessClaimDeleted, nil
+			return Link{}, AccessClaimDeleted, nil, nil
 		}
-		return Link{}, AccessClaimConflict, err
+		return Link{}, AccessClaimConflict, nil, err
 	}
 	if current.Version != expectedVersion || current.RiskFingerprint != expectedFingerprint {
-		return current, AccessClaimConflict, nil
+		return current, AccessClaimConflict, nil, nil
 	}
 	if current.Status == "deleted" || current.DeletedAt != nil {
-		return current, AccessClaimDeleted, nil
+		return current, AccessClaimDeleted, nil, nil
 	}
 	if current.Status != "active" {
-		return current, AccessClaimPaused, nil
+		return current, AccessClaimPaused, nil, nil
 	}
 	if _, err := s.authorizeCustomDomainRoutingTx(ctx, tx, current.WorkspaceID, current.Hostname, current.DomainKind, now.UTC()); err != nil {
-		return current, AccessClaimDomainUnavailable, nil
+		return current, AccessClaimDomainUnavailable, nil, nil
 	}
 
 	now = now.UTC()
 	if current.ExpiresAt != nil && !current.ExpiresAt.After(now) {
-		return current, AccessClaimExpired, nil
+		return current, AccessClaimExpired, nil, nil
 	}
 	if current.ClickLimit != nil && current.ClickCount >= *current.ClickLimit {
-		return current, AccessClaimExhausted, nil
+		return current, AccessClaimExhausted, nil, nil
 	}
 	if current.OneTime && current.ClickCount >= 1 {
-		return current, AccessClaimExhausted, nil
+		return current, AccessClaimExhausted, nil, nil
 	}
 
 	result, err := tx.ExecContext(ctx, `
@@ -95,18 +120,39 @@ func (s *MySQLStore) ClaimRedirectAccessCurrentAuthority(ctx context.Context, id
 		current.ID, current.Version, expectedFingerprint,
 	)
 	if err != nil {
-		return Link{}, AccessClaimConflict, err
+		return Link{}, AccessClaimConflict, nil, err
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return Link{}, AccessClaimConflict, err
+		return Link{}, AccessClaimConflict, nil, err
 	}
 	if affected != 1 {
-		return current, AccessClaimConflict, nil
+		return current, AccessClaimConflict, nil, nil
 	}
 	current.ClickCount++
-	if err := tx.Commit(); err != nil {
-		return Link{}, AccessClaimConflict, err
+
+	var event *analytics.Event
+	if dimensions != nil {
+		created, eventErr := analytics.NewClickEvent(current.WorkspaceID, current.ID, current.ClickCount, now, *dimensions)
+		if eventErr != nil {
+			return Link{}, AccessClaimConflict, nil, eventErr
+		}
+		if eventErr := analytics.InsertOutboxTx(ctx, tx, created); eventErr != nil {
+			return Link{}, AccessClaimConflict, nil, eventErr
+		}
+		event = &created
 	}
-	return current, AccessClaimAllowed, nil
+
+	if err := tx.Commit(); err != nil {
+		return Link{}, AccessClaimConflict, nil, err
+	}
+	return current, AccessClaimAllowed, event, nil
+}
+
+func (s *MySQLStore) MarkAnalyticsOutboxPublished(ctx context.Context, eventID, streamID string, at time.Time) error {
+	return analytics.NewStore(s.db).MarkOutboxPublished(ctx, eventID, streamID, at)
+}
+
+func (s *MySQLStore) RecordAnalyticsOutboxPublishFailure(ctx context.Context, eventID string, publishErr error) error {
+	return analytics.NewStore(s.db).RecordOutboxPublishFailure(ctx, eventID, publishErr)
 }
