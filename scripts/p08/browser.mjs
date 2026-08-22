@@ -150,7 +150,7 @@ async function seedReady(code = 'browser-ready', label = 'Browser ready QR') {
 function diagnostics() { return { console_errors: [], page_errors: [], http_errors: [], request_failures: [] }; }
 function attachDiagnostics(page, report) {
   page.on('console', (message) => { if (message.type() === 'error') report.console_errors.push({ text: message.text(), location: message.location() }); });
-  page.on('pageerror', (error) => report.page_errors.push(String(error));
+  page.on('pageerror', (error) => report.page_errors.push(String(error)));
   page.on('response', (response) => {
     if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({ status: response.status(), url: response.url(), resourceType: response.request().resourceType() });
   });
