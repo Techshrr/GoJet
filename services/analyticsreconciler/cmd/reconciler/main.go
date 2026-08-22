@@ -105,6 +105,14 @@ func runCycle(ctx context.Context, store *analytics.Store, publisher *analytics.
 	if err != nil {
 		return fmt.Errorf("read authoritative totals: %w", err)
 	}
+	complete := recovery.Failed == 0 && outbox == consumed && consumed == aggregate
+	reason := "backlog_or_mismatch"
+	if complete {
+		reason = "reconciled"
+	}
+	if err := store.RefreshWorkspaceCompleteness(ctx, complete, reason); err != nil {
+		return fmt.Errorf("refresh workspace completeness: %w", err)
+	}
 	logger.Info("analytics reconciliation cycle",
 		"run_id", reconciliation.RunID,
 		"outbox_pending", recovery.Pending,
@@ -117,6 +125,7 @@ func runCycle(ctx context.Context, store *analytics.Store, publisher *analytics.
 		"accepted_outbox_total", outbox,
 		"consumed_event_total", consumed,
 		"aggregate_total", aggregate,
+		"workspace_complete", complete,
 	)
 	return nil
 }
