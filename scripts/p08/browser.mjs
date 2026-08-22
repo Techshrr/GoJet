@@ -593,8 +593,14 @@ async function caseT014(browser) {
   const source = page.getByLabel('Source Link', { exact: true });
   const tabsToSource = await tabUntil(page, source, 20);
   assert(await source.getAttribute('required') !== null, 'Source Link required semantics missing');
+  const sourceOptions = await source.locator('option').evaluateAll((options) => options.map((option) => option.value));
+  assert(sourceOptions.includes(String(link.id)), `keyboard source option missing: ${JSON.stringify(sourceOptions)}`);
+  await source.press('Home');
   await source.press('ArrowDown');
-  await source.press('Enter');
+  await page.waitForFunction(
+    (expected) => document.querySelector('#qr-source-link')?.value === expected,
+    String(link.id),
+  );
   assert(await source.inputValue() === String(link.id), `keyboard source selection failed: ${await source.inputValue()}`);
 
   const label = page.getByLabel('Label', { exact: true });
