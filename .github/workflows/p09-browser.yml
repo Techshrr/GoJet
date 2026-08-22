@@ -1,0 +1,347 @@
+name: P09 Workspace Files Browser
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/files/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'installer/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p09/**'
+      - 'artifacts/v10/P09/**'
+      - '.github/workflows/p09-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p09-workspace-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: P09 real Files Workspace Admin Installer browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ANALYTICS_ENABLED: '0'
+      GOJET_QR_WORKSPACE_QUOTA: '2'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_FILES_ENABLED: '1'
+      GOJET_FILE_WORKSPACE_MAX_FILES: '5'
+      GOJET_FILE_WORKSPACE_MAX_BYTES: '1048576'
+      GOJET_FILE_MAX_UPLOAD_BYTES: '65536'
+      GOJET_FILE_STORAGE_ROOT: /tmp/gojet-p09-browser/storage
+      GOJET_FILE_TYPE_ALLOWLIST: txt=text/plain
+      GOJET_FILE_PUBLIC_AUTH_SECRET: p09-browser-only-secret-0123456789abcdef
+      GOJET_CLAMAV_NETWORK: tcp
+      GOJET_CLAMAV_ADDRESS: 127.0.0.1:3310
+      GOJET_CLAMAV_DIAL_TIMEOUT: 1s
+      GOJET_CLAMAV_SCAN_TIMEOUT: 15s
+      GOJET_CLAMAV_MAX_SIGNATURE_AGE: 72h
+      GOJET_FILE_PREFLIGHT_BIN: /tmp/gojet-p09-browser/filepreflight
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_ADMIN_URL: http://127.0.0.1:4175
+      GOJET_TEST_INSTALL_URL: http://127.0.0.1:4176
+      GOJET_TEST_INSTALL_FAULT_URL: http://127.0.0.1:4177
+      GOJET_TEST_WORKSPACE_ID: ws-p09-browser
+      GOJET_TEST_ACTOR_ID: p09-browser-owner
+      GOJET_P09_FILEWORKER: /tmp/gojet-p09-browser/fileworker
+      GOJET_P09_REAL_CLAMD_ADDRESS: 127.0.0.1:3310
+      GOJET_P09_FAULT_SERVER: scripts/p09/clamd_fault_server.py
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      VITE_GOJET_TEST_AUTH_ENABLED: '1'
+      VITE_GOJET_TEST_WORKSPACE_ID: ws-p09-browser
+      VITE_GOJET_TEST_ACTOR_ID: p09-browser-owner
+      VITE_GOJET_TEST_WORKSPACE_ROLE: owner
+      VITE_GOJET_TEST_ADMIN_ROLE: admin
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install native browser dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            default-mysql-client redis-tools php-cli clamav clamav-daemon clamav-freshclam
+          mysql --version
+          redis-cli --version
+          php --version
+          clamd --version
+
+      - name: Refresh signatures and start real clamd
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p09-browser artifacts/v10/P09/browser artifacts/v10/P09/captures artifacts/v10/P09/runtime artifacts/v10/P09/clamav
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket 2>/dev/null || true
+          refreshed=0
+          for attempt in 1 2 3; do
+            if sudo freshclam --stdout 2>&1 | tee "artifacts/v10/P09/clamav/browser-freshclam-attempt-${attempt}.log"; then
+              refreshed=1
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [ "$refreshed" -ne 1 ]; then
+            echo 'freshclam did not refresh during this run; checking installed signatures' >&2
+          fi
+          test -n "$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)"
+          cat > /tmp/gojet-p09-browser/clamd.conf <<'EOF'
+          Foreground true
+          TCPSocket 3310
+          TCPAddr 127.0.0.1
+          DatabaseDirectory /var/lib/clamav
+          LogTime true
+          LogFile /tmp/gojet-p09-browser/clamd.log
+          PidFile /tmp/gojet-p09-browser/clamd.pid
+          MaxFileSize 100M
+          MaxScanSize 100M
+          StreamMaxLength 100M
+          EOF
+          clamd --config-file=/tmp/gojet-p09-browser/clamd.conf > artifacts/v10/P09/clamav/browser-clamd-stdout.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-clamd.pid
+          python3 - <<'PY'
+          import socket, time
+          deadline = time.monotonic() + 30
+          last = None
+          while time.monotonic() < deadline:
+              try:
+                  with socket.create_connection(('127.0.0.1', 3310), timeout=1) as sock:
+                      sock.sendall(b'zVERSION\0')
+                      data = sock.recv(4096)
+                      if data:
+                          print(data.rstrip(b'\0').decode('utf-8', 'replace'))
+                          open('artifacts/v10/P09/clamav/browser-version.txt', 'wb').write(data.rstrip(b'\0') + b'\n')
+                          raise SystemExit(0)
+              except OSError as exc:
+                  last = exc
+                  time.sleep(1)
+          raise SystemExit(f'clamd did not become ready: {last}')
+          PY
+
+      - name: Verify browser dependency closure
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          pnpm install --frozen-lockfile
+          for script in scripts/p09/browser*.mjs; do node --check "$script"; done
+          python3 -m py_compile scripts/p09/clamd_fault_server.py scripts/p09/validate_contract.py
+          go test ./internal/files ./internal/links ./services/platformapi/cmd/server
+          go vet ./internal/files ./internal/links ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/platformapi/cmd/filepreflight
+          php -l installer/public/index.php
+          php -l installer/src/FilePreflight.php
+          php -l installer/src/Shell.php
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+          pnpm --filter @gojet/admin typecheck
+
+      - name: Apply P05 through P09 migrations
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < "$migration"
+          done
+
+      - name: Build native services and route-backed applications
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p09-browser/platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p09-browser/fileworker ./services/platformapi/cmd/fileworker
+          go build -trimpath -o /tmp/gojet-p09-browser/filepreflight ./services/platformapi/cmd/filepreflight
+          pnpm --filter @gojet/workspace build
+          pnpm --filter @gojet/admin build
+          sha256sum \
+            /tmp/gojet-p09-browser/platformapi \
+            /tmp/gojet-p09-browser/fileworker \
+            /tmp/gojet-p09-browser/filepreflight \
+            > artifacts/v10/P09/runtime/browser-native-binaries.sha256
+
+      - name: Start platform Workspace Admin and Installer surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p09-browser/platformapi > artifacts/v10/P09/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-platformapi.pid
+          nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 > artifacts/v10/P09/runtime/browser-workspace.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-workspace.pid
+          nohup pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4175 > artifacts/v10/P09/runtime/browser-admin.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-admin.pid
+          php -S 127.0.0.1:4176 installer/public/index.php > artifacts/v10/P09/runtime/browser-installer.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-installer.pid
+          GOJET_CLAMAV_ADDRESS=127.0.0.1:39998 php -S 127.0.0.1:4177 installer/public/index.php > artifacts/v10/P09/runtime/browser-installer-fault.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/browser-installer-fault.pid
+          for attempt in $(seq 1 60); do
+            fault_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4177/install/health || true)"
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:4174/app/files >/dev/null \
+              && curl -fsS http://127.0.0.1:4175/admin/platform/storage >/dev/null \
+              && curl -fsS http://127.0.0.1:4176/install/environment >/dev/null \
+              && [ "$fault_status" = "503" ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P09 browser dependencies did not become healthy' >&2
+          cat artifacts/v10/P09/runtime/browser-platformapi.log || true
+          cat artifacts/v10/P09/runtime/browser-workspace.log || true
+          cat artifacts/v10/P09/runtime/browser-admin.log || true
+          cat artifacts/v10/P09/runtime/browser-installer.log || true
+          cat artifacts/v10/P09/runtime/browser-installer-fault.log || true
+          exit 1
+
+      - name: Run P09-T021 through P09-T025 browser evidence
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p09/browser.mjs --case all
+
+      - name: Verify exact-head P09-T021 through P09-T025 evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const head = process.env.EXACT_HEAD;
+          const errors = [];
+          for (let number = 21; number <= 25; number += 1) {
+            const caseId = `P09-T${String(number).padStart(3, '0')}`;
+            const path = `artifacts/v10/P09/browser/${caseId}.json`;
+            let data;
+            try { data = JSON.parse(readFileSync(path, 'utf8')); }
+            catch (error) { errors.push(`${caseId} missing/invalid evidence: ${error}`); continue; }
+            if (data.implementation_commit !== head) errors.push(`${caseId} implementation_commit=${data.implementation_commit} expected=${head}`);
+            if (data.status !== 'PASS') errors.push(`${caseId} status=${data.status}`);
+            if (!Array.isArray(data.errors) || data.errors.length) errors.push(`${caseId} errors=${JSON.stringify(data.errors)}`);
+          }
+          if (errors.length) throw new Error(errors.join('\n'));
+          console.log(`P09-T021..T025 browser evidence PASS on exact head ${head}`);
+          NODE
+
+      - name: Capture P09 browser runtime evidence
+        if: always()
+        run: |
+          set +e
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,public_slug,original_name,size_bytes,scan_state,scan_generation,published,download_count,created_at,updated_at,deleted_at FROM files ORDER BY id" \
+            > artifacts/v10/P09/runtime/browser-files.tsv 2> artifacts/v10/P09/runtime/browser-files.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,file_id,workspace_id,generation,status,COALESCE(worker_id,''),COALESCE(engine_version,''),COALESCE(signature_version,''),COALESCE(verdict_code,''),COALESCE(error_code,''),queued_at,claimed_at,completed_at FROM file_scan_attempts ORDER BY id" \
+            > artifacts/v10/P09/runtime/browser-file-scans.tsv 2> artifacts/v10/P09/runtime/browser-file-scans.err
+          find "$GOJET_FILE_STORAGE_ROOT" -printf '%m %u %g %p\n' 2>/dev/null | sort > artifacts/v10/P09/runtime/browser-storage-permissions.txt || true
+          find frontend/apps/workspace/dist -type f -printf 'workspace/%P\t%s\n' | sort > artifacts/v10/P09/runtime/browser-build-files.tsv 2>/dev/null
+          find frontend/apps/admin/dist -type f -printf 'admin/%P\t%s\n' | sort >> artifacts/v10/P09/runtime/browser-build-files.tsv 2>/dev/null
+          cp /tmp/gojet-p09-browser/clamd.log artifacts/v10/P09/clamav/browser-clamd.log 2>/dev/null || true
+          true
+
+      - name: Stop P09 browser services
+        if: always()
+        run: |
+          set +e
+          for file in \
+            browser-installer-fault.pid \
+            browser-installer.pid \
+            browser-admin.pid \
+            browser-workspace.pid \
+            browser-platformapi.pid \
+            browser-clamd.pid; do
+            kill "$(cat "artifacts/v10/P09/runtime/$file" 2>/dev/null)" 2>/dev/null || true
+          done
+          pkill -f 'clamd_fault_server.py' 2>/dev/null || true
+          pkill -f '/tmp/gojet-p09-browser/fileworker' 2>/dev/null || true
+          true
+
+      - name: Upload P09 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p09-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/v10/P09/browser/P09-T021.json
+            artifacts/v10/P09/browser/P09-T022.json
+            artifacts/v10/P09/browser/P09-T023.json
+            artifacts/v10/P09/browser/P09-T024.json
+            artifacts/v10/P09/browser/P09-T025.json
+            artifacts/v10/P09/captures/
+            artifacts/v10/P09/runtime/browser-*
+            artifacts/v10/P09/clamav/browser-*
