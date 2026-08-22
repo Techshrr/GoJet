@@ -7,7 +7,7 @@
 }
 
 .analytics-page-header {
-  display: flex;
+  display: grid;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gojet-space-4);
@@ -56,18 +56,19 @@
 
 .analytics-filter-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: var(--gojet-space-3);
 }
 
 .analytics-filter-form .gj-button {
   justify-self: start;
+  inline-size: 100%;
 }
 
 .analytics-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gojet-space-3);
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -94,7 +95,7 @@
 }
 
 .analytics-section-heading {
-  display: flex;
+  display: grid;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gojet-space-3);
@@ -105,6 +106,7 @@
 
 .analytics-state-label {
   flex: 0 0 auto;
+  justify-self: start;
   padding: var(--gojet-space-1) var(--gojet-space-2);
   border: var(--gojet-border-width-default) solid var(--gojet-border-divider);
   border-radius: var(--gojet-radius-pill);
@@ -158,7 +160,7 @@
 
 .analytics-dimensions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gojet-space-3);
 }
 
@@ -186,7 +188,7 @@
 
 .analytics-provenance-card dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gojet-space-3);
   margin: 0;
 }
@@ -236,32 +238,30 @@
   box-sizing: border-box;
 }
 
-@media (max-width: 900px) {
-  .analytics-filter-form,
-  .analytics-metrics,
-  .analytics-dimensions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 600px) {
+@media (min-width: 640px) {
   .analytics-page-header,
   .analytics-section-heading {
-    display: grid;
+    display: flex;
   }
 
   .analytics-filter-form,
   .analytics-metrics,
   .analytics-dimensions,
   .analytics-provenance-card dl {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .analytics-filter-form .gj-button {
-    inline-size: 100%;
+    inline-size: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .analytics-filter-form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .analytics-state-label {
-    justify-self: start;
+  .analytics-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
