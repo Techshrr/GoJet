@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 )
@@ -61,20 +62,26 @@ func main() {
 	store := links.NewMySQLStoreWithCustomDomainAuthority(db, domainStore)
 	risk := links.NewRedisRiskStore(redisClient)
 	testAuth := os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1"
+	analyticsEnabled := os.Getenv("GOJET_ANALYTICS_ENABLED") == "1"
 	if testAuth {
 		logger.Warn("test-only auth adapter enabled; never use this setting in production")
 	}
 	linksAPI := links.NewAPI(store, testAuth)
 	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
+	analyticsAPI := analytics.NewAPI(analytics.NewStore(db), testAuth, analyticsEnabled)
 	domainsHandler := domainsAPI.Handler()
+	analyticsHandler := analyticsAPI.Handler()
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains routes explicitly. Each inner handler retains its own security
-	// headers and test-only auth boundary.
+	// P06 Domains and P07 Analytics routes explicitly. Each inner handler retains
+	// its own security headers and test-only auth boundary.
 	root := http.NewServeMux()
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("GET /api/workspaces/{workspaceId}/domains/{domainId}", domainsHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/analytics/overview", analyticsHandler)
+	root.Handle("GET /api/workspaces/{workspaceId}/analytics/links/{linkId}", analyticsHandler)
+	root.Handle("POST /api/workspaces/{workspaceId}/analytics/conversions", analyticsHandler)
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
@@ -101,7 +108,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
