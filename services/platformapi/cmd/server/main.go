@@ -116,6 +116,9 @@ func main() {
 		root.Handle("POST /api/workspaces/{workspaceId}/files/{fileId}/publish", filesHandler)
 		root.Handle("POST /api/workspaces/{workspaceId}/files/{fileId}/rescan", filesHandler)
 		root.Handle("GET /api/workspaces/{workspaceId}/files/{fileId}/download", filesHandler)
+		root.Handle("GET /f/{slug}", filesHandler)
+		root.Handle("POST /f/{slug}", filesHandler)
+		root.Handle("GET /api/public/files/{slug}", filesHandler)
 	}
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
