@@ -28,6 +28,8 @@ export async function caseT021(browser) {
   const quarantined = await uploadResponse.json();
   await waitPageState(page, '[data-page="file-detail"]', 'quarantined');
 
+  runWorker();
+  assert(dbState(quarantined.id) === 'safe', 'initial quarantine fixture did not leave the durable queue through the real worker');
   const safe = await uploadApi('t021-safe.txt');
   runWorker();
   assert(dbState(safe.id) === 'safe', 'real clean file did not become safe');
@@ -41,6 +43,8 @@ export async function caseT021(browser) {
   const fault = await startFault('hold', 33992, 20);
   const worker = workerPopen('127.0.0.1:33992', { GOJET_CLAMAV_SCAN_TIMEOUT: '30s' });
   await waitUntil(() => dbState(scanning.id) === 'scanning', 7000, 'scanning state');
+  await action(quarantined.id, 'rescan');
+  assert(dbState(quarantined.id) === 'quarantined', 'rescan did not restore quarantined authority for five-state evidence');
   await gotoWorkspace(page, '/app/files');
   await page.locator('.files-list').waitFor();
   const visibleStates = await page.locator('.files-card').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-scan-state')).sort());
@@ -99,6 +103,8 @@ export async function caseT022(browser) {
   assert(await page.locator('[data-file-state="scan-pending"]').isVisible(), 'rescan did not fail public page closed');
   const rescanBinary = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); return { status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }, slug);
   assert(rescanBinary.status === 403, `rescan binary status ${rescanBinary.status}`);
+  runWorker();
+  assert(dbState(safe.id) === 'safe', 'rescan generation did not complete clean before the blocked fixture');
 
   const infected = await uploadApi('t022-blocked.txt', EICAR);
   runWorker();
@@ -172,6 +178,8 @@ export async function caseT024(browser) {
 export async function caseT025(browser) {
   resetFiles();
   const quarantined = await uploadApi('t025-quarantined.txt');
+  runWorker();
+  assert(dbState(quarantined.id) === 'safe', 'initial T025 quarantine fixture did not leave the durable queue through the real worker');
   const safe = await uploadApi('t025-safe.txt'); runWorker();
   const blocked = await uploadApi('t025-blocked.txt', EICAR); runWorker();
   const scanError = await uploadApi('t025-error.txt'); runWorker('127.0.0.1:39999');
@@ -179,6 +187,8 @@ export async function caseT025(browser) {
   const fault = await startFault('hold', 33993, 20);
   const worker = workerPopen('127.0.0.1:33993', { GOJET_CLAMAV_SCAN_TIMEOUT: '30s' });
   await waitUntil(() => dbState(scanning.id) === 'scanning', 7000, 'T025 scanning state');
+  await action(quarantined.id, 'rescan');
+  assert(dbState(quarantined.id) === 'quarantined', 'T025 rescan did not restore quarantined authority');
   const expected = [
     [quarantined.id, 'quarantined', 'PackageLock', 'File quarantined'],
     [safe.id, 'safe', 'ShieldCheck', 'File is safe to publish'],
