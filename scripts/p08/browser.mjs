@@ -250,12 +250,26 @@ async function layoutEvidence(page) {
         return !(aria || labelled || text || label);
       })
       .map((node) => ({ tag: node.tagName, id: node.id }));
+    const overflowing = [...document.querySelectorAll('main *')]
+      .filter(visible)
+      .map((node) => ({ node, rect: node.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.right > innerWidth + 1 || rect.left < -1)
+      .slice(0, 20)
+      .map(({ node, rect }) => ({
+        tag: node.tagName,
+        class_name: node.className || '',
+        text: node.textContent?.trim().slice(0, 120) ?? '',
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+      }));
     return {
       viewport: { width: innerWidth, height: innerHeight },
       root_overflow_px: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
       body_overflow_px: Math.max(0, document.body.scrollWidth - document.body.clientWidth),
       clipped_required_controls_or_text: clipped,
       unnamed_visible_controls: unnamed,
+      overflowing_elements: overflowing,
     };
   });
 }
@@ -518,7 +532,13 @@ async function caseT013(browser) {
 
     const capture = `gjv10__workspace-qr__p08-t013-${name}__normal__light__en__${name}.png`;
     await page.screenshot({ path: `${capturesDir}/${capture}`, fullPage: false });
-    assertDiagnostics(report, `T013 ${name}`);
+    const detailURL = `${WORKSPACE_URL}/api/workspaces/${WORKSPACE}/qr-codes/${qrId}`;
+    const expectedNavigationAborts = report.request_failures.filter((entry) => entry.url === detailURL && entry.failure?.errorText === 'net::ERR_ABORTED');
+    const diagnosticReport = {
+      ...report,
+      request_failures: report.request_failures.filter((entry) => !(entry.url === detailURL && entry.failure?.errorText === 'net::ERR_ABORTED')),
+    };
+    assertDiagnostics(diagnosticReport, `T013 ${name}`);
     perViewport[name] = {
       viewport,
       list_create: listCreateLayout,
@@ -526,6 +546,7 @@ async function caseT013(browser) {
       risk_denied: deniedLayout,
       post_delete: afterDeleteLayout,
       download_filename: download.suggestedFilename(),
+      expected_detail_navigation_aborts: expectedNavigationAborts.length,
       capture: `artifacts/v10/P08/captures/${capture}`,
     };
     await context.close();
