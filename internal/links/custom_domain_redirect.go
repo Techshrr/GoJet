@@ -140,6 +140,10 @@ func (s *MySQLStore) claimRedirectAccessCurrentAuthority(
 		if measured.CampaignID == "" {
 			measured.CampaignID = current.UTM.Campaign
 		}
+		// External request metadata and user-authored UTM campaign text must not
+		// turn analytics measurement into a redirect availability dependency. A
+		// value outside the strict storage contract is represented as unknown.
+		measured = analytics.SanitizeDimensions(measured)
 		created, eventErr := analytics.NewClickEvent(current.WorkspaceID, current.ID, current.ClickCount, now, measured)
 		if eventErr != nil {
 			return Link{}, AccessClaimConflict, nil, eventErr

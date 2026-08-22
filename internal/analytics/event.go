@@ -19,11 +19,11 @@ const (
 var ErrInvalidEvent = errors.New("invalid analytics event")
 
 type Dimensions struct {
-	CountryCode   string `json:"country_code"`
-	Device        string `json:"device"`
-	Language      string `json:"language"`
+	CountryCode    string `json:"country_code"`
+	Device         string `json:"device"`
+	Language       string `json:"language"`
 	SourceHostname string `json:"source_hostname"`
-	CampaignID    string `json:"campaign_id"`
+	CampaignID     string `json:"campaign_id"`
 }
 
 type Event struct {
@@ -68,10 +68,35 @@ func ValidateEvent(event Event) error {
 		return ErrInvalidEvent
 	}
 	rebuilt, err := NewClickEvent(event.WorkspaceID, event.LinkID, event.ClickSequence, event.OccurredAt, event.Dimensions)
-	if err != nil || rebuilt.EventID != event.EventID {
+	if err != nil || rebuilt.EventID != event.EventID || rebuilt.Dimensions != event.Dimensions {
 		return ErrInvalidEvent
 	}
 	return nil
+}
+
+// SanitizeDimensions converts externally measured request metadata into the
+// strict analytics storage contract without inventing values. Valid values are
+// normalized and preserved. A value that is oversized, non-ASCII, or contains
+// a control character becomes the empty/unknown dimension instead of making an
+// otherwise-authorized redirect fail its analytics outbox transaction.
+func SanitizeDimensions(in Dimensions) Dimensions {
+	out := normalizeDimensions(in)
+	if !validDimensionValue(out.CountryCode, 8) {
+		out.CountryCode = ""
+	}
+	if !validDimensionValue(out.Device, 16) {
+		out.Device = ""
+	}
+	if !validDimensionValue(out.Language, 32) {
+		out.Language = ""
+	}
+	if !validDimensionValue(out.SourceHostname, 253) {
+		out.SourceHostname = ""
+	}
+	if !validDimensionValue(out.CampaignID, 64) {
+		out.CampaignID = ""
+	}
+	return out
 }
 
 func normalizeDimensions(in Dimensions) Dimensions {
@@ -85,14 +110,20 @@ func normalizeDimensions(in Dimensions) Dimensions {
 }
 
 func validDimensions(in Dimensions) bool {
-	if len(in.CountryCode) > 8 || len(in.Device) > 16 || len(in.Language) > 32 || len(in.SourceHostname) > 253 || len(in.CampaignID) > 64 {
+	return validDimensionValue(in.CountryCode, 8) &&
+		validDimensionValue(in.Device, 16) &&
+		validDimensionValue(in.Language, 32) &&
+		validDimensionValue(in.SourceHostname, 253) &&
+		validDimensionValue(in.CampaignID, 64)
+}
+
+func validDimensionValue(value string, maxBytes int) bool {
+	if len(value) > maxBytes {
 		return false
 	}
-	for _, value := range []string{in.CountryCode, in.Device, in.Language, in.SourceHostname, in.CampaignID} {
-		for _, r := range value {
-			if r > 127 || r < 32 {
-				return false
-			}
+	for _, r := range value {
+		if r > 127 || r < 32 {
+			return false
 		}
 	}
 	return true

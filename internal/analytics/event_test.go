@@ -41,6 +41,29 @@ func TestClickEventIdentityAndNormalization(t *testing.T) {
 	}
 }
 
+func TestSanitizeDimensionsPreservesMeasuredValuesAndDropsUnsafeValues(t *testing.T) {
+	got := SanitizeDimensions(Dimensions{
+		CountryCode:    " SG ",
+		Device:         "móbile",
+		Language:       strings.Repeat("x", 33),
+		SourceHostname: "例子.test.",
+		CampaignID:     "bad\nvalue",
+	})
+	if got.CountryCode != "sg" {
+		t.Fatalf("valid measured country must be preserved, got %q", got.CountryCode)
+	}
+	if got.Device != "" || got.Language != "" || got.SourceHostname != "" || got.CampaignID != "" {
+		t.Fatalf("unsafe measured dimensions must degrade to unknown/empty: %#v", got)
+	}
+}
+
+func TestNewClickEventRemainsStrictForUnsanitizedPayloads(t *testing.T) {
+	_, err := NewClickEvent("ws-p07", 1, 1, time.Now().UTC(), Dimensions{SourceHostname: "例子.test"})
+	if err == nil {
+		t.Fatal("strict event constructor must reject an unsanitized non-ASCII dimension")
+	}
+}
+
 func TestValidateEventRejectsIdentityMutation(t *testing.T) {
 	event, err := NewClickEvent("ws-p07", 1, 1, time.Now().UTC(), Dimensions{Device: "desktop"})
 	if err != nil {
