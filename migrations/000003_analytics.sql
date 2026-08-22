@@ -45,6 +45,7 @@ CREATE TABLE analytics_events (
     UNIQUE KEY uq_analytics_events_link_click (link_id, click_sequence),
     KEY idx_analytics_events_workspace_time (workspace_id, occurred_at, event_id),
     KEY idx_analytics_events_workspace_link_time (workspace_id, link_id, occurred_at, event_id),
+    KEY idx_analytics_events_workspace_campaign_time (workspace_id, campaign_id, occurred_at, event_id),
     CONSTRAINT fk_analytics_events_link FOREIGN KEY (link_id) REFERENCES links(id) ON DELETE RESTRICT,
     CONSTRAINT chk_analytics_events_click_sequence CHECK (click_sequence > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -66,6 +67,35 @@ CREATE TABLE analytics_hourly_aggregates (
     ),
     KEY idx_analytics_hourly_workspace_bucket (workspace_id, bucket_start, link_id),
     CONSTRAINT fk_analytics_hourly_link FOREIGN KEY (link_id) REFERENCES links(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE analytics_workspace_state (
+    workspace_id VARCHAR(64) NOT NULL,
+    status ENUM('complete', 'partial', 'stale') NOT NULL DEFAULT 'partial',
+    data_through_at DATETIME(6) NULL,
+    retention_days SMALLINT UNSIGNED NOT NULL DEFAULT 90,
+    state_reason VARCHAR(160) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'initializing',
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (workspace_id),
+    CONSTRAINT chk_analytics_workspace_retention CHECK (retention_days BETWEEN 1 AND 3660),
+    CONSTRAINT chk_analytics_workspace_reason_nonempty CHECK (CHAR_LENGTH(TRIM(state_reason)) > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE analytics_conversions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    workspace_id VARCHAR(64) NOT NULL,
+    conversion_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    campaign_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    link_id BIGINT UNSIGNED NOT NULL,
+    occurred_at DATETIME(6) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_analytics_conversion_workspace_id (workspace_id, conversion_id),
+    KEY idx_analytics_conversion_workspace_campaign_time (workspace_id, campaign_id, occurred_at, id),
+    KEY idx_analytics_conversion_workspace_link_time (workspace_id, link_id, occurred_at, id),
+    CONSTRAINT fk_analytics_conversion_link FOREIGN KEY (link_id) REFERENCES links(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_analytics_conversion_id_nonempty CHECK (CHAR_LENGTH(TRIM(conversion_id)) > 0),
+    CONSTRAINT chk_analytics_conversion_campaign_nonempty CHECK (CHAR_LENGTH(TRIM(campaign_id)) > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE analytics_reconciliation_runs (
