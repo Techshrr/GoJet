@@ -52,6 +52,9 @@ jobs:
       - name: Preserve P05/P06 source-authority compile boundary
         run: go test ./internal/links/... ./internal/domains/...
 
+      - name: Compile and test P08 backend slice
+        run: go test ./internal/qr/... ./services/platformapi/...
+
       - name: Record exact-head contract evidence
         if: always()
         shell: bash
