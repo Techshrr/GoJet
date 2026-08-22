@@ -61,10 +61,18 @@ func main() {
 	domainStore := domains.NewMySQLStore(db)
 	store := links.NewMySQLStoreWithCustomDomainAuthority(db, domainStore)
 	risk := links.NewRedisRiskStore(redisClient)
-	analyticsPublisher := analytics.NewRedisStreamPublisher(redisClient)
 	trustTestHeaders := os.Getenv("GOJET_TEST_ROUTING_HEADERS") == "1"
 	if trustTestHeaders {
 		logger.Warn("test-only routing headers enabled; never use this setting in production")
+	}
+
+	analyticsEnabled := os.Getenv("GOJET_ANALYTICS_ENABLED") == "1"
+	var handler http.Handler
+	if analyticsEnabled {
+		analyticsPublisher := analytics.NewRedisStreamPublisher(redisClient)
+		handler = links.NewRedirectHandlerWithAnalytics(store, risk, analyticsPublisher, trustTestHeaders)
+	} else {
+		handler = links.NewRedirectHandler(store, risk, trustTestHeaders)
 	}
 
 	address := strings.TrimSpace(os.Getenv("GOJET_REDIRECTENGINE_ADDR"))
@@ -73,7 +81,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           links.NewRedirectHandlerWithAnalytics(store, risk, analyticsPublisher, trustTestHeaders),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -91,7 +99,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("redirectengine listening", "address", address, "analytics_stream", analytics.ClickStreamKey)
+	logger.Info("redirectengine listening", "address", address, "analytics_enabled", analyticsEnabled, "analytics_stream", analytics.ClickStreamKey)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("redirectengine failed", "error", err)
 		os.Exit(1)
