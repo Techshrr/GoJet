@@ -11,6 +11,8 @@ const DomainDetailPage = lazy(() => import('./routes/DomainDetailPage'));
 const AnalyticsPage = lazy(() => import('./routes/AnalyticsPage'));
 const QRListPage = lazy(() => import('./routes/QRListPage'));
 const QRDetailPage = lazy(() => import('./routes/QRDetailPage'));
+const FilesListPage = lazy(() => import('./routes/FilesListPage'));
+const FileDetailPage = lazy(() => import('./routes/FileDetailPage'));
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -30,21 +32,14 @@ const domainDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '
 const analyticsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/analytics', component: AnalyticsPage });
 const qrRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/qr', component: QRListPage });
 const qrDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/qr/$qrId', component: QRDetailPage });
-const sectionRoutes = ['files', 'developer', 'members', 'settings'].map((section) =>
+const filesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/files', component: FilesListPage });
+const fileDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/files/$fileId', component: FileDetailPage });
+const sectionRoutes = ['developer', 'members', 'settings'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
 );
 const routeTree = rootRoute.addChildren([
-  appRoute,
-  linksRoute,
-  linkCreateRoute,
-  linkDetailRoute,
-  domainsRoute,
-  domainCreateRoute,
-  domainDetailRoute,
-  analyticsRoute,
-  qrRoute,
-  qrDetailRoute,
-  ...sectionRoutes,
+  appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
+  analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }
