@@ -61,3 +61,15 @@ export type {
   WorkspaceDomainsResponse,
   WorkspaceDomainViewState,
 } from './domains';
+
+export { GoJetAnalyticsClient } from './analytics';
+export type {
+  AnalyticsBucket,
+  AnalyticsConversionInput,
+  AnalyticsConversionResponse,
+  AnalyticsDimensionCount,
+  AnalyticsGranularity,
+  AnalyticsQueryInput,
+  AnalyticsReport,
+  AnalyticsState,
+} from './analytics';
