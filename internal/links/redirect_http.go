@@ -1,6 +1,7 @@
 package links
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -9,11 +10,18 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Techshrr/GoJet/internal/analytics"
 )
+
+type AnalyticsEventPublisher interface {
+	Publish(context.Context, analytics.Event) (string, error)
+}
 
 type RedirectHandler struct {
 	store                   *MySQLStore
 	risk                    *RedisRiskStore
+	analyticsPublisher      AnalyticsEventPublisher
 	trustTestRoutingHeaders bool
 }
 
@@ -70,7 +78,18 @@ var passwordTemplate = template.Must(template.New("link-password").Parse(`<!doct
 </html>`))
 
 func NewRedirectHandler(store *MySQLStore, risk *RedisRiskStore, trustTestRoutingHeaders bool) http.Handler {
-	handler := &RedirectHandler{store: store, risk: risk, trustTestRoutingHeaders: trustTestRoutingHeaders}
+	return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders)
+}
+
+func NewRedirectHandlerWithAnalytics(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool) http.Handler {
+	if publisher == nil {
+		return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders)
+	}
+	return newRedirectHandler(store, risk, publisher, trustTestRoutingHeaders)
+}
+
+func newRedirectHandler(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool) http.Handler {
+	handler := &RedirectHandler{store: store, risk: risk, analyticsPublisher: publisher, trustTestRoutingHeaders: trustTestRoutingHeaders}
 	mux := http.NewServeMux()
 	// In Go's ServeMux, a GET method pattern also matches HEAD. Registering an
 	// additional generic HEAD /{code} conflicts with the more specific
@@ -150,7 +169,8 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	selected, err := SelectTarget(link, h.resolveContext(r))
+	resolveContext := h.resolveContext(r)
+	selected, err := SelectTarget(link, resolveContext)
 	if err != nil {
 		h.writeSafety(w, http.StatusOK, "pending", code)
 		return
@@ -177,9 +197,25 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	claimed, claimState, err := h.store.ClaimRedirectAccessCurrentAuthority(
-		r.Context(), link.ID, link.Version, link.RiskFingerprint, time.Now().UTC(),
-	)
+	now := time.Now().UTC()
+	var claimed Link
+	var claimState AccessClaimState
+	var analyticsEvent *analytics.Event
+	if h.analyticsPublisher != nil {
+		claimed, claimState, analyticsEvent, err = h.store.ClaimRedirectAccessCurrentAuthorityWithAnalytics(
+			r.Context(), link.ID, link.Version, link.RiskFingerprint, now,
+			analytics.Dimensions{
+				CountryCode:    resolveContext.Country,
+				Device:         resolveContext.Device,
+				Language:       resolveContext.Language,
+				SourceHostname: resolveContext.SourceHostname,
+			},
+		)
+	} else {
+		claimed, claimState, err = h.store.ClaimRedirectAccessCurrentAuthority(
+			r.Context(), link.ID, link.Version, link.RiskFingerprint, now,
+		)
+	}
 	if err != nil {
 		h.writeSafety(w, http.StatusServiceUnavailable, "operational-unavailable", code)
 		return
@@ -191,6 +227,19 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	if claimed.Version != link.Version || claimed.RiskFingerprint != link.RiskFingerprint {
 		h.writeSafety(w, http.StatusOK, "pending", code)
 		return
+	}
+
+	// Analytics is emitted only after the exact-current authority/access claim.
+	// Redis publication is intentionally non-blocking for the redirect result:
+	// the same MySQL claim transaction already persisted the deterministic
+	// outbox event, so transient Redis failure is recoverable rather than lost.
+	if analyticsEvent != nil {
+		streamID, publishErr := h.analyticsPublisher.Publish(r.Context(), *analyticsEvent)
+		if publishErr != nil {
+			_ = h.store.RecordAnalyticsOutboxPublishFailure(r.Context(), analyticsEvent.EventID, publishErr)
+		} else {
+			_ = h.store.MarkAnalyticsOutboxPublished(r.Context(), analyticsEvent.EventID, streamID, time.Now().UTC())
+		}
 	}
 
 	// Exact-current domain authority, destination-risk allow and every applicable
@@ -378,5 +427,5 @@ func safetyCopy(reason string) (string, string) {
 }
 
 func (h *RedirectHandler) String() string {
-	return fmt.Sprintf("RedirectHandler{testRoutingHeaders:%t}", h.trustTestRoutingHeaders)
+	return fmt.Sprintf("RedirectHandler{analytics:%t,testRoutingHeaders:%t}", h.analyticsPublisher != nil, h.trustTestRoutingHeaders)
 }
