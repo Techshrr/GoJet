@@ -14,7 +14,7 @@ header('Content-Type: text/html; charset=utf-8');
 
 $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/install'), PHP_URL_PATH) ?: '/install';
 $state = 'session-ready';
-if ($path === '/install/environment' || $path === '/install/health') {
+if (in_array($path, ['/install/environment', '/install/services', '/install/health'], true)) {
     $result = FilePreflight::check();
     $state = $result['state'];
     if ($state === 'hard-failure') {

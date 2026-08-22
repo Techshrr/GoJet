@@ -45,4 +45,7 @@ export { GoJetQRClient } from './qr';
 export type { QRArtifact, QRCreateInput, QRListResponse, QRRiskState, QRRecord, QRSource, QRState } from './qr';
 
 export { GoJetFilesClient } from './files';
-export type { FileArtifact, FileListResponse, FilePolicyInput, FileRecord, FileScanState, FileUploadInput } from './files';
+export type {
+  FileArtifact, FileDependencyHealthReport, FileDependencyState, FileListResponse, FilePolicyInput,
+  FileRecord, FileScanState, FileUploadInput,
+} from './files';

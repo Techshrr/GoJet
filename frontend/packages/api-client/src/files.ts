@@ -2,6 +2,7 @@ import { GoJetApiError } from './links';
 import type { ApiTransport } from './links';
 
 export type FileScanState = 'quarantined' | 'scanning' | 'safe' | 'blocked' | 'scan_error';
+export type FileDependencyState = 'healthy' | 'unavailable' | 'permission_error' | 'stale' | 'indeterminate';
 
 export type FileRecord = {
   id: number;
@@ -41,6 +42,18 @@ export type FilePolicyInput = {
   change_reason: string;
 };
 export type FileArtifact = { blob: Blob; filename: string };
+export type FileDependencyHealthReport = {
+  ready: boolean;
+  status: FileDependencyState;
+  storage: { state: FileDependencyState; writable: boolean };
+  clamav: {
+    state: FileDependencyState;
+    engine_version?: string;
+    signature_version?: string;
+    signature_date?: string;
+    checked_at: string;
+  };
+};
 
 type ApiErrorEnvelope = { error?: { code?: string; message?: string } };
 
@@ -132,5 +145,9 @@ export class GoJetFilesClient {
       blob: await response.blob(),
       filename: safeFilename(response.headers.get('Content-Disposition'), `gojet-file-${fileId}`),
     };
+  }
+
+  health(): Promise<FileDependencyHealthReport> {
+    return this.request('/api/admin/platform/storage');
   }
 }
