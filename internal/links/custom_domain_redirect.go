@@ -133,7 +133,14 @@ func (s *MySQLStore) claimRedirectAccessCurrentAuthority(
 
 	var event *analytics.Event
 	if dimensions != nil {
-		created, eventErr := analytics.NewClickEvent(current.WorkspaceID, current.ID, current.ClickCount, now, *dimensions)
+		measured := *dimensions
+		// Until P12 owns the broader Campaign organization product, P07 uses the
+		// existing Link UTM campaign field as the server-owned measurement key.
+		// This is measurement association only; it does not create Campaign CRUD.
+		if measured.CampaignID == "" {
+			measured.CampaignID = current.UTM.Campaign
+		}
+		created, eventErr := analytics.NewClickEvent(current.WorkspaceID, current.ID, current.ClickCount, now, measured)
 		if eventErr != nil {
 			return Link{}, AccessClaimConflict, nil, eventErr
 		}
