@@ -1,0 +1,214 @@
+{
+  "node": "P08",
+  "title": "QR",
+  "base_integration_commit": "04941afc59db763e6c7db8a67721dea542c72a43",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capability": "CAP-QR",
+    "owner": "P08",
+    "gates": ["G3", "G10"],
+    "workspace_routes": [
+      "APP-QR /app/qr",
+      "APP-QR-DETAIL /app/qr/{qrId}"
+    ],
+    "api_family": [
+      "GET /api/workspaces/{id}/qr-codes",
+      "POST /api/workspaces/{id}/qr-codes",
+      "GET /api/workspaces/{id}/qr-codes/{qrId}",
+      "DELETE /api/workspaces/{id}/qr-codes/{qrId}",
+      "GET /api/workspaces/{id}/qr-codes/{qrId}/preview?format={format}",
+      "GET /api/workspaces/{id}/qr-codes/{qrId}/download?format={format}"
+    ],
+    "supported_download_formats": ["png", "svg"],
+    "target_authority": "A P08 QR record references one same-Workspace authoritative source Link. The encoded value is the server-derived current public short URL for that source Link; clients cannot submit an alternate raw encoded destination.",
+    "source_safety": "Creation, preview and download require the source Link to satisfy the current P05/P06 authority chain. Destination-risk pending, review, block, missing, malformed or stale denies QR generation/distribution. Applicable custom-domain authority remains independently required.",
+    "delete_semantics": "Deletion removes the authoritative QR resource and makes detail, preview and download unavailable. Previously downloaded QR bytes are not treated as revocable media; their encoded GoJet short URL remains subject to live redirect authority."
+  },
+  "environment_contract": {
+    "mysql": "Real MySQL 8.x is required for authoritative QR and source-Link persistence.",
+    "redis": "Real Redis is required when exercising the source Link exact-current destination-risk authority used by QR creation/distribution.",
+    "platformapi": "Use the real native Go platformapi HTTP path; an in-memory HTTP replacement cannot satisfy P08 evidence.",
+    "redirectengine": "Use the real native Go redirectengine for source-link reachability/safety evidence where a generated QR is followed.",
+    "workspace_browser": "Use the built Workspace application on the canonical P08 routes; static HTML fixtures cannot satisfy browser evidence.",
+    "renderer": "Use a real server-side QR encoder that emits valid PNG and SVG artifacts; placeholder artwork, visual-only boxes and client-only fake data are prohibited.",
+    "scanner": "Use an independent machine decoder path distinct from the production QR encoder and record the decoded payload plus artifact digest.",
+    "fixture_policy": "Deterministic fixtures may arrange actors, Workspace membership, quota and risk decisions, but they cannot replace MySQL, Redis, platformapi, redirectengine, generated QR bytes, independent decoding or the real Workspace browser surface."
+  },
+  "cases": [
+    {
+      "id": "P08-T001",
+      "name": "Create persists authoritative source-bound QR resource",
+      "precondition": "Real MySQL is available; an authenticated manage-capable actor owns a Workspace with remaining QR quota and one same-Workspace active source Link whose exact-current destination-risk decision is allow.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T001",
+      "oracle": "POST to the frozen QR collection API persists exactly one QR row bound to the source Link ID and Workspace. The server derives the encoded public short URL from authoritative Link state; a client-supplied alternate target is rejected or ignored by schema and can never become encoded authority.",
+      "evidence": "artifacts/v10/P08/results/P08-T001.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T002",
+      "name": "List and detail enforce tenant isolation",
+      "precondition": "Two real Workspaces each have QR resources and distinct actors.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T002",
+      "oracle": "Collection results contain only the requested actor-authorized Workspace resources. Cross-Workspace detail access is denied with the shared non-enumerating semantics and never returns QR metadata, source-Link details or artifact bytes.",
+      "evidence": "artifacts/v10/P08/results/P08-T002.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T003",
+      "name": "Generated QR independently decodes the exact authoritative short URL",
+      "precondition": "A ready QR resource from P08-T001 exists and both PNG and SVG renderer paths are available.",
+      "driver": "go run ./scripts/p08/scanner_driver --case P08-T003",
+      "oracle": "An independent decoder reads actual generated/downloaded QR artifacts and returns exactly the server-derived current GoJet public short URL for the bound source Link. The result is machine decoding, not DOM text, renderer metadata or a visually asserted QR claim.",
+      "evidence": "artifacts/v10/P08/scanner/P08-T003.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T004",
+      "name": "PNG and SVG downloads are deterministic and safely served",
+      "precondition": "A ready QR resource exists and source authority is unchanged between repeated requests.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T004",
+      "oracle": "Repeated downloads for the same QR resource, format and unchanged authoritative source state have identical SHA-256 digests. PNG has a valid PNG signature; SVG parses as SVG without active script/external-fetch content. Content-Type, Content-Disposition filename and no-store/noindex machine-response policy are explicit and safe.",
+      "evidence": "artifacts/v10/P08/results/P08-T004.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T005",
+      "name": "Read create delete preview and download enforce server RBAC",
+      "precondition": "Actors with read-only, manage and unauthorized roles are available for one Workspace QR resource.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T005",
+      "oracle": "Every read/create/delete/preview/download request repeats server-side membership and action permission checks. Read-only actors cannot mutate; unauthorized actors cannot infer existence; denied requests produce no row change and no artifact bytes.",
+      "evidence": "artifacts/v10/P08/results/P08-T005.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T006",
+      "name": "Quota denial cannot fabricate a QR resource",
+      "precondition": "A real Workspace is at its authoritative QR quota.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T006",
+      "oracle": "Create is denied with the shared quota error semantics, returns no successful resource representation, inserts no QR row and creates no render/download artifact. UI-only quota state is not the enforcement boundary.",
+      "evidence": "artifacts/v10/P08/results/P08-T006.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T007",
+      "name": "Source-Link review is distinct from ready and denies distribution",
+      "precondition": "A QR resource references a Link whose exact-current destination-risk decision changes from allow to review without deleting the QR record.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T007",
+      "oracle": "Detail reports source-link-review rather than ready. Preview/download generation is denied and no fresh artifact bytes are distributed. The response exposes only allowlisted remediation/correlation data and never a continue-anyway target.",
+      "evidence": "artifacts/v10/P08/results/P08-T007.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T008",
+      "name": "Blocked or non-current source risk cannot bypass into QR ready/download",
+      "precondition": "Exercise source Link destination-risk states block, pending, missing, malformed and stale, including a reachable-target edit that invalidates a previously allowed fingerprint; exercise applicable custom-domain authority denial.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T008",
+      "oracle": "Every non-allow exact-current risk state and every independently required custom-domain denial fail closed for QR creation/distribution. A previous fingerprint allow is never reused, no alternate raw destination can be encoded, and the unsafe customer destination is absent from denied responses.",
+      "evidence": "artifacts/v10/P08/results/P08-T008.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T009",
+      "name": "Delete removes authoritative detail and live artifact access",
+      "precondition": "A manage-capable actor owns a ready QR resource and a previously downloaded artifact digest has been recorded.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T009",
+      "oracle": "DELETE removes or tombstones the authoritative resource according to the P08 store contract and makes subsequent detail/preview/download unavailable with the explicit deleted/not-found lifecycle semantics. No new artifact can be generated for the deleted QR ID. Previously downloaded bytes are not falsely claimed to be remotely revocable.",
+      "evidence": "artifacts/v10/P08/results/P08-T009.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T010",
+      "name": "Malformed not-found deleted and dependency-error responses are stable",
+      "precondition": "The integration driver can issue malformed IDs, unknown same-tenant IDs, deleted IDs and a controlled dependency failure without replacing the real service under test.",
+      "driver": "python3 scripts/p08/integration.py --case P08-T010",
+      "oracle": "Each condition returns the registered/shared HTTP and error model with correlation ID where applicable, never soft-success, stack trace, cross-tenant existence data, source destination leakage or partial artifact bytes.",
+      "evidence": "artifacts/v10/P08/results/P08-T010.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T011",
+      "name": "APP-QR list/create states are route-backed",
+      "precondition": "The real built Workspace app is served with deterministic server fixtures for the IA-declared APP-QR states.",
+      "driver": "node scripts/p08/browser.mjs --case P08-T011",
+      "oracle": "/app/qr renders loading, empty, create, risk-denied, quota-reached and error as distinct route-backed states. Create actions use the real QR API and no fabricated success appears before server confirmation.",
+      "evidence": "artifacts/v10/P08/browser/P08-T011.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T012",
+      "name": "APP-QR-DETAIL and Link Detail QR integration are route-backed",
+      "precondition": "The real built Workspace app has ready, review, block and deleted QR/source-Link fixtures.",
+      "driver": "node scripts/p08/browser.mjs --case P08-T012",
+      "oracle": "/app/qr/{qrId} renders loading, ready, source-link-review, source-link-block, deleted and error distinctly; preview/download/delete actions call real APIs. The P05 Link Detail QR tab transitions from its P08 placeholder into truthful P08 integration without inventing a second QR authority.",
+      "evidence": "artifacts/v10/P08/browser/P08-T012.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T013",
+      "name": "Canonical desktop tablet and mobile QR tasks have no root overflow or clipping",
+      "precondition": "The real Workspace QR routes are available at Design System canonical evidence viewports.",
+      "driver": "node scripts/p08/browser.mjs --case P08-T013",
+      "oracle": "List/create/detail/preview/download/delete and risk-denied tasks complete at 1440x900, 1024x768 and 390x844 with root/body horizontal overflow equal to zero, no clipped required text/control and mobile resource layouts following the shared Workspace Design System rather than private breakpoints.",
+      "evidence": "artifacts/v10/P08/browser/P08-T013.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T014",
+      "name": "QR workflows meet keyboard and non-color accessibility contract",
+      "precondition": "The real Workspace QR routes are rendered with keyboard-only input and accessibility inspection enabled.",
+      "driver": "node scripts/p08/browser.mjs --case P08-T014",
+      "oracle": "Primary QR tasks are keyboard reachable with visible focus, logical focus order, correct accessible names/roles/values, associated errors/live states and no color-only ready/review/block meaning. Reduced-motion and 320 CSS px reflow do not remove required state or task access.",
+      "evidence": "artifacts/v10/P08/browser/P08-T014.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T015",
+      "name": "P08 evidence coherently proves real rendering decoding APIs and browser state on one implementation head",
+      "precondition": "P08-T001 through P08-T014 have produced API, generated-asset, scanner and browser evidence for one candidate implementation SHA.",
+      "driver": "python3 scripts/p08/validate.py --case P08-T015",
+      "oracle": "Evidence index resolves every required P08 case to one 40-hex implementation_commit. Generated PNG/SVG digests, independent scanner payloads, API records and browser manifests agree on QR/source identity and current authority; no placeholder/manual-only evidence substitutes for the real paths.",
+      "evidence": "artifacts/v10/P08/results/P08-T015.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    },
+    {
+      "id": "P08-T016",
+      "name": "Same-exact-head P08 closure and affected regression matrix",
+      "precondition": "P08 implementation is complete, P08-T001 through P08-T015 pass on one exact candidate SHA, review can be signed and the affected P00-P07 regressions are runnable on that SHA.",
+      "driver": "python3 scripts/p08/validate.py --case P08-T016 --closure",
+      "oracle": "P08-T001..P08-T016, the accountable signed review and all affected P00-P07 workflow/regression requirements resolve to one exact implementation SHA. P0 defects, P1 defects and unresolved DECISION REQUIRED entries are all zero. P08 contributes truthful G3/G10 evidence without claiming release-wide G10 closure.",
+      "evidence": "artifacts/v10/P08/closure.json",
+      "expected_exit": 0,
+      "owner": "P08"
+    }
+  ],
+  "closure_contract": {
+    "version": 1,
+    "same_exact_head_required": true,
+    "required_case_range": "P08-T001..P08-T016",
+    "required_regression_scope": "All affected P00-P07 contract, build, unit, integration, browser, security and closure workflows required by the changed P08 exact head.",
+    "review_required": true,
+    "p0_max": 0,
+    "p1_max": 0,
+    "decision_required_max": 0,
+    "gate_scope": "P08-owned CAP-QR G3/G10 contribution only; release-wide G10 remains open until its owning release gate closes."
+  }
+}
