@@ -1,0 +1,276 @@
+name: P12 Workspace Organization Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p12/**'
+      - 'artifacts/v10/P12/**'
+      - '.github/workflows/p12-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p12-workspace-organization-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: P12 real Workspace organization browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_QR_WORKSPACE_QUOTA: '200'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_REDIS_HOST: 127.0.0.1
+      GOJET_TEST_REDIS_PORT: '6379'
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_WORKSPACE_VIEWER_URL: http://127.0.0.1:4175
+      GOJET_TEST_WORKSPACE_INVITEE_URL: http://127.0.0.1:4176
+      GOJET_TEST_PLATFORM_BINARY: /tmp/gojet-p12-browser-platformapi
+      GOJET_TEST_PLATFORM_PID_FILE: artifacts/v10/P12/runtime/browser-platformapi.pid
+      GOJET_TEST_P12_PRODUCER: /tmp/gojet-p12-browser-producer
+
+    steps:
+      - name: Checkout exact browser candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P12 browser dependency boundary
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P12/browser artifacts/v10/P12/captures artifacts/v10/P12/runtime
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          pnpm install --frozen-lockfile
+          node --check scripts/p12/browser.mjs
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+          go test ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/workspace ./services/platformapi/cmd/server
+
+      - name: Apply P05 through P12 migrations
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql \
+            migrations/000007_bio.sql \
+            migrations/000008_workspace_organization.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build native API producer and Workspace variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p12-browser-platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p12-browser-producer ./scripts/p12/producer.go
+          sha256sum /tmp/gojet-p12-browser-platformapi > artifacts/v10/P12/runtime/browser-native-platformapi.sha256
+          sha256sum /tmp/gojet-p12-browser-producer > artifacts/v10/P12/runtime/browser-producer.sha256
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p12-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p12-browser-owner
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=owner
+            export VITE_GOJET_TEST_EMAIL=p12-browser-owner@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P12 Owner'
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p12-owner
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p12-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p12-browser-viewer
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=viewer
+            export VITE_GOJET_TEST_EMAIL=p12-browser-viewer@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P12 Viewer'
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p12-viewer
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p12-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p12-browser-invitee
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=viewer
+            export VITE_GOJET_TEST_EMAIL=p12-browser-invitee@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P12 Invitee'
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p12-invitee
+          )
+
+      - name: Start native API and real Workspace builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p12-browser-platformapi > artifacts/v10/P12/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/browser-platformapi.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 --outDir dist-p12-owner > artifacts/v10/P12/runtime/browser-owner.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/browser-owner.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4175 --outDir dist-p12-viewer > artifacts/v10/P12/runtime/browser-viewer.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/browser-viewer.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4176 --outDir dist-p12-invitee > artifacts/v10/P12/runtime/browser-invitee.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/browser-invitee.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:4174/app >/dev/null \
+              && curl -fsS http://127.0.0.1:4175/app >/dev/null \
+              && curl -fsS http://127.0.0.1:4176/app >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P12/runtime/browser-platformapi.log || true
+          cat artifacts/v10/P12/runtime/browser-owner.log || true
+          cat artifacts/v10/P12/runtime/browser-viewer.log || true
+          cat artifacts/v10/P12/runtime/browser-invitee.log || true
+          exit 1
+
+      - name: Run P12-T019 through P12-T023
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in 019 020 021 022 023; do
+            GITHUB_SHA="$exact_head" node scripts/p12/browser.mjs --case "P12-T${number}"
+          done
+
+      - name: Verify exact-head P12 browser evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P12/browser')
+          errors = []
+          for number in range(19, 24):
+              cid = f'P12-T{number:03d}'
+              path = root / f'{cid}.json'
+              if not path.is_file(): errors.append(f'missing {path}'); continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head: errors.append(f'{cid} exact-head mismatch')
+              if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f'P12-T019..T023 exact-head browser evidence PASS on {head}')
+          PY
+          test "$(find artifacts/v10/P12/captures -type f -name 'P12-T*.png' | wc -l)" -ge 8
+
+      - name: Capture safe P12 browser runtime state
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P12/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,name,status,version,created_by FROM workspaces ORDER BY id" > artifacts/v10/P12/runtime/browser-workspaces.tsv 2> artifacts/v10/P12/runtime/browser-workspaces.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,user_id,role FROM workspace_memberships ORDER BY workspace_id,user_id" > artifacts/v10/P12/runtime/browser-memberships.tsv 2> artifacts/v10/P12/runtime/browser-memberships.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,status,data_through_at,state_reason FROM workspace_notification_state ORDER BY workspace_id" > artifacts/v10/P12/runtime/browser-notification-state.tsv 2> artifacts/v10/P12/runtime/browser-notification-state.err
+          true
+
+      - name: Stop P12 browser services
+        if: always()
+        run: |
+          set +e
+          for file in artifacts/v10/P12/runtime/browser-owner.pid artifacts/v10/P12/runtime/browser-viewer.pid artifacts/v10/P12/runtime/browser-invitee.pid artifacts/v10/P12/runtime/browser-platformapi.pid; do
+            kill "$(cat "$file" 2>/dev/null)" 2>/dev/null || true
+          done
+          true
+
+      - name: Upload P12 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p12-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P12/browser/P12-T019.json
+            artifacts/v10/P12/browser/P12-T020.json
+            artifacts/v10/P12/browser/P12-T021.json
+            artifacts/v10/P12/browser/P12-T022.json
+            artifacts/v10/P12/browser/P12-T023.json
+            artifacts/v10/P12/captures/
+            artifacts/v10/P12/runtime/
+          if-no-files-found: warn
+          retention-days: 30
