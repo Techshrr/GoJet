@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 from integration_common import *
@@ -19,13 +20,15 @@ def run_case(case_id: str):
         if case_id == "P11-T001":
             page = create_page(workspace, title="Alpha Bio", bio="Profile α", links=[child("Site", "HTTPS://Example.COM:443/a/../b?z=2&a=1#fragment", 0)])
             expect(page["status"] == "draft" and page["version"] == 1, "create lifecycle mismatch")
-            expect(len(page["slug"]) >= 16 and str(page["id"]) not in page["slug"], "slug is not opaque")
+            slug = page["slug"]
+            expect(len(slug) >= 16 and re.fullmatch(r"[A-Za-z0-9_-]+", slug) is not None, "slug is not an opaque URL-safe token")
+            expect(slug not in {str(page["id"]), "Alpha Bio", "alpha-bio", workspace}, "slug exposes predictable internal or title authority")
             expect(page["links"][0]["destination_url"] == "https://example.com/b?a=1&z=2", "destination normalization mismatch")
             status, _, _, listed = list_pages(workspace)
             expect(status == 200 and listed["total"] == 1 and listed["items"][0]["id"] == page["id"], "same-workspace list mismatch")
             status2, _, _, listed2 = list_pages("ws-p11-001-other")
             expect(status2 == 200 and listed2["total"] == 0, "cross-workspace list leaked page")
-            observations = {"page_id": page["id"], "slug": page["slug"], "normalized_destination": page["links"][0]["destination_url"], "quota": listed["quota"]}
+            observations = {"page_id": page["id"], "slug": slug, "normalized_destination": page["links"][0]["destination_url"], "quota": listed["quota"]}
 
         elif case_id == "P11-T002":
             before = int(mysql_scalar("SELECT COUNT(*) FROM bio_pages"))
