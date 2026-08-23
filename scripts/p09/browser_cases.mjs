@@ -1,6 +1,11 @@
 import { WORKSPACE_URL, ADMIN_URL, INSTALL_URL, INSTALL_FAULT_URL, PLATFORM_URL, WORKSPACE, STORAGE_ROOT, REAL_CLAMD, BENIGN, EICAR, assert, sleep, resetFiles, uploadApi, patchPolicy, action, runWorker, workerPopen, stopProcess, startFault, waitUntil, dbState, holdFilesWriteLock, viewports, capturesDir } from './browser_env.mjs';
 import { diagnostics, attachDiagnostics, assertDiagnostics, newPage, gotoWorkspace, waitPageState, layoutEvidence, assertLayout, tabUntil, focusEvidence } from './browser_ui.mjs';
 
+async function publicBinary(context, slug) {
+  const response = await context.request.get(`${WORKSPACE_URL}/api/public/files/${encodeURIComponent(slug)}`);
+  return { status: response.status(), body: await response.body() };
+}
+
 export async function caseT021(browser) {
   resetFiles();
   const report = diagnostics();
@@ -82,16 +87,16 @@ export async function caseT022(browser) {
   assert(publishResponse.status() === 200, `publish UI status ${publishResponse.status()}`);
   await page.getByText('Public page:', { exact: false }).waitFor();
   const slug = String((await publishResponse.json()).public_slug);
-  const preauth = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); return { status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }, slug);
-  assert(preauth.status === 403, `preauth binary status ${preauth.status}`);
+  const preauth = await publicBinary(context, slug);
+  assert(preauth.status === 403 && !preauth.body.equals(BENIGN), `preauth binary status ${preauth.status}`);
   await page.goto(`${WORKSPACE_URL}/f/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' });
   assert(await page.locator('[data-file-state="password-required"]').isVisible(), 'password-required public page missing');
   assert(!page.url().includes('P09-browser-password'), 'password leaked into public URL');
   await page.getByRole('textbox', { name: 'Password', exact: true }).fill('P09-browser-password');
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.getByRole('button', { name: 'Continue', exact: true }).click()]);
   assert(await page.locator('[data-file-state="available"]').isVisible(), 'authorized public page did not become available');
-  const allowed = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); const bytes = new Uint8Array(await response.arrayBuffer()); return { status: response.status, text: new TextDecoder().decode(bytes) }; }, slug);
-  assert(allowed.status === 200 && allowed.text === BENIGN.toString(), `authorized public binary failed ${JSON.stringify(allowed)}`);
+  const allowed = await publicBinary(context, slug);
+  assert(allowed.status === 200 && allowed.body.equals(BENIGN), `authorized public binary failed status=${allowed.status}`);
 
   await gotoWorkspace(page, `/app/files/${safe.id}`);
   const rescanResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/${safe.id}/rescan`));
@@ -101,8 +106,8 @@ export async function caseT022(browser) {
   await waitPageState(page, '[data-page="file-detail"]', 'quarantined');
   await page.goto(`${WORKSPACE_URL}/f/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' });
   assert(await page.locator('[data-file-state="scan-pending"]').isVisible(), 'rescan did not fail public page closed');
-  const rescanBinary = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); return { status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }, slug);
-  assert(rescanBinary.status === 403, `rescan binary status ${rescanBinary.status}`);
+  const rescanBinary = await publicBinary(context, slug);
+  assert(rescanBinary.status === 403 && !rescanBinary.body.equals(BENIGN), `rescan binary status ${rescanBinary.status}`);
   runWorker();
   assert(dbState(safe.id) === 'safe', 'rescan generation did not complete clean before the blocked fixture');
 
@@ -110,8 +115,8 @@ export async function caseT022(browser) {
   runWorker();
   await page.goto(`${WORKSPACE_URL}/f/${encodeURIComponent(infected.public_slug)}`, { waitUntil: 'networkidle' });
   assert(await page.locator('[data-file-state="blocked"]').isVisible(), 'blocked public state missing');
-  const blockedBinary = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); return { status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }, infected.public_slug);
-  assert(blockedBinary.status === 403, `blocked binary status ${blockedBinary.status}`);
+  const blockedBinary = await publicBinary(context, infected.public_slug);
+  assert(blockedBinary.status === 403 && !blockedBinary.body.equals(EICAR), `blocked binary status ${blockedBinary.status}`);
   await context.close();
   assertDiagnostics(report, 'P09-T022', { allowedHttp: [{ includes: '/api/public/files/', status: 403 }] });
   return { detail_route_state: 'safe', publish_status: publishResponse.status(), public_password_state: 'password-required', preauth_binary_status: preauth.status, authorized_binary_status: allowed.status, rescan_public_state: 'scan-pending', rescan_binary_status: rescanBinary.status, blocked_public_state: 'blocked', blocked_binary_status: blockedBinary.status };
