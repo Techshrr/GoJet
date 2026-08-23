@@ -11,6 +11,8 @@ on:
       - 'internal/analytics/**'
       - 'migrations/**'
       - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
       - 'scripts/p12/**'
       - 'artifacts/v10/P12/**'
       - '.github/workflows/p12-*.yml'
