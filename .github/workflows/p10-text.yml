@@ -1,0 +1,75 @@
+name: P10 Text Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/v10/P10/**'
+      - 'scripts/p10/**'
+      - '.github/workflows/p10-*.yml'
+      - 'internal/text/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p10-text-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P10 contract freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P10 contract validator
+        run: python3 -m py_compile scripts/p10/validate_contract.py
+
+      - name: Validate frozen P10 contract
+        run: python3 scripts/p10/validate_contract.py | tee /tmp/p10-contract.json
+
+      - name: Preserve current native compile and unit boundary
+        run: go test ./...
+
+      - name: Record exact-head contract evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p10-contract-evidence
+          cp /tmp/p10-contract.json /tmp/p10-contract-evidence/contract.json 2>/dev/null || true
+          git rev-parse HEAD > /tmp/p10-contract-evidence/implementation_commit.txt
+          printf '%s\n' '0c43b9e5fa9abb9da7231e4ab5bd6d8a76f6d9a8' > /tmp/p10-contract-evidence/base_integration_commit.txt
+          printf '%s\n' 'P10-T001..P10-T020' > /tmp/p10-contract-evidence/case_range.txt
+          printf '%s\n' 'CAP-TEXT P10 G3/G7' > /tmp/p10-contract-evidence/capabilities.txt
+          printf '%s\n' 'Workspace exact HTTP family is P10 implementation authority; IA freezes Text API semantics only.' > /tmp/p10-contract-evidence/api-authority.txt
+          printf '%s\n' 'PUB-TEXT /t/{slug}: noindex; sitemap=no; HTTP=200/401/403/404/410; release-wide G7 remains later-owned.' > /tmp/p10-contract-evidence/ugc-seo-boundary.txt
+
+      - name: Upload P10 contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p10-text-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/p10-contract-evidence
+          if-no-files-found: error
+          retention-days: 14
