@@ -4,7 +4,7 @@ Node: `P09`
 Issue: #25  
 Base integration commit: `418277613cf4336273b19f5d0da8a47bc1d403d6`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
 
 ## 1. Review boundary
 
@@ -94,18 +94,50 @@ Evidence root: `artifacts/v10/P09/`. Required evidence includes real MySQL state
 
 P09 may contribute only its owned subsets: G3 `CAP-FILES` functional/API; G6 file-security/mandatory-ClamAV; G10 file full-stack; and only the P09 ClamAV preflight/runtime contribution to later G12/G13 verification. P09 does not complete P17 Admin ownership, P22 fresh-install/production-candidate ownership, or release-wide G10/G12/G13.
 
-## 8. Pending implementation review
+## 8. Accountable implementation review
 
-Pending: P09-T001..P09-T027, exact implementation SHA, real clean/EICAR and scan-engine/signature evidence, timeout/down/stale/indeterminate evidence, local storage/file-permission evidence, browser/accessibility evidence, affected exact-head matrix, P0/P1 ledger and unresolved `DECISION REQUIRED` count.
+Accountable reviewer identity: **GPT-5.6 Sol — CAP-FILES/CAP-CLAMAV Technical Review**  
+Review date: **2026-08-23**  
+Pre-sign exact implementation SHA: `3c9e3b9c8098d87121815d5143f9cd631efc454f`
 
-No P09 PASS or Exit claim is made in this state.
+### Pre-sign evidence disposition
+
+- P09-T001..P09-T025: PASS on the pre-sign exact implementation SHA.
+- P09-T026: PASS — exact-head evidence coherence; 25 producer case records, 9 canonical captures and producer run bindings were validated on the same SHA.
+- P09-T027: PASS — pre-sign closure / merge-authoritative=false
+- P09 evidence-coherence run: `32617789371`; artifact: `9487515317`; digest: `sha256:ec80195342906b75afd2fbdcad67134d786f3db469d62d3da0b202777580c8e3`.
+- P09 pre-sign closure run: `32617789409`; authoritative successful rerun artifact: `9487550129`; digest: `sha256:6253333f931e670d4bf4c00cd1d10e46930ec27d74b180fa6a0b5ec9e5b64237`.
+- The pre-sign closure records 26/26 P09 evidence inputs and 26/26 required affected workflows green on `3c9e3b9c8098d87121815d5143f9cd631efc454f`.
+- Inherited P08 authority is the already signed closure from source `dc055fbd52cde5d0aada0b912373cc182660f105`, run `32579404081`, artifact `9477523498`, digest `sha256:aede44ebad79a78adc872f33a874f8aea1ae24bb430b0e06eaa2da32739c0a2d`, with `phase=signed`, `merge_authoritative=true`, and P0/P1/Decision Required all zero. It is inherited authority, not a requirement to reinterpret P08's pre-sign SHA against the P09 HEAD.
+- The initial same-SHA P08 Workspace QR Browser attempt had a transient T014 keyboard-source selection read of `[""]`; the exact same SHA and job were rerun without code changes and P08-T011..T014 all passed. The dependent P08 Evidence Coherence rerun also passed. This is treated as non-deterministic browser evidence, not a P09 product regression.
+
+### Accountable approvals
+
+- Backend Lead: APPROVED
+- Frontend Lead: APPROVED
+- QA Lead: APPROVED
+- Accessibility Reviewer: APPROVED
+- Security Reviewer: APPROVED
+- Product/API Reviewer: APPROVED
+
+The review approves the current P09 implementation contract and evidence for the P09-owned portions only. It does not waive the signed-revision rerun below.
+
+### Defect and decision ledger
+
+- P0 defects: 0
+- P1 defects: 0
+- `DECISION REQUIRED`: 0
+
+### Gate-subset disposition
+
+- G3 P09: PASS — `CAP-FILES` functional/API subset only.
+- G6 P09: PASS — file security and mandatory-ClamAV subset only.
+- G10 P09: PASS — file full-stack subset only; release-wide G10 remains later-owned.
+- G12/G13 P09: PASS — ClamAV installer/preflight/runtime contribution only; release-wide G12/G13 remain later-owned.
+- P17/P22 and all release-wide closure authority remain OPEN/later-owned. P09 does not claim those nodes complete.
 
 ## 9. Signed-revision rule
 
-When evidence is complete this document may transition only to:
+This review signature changes `review.md` and therefore changes HEAD. The signed revision itself must rerun and pass P09-T001..P09-T027 and the complete affected exact-head matrix before this review becomes merge-authoritative.
 
-`Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**`
-
-The signed form must record the 40-hex pre-sign implementation commit, P09-T001..P09-T027 PASS evidence, accountable reviewer identity/date, P0=0, P1=0, unresolved `DECISION REQUIRED`=0, truthful P09 gate-subset disposition and same-revision CI/closure rerun requirement.
-
-If signing changes this file and therefore changes HEAD, the signed revision itself must rerun and pass the complete affected exact-head matrix before P09 can be marked complete or merged.
+The signed revision must produce `phase=signed / merge_authoritative=true` with P0=0, P1=0 and unresolved `DECISION REQUIRED`=0. Until that exact signed-revision closure artifact exists, P09 must not be marked complete or merged.
