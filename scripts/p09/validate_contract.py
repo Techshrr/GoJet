@@ -9,6 +9,7 @@ PLAN=ROOT/'artifacts/v10/P09/test-plan.json'
 REVIEW=ROOT/'artifacts/v10/P09/review.md'
 BASE='418277613cf4336273b19f5d0da8a47bc1d403d6'
 PENDING='Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**'
+SIGNED='Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**'
 EXPECTED_CASES=tuple(f'P09-T{n:03d}' for n in range(1,28))
 SPEC_BLOBS={
  'specifications/GoJet_V10_MASTER_PLAN_OPTIMIZED.md':'29cb2b4e14076ce71b21747dbf2facc411ccb41a',
@@ -108,14 +109,28 @@ def main():
  req(closure.get('same_exact_head_required') is True and closure.get('required_case_range')=='P09-T001..P09-T027','closure exact-head/case-range drift',errors)
  req(closure.get('review_required') is True and closure.get('p0_max')==0 and closure.get('p1_max')==0 and closure.get('decision_required_max')==0,'closure review/defect thresholds drift',errors)
  req('P17/P22' in str(closure.get('gate_scope','')),'closure later-owner boundary missing',errors)
+
+ # Contract shape remains frozen in either legal review phase. Closure authority is validated separately by validate_closure.py.
  status=[x.strip() for x in review.splitlines() if x.strip().startswith('Status:')]
- req(status==[PENDING],f'review current Status drift: {status}',errors)
- for marker in ('Required P09 case range: **P09-T001..P09-T027**.','does **not** freeze exact Workspace HTTP methods/paths','`CAP-S3-STORAGE` is DEFERRED','No P09 PASS or Exit claim is made in this state.','SAME-REVISION CI REQUIRED'):
+ has_pending=status==[PENDING]; has_signed=status==[SIGNED]
+ req(has_pending ^ has_signed,f'review current Status drift: {status}',errors)
+ for marker in ('Required P09 case range: **P09-T001..P09-T027**.','does **not** freeze exact Workspace HTTP methods/paths','`CAP-S3-STORAGE` is DEFERRED','SAME-REVISION CI REQUIRED'):
   req(marker in review,f'review marker missing: {marker}',errors)
+ if has_pending:
+  req('No P09 PASS or Exit claim is made in this state.' in review,'pending review marker missing',errors)
+  req('Accountable reviewer identity:' not in review,'pending review must not contain accountable signature',errors)
+ if has_signed:
+  req(re.search(r'Pre-sign exact implementation SHA:\s*`[0-9a-f]{40}`',review) is not None,'signed review pre-sign SHA missing',errors)
+  req('P09-T027: PASS — pre-sign closure / merge-authoritative=false' in review,'signed review pre-sign T027 record missing',errors)
+  for marker in ('- P0 defects: 0','- P1 defects: 0','- `DECISION REQUIRED`: 0'):
+   req(marker in review,f'signed review defect marker missing: {marker}',errors)
+  req('signed revision itself must rerun' in review.lower(),'signed review rerun rule missing',errors)
+
  head=git('rev-parse','HEAD'); req(bool(re.fullmatch(r'[0-9a-f]{40}',head)),f'invalid exact HEAD {head}',errors)
  try: mb=git('merge-base',head,BASE); req(mb==BASE,f'branch base drift: merge-base={mb}',errors)
  except Exception as exc: errors.append(f'cannot verify branch ancestry: {exc}')
- result={'node':'P09','status':'PASS' if not errors else 'FAIL','implementation_commit':head,'base_integration_commit':BASE,'case_range':'P09-T001..P09-T027','case_count':len(cases),'review_status':'PENDING','workspace_api_authority':'P09 implementation contract; IA supplies semantic fileshare/file-delete wording, not exact Workspace HTTP paths','errors':errors}
+ review_state='SIGNED' if has_signed else 'PENDING' if has_pending else 'INVALID'
+ result={'node':'P09','status':'PASS' if not errors else 'FAIL','implementation_commit':head,'base_integration_commit':BASE,'case_range':'P09-T001..P09-T027','case_count':len(cases),'review_status':review_state,'workspace_api_authority':'P09 implementation contract; IA supplies semantic fileshare/file-delete wording, not exact Workspace HTTP paths','errors':errors}
  print(json.dumps(result,indent=2,sort_keys=True)); return 0 if not errors else 1
 
 if __name__=='__main__': raise SystemExit(main())
