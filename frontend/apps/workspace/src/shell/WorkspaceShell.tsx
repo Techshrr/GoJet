@@ -5,7 +5,7 @@ import { Button, Dialog, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
 
 const groups = [
-  ['CREATE', [['Links', '/app/links'], ['QR Codes', '/app/qr'], ['Files', '/app/files']]],
+  ['CREATE', [['Links', '/app/links'], ['QR Codes', '/app/qr'], ['Files', '/app/files'], ['Text', '/app/text']]],
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains']]],
   ['DEVELOPER', [['Developer', '/app/developer']]],
@@ -13,25 +13,14 @@ const groups = [
 ] as const;
 
 type OverlayName = 'create' | 'command' | 'notifications';
-
-type WorkspaceShellProps = {
-  children: ReactNode;
-  state?: ShellState<'workspace'>;
-  sectionLabel?: string;
-};
+type WorkspaceShellProps = { children: ReactNode; state?: ShellState<'workspace'>; sectionLabel?: string };
 
 export function WorkspaceShell({ children, state = 'loading-workspace', sectionLabel = 'Overview' }: WorkspaceShellProps) {
   const [overlay, setOverlay] = useState<OverlayName | null>(null);
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   const viewport = useShellViewport();
-  const openOverlay = (name: OverlayName, event: MouseEvent<HTMLButtonElement>) => {
-    lastTrigger.current = event.currentTarget;
-    setOverlay(name);
-  };
-  const closeOverlay = () => {
-    setOverlay(null);
-    requestAnimationFrame(() => lastTrigger.current?.focus());
-  };
+  const openOverlay = (name: OverlayName, event: MouseEvent<HTMLButtonElement>) => { lastTrigger.current = event.currentTarget; setOverlay(name); };
+  const closeOverlay = () => { setOverlay(null); requestAnimationFrame(() => lastTrigger.current?.focus()); };
   const title = overlay === 'create' ? 'Global Create' : overlay === 'command' ? 'Command palette' : 'Notifications';
   const copy = overlay === 'create' ? 'Link · QR · File · Text · Bio' : overlay === 'command' ? 'Navigation and permitted actions' : 'Recent security, domain, billing and support activity.';
 
@@ -61,9 +50,7 @@ export function WorkspaceShell({ children, state = 'loading-workspace', sectionL
         {state === 'read-only-role' && <InlineMessage variant="info">You have read-only access to this workspace.</InlineMessage>}
         <main className="workspace-content" aria-busy={state === 'loading-workspace'}>{children}</main>
       </div>
-      <Dialog open={overlay !== null} title={title} description="Only one workspace overlay may be active at a time." onClose={closeOverlay}>
-        <p>{copy}</p>
-      </Dialog>
+      <Dialog open={overlay !== null} title={title} description="Only one workspace overlay may be active at a time." onClose={closeOverlay}><p>{copy}</p></Dialog>
     </div>
   );
 }

@@ -13,6 +13,8 @@ const QRListPage = lazy(() => import('./routes/QRListPage'));
 const QRDetailPage = lazy(() => import('./routes/QRDetailPage'));
 const FilesListPage = lazy(() => import('./routes/FilesListPage'));
 const FileDetailPage = lazy(() => import('./routes/FileDetailPage'));
+const TextListPage = lazy(() => import('./routes/TextListPage'));
+const TextDetailPage = lazy(() => import('./routes/TextDetailPage'));
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -34,12 +36,14 @@ const qrRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/qr', 
 const qrDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/qr/$qrId', component: QRDetailPage });
 const filesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/files', component: FilesListPage });
 const fileDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/files/$fileId', component: FileDetailPage });
+const textRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/text', component: TextListPage });
+const textDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/text/$shareId', component: TextDetailPage });
 const sectionRoutes = ['developer', 'members', 'settings'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
 );
 const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
-  analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, ...sectionRoutes,
+  analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

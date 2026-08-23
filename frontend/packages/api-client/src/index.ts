@@ -49,3 +49,6 @@ export type {
   FileArtifact, FileDependencyHealthReport, FileDependencyState, FileListResponse, FilePolicyInput,
   FileRecord, FileScanState, FileUploadInput,
 } from './files';
+
+export { GoJetTextClient } from './text';
+export type { TextCreateInput, TextListResponse, TextShareRecord, TextUpdateInput, TextVisibility } from './text';
