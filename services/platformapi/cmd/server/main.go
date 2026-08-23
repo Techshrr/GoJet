@@ -90,9 +90,14 @@ func main() {
 		logger.Error("configure files", "error", err)
 		os.Exit(1)
 	}
+	textHandler, textEnabled, err := buildTextHandler(db, testAuth)
+	if err != nil {
+		logger.Error("configure Text Sharing", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains, P07 Analytics, P08 QR and conditionally enabled P09 Files routes
+	// P06 Domains, P07 Analytics, P08 QR, conditionally enabled P09 Files and P10 Text routes
 	// explicitly. Each inner handler retains its own security headers and test-only auth boundary.
 	root := http.NewServeMux()
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -121,6 +126,16 @@ func main() {
 		root.Handle("GET /api/public/files/{slug}", filesHandler)
 		root.Handle("GET /api/admin/platform/storage", filesHandler)
 	}
+	if textEnabled {
+		root.Handle("GET /api/workspaces/{workspaceId}/text-shares", textHandler)
+		root.Handle("POST /api/workspaces/{workspaceId}/text-shares", textHandler)
+		root.Handle("GET /api/workspaces/{workspaceId}/text-shares/{shareId}", textHandler)
+		root.Handle("PATCH /api/workspaces/{workspaceId}/text-shares/{shareId}", textHandler)
+		root.Handle("DELETE /api/workspaces/{workspaceId}/text-shares/{shareId}", textHandler)
+		root.Handle("GET /t/{slug}", textHandler)
+		root.Handle("POST /t/{slug}", textHandler)
+		root.Handle("POST /api/public/text/{slug}", textHandler)
+	}
 	root.Handle("/", linksAPI.FullHandlerWithRisk(risk))
 
 	address := strings.TrimSpace(os.Getenv("GOJET_PLATFORMAPI_ADDR"))
@@ -147,7 +162,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
