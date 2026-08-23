@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GoJetApiError, type TextVisibility } from '@gojet/api-client';
+import { GoJetApiError, type TextUpdateInput, type TextVisibility } from '@gojet/api-client';
 import { Button, Card, InlineMessage, TextField } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
 import { isReadOnly } from '../links/runtime';
@@ -13,10 +13,10 @@ function toLocalDateTime(value?: string | null): string {
   const shifted = new Date(date.valueOf() - date.getTimezoneOffset() * 60_000);
   return shifted.toISOString().slice(0, 16);
 }
-function toRFC3339(value: string): string | undefined {
-  if (!value) return undefined;
+function toRFC3339(value: string): string | null {
+  if (!value) return null;
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
+  return Number.isNaN(date.valueOf()) ? null : date.toISOString();
 }
 
 export default function TextDetailPage() {
@@ -51,12 +51,13 @@ export default function TextDetailPage() {
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!runtime || !client || !item) throw new Error('Text authority is unavailable.');
-      return client.update(runtime.workspaceId, numericId, {
-        expected_version: item.version, title: title.trim(), content, visibility,
-        password: password || undefined, clear_password: clearPassword || undefined,
-        expires_at: expiresAt ? toRFC3339(expiresAt) : undefined, clear_expires_at: !expiresAt && Boolean(item.expires_at) ? true : undefined,
-        one_time: oneTime, change_reason: changeReason.trim(),
-      });
+      const input: TextUpdateInput = { expected_version: item.version, title: title.trim(), content, visibility, one_time: oneTime, change_reason: changeReason.trim() };
+      if (password) input.password = password;
+      if (clearPassword) input.clear_password = true;
+      const expiry = toRFC3339(expiresAt);
+      if (expiry) input.expires_at = expiry;
+      else if (item.expires_at) input.clear_expires_at = true;
+      return client.update(runtime.workspaceId, numericId, input);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['text-share', runtime?.workspaceId, numericId] });
