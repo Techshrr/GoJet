@@ -188,7 +188,7 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		"items": publicLinks(result.Items),
 		"total": result.Total,
 		"filters": map[string]any{
-			"implemented": []string{"q", "hostname", "status", "campaign", "tag", "folder", "updated_from", "updated_to"},
+			"implemented":        []string{"q", "hostname", "status", "campaign", "tag", "folder", "updated_from", "updated_to"},
 			"deferred_to_owners": map[string]string{},
 		},
 	})
