@@ -5,7 +5,7 @@ import { Button, Dialog, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
 
 const groups = [
-  ['CREATE', [['Links', '/app/links'], ['QR Codes', '/app/qr'], ['Files', '/app/files'], ['Text', '/app/text']]],
+  ['CREATE', [['Links', '/app/links'], ['QR Codes', '/app/qr'], ['Files', '/app/files'], ['Text', '/app/text'], ['Bio', '/app/bio']]],
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains']]],
   ['DEVELOPER', [['Developer', '/app/developer']]],
