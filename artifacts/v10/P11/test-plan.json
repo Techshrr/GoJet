@@ -1,0 +1,344 @@
+{
+  "node": "P11",
+  "title": "Bio",
+  "base_integration_commit": "4d2186da8b2958c7618a233f53908f2914c389a3",
+  "case_ids_frozen_by": "P11 contract-freeze revision; Master Plan supplies requirements, not P11-Txxx identifiers",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capability": {
+      "id": "CAP-BIO",
+      "status": "REQUIRED",
+      "owner": "P11",
+      "gates": ["G3", "G7"]
+    },
+    "p11_dependencies": ["P05"],
+    "entry_conditions": "Public resource and Design System patterns are available on the integrated main baseline.",
+    "goal": "Create, edit, preview, publish, pause and remove Bio pages with fail-closed child-link safety, responsive public rendering and permanent V10 UGC noindex/sitemap exclusion.",
+    "master_required_tests": [
+      "ownership",
+      "risk-blocked link",
+      "mobile",
+      "noindex",
+      "sitemap exclusion"
+    ],
+    "gate_scope": "P11 closes CAP-BIO and only the P11 Bio UGC/noindex contribution to G7; release-wide G7 remains later-owned by P18/P19/P20/P22. P11 consumes current-repository destination-risk authority but does not claim P16 completion of the broader CAP-DESTINATION-RISK review/admin lifecycle.",
+    "implementation_columns": [
+      "Backend", "DB/Migration", "API", "UI", "RBAC", "States", "Browser", "Security", "Observability", "Release"
+    ]
+  },
+  "predecessor_signed_authority": {
+    "node": "P10",
+    "integration_commit": "4d2186da8b2958c7618a233f53908f2914c389a3",
+    "signed_source_commit": "7db4fca49ba3fd8e60600ecdf41847c7e2f94776",
+    "closure_run_id": 32643830718,
+    "artifact_id": 9494371271,
+    "artifact_digest": "sha256:6a4bcaed870c6432df40e1fe71cb38dd05a84789d3539ab10dabcbfefe450c50",
+    "phase": "signed",
+    "merge_authoritative": true
+  },
+  "master_test_trace": {
+    "ownership": "P11-T003",
+    "risk-blocked link": ["P11-T009", "P11-T010"],
+    "mobile": "P11-T018",
+    "noindex": ["P11-T013", "P11-T015"],
+    "sitemap exclusion": "P11-T014"
+  },
+  "route_contract": {
+    "ia_authoritative_routes": [
+      "APP-BIO /app/bio",
+      "APP-BIO-DETAIL /app/bio/{pageId}",
+      "PUB-BIO /p/{slug}",
+      "PUB-BIO GET /api/public/bio/{slug}"
+    ],
+    "workspace_api_authority_note": "The approved IA names required Bio APIs and route-using Bio APIs but does not freeze exact Workspace HTTP method/path families. The following family is frozen by P11 as the current-repository implementation contract and must not be represented as IA-exact authority.",
+    "p11_workspace_api_family": [
+      "GET /api/workspaces/{id}/bio-pages",
+      "POST /api/workspaces/{id}/bio-pages",
+      "GET /api/workspaces/{id}/bio-pages/{pageId}",
+      "PATCH /api/workspaces/{id}/bio-pages/{pageId}",
+      "DELETE /api/workspaces/{id}/bio-pages/{pageId}",
+      "POST /api/workspaces/{id}/bio-pages/{pageId}/publish",
+      "POST /api/workspaces/{id}/bio-pages/{pageId}/pause"
+    ],
+    "public_contract": {
+      "page": "GET /p/{slug} is IA-exact PUB-BIO browser authority.",
+      "machine": "GET /api/public/bio/{slug} is the IA-exact public Bio API dependency and repeats publication/removal and child-link safety authority.",
+      "published_status": 200,
+      "paused_status": 200,
+      "unknown_or_unpublished_status": 404,
+      "removed_status": 410,
+      "blocked_child_behavior": "A published page may remain 200 in risk-blocked-child-link state, but review/blocked child destinations must not remain active href/navigation targets.",
+      "legacy_aliases": "PROHIBITED unless later specification change control creates a Route ID and removal plan"
+    }
+  },
+  "resource_contract": {
+    "page_fields": [
+      "id", "workspace_id", "slug", "title", "bio", "status", "version", "published_at", "created_by", "created_at", "updated_at", "deleted_at"
+    ],
+    "child_link_fields": [
+      "id", "bio_page_id", "position", "label", "destination_url", "destination_fingerprint", "risk_status", "risk_checked_at"
+    ],
+    "page_statuses": ["draft", "published", "paused"],
+    "child_risk_statuses": ["review", "allowed", "blocked"],
+    "slug_authority": "opaque server-generated public slug; internal IDs are not public path authority",
+    "content_authority": "Bio title, profile text and link labels are UTF-8 data and must never execute as HTML/script.",
+    "link_authority": "Only normalized http/https child destinations may be stored; javascript/data/credential-bearing or malformed targets are rejected server-side.",
+    "risk_authority": "Every child destination is bound to a normalized destination fingerprint and current-repository risk result. A changed destination invalidates the prior allow result and must be re-evaluated before becoming navigable.",
+    "publication_authority": "Only server-authoritative published state may expose profile content publicly. Draft is public 404; paused is an explicit noindex public state with no active child navigation; removed is 410.",
+    "conflict_authority": "versioned optimistic concurrency; stale page mutation returns 409",
+    "delete_authority": "removed/deleted public access is 410 and stale writes cannot resurrect authority"
+  },
+  "deferred_contract": {
+    "capability": "CAP-BIO-OPT-IN-INDEX",
+    "status": "DEFERRED",
+    "p11_rule": "No P11 API, database field, Workspace control or public query may enable indexing. Bio remains noindex and absent from sitemaps for all V10 P11 states."
+  },
+  "seo_contract": {
+    "public_route": "PUB-BIO /p/{slug}",
+    "index_policy": "noindex",
+    "canonical": "none",
+    "locale_alternate": "none",
+    "structured_data": "none",
+    "sitemap": false,
+    "internal_link_parent": "Workspace publish action only",
+    "metadata_source": "resource-safe title only",
+    "html_robots": "noindex",
+    "machine_header": "X-Robots-Tag: noindex, nofollow",
+    "outbound_rel": "ugc nofollow",
+    "http_contract": {
+      "published": 200,
+      "paused": 200,
+      "unknown_or_unpublished": 404,
+      "removed": 410
+    },
+    "soft_404": "Unknown/unpublished and removed resources must not be represented as generic 200 success pages; paused is an explicit IA public state, not a not-found substitute.",
+    "release_wide_g7": "OPEN / later-owned by P18/P19/P20/P22"
+  },
+  "environment_contract": {
+    "mysql": "Real MySQL 8.x authoritative Bio page/link persistence, publication and risk-state binding.",
+    "platformapi": "Real native Go platformapi; fixture/in-memory substitution is insufficient for Exit evidence.",
+    "destination_risk": "Current-repository P05 destination-risk safety authority is required for child-link allow/review/block evidence; P11 does not claim P16 admin/review completion.",
+    "workspace_browser": "Built Workspace app consuming real P11 APIs.",
+    "public_http": "Real native platformapi/public Bio HTML and API responses with raw status/header/body evidence.",
+    "production_docker_compose_node": "PROHIBITED"
+  },
+  "cases": [
+    {
+      "id": "P11-T001",
+      "name": "Create and list Bio pages persist authoritative Workspace draft state",
+      "precondition": "Real MySQL; authenticated Workspace manage actor.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T001",
+      "oracle": "Create persists one same-Workspace draft Bio page with opaque server slug, owner/version timestamps and ordered child-link collection; list returns only same-Workspace pages.",
+      "evidence": "artifacts/v10/P11/api/P11-T001.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T002",
+      "name": "Bio page and child-link validation reject malformed or executable authority",
+      "precondition": "Valid and malformed create/update payloads against real platformapi.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T002",
+      "oracle": "Server validates profile fields, link labels/order and destination URLs; only normalized http/https targets are accepted; executable/malformed/credential-bearing targets fail without partial publication.",
+      "evidence": "artifacts/v10/P11/api/P11-T002.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T003",
+      "name": "Authentication ownership tenant isolation and RBAC protect Bio CRUD and publish actions",
+      "precondition": "Signed-out actor, two Workspaces, read-only and manage actors.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T003",
+      "oracle": "Signed-out access is denied, read-only cannot mutate/publish, cross-Workspace actors cannot infer or mutate pages, and manage permission is enforced server-side for every mutation.",
+      "evidence": "artifacts/v10/P11/api/P11-T003.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T004",
+      "name": "Optimistic version conflict prevents lost Bio edits",
+      "precondition": "One Bio page with concurrent/current and stale edit versions.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T004",
+      "oracle": "Current version updates atomically; stale page/link mutation returns 409 and cannot overwrite the committed page or child-link order.",
+      "evidence": "artifacts/v10/P11/api/P11-T004.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T005",
+      "name": "Delete and removal lifecycle is durable and non-resurrecting",
+      "precondition": "Existing draft and published Bio pages with manage actor.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T005",
+      "oracle": "Delete/removal is authorized and durable; removed public page/API return 410, child destinations are not exposed, and stale writes cannot resurrect publication.",
+      "evidence": "artifacts/v10/P11/headers/P11-T005.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T006",
+      "name": "Publish transition exposes only server-authorized Bio content with HTTP 200",
+      "precondition": "Draft Bio page whose child links all have current allowed safety state.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T006",
+      "oracle": "Publish records authoritative published_at/status; GET /p/{slug} and GET /api/public/bio/{slug} return 200 with safe profile data and only currently allowed child navigation.",
+      "evidence": "artifacts/v10/P11/headers/P11-T006.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T007",
+      "name": "Draft and pause authority fail closed without exposing active child navigation",
+      "precondition": "Draft page and published page transitioned to paused.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T007",
+      "oracle": "Draft/unpublished public access is 404; paused PUB-BIO is the explicit 200 paused state but exposes no active child href/navigation and can be resumed only by authorized Workspace action.",
+      "evidence": "artifacts/v10/P11/headers/P11-T007.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T008",
+      "name": "Allowed outbound Bio links render as UGC nofollow links",
+      "precondition": "Published Bio page with multiple currently allowed http/https destinations.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T008",
+      "oracle": "Rendered outbound links preserve owner-defined label/order, use normalized destinations, include rel containing ugc and nofollow, and do not expose internal risk evidence or tenant fields.",
+      "evidence": "artifacts/v10/P11/headers/P11-T008.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T009",
+      "name": "Risk-review and blocked child links fail closed on the published Bio surface",
+      "precondition": "Published page with one allowed, one review and one blocked child destination using real current-repository safety authority.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T009",
+      "oracle": "Page may remain 200 in IA risk-blocked-child-link state, but review/blocked children have no active href/navigation target while allowed children remain usable; raw response leaks no provider/risk secret evidence.",
+      "evidence": "artifacts/v10/P11/headers/P11-T009.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T010",
+      "name": "Changing a child destination invalidates stale allow state and requires new risk authority",
+      "precondition": "Published page with an allowed child then mutated to a different destination.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T010",
+      "oracle": "Destination fingerprint changes; the previous allow result cannot authorize the new target; child enters review/blocked until current risk authority permits it, with no stale public href window.",
+      "evidence": "artifacts/v10/P11/api/P11-T010.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T011",
+      "name": "Public Bio API mirrors publication/removal and safe-link authority without internal leakage",
+      "precondition": "Published, paused, draft, removed and unknown Bio fixtures.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T011",
+      "oracle": "GET /api/public/bio/{slug} follows 200/404/410 lifecycle authority, never exposes Workspace IDs/internal risk evidence, and never returns active review/blocked child destinations.",
+      "evidence": "artifacts/v10/P11/headers/P11-T011.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T012",
+      "name": "Bio quota and failed publish are transactional and non-escalating",
+      "precondition": "Workspace at configured Bio quota plus a page with unresolved child safety state.",
+      "driver": "python3 scripts/p11/integration.py --case P11-T012",
+      "oracle": "Over-quota create is rejected server-side without partial page; publish with unresolved unsafe authority fails closed without changing authoritative published state or exposing child targets.",
+      "evidence": "artifacts/v10/P11/api/P11-T012.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T013",
+      "name": "Every Bio UGC HTML and public API response is permanently noindex",
+      "precondition": "Published, paused, risk-blocked-child-link, removed, draft and unknown lifecycle fixtures.",
+      "driver": "python3 scripts/p11/seo.py --case P11-T013",
+      "oracle": "HTML carries robots noindex and response headers carry applicable X-Robots-Tag; public Bio API carries X-Robots-Tag: noindex, nofollow on success/error statuses.",
+      "evidence": "artifacts/v10/P11/headers/P11-T013.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T014",
+      "name": "Bio UGC is excluded from Website and Docs sitemaps and has no canonical hreflang or structured data",
+      "precondition": "Current route/SEO outputs, sitemap artifacts and representative Bio public responses.",
+      "driver": "python3 scripts/p11/seo.py --case P11-T014",
+      "oracle": "No /p/{slug} is emitted into Website/Docs sitemaps; sitemap diff has zero Bio additions; PUB-BIO has no canonical/hreflang/structured data; unknown/draft and removed use 404/410 instead of generic 200 success.",
+      "evidence": "artifacts/v10/P11/sitemap/P11-T014.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T015",
+      "name": "Deferred Bio owner opt-in indexing remains absent and cannot expand the index surface",
+      "precondition": "Workspace/API/public contracts and representative create/update/publish payloads.",
+      "driver": "python3 scripts/p11/seo.py --case P11-T015",
+      "oracle": "CAP-BIO-OPT-IN-INDEX remains DEFERRED: no API field, persisted authority, Workspace control or query can enable index/canonical/sitemap membership; attempted index input is rejected or ignored fail-closed while public output stays noindex.",
+      "evidence": "artifacts/v10/P11/headers/P11-T015.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T016",
+      "name": "APP-BIO list/create route covers loading empty edit preview publish-error and quota states",
+      "precondition": "Built Workspace using real platformapi/MySQL with owner and read-only actors plus controlled quota/error fixtures.",
+      "driver": "node scripts/p11/browser.mjs --case P11-T016",
+      "oracle": "Route-backed /app/bio renders the IA state set without mocked request interception; create navigates to the real detail route and quota/publish-error are real server outcomes.",
+      "evidence": "artifacts/v10/P11/browser/P11-T016.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T017",
+      "name": "APP-BIO-DETAIL editor preview publish and child-link safety states are route-backed",
+      "precondition": "Built Workspace, real page fixtures and current risk authority for allowed/review/blocked links.",
+      "driver": "node scripts/p11/browser.mjs --case P11-T017",
+      "oracle": "Route-backed /app/bio/{pageId} covers loading/draft/preview/published/child-link-review/child-link-block/conflict/deleted; public preview/publish action reaches real /p/{slug} and blocked links are non-navigable.",
+      "evidence": "artifacts/v10/P11/browser/P11-T017.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T018",
+      "name": "Bio Workspace and public surfaces satisfy canonical responsive mobile and accessibility evidence",
+      "precondition": "Real owner Workspace/public page in system Chromium at Design System canonical desktop/tablet/mobile viewports plus 320px reflow and reduced-motion contexts.",
+      "driver": "node scripts/p11/browser.mjs --case P11-T018",
+      "oracle": "List/detail/public surfaces have zero horizontal overflow or clipped actionable content, keyboard-visible focus, non-color safety state text, usable reduced-motion behavior and public outbound rel=ugc nofollow at mobile and canonical viewports.",
+      "evidence": "artifacts/v10/P11/browser/P11-T018.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T019",
+      "name": "Exact-head Bio evidence coherence binds T001 through T018 producers and captures",
+      "precondition": "P11 Contract, real integration and Workspace/Public browser producers completed successfully on one exact HEAD.",
+      "driver": "python3 scripts/p11/validate.py --case P11-T019",
+      "oracle": "T001..T018 are PASS with empty errors and one implementation SHA; producer run/artifact IDs and SHA-256 digests are bound; browser captures and sitemap diff are inspectable and semantically consistent.",
+      "evidence": "artifacts/v10/P11/results/P11-T019.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    },
+    {
+      "id": "P11-T020",
+      "name": "Signed exact-head P11 closure binds affected regression matrix predecessor authority and accountable review",
+      "precondition": "T001..T019 coherent exact-head evidence, affected P00-P11 workflows green, authoritative P10 signed closure available, and P11 review eligible for signature.",
+      "driver": "python3 scripts/p11/validate.py --case P11-T020 --closure",
+      "oracle": "Pre-sign closure is PASS but merge-authoritative=false; the review-only child commit records accountable approvals/P0=0/P1=0/DECISION REQUIRED=0; signed HEAD reruns the whole matrix and closes only when phase=signed and merge-authoritative=true.",
+      "evidence": "artifacts/v10/P11/results/P11-T020.json",
+      "expected_exit": 0,
+      "owner": "P11"
+    }
+  ],
+  "closure_contract": {
+    "version": 1,
+    "same_exact_head_required": true,
+    "required_case_range": "P11-T001..P11-T020",
+    "review_required": true,
+    "p0_max": 0,
+    "p1_max": 0,
+    "decision_required_max": 0,
+    "pre_sign_phase": "pre-sign / merge_authoritative=false",
+    "signed_phase": "signed / merge_authoritative=true",
+    "predecessor_rule": "P11 closure inherits the already-signed authoritative P10 closure from source commit 7db4fca49ba3fd8e60600ecdf41847c7e2f94776; it must not rerun P10 revision-specific closure on a P11 HEAD and reinterpret it.",
+    "gate_scope": "P11 CAP-BIO G3 plus P11 Bio UGC/noindex G7 subset only; full G7 and P16 destination-risk admin/review completion remain later-owned."
+  }
+}
