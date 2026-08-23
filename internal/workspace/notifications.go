@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,6 +28,12 @@ type NotificationPage struct {
 	UnreadCount uint64            `json:"unread_count"`
 	State       NotificationState `json:"state"`
 }
+
+var (
+	notificationEmailLike  = regexp.MustCompile(`(?i)[a-z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+`)
+	notificationBearerLike = regexp.MustCompile(`(?i)\bbearer\s+[a-z0-9._~+/-]{8,}`)
+	notificationJWTLike    = regexp.MustCompile(`\beyJ[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,}\b`)
+)
 
 func validNotificationCategory(value string) bool {
 	switch value {
@@ -261,6 +268,9 @@ func redactNotificationText(value string) string {
 		if strings.Contains(lower, marker) {
 			return "[redacted]"
 		}
+	}
+	if notificationEmailLike.MatchString(value) || notificationBearerLike.MatchString(value) || notificationJWTLike.MatchString(value) {
+		return "[redacted]"
 	}
 	return value
 }
