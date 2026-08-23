@@ -74,7 +74,11 @@ function attachDiagnostics(page, report) {
 }
 function assertDiagnostics(report, label, allowedStatuses=[]) {
   const httpErrors = report.http_errors.filter((entry) => !allowedStatuses.includes(entry.status));
-  assert(report.console_errors.length===0, `${label} console errors ${JSON.stringify(report.console_errors)}`);
+  const consoleErrors = report.console_errors.filter((message) => {
+    const match = /status of (\d{3})\b/.exec(message);
+    return !match || !allowedStatuses.includes(Number(match[1]));
+  });
+  assert(consoleErrors.length===0, `${label} console errors ${JSON.stringify(consoleErrors)}`);
   assert(report.page_errors.length===0, `${label} page errors ${JSON.stringify(report.page_errors)}`);
   assert(report.request_failures.length===0, `${label} request failures ${JSON.stringify(report.request_failures)}`);
   assert(httpErrors.length===0, `${label} HTTP errors ${JSON.stringify(httpErrors)}`);
