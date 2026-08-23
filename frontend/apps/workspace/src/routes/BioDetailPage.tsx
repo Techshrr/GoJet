@@ -111,8 +111,12 @@ export default function BioDetailPage() {
     setChildren((current) => {
       const target = position + direction;
       if (target < 0 || target >= current.length) return current;
+      const currentItem = current[position];
+      const targetItem = current[target];
+      if (!currentItem || !targetItem) return current;
       const next = [...current];
-      [next[position], next[target]] = [next[target], next[position]];
+      next[position] = targetItem;
+      next[target] = currentItem;
       return reindex(next);
     });
   }
