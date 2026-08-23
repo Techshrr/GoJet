@@ -144,6 +144,7 @@ async function caseT017(browser){
   await updateText(base,{title:'External version'}); await opened.page.getByLabel('Title').fill('Stale browser edit'); await opened.page.getByRole('button',{name:'Save current version'}).click(); await waitState(opened.page,'[data-page="text-detail"]','conflict'); evidence.conflict=true; await opened.context.close();
 
   const expired=await createText({title:'Expired detail',visibility:'public',expires_at:new Date(Date.now()-60000).toISOString()}); opened=await openPage(browser,OWNER_URL,`/app/text/${expired.id}`); await waitState(opened.page,'[data-page="text-detail"]','expired'); evidence.expired=true; await opened.context.close();
+  await deleteText(expired); evidence.expired_fixture_removed=true;
   const deleted=await createText({title:'Deleted detail'}); await deleteText(deleted); opened=await openPage(browser,OWNER_URL,`/app/text/${deleted.id}`); await waitState(opened.page,'[data-page="text-detail"]','deleted'); evidence.deleted=true; assertDiagnostics(opened.report,'T017 deleted',[410]); await opened.context.close();
 
   mysql('RENAME TABLE text_shares TO text_shares_p10_fault');
