@@ -53,9 +53,14 @@ func (s *Store) ProduceNotification(ctx context.Context, input NotificationInput
 	input.Title = redactNotificationText(strings.TrimSpace(input.Title))
 	input.Summary = redactNotificationText(strings.TrimSpace(input.Summary))
 	input.DeepLink = normalizeDeepLink(input.DeepLink)
+	input.ResourceType = strings.TrimSpace(input.ResourceType)
+	input.ResourceID = strings.TrimSpace(input.ResourceID)
 	if input.WorkspaceID == "" || input.RecipientUserID == "" || !validNotificationCategory(input.Category) ||
 		input.EventKey == "" || input.DedupeKey == "" || input.Title == "" || len(input.Title) > 200 ||
-		len(input.Summary) > 500 || len(input.DedupeKey) > 160 {
+		len(input.Summary) > 500 || len(input.EventKey) > 96 || len(input.DedupeKey) > 160 ||
+		len(input.ResourceType) > 64 || len(input.ResourceID) > 128 ||
+		notificationContainsSensitiveData(input.EventKey) || notificationContainsSensitiveData(input.DedupeKey) ||
+		notificationContainsSensitiveData(input.ResourceType) || notificationContainsSensitiveData(input.ResourceID) {
 		return Notification{}, false, ErrInvalid
 	}
 	if _, err := s.GetMembership(ctx, input.WorkspaceID, input.RecipientUserID); err != nil {
@@ -66,7 +71,7 @@ INSERT IGNORE INTO workspace_notifications
 (workspace_id,recipient_user_id,category,event_key,dedupe_key,title,summary,deep_link,resource_type,resource_id)
 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		input.WorkspaceID, input.RecipientUserID, input.Category, input.EventKey, input.DedupeKey,
-		input.Title, input.Summary, nullIfEmpty(input.DeepLink), strings.TrimSpace(input.ResourceType), strings.TrimSpace(input.ResourceID))
+		input.Title, input.Summary, nullIfEmpty(input.DeepLink), input.ResourceType, input.ResourceID)
 	if err != nil {
 		return Notification{}, false, err
 	}
@@ -195,7 +200,7 @@ func (s *Store) SetNotificationState(ctx context.Context, workspaceID, status, r
 		return ErrInvalid
 	}
 	reason = strings.TrimSpace(reason)
-	if reason == "" || len(reason) > 160 {
+	if reason == "" || len(reason) > 160 || notificationContainsSensitiveData(reason) {
 		return ErrInvalid
 	}
 	_, err := s.db.ExecContext(ctx, `
@@ -207,7 +212,7 @@ WHERE workspace_id=?`, status, dataThrough, reason, workspaceID)
 
 func normalizeDeepLink(value string) string {
 	value = strings.TrimSpace(value)
-	if value == "" || !strings.HasPrefix(value, "/app") || strings.HasPrefix(value, "//") {
+	if value == "" || !strings.HasPrefix(value, "/app") || strings.HasPrefix(value, "//") || strings.ContainsAny(value, "?#") || notificationContainsSensitiveData(value) {
 		return ""
 	}
 	clean := path.Clean(value)
@@ -261,15 +266,19 @@ func (s *Store) AuthorizeDeepLink(ctx context.Context, workspaceID, userID, deep
 	return false, nil
 }
 
-func redactNotificationText(value string) string {
+func notificationContainsSensitiveData(value string) bool {
 	lower := strings.ToLower(value)
 	deny := []string{"password=", "token=", "secret=", "authorization:", "cookie:", "oauth_", "webhook_secret", "payment_secret", "risk_evidence"}
 	for _, marker := range deny {
 		if strings.Contains(lower, marker) {
-			return "[redacted]"
+			return true
 		}
 	}
-	if notificationEmailLike.MatchString(value) || notificationBearerLike.MatchString(value) || notificationJWTLike.MatchString(value) {
+	return notificationEmailLike.MatchString(value) || notificationBearerLike.MatchString(value) || notificationJWTLike.MatchString(value)
+}
+
+func redactNotificationText(value string) string {
+	if notificationContainsSensitiveData(value) {
 		return "[redacted]"
 	}
 	return value
