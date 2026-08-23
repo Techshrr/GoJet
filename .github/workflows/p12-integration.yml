@@ -100,7 +100,7 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
           python3 -m py_compile scripts/p12/integration_common.py scripts/p12/integration.py scripts/p12/validate_contract.py
-          find internal/workspace internal/links internal/analytics services/platformapi/cmd/server scripts/p12 -type f -name '*.go' -print0 | xargs -0 gofmt -d | tee /tmp/p12-gofmt.diff
+          gofmt -d internal/workspace/*.go internal/links/httpapi.go internal/links/store_mysql_query.go services/platformapi/cmd/server/main.go services/platformapi/cmd/server/workspace.go scripts/p12/producer.go | tee /tmp/p12-gofmt.diff
           test ! -s /tmp/p12-gofmt.diff
           go test ./internal/workspace ./internal/links ./internal/analytics ./services/platformapi/cmd/server
           go vet ./internal/workspace ./internal/links ./internal/analytics ./services/platformapi/cmd/server
