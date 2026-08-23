@@ -16,10 +16,13 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 		writeWorkspaceStoreError(w, r, err)
 		return
 	}
-	invitations, err := a.store.ListInvitations(r.Context(), m.WorkspaceID)
-	if err != nil {
-		writeWorkspaceStoreError(w, r, err)
-		return
+	invitations := []Invitation{}
+	if m.Role == RoleOwner || m.Role == RoleAdmin {
+		invitations, err = a.store.ListInvitations(r.Context(), m.WorkspaceID)
+		if err != nil {
+			writeWorkspaceStoreError(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"members": items, "invitations": invitations})
 }
