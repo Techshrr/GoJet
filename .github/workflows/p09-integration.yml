@@ -1,0 +1,321 @@
+name: P09 Real Files and ClamAV Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/files/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'scripts/p09/**'
+      - 'artifacts/v10/P09/**'
+      - '.github/workflows/p09-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p09-real-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration:
+    name: P09 real MySQL ClamAV storage and worker tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ANALYTICS_ENABLED: '0'
+      GOJET_QR_WORKSPACE_QUOTA: '2'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_FILES_ENABLED: '1'
+      GOJET_FILE_WORKSPACE_MAX_FILES: '2'
+      GOJET_FILE_WORKSPACE_MAX_BYTES: '1048576'
+      GOJET_FILE_MAX_UPLOAD_BYTES: '65536'
+      GOJET_FILE_STORAGE_ROOT: /tmp/gojet-p09/storage
+      GOJET_FILE_TYPE_ALLOWLIST: txt=text/plain
+      GOJET_FILE_PUBLIC_AUTH_SECRET: p09-integration-only-secret-0123456789abcdef
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_P09_FILEWORKER: /tmp/gojet-p09/fileworker
+      GOJET_P09_REAL_CLAMD_ADDRESS: 127.0.0.1:3310
+      GOJET_P09_FAULT_SERVER: scripts/p09/clamd_fault_server.py
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL Redis and native ClamAV clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools clamav clamav-daemon clamav-freshclam
+          mysql --version
+          redis-cli --version
+          clamd --version
+          freshclam --version
+
+      - name: Ensure ClamAV signatures and start native clamd
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p09 artifacts/v10/P09/runtime artifacts/v10/P09/results artifacts/v10/P09/clamav
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket 2>/dev/null || true
+          refreshed=0
+          for attempt in 1 2 3; do
+            if sudo freshclam --stdout 2>&1 | tee "artifacts/v10/P09/clamav/freshclam-attempt-${attempt}.log"; then
+              refreshed=1
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [ "$refreshed" -ne 1 ]; then
+            echo 'freshclam did not refresh during this run; checking the installed signature database' >&2
+          fi
+          test -n "$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)"
+          cat > /tmp/gojet-p09/clamd.conf <<'EOF'
+          Foreground true
+          TCPSocket 3310
+          TCPAddr 127.0.0.1
+          DatabaseDirectory /var/lib/clamav
+          LogTime true
+          LogFile /tmp/gojet-p09/clamd.log
+          PidFile /tmp/gojet-p09/clamd.pid
+          MaxFileSize 100M
+          MaxScanSize 100M
+          StreamMaxLength 100M
+          EOF
+          clamd --config-file=/tmp/gojet-p09/clamd.conf > artifacts/v10/P09/clamav/clamd-stdout.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/clamd.pid
+          python3 - <<'PY'
+          import socket, time
+          deadline = time.monotonic() + 30
+          last = None
+          while time.monotonic() < deadline:
+              try:
+                  with socket.create_connection(('127.0.0.1', 3310), timeout=1) as sock:
+                      sock.sendall(b'zVERSION\0')
+                      data = sock.recv(4096)
+                      if data:
+                          print(data.rstrip(b'\0').decode('utf-8', 'replace'))
+                          open('artifacts/v10/P09/clamav/version.txt', 'wb').write(data.rstrip(b'\0') + b'\n')
+                          raise SystemExit(0)
+              except OSError as exc:
+                  last = exc
+                  time.sleep(1)
+          raise SystemExit(f'clamd did not become ready: {last}')
+          PY
+
+      - name: Verify dependency closure and P09 drivers
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          python3 -m py_compile scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p09/validate_contract.py
+          find internal/files services/platformapi/cmd/server services/platformapi/cmd/fileworker -type f -name '*.go' -print0 \
+            | xargs -0 gofmt -d | tee /tmp/p09-gofmt.diff
+          test ! -s /tmp/p09-gofmt.diff
+          go test ./internal/files ./internal/links
+          go vet ./internal/files ./internal/links ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker
+
+      - name: Apply P05 through P09 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < "$migration"
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SHOW TABLES LIKE 'file%'" | sort | tee artifacts/v10/P09/runtime/mysql-file-tables.txt
+
+      - name: Build native P09 services
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p09/platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p09/fileworker ./services/platformapi/cmd/fileworker
+          file /tmp/gojet-p09/platformapi /tmp/gojet-p09/fileworker
+          sha256sum /tmp/gojet-p09/platformapi /tmp/gojet-p09/fileworker > artifacts/v10/P09/runtime/native-binaries.sha256
+
+      - name: Start native platform service
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p09/platformapi > artifacts/v10/P09/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P09/runtime/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'P09 platformapi did not become healthy' >&2
+          cat artifacts/v10/P09/runtime/platformapi.log || true
+          exit 1
+
+      - name: Run P09-T001 through P09-T018
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in $(seq -w 1 18); do
+            case_id="P09-T0${number}"
+            GITHUB_SHA="$exact_head" python3 scripts/p09/integration.py --case "$case_id"
+          done
+
+      - name: Verify exact-head P09-T001 through P09-T018 evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P09')
+          errors = []
+          for number in range(1, 19):
+              case_id = f'P09-T{number:03d}'
+              directory = 'clamav' if 5 <= number <= 10 else 'results'
+              path = root / directory / f'{case_id}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head:
+                  errors.append(f"{case_id} implementation_commit={data.get('implementation_commit')} expected={head}")
+              if data.get('status') != 'PASS':
+                  errors.append(f"{case_id} status={data.get('status')}")
+              if data.get('errors') != []:
+                  errors.append(f"{case_id} errors={data.get('errors')}")
+          for case_id in ('P09-T005', 'P09-T006'):
+              data = json.loads((root / 'clamav' / f'{case_id}.json').read_text(encoding='utf-8'))
+              obs = data.get('observations', {})
+              if not obs.get('engine_version') or not obs.get('signature_version'):
+                  errors.append(f'{case_id} missing real ClamAV engine/signature evidence')
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print(f'P09-T001..T018 exact-head evidence PASS on {head}')
+          PY
+
+      - name: Capture P09 runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P09/runtime artifacts/v10/P09/clamav
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,public_slug,original_name,size_bytes,scan_state,scan_generation,published,download_count,created_at,updated_at,deleted_at FROM files ORDER BY id" \
+            > artifacts/v10/P09/runtime/mysql-files.tsv 2> artifacts/v10/P09/runtime/mysql-files.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,file_id,workspace_id,generation,status,COALESCE(worker_id,''),COALESCE(engine_version,''),COALESCE(signature_version,''),COALESCE(verdict_code,''),COALESCE(error_code,''),queued_at,claimed_at,completed_at FROM file_scan_attempts ORDER BY id" \
+            > artifacts/v10/P09/runtime/mysql-file-scans.tsv 2> artifacts/v10/P09/runtime/mysql-file-scans.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT workspace_id,active_count,active_bytes,updated_at FROM file_workspace_counters ORDER BY workspace_id" \
+            > artifacts/v10/P09/runtime/mysql-file-counters.tsv 2> artifacts/v10/P09/runtime/mysql-file-counters.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test \
+            -e "SELECT id,workspace_id,file_id,actor_id,action,request_correlation_id,result,created_at FROM file_audit_events ORDER BY id" \
+            > artifacts/v10/P09/runtime/mysql-file-audit.tsv 2> artifacts/v10/P09/runtime/mysql-file-audit.err
+          find "$GOJET_FILE_STORAGE_ROOT" -printf '%m %u %g %p\n' 2>/dev/null | sort > artifacts/v10/P09/runtime/storage-permissions.txt || true
+          cp /tmp/gojet-p09/clamd.log artifacts/v10/P09/clamav/clamd.log 2>/dev/null || true
+          ps -o pid=,comm= -p "$(cat artifacts/v10/P09/runtime/platformapi.pid 2>/dev/null)" "$(cat artifacts/v10/P09/runtime/clamd.pid 2>/dev/null)" \
+            > artifacts/v10/P09/runtime/processes.txt 2>/dev/null || true
+          true
+
+      - name: Stop native P09 services
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P09/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          kill "$(cat artifacts/v10/P09/runtime/clamd.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload P09 real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p09-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P09/results/P09-T001.json
+            artifacts/v10/P09/results/P09-T002.json
+            artifacts/v10/P09/results/P09-T003.json
+            artifacts/v10/P09/results/P09-T004.json
+            artifacts/v10/P09/clamav/P09-T005.json
+            artifacts/v10/P09/clamav/P09-T006.json
+            artifacts/v10/P09/clamav/P09-T007.json
+            artifacts/v10/P09/clamav/P09-T008.json
+            artifacts/v10/P09/clamav/P09-T009.json
+            artifacts/v10/P09/clamav/P09-T010.json
+            artifacts/v10/P09/results/P09-T011.json
+            artifacts/v10/P09/results/P09-T012.json
+            artifacts/v10/P09/results/P09-T013.json
+            artifacts/v10/P09/results/P09-T014.json
+            artifacts/v10/P09/results/P09-T015.json
+            artifacts/v10/P09/results/P09-T016.json
+            artifacts/v10/P09/results/P09-T017.json
+            artifacts/v10/P09/results/P09-T018.json
+            artifacts/v10/P09/clamav/version.txt
+            artifacts/v10/P09/clamav/clamd.log
+            artifacts/v10/P09/clamav/clamd-stdout.log
+            artifacts/v10/P09/clamav/freshclam-attempt-*.log
+            artifacts/v10/P09/runtime/
+          if-no-files-found: warn
+          retention-days: 30

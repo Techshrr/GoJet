@@ -10,6 +10,7 @@ import './links/links.css';
 import './domains/domains.css';
 import './analytics/analytics.css';
 import './qr/qr.css';
+import './files/files.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('GoJet application root is missing');

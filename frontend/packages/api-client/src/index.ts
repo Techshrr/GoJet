@@ -19,68 +19,33 @@ export function createGoJetQueryClient(): QueryClient {
   });
 }
 
-export {
-  GoJetApiError,
-  GoJetLinksClient,
-} from './links';
+export { GoJetApiError, GoJetLinksClient } from './links';
 export type {
-  ApiTransport,
-  BulkLinkAction,
-  BulkLinkResponse,
-  BulkLinkResult,
-  LinkABVariant,
-  LinkAccessInput,
-  LinkAccessState,
-  LinkCreateInput,
-  LinkListFilters,
-  LinkListResponse,
-  LinkRecord,
-  LinkRoutingRule,
-  LinkUpdateInput,
-  LinkUTM,
-  LinkVersionRecord,
+  ApiTransport, BulkLinkAction, BulkLinkResponse, BulkLinkResult, LinkABVariant, LinkAccessInput,
+  LinkAccessState, LinkCreateInput, LinkListFilters, LinkListResponse, LinkRecord, LinkRoutingRule,
+  LinkUpdateInput, LinkUTM, LinkVersionRecord,
 } from './links';
 
 export { GoJetDomainsClient } from './domains';
 export type {
-  CreatedDomainRecord,
-  CreatedWorkspaceDomain,
-  CreateWorkspaceDomainInput,
-  DomainAssignedLink,
-  DomainEntitlementSource,
-  DomainEntitlementStatus,
-  DomainHTTPSStatus,
-  DomainIngressDNSStatus,
-  DomainOwnershipStatus,
-  DomainRevalidationRecord,
-  DomainRiskStatus,
-  DomainRoutingState,
-  WorkspaceDomainDetailResponse,
-  WorkspaceDomainEntitlement,
-  WorkspaceDomainRecord,
-  WorkspaceDomainsResponse,
-  WorkspaceDomainViewState,
+  CreatedDomainRecord, CreatedWorkspaceDomain, CreateWorkspaceDomainInput, DomainAssignedLink,
+  DomainEntitlementSource, DomainEntitlementStatus, DomainHTTPSStatus, DomainIngressDNSStatus,
+  DomainOwnershipStatus, DomainRevalidationRecord, DomainRiskStatus, DomainRoutingState,
+  WorkspaceDomainDetailResponse, WorkspaceDomainEntitlement, WorkspaceDomainRecord,
+  WorkspaceDomainsResponse, WorkspaceDomainViewState,
 } from './domains';
 
 export { GoJetAnalyticsClient } from './analytics';
 export type {
-  AnalyticsBucket,
-  AnalyticsConversionInput,
-  AnalyticsConversionResponse,
-  AnalyticsDimensionCount,
-  AnalyticsGranularity,
-  AnalyticsQueryInput,
-  AnalyticsReport,
-  AnalyticsState,
+  AnalyticsBucket, AnalyticsConversionInput, AnalyticsConversionResponse, AnalyticsDimensionCount,
+  AnalyticsGranularity, AnalyticsQueryInput, AnalyticsReport, AnalyticsState,
 } from './analytics';
 
 export { GoJetQRClient } from './qr';
+export type { QRArtifact, QRCreateInput, QRListResponse, QRRiskState, QRRecord, QRSource, QRState } from './qr';
+
+export { GoJetFilesClient } from './files';
 export type {
-  QRArtifact,
-  QRCreateInput,
-  QRListResponse,
-  QRRiskState,
-  QRRecord,
-  QRSource,
-  QRState,
-} from './qr';
+  FileArtifact, FileDependencyHealthReport, FileDependencyState, FileListResponse, FilePolicyInput,
+  FileRecord, FileScanState, FileUploadInput,
+} from './files';
