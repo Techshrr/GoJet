@@ -13,8 +13,11 @@ def main() -> int:
         from validate_coherence import run
         return run()
     if args.case == 'P12-T025' and args.closure:
-        from validate_closure import run_closure
-        return run_closure(True)
+        import validate_closure
+        from validate_review_adapter import install
+
+        install(validate_closure)
+        return validate_closure.run_closure(True)
     raise SystemExit(f'unsupported P12 validation case/mode: {args.case} closure={args.closure}')
 
 
