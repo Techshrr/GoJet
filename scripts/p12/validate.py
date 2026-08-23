@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='GoJet V10 P12 evidence validator')
     parser.add_argument('--case', required=True)
@@ -12,8 +13,10 @@ def main() -> int:
         from validate_coherence import run
         return run()
     if args.case == 'P12-T025' and args.closure:
-        raise SystemExit('P12-T025 closure validator is not installed until T024 is authoritative')
+        from validate_closure import run_closure
+        return run_closure(True)
     raise SystemExit(f'unsupported P12 validation case/mode: {args.case} closure={args.closure}')
+
 
 if __name__ == '__main__':
     raise SystemExit(main())
