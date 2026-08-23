@@ -187,7 +187,7 @@ def run_case(case_id: str):
             revoked_inspect = p12("GET", f"/api/invitations/{revoked['token']}", "p12-t007-revoked", "p12-t007-revoked@example.test")
             revoked_accept = p12("POST", "/api/invitations/accept", "p12-t007-revoked", "p12-t007-revoked@example.test", body={"token":revoked["token"]})
             expired_inv = invite(ws["id"], owner, oe, "p12-t007-expired@example.test")
-            mysql(f"UPDATE workspace_invitations SET expires_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) WHERE id={int(expired_inv['invitation']['id'])}")
+            mysql(f"UPDATE workspace_invitations SET created_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 2 HOUR), expires_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) WHERE id={int(expired_inv['invitation']['id'])}")
             expired_inspect = p12("GET", f"/api/invitations/{expired_inv['token']}", "p12-t007-expired", "p12-t007-expired@example.test")
             expired_accept = p12("POST", "/api/invitations/accept", "p12-t007-expired", "p12-t007-expired@example.test", body={"token":expired_inv["token"]})
             unknown = p12("GET", "/api/invitations/p12-unknown-token", "p12-t007-x", "p12-t007-x@example.test")
