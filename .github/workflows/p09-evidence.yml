@@ -1,0 +1,251 @@
+name: P09 Evidence Coherence
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/files/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'installer/**'
+      - 'scripts/p09/**'
+      - 'artifacts/v10/P09/**'
+      - '.github/workflows/p09-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p09-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P09 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P09 evidence validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p09/validate.py scripts/p09/validate_coherence.py scripts/p09/coherence_*.py scripts/p09/validate_contract.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P09 evidence producers
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P09
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = (
+              'P09 Files Contract',
+              'P09 Real Files and ClamAV Integration',
+              'P09 Files Health and Installer Preflight',
+              'P09 Workspace Files Browser',
+          )
+          sha = os.environ['EXACT_HEAD']
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          path = Path('artifacts/v10/P09/evidence-producer-manifest.json')
+
+          def fetch_runs():
+              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repository}/actions/runs?{query}',
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)['workflow_runs']
+
+          deadline = time.time() + 30 * 60
+          while time.time() < deadline:
+              runs = fetch_runs()
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name not in required:
+                      continue
+                  previous = latest.get(name)
+                  if previous is None or int(run.get('id', 0)) > int(previous.get('id', 0)):
+                      latest[name] = run
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': {
+                      name: {
+                          'run_id': int(latest[name]['id']),
+                          'run_number': int(latest[name].get('run_number', 0)),
+                          'head_sha': latest[name].get('head_sha'),
+                          'status': latest[name].get('status'),
+                          'conclusion': latest[name].get('conclusion'),
+                          'html_url': latest[name].get('html_url'),
+                      }
+                      for name in required if name in latest
+                  },
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+              if failed:
+                  raise SystemExit('required P09 evidence producer failed: ' + ', '.join(failed))
+              if not missing and not pending:
+                  print(f'P09 exact-head evidence producers are green for {sha}')
+                  break
+              print(f'Waiting for P09 evidence producers: missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for P09 evidence producers for {sha}')
+          PY
+
+      - name: Download exact-head P09 evidence artifacts
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          read_run() {
+            python3 - "$1" <<'PY'
+          import json, sys
+          data = json.load(open('artifacts/v10/P09/evidence-producer-manifest.json', encoding='utf-8'))
+          print(data['required_workflows'][sys.argv[1]]['run_id'])
+          PY
+          }
+          contract_run="$(read_run 'P09 Files Contract')"
+          integration_run="$(read_run 'P09 Real Files and ClamAV Integration')"
+          health_run="$(read_run 'P09 Files Health and Installer Preflight')"
+          browser_run="$(read_run 'P09 Workspace Files Browser')"
+
+          rm -rf /tmp/p09-contract /tmp/p09-integration /tmp/p09-health /tmp/p09-browser
+          mkdir -p /tmp/p09-contract /tmp/p09-integration /tmp/p09-health /tmp/p09-browser
+          mkdir -p artifacts/v10/P09/contract artifacts/v10/P09/results artifacts/v10/P09/clamav artifacts/v10/P09/browser artifacts/v10/P09/captures
+
+          gh run download "$contract_run" --repo "$REPOSITORY" --name "p09-files-contract-$EXACT_HEAD" --dir /tmp/p09-contract
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p09-integration-$EXACT_HEAD" --dir /tmp/p09-integration
+          gh run download "$health_run" --repo "$REPOSITORY" --name "gojet-v10-p09-health-$EXACT_HEAD" --dir /tmp/p09-health
+          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p09-browser-$EXACT_HEAD" --dir /tmp/p09-browser
+
+          for name in contract.json implementation_commit.txt base_integration_commit.txt case_range.txt capabilities.txt api-authority.txt; do
+            source="$(find /tmp/p09-contract -type f -name "$name" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P09/contract/$name"
+          done
+          test "$(cat artifacts/v10/P09/contract/implementation_commit.txt)" = "$EXACT_HEAD"
+          EXACT_HEAD="$EXACT_HEAD" python3 - <<'PY'
+          import json, os
+          data = json.load(open('artifacts/v10/P09/contract/contract.json', encoding='utf-8'))
+          assert data['status'] == 'PASS' and data['errors'] == [], data
+          assert data['implementation_commit'] == os.environ['EXACT_HEAD'], data
+          assert data['case_range'] == 'P09-T001..P09-T027' and data['case_count'] == 27, data
+          PY
+
+          for number in 001 002 003 004 011 012 013 014 015 016 017 018; do
+            source="$(find /tmp/p09-integration -type f -name "P09-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P09/results/P09-T${number}.json"
+          done
+          for number in 005 006 007 008 009 010; do
+            source="$(find /tmp/p09-integration -type f -name "P09-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P09/clamav/P09-T${number}.json"
+          done
+          for number in 019 020; do
+            source="$(find /tmp/p09-health -type f -name "P09-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P09/results/P09-T${number}.json"
+          done
+          for number in 021 022 023 024 025; do
+            source="$(find /tmp/p09-browser -type f -name "P09-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P09/browser/P09-T${number}.json"
+          done
+          find /tmp/p09-browser -type f -name 'P09-T*.png' -print -exec cp '{}' artifacts/v10/P09/captures/ ';'
+
+          test "$(find artifacts/v10/P09/results -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 14
+          test "$(find artifacts/v10/P09/clamav -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 6
+          test "$(find artifacts/v10/P09/browser -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 5
+          test "$(find artifacts/v10/P09/captures -maxdepth 1 -type f -name 'P09-T*.png' | wc -l)" -eq 9
+
+      - name: Run P09-T026 exact-head evidence coherence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p09/validate.py --case P09-T026
+          python3 - <<'PY'
+          import json, subprocess
+          data = json.load(open('artifacts/v10/P09/results/P09-T026.json', encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert data['implementation_commit'] == head, (data['implementation_commit'], head)
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data['errors']
+          obs = data['observations']
+          assert obs['input_evidence_count'] == 25, obs
+          assert obs['same_exact_head'] is True, obs
+          assert obs['capture_count'] == 9, obs
+          assert set(obs['producer_run_ids']) == {
+              'P09 Files Contract',
+              'P09 Real Files and ClamAV Integration',
+              'P09 Files Health and Installer Preflight',
+              'P09 Workspace Files Browser',
+          }, obs
+          print(f'P09-T026 exact-head coherence PASS on {head}')
+          PY
+
+      - name: Upload P09 coherence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p09-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P09/evidence-producer-manifest.json
+            artifacts/v10/P09/evidence-index.json
+            artifacts/v10/P09/contract/
+            artifacts/v10/P09/results/P09-T*.json
+            artifacts/v10/P09/clamav/P09-T*.json
+            artifacts/v10/P09/browser/P09-T*.json
+            artifacts/v10/P09/captures/
+            artifacts/v10/P09/test-plan.json
+            artifacts/v10/P09/review.md

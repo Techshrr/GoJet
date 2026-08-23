@@ -6,7 +6,7 @@ on:
     paths:
       - 'artifacts/v10/P09/**'
       - 'scripts/p09/**'
-      - '.github/workflows/p09-files.yml'
+      - '.github/workflows/p09-*.yml'
       - 'internal/files/**'
       - 'internal/storage/**'
       - 'migrations/**'

@@ -11,10 +11,13 @@ def case_t001():
     expect(row["storage_key"] != row["original_name"], "original filename became storage authority")
     obj = storage_path("quarantine", row["storage_key"])
     expect(obj.is_file() and obj.read_bytes() == BENIGN, "quarantine object mismatch")
+    storage_sha256 = sha256_path(obj)
+    expect(storage_sha256 == row["content_sha256"], "quarantine object digest differs from authoritative content digest")
     pstatus, _, pbody = public_binary(row["public_slug"])
     expect(pstatus == 403 and BENIGN not in pbody, f"quarantined public binary leaked: {pstatus}")
     return {"file_id": rid, "scan_state": row["scan_state"], "published": row["published"], "public_status": pstatus,
-            "storage_key_length": len(row["storage_key"]), "quarantine_mode": oct(stat.S_IMODE(obj.stat().st_mode))}
+            "storage_key_length": len(row["storage_key"]), "quarantine_mode": oct(stat.S_IMODE(obj.stat().st_mode)),
+            "content_sha256": row["content_sha256"], "storage_sha256": storage_sha256}
 
 def case_t002():
     reset_case()
@@ -66,8 +69,14 @@ def case_t005():
     created, row, scan = clean_with_real()
     expect(row["scan_state"] == "safe" and row["published"] == 0, row)
     expect(scan["status"] == "clean" and scan["engine_version"] and scan["signature_version"], scan)
+    obj = storage_path("quarantine", row["storage_key"])
+    expect(obj.is_file(), "clean scan quarantine object missing")
+    storage_sha256 = sha256_path(obj)
+    expect(storage_sha256 == row["content_sha256"], "clean scan storage/content digest mismatch")
     return {"file_id": row["id"], "scan_state": row["scan_state"], "published": row["published"],
-            "engine_version": scan["engine_version"], "signature_version": scan["signature_version"], "scan_status": scan["status"]}
+            "engine_version": scan["engine_version"], "signature_version": scan["signature_version"], "scan_status": scan["status"],
+            "content_sha256": row["content_sha256"], "storage_sha256": storage_sha256,
+            "scan_attempt_id": scan["attempt_id"], "scan_generation": scan["generation"]}
 
 def case_t006():
     reset_case()
@@ -78,8 +87,13 @@ def case_t006():
     row, scan = db_resource(rid), db_scan(rid)
     expect(row["scan_state"] == "blocked" and row["published"] == 0, row)
     expect(scan["status"] == "infected" and scan["verdict_code"], scan)
+    obj = storage_path("quarantine", row["storage_key"])
+    expect(obj.is_file(), "blocked scan quarantine object missing")
+    storage_sha256 = sha256_path(obj)
+    expect(storage_sha256 == row["content_sha256"], "blocked scan storage/content digest mismatch")
     pstatus, _, pbody = public_binary(row["public_slug"])
     expect(pstatus == 403 and EICAR not in pbody, f"blocked bytes leaked status={pstatus}")
     return {"file_id": rid, "scan_state": row["scan_state"], "scan_status": scan["status"],
-            "verdict_code": scan["verdict_code"], "engine_version": scan["engine_version"], "signature_version": scan["signature_version"], "public_status": pstatus}
-
+            "verdict_code": scan["verdict_code"], "engine_version": scan["engine_version"], "signature_version": scan["signature_version"], "public_status": pstatus,
+            "content_sha256": row["content_sha256"], "storage_sha256": storage_sha256,
+            "scan_attempt_id": scan["attempt_id"], "scan_generation": scan["generation"]}

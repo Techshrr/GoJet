@@ -1,3 +1,5 @@
+import hashlib
+
 from integration_env import *
 
 def run_worker(address: str = REAL_CLAMD, *, max_jobs: int = 1, scan_timeout: str = "10s",
@@ -90,17 +92,27 @@ def db_resource(file_id: int) -> dict:
 
 def db_scan(file_id: int) -> dict:
     raw = mysql(
-        "SELECT status,COALESCE(engine_version,''),COALESCE(signature_version,''),"
+        "SELECT id,status,COALESCE(engine_version,''),COALESCE(signature_version,''),"
         "COALESCE(verdict_code,''),COALESCE(error_code,''),generation "
         f"FROM file_scan_attempts WHERE file_id={int(file_id)} ORDER BY generation DESC LIMIT 1"
     )
     expect(raw != "", f"scan attempt missing for {file_id}")
     fields = raw.split("\t")
-    expect(len(fields) == 6, f"unexpected scan row: {raw}")
-    return dict(zip(["status","engine_version","signature_version","verdict_code","error_code","generation"], fields))
+    expect(len(fields) == 7, f"unexpected scan row: {raw}")
+    data = dict(zip(["attempt_id","status","engine_version","signature_version","verdict_code","error_code","generation"], fields))
+    data["attempt_id"] = int(data["attempt_id"])
+    data["generation"] = int(data["generation"])
+    return data
 
 def storage_path(kind: str, key: str) -> Path:
     return STORAGE_ROOT / kind / key[:2] / key[2:4] / key
+
+def sha256_path(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(131072), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 def public_binary(slug: str, cookie: str | None = None):
     headers = {}
@@ -121,4 +133,3 @@ def write_evidence(case_id: str, observations: dict, errors: list[str] | None = 
     path = directory / f"{case_id}.json"
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
-

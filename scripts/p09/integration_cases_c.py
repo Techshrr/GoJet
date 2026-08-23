@@ -1,3 +1,5 @@
+import datetime as dt
+
 from integration_common import *
 from integration_cases_a import clean_with_real
 
@@ -16,7 +18,8 @@ def case_t013():
     row, scan = db_resource(rid), db_scan(rid)
     count = int(mysql(f"SELECT COUNT(*) FROM file_scan_attempts WHERE file_id={rid}"))
     expect(row["scan_state"] == "safe" and row["published"] == 0 and scan["status"] == "clean" and count == 1, (row, scan, count))
-    return {"attempt_count": count, "scan_state": row["scan_state"], "published": row["published"], "scan_status": scan["status"]}
+    return {"attempt_count": count, "scan_attempt_id": scan["attempt_id"], "scan_generation": scan["generation"],
+            "scan_state": row["scan_state"], "published": row["published"], "scan_status": scan["status"]}
 
 def case_t014():
     reset_case()
@@ -97,8 +100,9 @@ def case_t017():
     reset_case()
     created, row, _ = clean_with_real(filename="expiry.txt")
     rid, slug = int(created["id"]), row["public_slug"]
-    past = "2026-01-01T00:00:00Z"
-    future = "2027-01-01T00:00:00Z"
+    current = dt.datetime.now(dt.timezone.utc)
+    past = (current - dt.timedelta(hours=1)).isoformat(timespec="seconds").replace("+00:00", "Z")
+    future = (current + dt.timedelta(days=30)).isoformat(timespec="seconds").replace("+00:00", "Z")
     status, _, _, patched = patch_policy("ws-a", rid, {"expires_at": past, "retention_until": future})
     expect(status == 200 and patched["expires_at"] and patched["retention_until"], patched)
     status, _, _, published = action("ws-a", rid, "publish")
@@ -147,4 +151,3 @@ def case_t018():
     expect(not any(value in leaked_text for value in sensitive), f"private dependency detail leaked: {leaked_text}")
     return {"invalid_id": invalid, "unknown": unknown, "cross_tenant": cross, "header_path_mismatch": mismatch,
             "malformed_json": malformed, "missing_storage": missing, "private_detail_leaked": False}
-
