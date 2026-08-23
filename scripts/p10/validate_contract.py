@@ -228,7 +228,8 @@ def main() -> int:
     if has_pending:
         require("No P10 PASS or Exit claim is made in this state." in review, "pending review no-PASS marker missing", errors)
         require("Accountable reviewer identity:" not in review, "pending review must not contain accountable signature", errors)
-        require(not re.search(r"P10-T\d{3}\s*[:=-]?\s*PASS", review, re.IGNORECASE), "pending review must not contain P10 case PASS claims", errors)
+        explicit_pass_claim = re.search(r"(?mi)^\s*(?:[-*]\s*)?P10-T\d{3}\s*[:=-]\s*PASS\b", review)
+        require(explicit_pass_claim is None, "pending review must not contain P10 case PASS claims", errors)
     if has_signed:
         require(re.search(r"Pre-sign exact implementation SHA:\s*`[0-9a-f]{40}`", review) is not None, "signed review pre-sign SHA missing", errors)
         require("P10-T020" in review and "PASS" in review, "signed review final P10 closure PASS record missing", errors)

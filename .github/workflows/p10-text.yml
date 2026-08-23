@@ -46,7 +46,10 @@ jobs:
         run: python3 -m py_compile scripts/p10/validate_contract.py
 
       - name: Validate frozen P10 contract
-        run: python3 scripts/p10/validate_contract.py | tee /tmp/p10-contract.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p10/validate_contract.py | tee /tmp/p10-contract.json
 
       - name: Preserve current native compile and unit boundary
         run: go test ./...
