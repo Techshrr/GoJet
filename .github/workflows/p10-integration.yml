@@ -1,0 +1,218 @@
+name: P10 Real Text Integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/text/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'scripts/p10/**'
+      - 'artifacts/v10/P10/**'
+      - '.github/workflows/p10-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p10-real-text-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration:
+    name: P10 real MySQL API public lifecycle and UGC tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ANALYTICS_ENABLED: '0'
+      GOJET_QR_WORKSPACE_QUOTA: '200'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEXT_ENABLED: '1'
+      GOJET_TEXT_WORKSPACE_QUOTA: '200'
+      GOJET_TEXT_PUBLIC_AUTH_SECRET: p10-integration-public-auth-secret-0123456789abcdef
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P10 drivers and native packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P10/api artifacts/v10/P10/headers artifacts/v10/P10/runtime
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          python3 -m py_compile scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py
+          find internal/text services/platformapi/cmd/server -type f -name '*.go' -print0 | xargs -0 gofmt -d | tee /tmp/p10-gofmt.diff
+          test ! -s /tmp/p10-gofmt.diff
+          go test ./internal/text ./internal/links
+          go vet ./internal/text ./internal/links ./services/platformapi/cmd/server
+
+      - name: Apply P05 through P10 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < "$migration"
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'text%'" | sort | tee artifacts/v10/P10/runtime/mysql-text-tables.txt
+
+      - name: Build and start native platformapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p10-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p10-platformapi > artifacts/v10/P10/runtime/native-platformapi.sha256
+          /tmp/gojet-p10-platformapi > artifacts/v10/P10/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P10/runtime/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P10/runtime/platformapi.log || true
+          exit 1
+
+      - name: Run P10-T001 through P10-T015
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in $(seq -w 1 12); do GITHUB_SHA="$exact_head" python3 scripts/p10/integration.py --case "P10-T0${number}"; done
+          GITHUB_SHA="$exact_head" python3 scripts/p10/seo.py --case P10-T013
+          GITHUB_SHA="$exact_head" python3 scripts/p10/seo.py --case P10-T014
+          GITHUB_SHA="$exact_head" python3 scripts/p10/integration.py --case P10-T015
+
+      - name: Verify exact-head P10-T001 through P10-T015 evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P10')
+          errors = []
+          for number in range(1, 16):
+              cid = f'P10-T{number:03d}'
+              directory = 'headers' if 6 <= number <= 11 or number in (13,14) else 'api'
+              path = root / directory / f'{cid}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head: errors.append(f'{cid} implementation_commit mismatch')
+              if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f'P10-T001..T015 exact-head evidence PASS on {head}')
+          PY
+
+      - name: Capture P10 runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P10/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,public_slug,title,visibility,password_hash IS NOT NULL,expires_at,one_time,consumed_at,version,created_at,updated_at,deleted_at FROM text_shares ORDER BY id" > artifacts/v10/P10/runtime/mysql-text-shares.tsv 2> artifacts/v10/P10/runtime/mysql-text-shares.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,active_count,updated_at FROM text_workspace_counters ORDER BY workspace_id" > artifacts/v10/P10/runtime/mysql-text-counters.tsv 2> artifacts/v10/P10/runtime/mysql-text-counters.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,text_share_id,actor_id,action,request_correlation_id,result,created_at FROM text_audit_events ORDER BY id" > artifacts/v10/P10/runtime/mysql-text-audit.tsv 2> artifacts/v10/P10/runtime/mysql-text-audit.err
+          true
+
+      - name: Stop native P10 service
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P10/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload P10 real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p10-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P10/api/P10-T001.json
+            artifacts/v10/P10/api/P10-T002.json
+            artifacts/v10/P10/api/P10-T003.json
+            artifacts/v10/P10/api/P10-T004.json
+            artifacts/v10/P10/api/P10-T005.json
+            artifacts/v10/P10/headers/P10-T006.json
+            artifacts/v10/P10/headers/P10-T007.json
+            artifacts/v10/P10/headers/P10-T008.json
+            artifacts/v10/P10/headers/P10-T009.json
+            artifacts/v10/P10/headers/P10-T010.json
+            artifacts/v10/P10/headers/P10-T011.json
+            artifacts/v10/P10/api/P10-T012.json
+            artifacts/v10/P10/headers/P10-T013.json
+            artifacts/v10/P10/headers/P10-T014.json
+            artifacts/v10/P10/api/P10-T015.json
+            artifacts/v10/P10/runtime/
+          if-no-files-found: warn
+          retention-days: 30
