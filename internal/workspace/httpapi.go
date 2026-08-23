@@ -184,6 +184,7 @@ func auditReason(value string) *string {
 	if value == "" {
 		return nil
 	}
+	value = redactNotificationText(value)
 	if len(value) > 500 {
 		value = value[:500]
 	}
