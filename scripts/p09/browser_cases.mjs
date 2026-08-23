@@ -87,7 +87,7 @@ export async function caseT022(browser) {
   await page.goto(`${WORKSPACE_URL}/f/${encodeURIComponent(slug)}`, { waitUntil: 'networkidle' });
   assert(await page.locator('[data-file-state="password-required"]').isVisible(), 'password-required public page missing');
   assert(!page.url().includes('P09-browser-password'), 'password leaked into public URL');
-  await page.getByLabel('Password').fill('P09-browser-password');
+  await page.getByRole('textbox', { name: 'Password', exact: true }).fill('P09-browser-password');
   await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle' }), page.getByRole('button', { name: 'Continue', exact: true }).click()]);
   assert(await page.locator('[data-file-state="available"]').isVisible(), 'authorized public page did not become available');
   const allowed = await page.evaluate(async (value) => { const response = await fetch(`/api/public/files/${encodeURIComponent(value)}`); const bytes = new Uint8Array(await response.arrayBuffer()); return { status: response.status, text: new TextDecoder().decode(bytes) }; }, slug);
