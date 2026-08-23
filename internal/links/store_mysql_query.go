@@ -14,6 +14,9 @@ type ListOptions struct {
 	Query       string
 	Hostname    string
 	Status      string
+	CampaignID  string
+	TagID       uint64
+	FolderID    uint64
 	UpdatedFrom *time.Time
 	UpdatedTo   *time.Time
 	Limit       int
@@ -52,10 +55,10 @@ func (s *MySQLStore) List(ctx context.Context, options ListOptions) (ListResult,
 		return ListResult{}, ErrInvalidInput
 	}
 
-	where := []string{"workspace_id = ?"}
+	where := []string{"links.workspace_id = ?"}
 	args := []any{workspaceID}
 	if query := strings.TrimSpace(options.Query); query != "" {
-		where = append(where, "(code LIKE ? ESCAPE '\\\\' OR title LIKE ? ESCAPE '\\\\' OR primary_destination LIKE ? ESCAPE '\\\\')")
+		where = append(where, "(links.code LIKE ? ESCAPE '\\\\' OR links.title LIKE ? ESCAPE '\\\\' OR links.primary_destination LIKE ? ESCAPE '\\\\')")
 		pattern := "%" + escapeLike(query) + "%"
 		args = append(args, pattern, pattern, pattern)
 	}
@@ -64,7 +67,7 @@ func (s *MySQLStore) List(ctx context.Context, options ListOptions) (ListResult,
 		if err != nil {
 			return ListResult{}, err
 		}
-		where = append(where, "hostname = ?")
+		where = append(where, "links.hostname = ?")
 		args = append(args, normalized)
 	}
 	if status := strings.TrimSpace(options.Status); status != "" {
@@ -73,17 +76,41 @@ func (s *MySQLStore) List(ctx context.Context, options ListOptions) (ListResult,
 				return ListResult{}, err
 			}
 		}
-		where = append(where, "status = ?")
+		where = append(where, "links.status = ?")
 		args = append(args, status)
 	} else {
-		where = append(where, "status <> 'deleted'")
+		where = append(where, "links.status <> 'deleted'")
+	}
+	if campaignID := strings.TrimSpace(options.CampaignID); campaignID != "" {
+		if len(campaignID) > 64 {
+			return ListResult{}, ErrInvalidInput
+		}
+		where = append(where, `EXISTS (
+			SELECT 1 FROM workspace_link_organization wlo
+			WHERE wlo.workspace_id=links.workspace_id AND wlo.link_id=links.id AND wlo.campaign_id=?
+		)`)
+		args = append(args, campaignID)
+	}
+	if options.TagID != 0 {
+		where = append(where, `EXISTS (
+			SELECT 1 FROM workspace_link_tags wlt
+			WHERE wlt.workspace_id=links.workspace_id AND wlt.link_id=links.id AND wlt.tag_id=?
+		)`)
+		args = append(args, options.TagID)
+	}
+	if options.FolderID != 0 {
+		where = append(where, `EXISTS (
+			SELECT 1 FROM workspace_link_organization wlo
+			WHERE wlo.workspace_id=links.workspace_id AND wlo.link_id=links.id AND wlo.folder_id=?
+		)`)
+		args = append(args, options.FolderID)
 	}
 	if options.UpdatedFrom != nil {
-		where = append(where, "updated_at >= ?")
+		where = append(where, "links.updated_at >= ?")
 		args = append(args, options.UpdatedFrom.UTC())
 	}
 	if options.UpdatedTo != nil {
-		where = append(where, "updated_at <= ?")
+		where = append(where, "links.updated_at <= ?")
 		args = append(args, options.UpdatedTo.UTC())
 	}
 	whereSQL := strings.Join(where, " AND ")
@@ -94,7 +121,7 @@ func (s *MySQLStore) List(ctx context.Context, options ListOptions) (ListResult,
 	}
 
 	listArgs := append(append([]any(nil), args...), limit, options.Offset)
-	rows, err := s.db.QueryContext(ctx, linkSelect+" WHERE "+whereSQL+" ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?", listArgs...)
+	rows, err := s.db.QueryContext(ctx, linkSelect+" WHERE "+whereSQL+" ORDER BY links.updated_at DESC, links.id DESC LIMIT ? OFFSET ?", listArgs...)
 	if err != nil {
 		return ListResult{}, err
 	}

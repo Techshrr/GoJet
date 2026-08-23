@@ -1,0 +1,82 @@
+name: P12 Workspace Organization Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/v10/P12/**'
+      - 'scripts/p12/**'
+      - '.github/workflows/p12-*.yml'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/auth/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p12-workspace-organization-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P12 contract freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P12 contract validator
+        run: python3 -m py_compile scripts/p12/validate_contract.py
+
+      - name: Validate frozen P12 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p12/validate_contract.py | tee /tmp/p12-contract.json
+
+      - name: Preserve current native compile and unit boundary
+        run: go test ./...
+
+      - name: Record exact-head contract evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p12-contract-evidence
+          cp /tmp/p12-contract.json /tmp/p12-contract-evidence/contract.json 2>/dev/null || true
+          git rev-parse HEAD > /tmp/p12-contract-evidence/implementation_commit.txt
+          printf '%s\n' '638a6988c03eed6d287af0d2fdc63a3a3355ef68' > /tmp/p12-contract-evidence/base_integration_commit.txt
+          printf '%s\n' 'b59dfbe794f7d2f7bf63fdc79116217c5d893e87' > /tmp/p12-contract-evidence/predecessor_signed_source.txt
+          printf '%s\n' 'P12-T001..P12-T025' > /tmp/p12-contract-evidence/case_range.txt
+          printf '%s\n' 'CAP-WORKSPACE; CAP-FOLDERS-TAGS; P12 campaign-governance; CAP-NOTIFICATIONS core' > /tmp/p12-contract-evidence/capabilities.txt
+          printf '%s\n' 'P12 membership/role is MySQL server authority; client/test role claim is not authorization; P15 identity lifecycle later-owned.' > /tmp/p12-contract-evidence/rbac-authority.txt
+          printf '%s\n' 'No /app/folders route; APP-SETTINGS P12 scope is /app/settings/workspace only; P13-P17 notification producers later-owned.' > /tmp/p12-contract-evidence/route-ownership.txt
+
+      - name: Upload P12 contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p12-workspace-organization-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/p12-contract-evidence
+          if-no-files-found: error
+          retention-days: 14

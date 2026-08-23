@@ -1,5 +1,15 @@
 import { lazy, Suspense } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
+import {
+  CampaignsPage,
+  InvitationPage,
+  OrganizationPage,
+  TagsPage,
+  WorkspaceOverviewPage,
+  WorkspaceSettingsPage,
+} from './workspace/pages';
+import MembersPage from './workspace/MembersPage';
+import NotificationsPage from './workspace/NotificationsPage';
 
 const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));
@@ -26,7 +36,7 @@ const rootRoute = createRootRoute({
   ),
 });
 
-const appRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app', component: ShellPage });
+const appRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app', component: WorkspaceOverviewPage });
 const linksRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/links', component: LinksListPage });
 const linkCreateRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/links/new', component: LinkCreatePage });
 const linkDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/links/$linkId', component: LinkDetailPage });
@@ -42,12 +52,20 @@ const textRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/tex
 const textDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/text/$shareId', component: TextDetailPage });
 const bioRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/bio', component: BioListPage });
 const bioDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/bio/$pageId', component: BioDetailPage });
-const sectionRoutes = ['developer', 'members', 'settings'].map((section) =>
+const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/notifications', component: NotificationsPage });
+const organizationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/organization', component: OrganizationPage });
+const campaignsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/campaigns', component: CampaignsPage });
+const tagsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/tags', component: TagsPage });
+const membersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/members', component: MembersPage });
+const workspaceSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/workspace', component: WorkspaceSettingsPage });
+const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/invite/$token', component: InvitationPage });
+const sectionRoutes = ['developer', 'settings'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
 );
 const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
   analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, bioRoute, bioDetailRoute,
+  notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute, workspaceSettingsRoute, inviteRoute,
   ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });

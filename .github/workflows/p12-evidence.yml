@@ -1,0 +1,257 @@
+name: P12 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p12/**'
+      - 'artifacts/v10/P12/**'
+      - '.github/workflows/p12-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p12-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P12 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P12 coherence validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p12/validate.py scripts/p12/validate_coherence.py scripts/p12/validate_contract.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P12 evidence producers and bind artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P12
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          required = {
+            'P12 Workspace Organization Contract': lambda sha: f'p12-workspace-organization-contract-{sha}',
+            'P12 Real Workspace Organization Integration': lambda sha: f'gojet-v10-p12-integration-{sha}',
+            'P12 Workspace Organization Browser': lambda sha: f'gojet-v10-p12-browser-{sha}',
+          }
+          sha = os.environ['EXACT_HEAD']
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          path = Path('artifacts/v10/P12/evidence-producer-manifest.json')
+          headers = {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': f'Bearer {token}',
+            'X-GitHub-Api-Version': '2022-11-28',
+          }
+          def get(url):
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
+              return json.load(response)
+          deadline = time.time() + 35 * 60
+          while time.time() < deadline:
+            query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+            runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}')['workflow_runs']
+            latest = {}
+            for run in runs:
+              name = run.get('name')
+              if name in required and (name not in latest or int(run.get('id', 0)) > int(latest[name].get('id', 0))):
+                latest[name] = run
+            missing = [name for name in required if name not in latest]
+            pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+            failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+            entries = {}
+            if not missing and not pending and not failed:
+              for name, run in latest.items():
+                artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
+                expected = required[name](sha)
+                matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
+                if len(matches) != 1:
+                  failed.append(f'{name}:artifact:{expected}')
+                  continue
+                item = matches[0]
+                entries[name] = {
+                  'run_id': int(run['id']),
+                  'run_number': int(run.get('run_number', 0)),
+                  'head_sha': run.get('head_sha'),
+                  'status': run.get('status'),
+                  'conclusion': run.get('conclusion'),
+                  'html_url': run.get('html_url'),
+                  'artifact': {
+                    'id': int(item['id']),
+                    'name': item['name'],
+                    'digest': item.get('digest'),
+                    'size_in_bytes': int(item.get('size_in_bytes', 0)),
+                  },
+                }
+            manifest = {
+              'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+              'implementation_commit': sha,
+              'required_workflows': entries,
+              'missing': missing,
+              'pending': pending,
+              'failed': failed,
+            }
+            path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+            if failed:
+              raise SystemExit('required P12 producer/artifact failed: ' + ', '.join(failed))
+            if not missing and not pending and len(entries) == len(required):
+              print(f'P12 producers/artifacts green for {sha}')
+              break
+            print(f'Waiting P12 producers missing={missing} pending={pending}')
+            time.sleep(10)
+          else:
+            raise SystemExit(f'timed out waiting for P12 producers on {sha}')
+          PY
+
+      - name: Download exact-head P12 evidence artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          read_run() { python3 - "$1" <<'PY'
+          import json, sys
+          data = json.load(open('artifacts/v10/P12/evidence-producer-manifest.json', encoding='utf-8'))
+          print(data['required_workflows'][sys.argv[1]]['run_id'])
+          PY
+          }
+          contract_run="$(read_run 'P12 Workspace Organization Contract')"
+          integration_run="$(read_run 'P12 Real Workspace Organization Integration')"
+          browser_run="$(read_run 'P12 Workspace Organization Browser')"
+          rm -rf /tmp/p12-contract /tmp/p12-integration /tmp/p12-browser
+          mkdir -p /tmp/p12-contract /tmp/p12-integration /tmp/p12-browser \
+            artifacts/v10/P12/contract artifacts/v10/P12/api artifacts/v10/P12/rbac \
+            artifacts/v10/P12/audit artifacts/v10/P12/security artifacts/v10/P12/browser \
+            artifacts/v10/P12/captures artifacts/v10/P12/runtime artifacts/v10/P12/results
+
+          gh run download "$contract_run" --repo "$REPOSITORY" --name "p12-workspace-organization-contract-$EXACT_HEAD" --dir /tmp/p12-contract
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p12-integration-$EXACT_HEAD" --dir /tmp/p12-integration
+          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p12-browser-$EXACT_HEAD" --dir /tmp/p12-browser
+
+          for name in contract.json implementation_commit.txt base_integration_commit.txt predecessor_signed_source.txt case_range.txt capabilities.txt rbac-authority.txt route-ownership.txt; do
+            source="$(find /tmp/p12-contract -type f -name "$name" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P12/contract/$name"
+          done
+          test "$(cat artifacts/v10/P12/contract/implementation_commit.txt)" = "$EXACT_HEAD"
+
+          for number in 001 002 006 007 009 010 011 012 014 015 018; do
+            source="$(find /tmp/p12-integration -type f -name "P12-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P12/api/P12-T${number}.json"
+          done
+          for number in 003 004 005 008 016; do
+            source="$(find /tmp/p12-integration -type f -name "P12-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P12/rbac/P12-T${number}.json"
+          done
+          source="$(find /tmp/p12-integration -type f -name 'P12-T013.json' -print -quit)"
+          test -n "$source"
+          cp "$source" artifacts/v10/P12/audit/P12-T013.json
+          source="$(find /tmp/p12-integration -type f -name 'P12-T017.json' -print -quit)"
+          test -n "$source"
+          cp "$source" artifacts/v10/P12/security/P12-T017.json
+          if [ -d /tmp/p12-integration/runtime ]; then cp -a /tmp/p12-integration/runtime/. artifacts/v10/P12/runtime/; fi
+
+          for number in 019 020 021 022 023; do
+            source="$(find /tmp/p12-browser -type f -name "P12-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P12/browser/P12-T${number}.json"
+          done
+          find /tmp/p12-browser -type f -name 'P12-T*.png' -print -exec cp '{}' artifacts/v10/P12/captures/ ';'
+          if [ -d /tmp/p12-browser/runtime ]; then cp -a /tmp/p12-browser/runtime/. artifacts/v10/P12/runtime/; fi
+
+          test "$(find artifacts/v10/P12/api -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 11
+          test "$(find artifacts/v10/P12/rbac -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 5
+          test "$(find artifacts/v10/P12/audit -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 1
+          test "$(find artifacts/v10/P12/security -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 1
+          test "$(find artifacts/v10/P12/browser -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 5
+          test "$(find artifacts/v10/P12/captures -maxdepth 1 -type f -name 'P12-T*.png' | wc -l)" -eq 9
+
+          for name in \
+            mysql-audit-safe.err mysql-campaigns.err mysql-folders.err mysql-invitations-safe.err \
+            mysql-link-organization.err mysql-link-tags.err mysql-memberships.err mysql-notification-state.err \
+            mysql-notifications-safe.err mysql-tags.err mysql-workspaces.err \
+            browser-memberships.err browser-notification-state.err browser-workspaces.err; do
+            test -f "artifacts/v10/P12/runtime/$name"
+            test ! -s "artifacts/v10/P12/runtime/$name"
+          done
+
+      - name: Run P12-T024 exact-head evidence coherence
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p12/validate.py --case P12-T024
+          python3 - <<'PY'
+          import json, subprocess
+          data = json.load(open('artifacts/v10/P12/results/P12-T024.json', encoding='utf-8'))
+          head = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert data['status'] == 'PASS' and data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          obs = data['observations']
+          assert obs['input_evidence_count'] == 23 and obs['same_exact_head'] is True, obs
+          assert obs['capture_count'] == 9 and obs['runtime_error_files_clean'] is True, obs
+          assert set(obs['producer_run_ids']) == {
+            'P12 Workspace Organization Contract',
+            'P12 Real Workspace Organization Integration',
+            'P12 Workspace Organization Browser',
+          }, obs
+          for value in obs['producer_artifacts'].values():
+            assert value['id'] > 0 and value['digest'].startswith('sha256:') and value['size_in_bytes'] > 0, value
+          print(f'P12-T024 exact-head coherence PASS on {head}')
+          PY
+
+      - name: Upload P12 coherence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p12-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P12/evidence-producer-manifest.json
+            artifacts/v10/P12/evidence-index.json
+            artifacts/v10/P12/contract/
+            artifacts/v10/P12/api/P12-T*.json
+            artifacts/v10/P12/rbac/P12-T*.json
+            artifacts/v10/P12/audit/P12-T*.json
+            artifacts/v10/P12/security/P12-T*.json
+            artifacts/v10/P12/browser/P12-T*.json
+            artifacts/v10/P12/captures/
+            artifacts/v10/P12/runtime/
+            artifacts/v10/P12/results/P12-T024.json
+            artifacts/v10/P12/test-plan.json
+            artifacts/v10/P12/review.md

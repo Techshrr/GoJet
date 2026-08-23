@@ -58,3 +58,11 @@ export type {
   BioChildInput, BioChildRecord, BioChildRiskStatus, BioCreateInput, BioListResponse,
   BioPageRecord, BioStatus, BioUpdateInput,
 } from './bio';
+
+export { GoJetWorkspaceClient } from './workspace';
+export type {
+  CreatedWorkspaceInvitation, InvitationInspection, WorkspaceCampaign, WorkspaceContext, WorkspaceFolder,
+  WorkspaceInvitation, WorkspaceMembership, WorkspaceMembersResponse, WorkspaceNotification,
+  WorkspaceNotificationState, WorkspaceNotificationsResponse, WorkspaceOrganization, WorkspaceOverview,
+  WorkspaceRecord, WorkspaceRole, WorkspaceTag,
+} from './workspace';

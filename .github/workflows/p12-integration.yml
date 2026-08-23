@@ -1,0 +1,252 @@
+name: P12 Real Workspace Organization Integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'scripts/p12/**'
+      - 'artifacts/v10/P12/**'
+      - '.github/workflows/p12-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p12-real-workspace-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration:
+    name: P12 real MySQL Redis Workspace API RBAC notification tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_QR_WORKSPACE_QUOTA: '200'
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_REDIS_HOST: 127.0.0.1
+      GOJET_TEST_REDIS_PORT: '6379'
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P12 drivers and native packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P12/api artifacts/v10/P12/rbac artifacts/v10/P12/audit artifacts/v10/P12/security artifacts/v10/P12/runtime
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          python3 -m py_compile scripts/p12/integration_common.py scripts/p12/integration.py scripts/p12/validate_contract.py
+          gofmt -d internal/workspace/*.go internal/links/httpapi.go internal/links/store_mysql_query.go services/platformapi/cmd/server/main.go services/platformapi/cmd/server/workspace.go scripts/p12/producer.go | tee /tmp/p12-gofmt.diff
+          test ! -s /tmp/p12-gofmt.diff
+          go test ./internal/workspace ./internal/links ./internal/analytics ./services/platformapi/cmd/server
+          go vet ./internal/workspace ./internal/links ./internal/analytics ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p12-producer ./scripts/p12/producer.go
+          sha256sum /tmp/gojet-p12-producer > artifacts/v10/P12/runtime/producer.sha256
+
+      - name: Apply P05 through P12 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql \
+            migrations/000007_bio.sql \
+            migrations/000008_workspace_organization.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'workspace%'" | sort | tee artifacts/v10/P12/runtime/mysql-workspace-tables.txt
+
+      - name: Build and start native platformapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p12-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p12-platformapi > artifacts/v10/P12/runtime/native-platformapi.sha256
+          /tmp/gojet-p12-platformapi > artifacts/v10/P12/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P12/runtime/platformapi.log || true
+          exit 1
+
+      - name: Run P12-T001 through P12-T018
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in $(seq -w 1 18); do
+            GITHUB_SHA="$exact_head" python3 scripts/p12/integration.py --case "P12-T0${number}"
+          done
+
+      - name: Verify exact-head P12-T001 through P12-T018 evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P12')
+          rbac = {3,4,5,8,16}
+          audit = {13}
+          security = {17}
+          errors = []
+          for number in range(1, 19):
+              cid = f'P12-T{number:03d}'
+              directory = 'rbac' if number in rbac else ('audit' if number in audit else ('security' if number in security else 'api'))
+              path = root / directory / f'{cid}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head: errors.append(f'{cid} implementation_commit mismatch')
+              if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f'P12-T001..T018 exact-head evidence PASS on {head}')
+          PY
+
+      - name: Capture P12 runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P12/runtime
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,name,status,version,created_by,created_at,updated_at FROM workspaces ORDER BY id" > artifacts/v10/P12/runtime/mysql-workspaces.tsv 2> artifacts/v10/P12/runtime/mysql-workspaces.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,user_id,role,joined_at,updated_at FROM workspace_memberships ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-memberships.tsv 2> artifacts/v10/P12/runtime/mysql-memberships.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,email,role,status,expires_at,invited_by,accepted_by,created_at,updated_at FROM workspace_invitations ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-invitations-safe.tsv 2> artifacts/v10/P12/runtime/mysql-invitations-safe.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,name,status,version,created_by FROM workspace_campaigns ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-campaigns.tsv 2> artifacts/v10/P12/runtime/mysql-campaigns.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,name,normalized_name,version,created_by FROM workspace_tags ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-tags.tsv 2> artifacts/v10/P12/runtime/mysql-tags.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,name,normalized_name,version,created_by FROM workspace_folders ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-folders.tsv 2> artifacts/v10/P12/runtime/mysql-folders.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,link_id,campaign_id,folder_id,version FROM workspace_link_organization ORDER BY workspace_id,link_id" > artifacts/v10/P12/runtime/mysql-link-organization.tsv 2> artifacts/v10/P12/runtime/mysql-link-organization.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,link_id,tag_id FROM workspace_link_tags ORDER BY workspace_id,link_id,tag_id" > artifacts/v10/P12/runtime/mysql-link-tags.tsv 2> artifacts/v10/P12/runtime/mysql-link-tags.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,recipient_user_id,category,event_key,title,summary,COALESCE(deep_link,''),resource_type,resource_id,read_at,created_at FROM workspace_notifications ORDER BY workspace_id,id" > artifacts/v10/P12/runtime/mysql-notifications-safe.tsv 2> artifacts/v10/P12/runtime/mysql-notifications-safe.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,status,data_through_at,state_reason,updated_at FROM workspace_notification_state ORDER BY workspace_id" > artifacts/v10/P12/runtime/mysql-notification-state.tsv 2> artifacts/v10/P12/runtime/mysql-notification-state.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,actor_id,action,resource_type,resource_id,COALESCE(reason,''),request_correlation_id,result,created_at FROM workspace_audit_events ORDER BY id" > artifacts/v10/P12/runtime/mysql-audit-safe.tsv 2> artifacts/v10/P12/runtime/mysql-audit-safe.err
+          true
+
+      - name: Verify P12 runtime captures are clean
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for errfile in artifacts/v10/P12/runtime/*.err; do
+            test ! -s "$errfile" || { echo "runtime capture error: $errfile"; cat "$errfile"; exit 1; }
+          done
+          if grep -R -E 'p12-super-secret|hunter2|p12-secret-token|Bearer abcdefghijklmnop|victim@example\.test|risk_evidence=private' artifacts/v10/P12/runtime/mysql-audit-safe.tsv artifacts/v10/P12/runtime/mysql-notifications-safe.tsv; then
+            echo 'secret/PII found in safe runtime capture'
+            exit 1
+          fi
+          echo 'P12 runtime captures clean'
+
+      - name: Stop native P12 service
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P12/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload P12 real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p12-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P12/api/P12-T001.json
+            artifacts/v10/P12/api/P12-T002.json
+            artifacts/v10/P12/rbac/P12-T003.json
+            artifacts/v10/P12/rbac/P12-T004.json
+            artifacts/v10/P12/rbac/P12-T005.json
+            artifacts/v10/P12/api/P12-T006.json
+            artifacts/v10/P12/api/P12-T007.json
+            artifacts/v10/P12/rbac/P12-T008.json
+            artifacts/v10/P12/api/P12-T009.json
+            artifacts/v10/P12/api/P12-T010.json
+            artifacts/v10/P12/api/P12-T011.json
+            artifacts/v10/P12/api/P12-T012.json
+            artifacts/v10/P12/audit/P12-T013.json
+            artifacts/v10/P12/api/P12-T014.json
+            artifacts/v10/P12/api/P12-T015.json
+            artifacts/v10/P12/rbac/P12-T016.json
+            artifacts/v10/P12/security/P12-T017.json
+            artifacts/v10/P12/api/P12-T018.json
+            artifacts/v10/P12/runtime/
+          if-no-files-found: warn
+          retention-days: 30
