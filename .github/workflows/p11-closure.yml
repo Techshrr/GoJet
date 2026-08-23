@@ -1,0 +1,336 @@
+name: P11 Closure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/bio/**'
+      - 'internal/links/**'
+      - 'internal/files/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p11/**'
+      - 'artifacts/v10/P11/**'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
+      - '.github/workflows/p07-*.yml'
+      - '.github/workflows/p08-*.yml'
+      - '.github/workflows/p09-*.yml'
+      - '.github/workflows/p10-*.yml'
+      - '.github/workflows/p11-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p11-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P11 exact-head signed closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify P11 closure validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p11/validate.py scripts/p11/validate_coherence.py scripts/p11/validate_closure.py scripts/p11/validate_contract.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head affected P00-P11 matrix
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P11
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = (
+              'P00 Bootstrap and G0 Traceability',
+              'P01 Engineering Foundation',
+              'P02 Brand Foundation',
+              'P03 Design System',
+              'P04 Product Shells',
+              'P05 Links Domain Contract',
+              'P05 Real Integration',
+              'P05 Workspace Browser',
+              'P05 Closure',
+              'P06 Custom Domains',
+              'P06 Real Integration',
+              'P06 Workspace Domains Browser',
+              'P06 Closure',
+              'P07 Analytics Contract',
+              'P07 Real Integration',
+              'P07 Workspace Analytics Browser',
+              'P07 Closure',
+              'P08 QR Contract',
+              'P08 Real QR Integration',
+              'P08 Workspace QR Browser',
+              'P08 Evidence Coherence',
+              'P09 Files Contract',
+              'P09 Real Files and ClamAV Integration',
+              'P09 Files Health and Installer Preflight',
+              'P09 Workspace Files Browser',
+              'P09 Evidence Coherence',
+              'P10 Text Contract',
+              'P10 Real Text Integration',
+              'P10 Workspace Text Browser',
+              'P10 Evidence Coherence',
+              'P11 Bio Contract',
+              'P11 Real Bio Integration',
+              'P11 Workspace Bio Browser',
+              'P11 Evidence Coherence',
+          )
+          excluded = {
+              'P08 Closure': 'revision-specific signed P08 authority is transitively inherited through the authoritative P10 signed closure; do not reinterpret its pre-sign parent against a P11 HEAD',
+              'P09 Closure': 'revision-specific signed P09 authority is transitively inherited through the authoritative P10 signed closure; do not reinterpret its pre-sign parent against a P11 HEAD',
+              'P10 Closure': 'revision-specific signed P10 authority is inherited from source 7db4fca49ba3fd8e60600ecdf41847c7e2f94776 and artifact 9494371271; do not rerun/reinterpret P10 closure on a P11 HEAD',
+          }
+          sha = os.environ['EXACT_HEAD']
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          manifest_path = Path('artifacts/v10/P11/regression-manifest.json')
+
+          def fetch_runs():
+              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{repository}/actions/runs?{query}',
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)['workflow_runs']
+
+          deadline = time.time() + 45 * 60
+          while time.time() < deadline:
+              runs = fetch_runs()
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name not in required:
+                      continue
+                  previous = latest.get(name)
+                  if previous is None or int(run.get('id', 0)) > int(previous.get('id', 0)):
+                      latest[name] = run
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': {
+                      name: {
+                          'run_id': int(latest[name]['id']),
+                          'run_number': int(latest[name].get('run_number', 0)),
+                          'head_sha': latest[name].get('head_sha'),
+                          'status': latest[name].get('status'),
+                          'conclusion': latest[name].get('conclusion'),
+                          'html_url': latest[name].get('html_url'),
+                      }
+                      for name in required if name in latest
+                  },
+                  'excluded_revision_specific_workflows': excluded,
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+              if failed:
+                  raise SystemExit('required exact-head workflows failed: ' + ', '.join(failed))
+              if not missing and not pending:
+                  print(f'P00-P11 affected exact-head matrix is green for {sha}')
+                  break
+              print(f'Waiting for exact-head matrix: missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for exact-head workflows for {sha}')
+          PY
+
+      - name: Download exact-head P11 coherence evidence
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          evidence_run="$(python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P11/regression-manifest.json', encoding='utf-8'))
+          print(data['required_workflows']['P11 Evidence Coherence']['run_id'])
+          PY
+          )"
+          rm -rf /tmp/p11-evidence
+          mkdir -p /tmp/p11-evidence
+          gh run download "$evidence_run" --repo "$REPOSITORY" --name "gojet-v10-p11-evidence-$EXACT_HEAD" --dir /tmp/p11-evidence
+          cp -a /tmp/p11-evidence/. artifacts/v10/P11/
+          test -f artifacts/v10/P11/results/P11-T019.json
+          test -f artifacts/v10/P11/evidence-index.json
+          test "$(find artifacts/v10/P11/api artifacts/v10/P11/headers artifacts/v10/P11/sitemap artifacts/v10/P11/browser artifacts/v10/P11/results -type f -name 'P11-T*.json' | wc -l)" -eq 19
+
+      - name: Bind inherited authoritative P10 signed closure
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          P10_SOURCE='7db4fca49ba3fd8e60600ecdf41847c7e2f94776'
+          P10_RUN='32643830718'
+          P10_ARTIFACT='9494371271'
+          P10_DIGEST='sha256:6a4bcaed870c6432df40e1fe71cb38dd05a84789d3539ab10dabcbfefe450c50'
+          rm -rf /tmp/p10-authority artifacts/v10/P11/inherited
+          mkdir -p /tmp/p10-authority artifacts/v10/P11/inherited/P10
+
+          REPOSITORY="$REPOSITORY" P10_SOURCE="$P10_SOURCE" P10_RUN="$P10_RUN" P10_ARTIFACT="$P10_ARTIFACT" P10_DIGEST="$P10_DIGEST" python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          repo=os.environ['REPOSITORY']
+          token=os.environ['GH_TOKEN']
+          def get(path):
+              request=urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/{path}',
+                  headers={
+                      'Accept':'application/vnd.github+json',
+                      'Authorization':f'Bearer {token}',
+                      'X-GitHub-Api-Version':'2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          run=get(f"actions/runs/{os.environ['P10_RUN']}")
+          artifact=get(f"actions/artifacts/{os.environ['P10_ARTIFACT']}")
+          source=os.environ['P10_SOURCE']
+          expected_digest=os.environ['P10_DIGEST']
+          assert run['head_sha'] == source, run
+          assert run['status'] == 'completed' and run['conclusion'] == 'success', run
+          assert int(artifact['id']) == int(os.environ['P10_ARTIFACT']), artifact
+          assert artifact['digest'] == expected_digest, artifact
+          assert artifact['expired'] is False, artifact
+          assert int(artifact['workflow_run']['id']) == int(os.environ['P10_RUN']), artifact
+          assert artifact['workflow_run']['head_sha'] == source, artifact
+          data={
+              'source_commit': source,
+              'closure_run_id': int(os.environ['P10_RUN']),
+              'workflow_status': run['status'],
+              'workflow_conclusion': run['conclusion'],
+              'workflow_head_sha': run['head_sha'],
+              'artifact_id': int(os.environ['P10_ARTIFACT']),
+              'artifact_name': artifact['name'],
+              'artifact_digest': artifact['digest'],
+              'artifact_expired': artifact['expired'],
+              'archive_sha256': None,
+          }
+          Path('artifacts/v10/P11/inherited/p10-authority.json').write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+
+          gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "/repos/$REPOSITORY/actions/artifacts/$P10_ARTIFACT/zip" > /tmp/p10-authority.zip
+          archive_sha="$(sha256sum /tmp/p10-authority.zip | awk '{print $1}')"
+          test "sha256:$archive_sha" = "$P10_DIGEST"
+          unzip -q /tmp/p10-authority.zip -d /tmp/p10-authority
+          cp -a /tmp/p10-authority/. artifacts/v10/P11/inherited/P10/
+          ARCHIVE_SHA="$archive_sha" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path=Path('artifacts/v10/P11/inherited/p10-authority.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          data['archive_sha256']=os.environ['ARCHIVE_SHA']
+          path.write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+          test -f artifacts/v10/P11/inherited/P10/closure.json
+          test -f artifacts/v10/P11/inherited/P10/results/P10-T020.json
+          test -f artifacts/v10/P11/inherited/P10/review.md
+
+      - name: Run P11-T020 exact-head closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p11/validate.py --case P11-T020 --closure
+          python3 - <<'PY'
+          import json
+          import subprocess
+          result=json.load(open('artifacts/v10/P11/results/P11-T020.json', encoding='utf-8'))
+          closure=json.load(open('artifacts/v10/P11/closure.json', encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert result['implementation_commit'] == head, result
+          assert result['status'] == 'PASS' and result['errors'] == [], result
+          assert result['details']['input_evidence_count'] == 19, result['details']
+          assert result['details']['regression_workflow_count'] == 34, result['details']
+          inherited=result['details']['inherited_p10_signed_closure']
+          assert inherited['source_commit'] == '7db4fca49ba3fd8e60600ecdf41847c7e2f94776', inherited
+          assert inherited['phase'] == 'signed' and inherited['merge_authoritative'] is True, inherited
+          assert inherited['defects'] == {'p0':0,'p1':0,'decision_required':0}, inherited
+          assert closure['implementation_commit'] == head and closure['status'] == 'PASS', closure
+          if closure['phase'] == 'pre-sign':
+              assert closure['merge_authoritative'] is False, closure
+              assert closure['defects'] == {'p0': None, 'p1': None, 'decision_required': None}, closure['defects']
+              print(f'P11-T020 pre-sign closure PASS on {head}; merge-authoritative=false')
+          elif closure['phase'] == 'signed':
+              assert closure['merge_authoritative'] is True, closure
+              assert closure['defects'] == {'p0': 0, 'p1': 0, 'decision_required': 0}, closure['defects']
+              print(f'P11-T020 signed closure PASS on {head}; merge-authoritative=true')
+          else:
+              raise AssertionError(closure)
+          PY
+
+      - name: Upload P11 closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p11-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P11/regression-manifest.json
+            artifacts/v10/P11/evidence-producer-manifest.json
+            artifacts/v10/P11/evidence-index.json
+            artifacts/v10/P11/closure-evidence-index.json
+            artifacts/v10/P11/closure.json
+            artifacts/v10/P11/contract/
+            artifacts/v10/P11/api/
+            artifacts/v10/P11/headers/
+            artifacts/v10/P11/sitemap/
+            artifacts/v10/P11/browser/
+            artifacts/v10/P11/captures/
+            artifacts/v10/P11/runtime/
+            artifacts/v10/P11/results/P11-T*.json
+            artifacts/v10/P11/inherited/
+            artifacts/v10/P11/test-plan.json
+            artifacts/v10/P11/review.md

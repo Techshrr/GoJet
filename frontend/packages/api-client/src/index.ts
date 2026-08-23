@@ -52,3 +52,9 @@ export type {
 
 export { GoJetTextClient } from './text';
 export type { TextCreateInput, TextListResponse, TextShareRecord, TextUpdateInput, TextVisibility } from './text';
+
+export { GoJetBioClient } from './bio';
+export type {
+  BioChildInput, BioChildRecord, BioChildRiskStatus, BioCreateInput, BioListResponse,
+  BioPageRecord, BioStatus, BioUpdateInput,
+} from './bio';
