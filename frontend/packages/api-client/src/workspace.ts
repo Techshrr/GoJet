@@ -104,6 +104,11 @@ export type CreatedWorkspaceInvitation = { invitation: WorkspaceInvitation; toke
 type ApiErrorEnvelope = { error?: { code?: string; message?: string } };
 function normalizeBaseUrl(value: string | undefined): string { return value?.replace(/\/$/, '') ?? ''; }
 function workspacePath(workspaceId: string): string { return `/api/workspaces/${encodeURIComponent(workspaceId)}`; }
+function normalizeCollection<T>(value: T[] | null | undefined, field: string): T[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new TypeError(`Invalid API collection field: ${field}`);
+  return value;
+}
 
 export class GoJetWorkspaceClient {
   private readonly baseUrl: string;
@@ -134,7 +139,10 @@ export class GoJetWorkspaceClient {
     return await response.json() as T;
   }
 
-  listWorkspaces(): Promise<{ items: WorkspaceRecord[] }> { return this.request('/api/workspaces'); }
+  async listWorkspaces(): Promise<{ items: WorkspaceRecord[] }> {
+    const value = await this.request<{ items: WorkspaceRecord[] | null }>('/api/workspaces');
+    return { items: normalizeCollection(value.items, 'workspaces.items') };
+  }
   createWorkspace(name: string): Promise<WorkspaceContext> {
     return this.request('/api/workspaces', { method: 'POST', body: JSON.stringify({ name }) });
   }
@@ -144,14 +152,23 @@ export class GoJetWorkspaceClient {
   }
   overview(workspaceId: string): Promise<WorkspaceOverview> { return this.request(`${workspacePath(workspaceId)}/overview`); }
 
-  members(workspaceId: string): Promise<WorkspaceMembersResponse> { return this.request(`${workspacePath(workspaceId)}/members`); }
+  async members(workspaceId: string): Promise<WorkspaceMembersResponse> {
+    const value = await this.request<{ members: WorkspaceMembership[] | null; invitations: WorkspaceInvitation[] | null }>(`${workspacePath(workspaceId)}/members`);
+    return {
+      members: normalizeCollection(value.members, 'members.members'),
+      invitations: normalizeCollection(value.invitations, 'members.invitations'),
+    };
+  }
   updateMember(workspaceId: string, memberId: number, role: WorkspaceRole, reason = ''): Promise<WorkspaceMembership> {
     return this.request(`${workspacePath(workspaceId)}/members/${memberId}`, { method: 'PATCH', body: JSON.stringify({ role, reason }) });
   }
   removeMember(workspaceId: string, memberId: number, reason = ''): Promise<void> {
     return this.request(`${workspacePath(workspaceId)}/members/${memberId}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
   }
-  invitations(workspaceId: string): Promise<{ items: WorkspaceInvitation[] }> { return this.request(`${workspacePath(workspaceId)}/invitations`); }
+  async invitations(workspaceId: string): Promise<{ items: WorkspaceInvitation[] }> {
+    const value = await this.request<{ items: WorkspaceInvitation[] | null }>(`${workspacePath(workspaceId)}/invitations`);
+    return { items: normalizeCollection(value.items, 'invitations.items') };
+  }
   invite(workspaceId: string, email: string, role: Exclude<WorkspaceRole, 'owner'>, expiresAt: string, reason = ''): Promise<CreatedWorkspaceInvitation> {
     return this.request(`${workspacePath(workspaceId)}/invitations`, { method: 'POST', body: JSON.stringify({ email, role, expires_at: expiresAt, reason }) });
   }
@@ -170,7 +187,10 @@ export class GoJetWorkspaceClient {
   updateOrganization(workspaceId: string, name: string, description: string, expectedVersion: number): Promise<WorkspaceOrganization> {
     return this.request(`${workspacePath(workspaceId)}/organization`, { method: 'PATCH', body: JSON.stringify({ name, description, expected_version: expectedVersion }) });
   }
-  campaigns(workspaceId: string): Promise<{ items: WorkspaceCampaign[] }> { return this.request(`${workspacePath(workspaceId)}/campaigns`); }
+  async campaigns(workspaceId: string): Promise<{ items: WorkspaceCampaign[] }> {
+    const value = await this.request<{ items: WorkspaceCampaign[] | null }>(`${workspacePath(workspaceId)}/campaigns`);
+    return { items: normalizeCollection(value.items, 'campaigns.items') };
+  }
   createCampaign(workspaceId: string, name: string): Promise<WorkspaceCampaign> {
     return this.request(`${workspacePath(workspaceId)}/campaigns`, { method: 'POST', body: JSON.stringify({ name }) });
   }
@@ -180,7 +200,10 @@ export class GoJetWorkspaceClient {
   removeCampaign(workspaceId: string, campaignId: string): Promise<void> {
     return this.request(`${workspacePath(workspaceId)}/campaigns/${encodeURIComponent(campaignId)}`, { method: 'DELETE' });
   }
-  tags(workspaceId: string): Promise<{ items: WorkspaceTag[] }> { return this.request(`${workspacePath(workspaceId)}/tags`); }
+  async tags(workspaceId: string): Promise<{ items: WorkspaceTag[] }> {
+    const value = await this.request<{ items: WorkspaceTag[] | null }>(`${workspacePath(workspaceId)}/tags`);
+    return { items: normalizeCollection(value.items, 'tags.items') };
+  }
   createTag(workspaceId: string, name: string): Promise<WorkspaceTag> {
     return this.request(`${workspacePath(workspaceId)}/tags`, { method: 'POST', body: JSON.stringify({ name }) });
   }
@@ -190,7 +213,10 @@ export class GoJetWorkspaceClient {
   removeTag(workspaceId: string, tagId: number): Promise<void> {
     return this.request(`${workspacePath(workspaceId)}/tags/${tagId}`, { method: 'DELETE' });
   }
-  folders(workspaceId: string): Promise<{ items: WorkspaceFolder[] }> { return this.request(`${workspacePath(workspaceId)}/folders`); }
+  async folders(workspaceId: string): Promise<{ items: WorkspaceFolder[] }> {
+    const value = await this.request<{ items: WorkspaceFolder[] | null }>(`${workspacePath(workspaceId)}/folders`);
+    return { items: normalizeCollection(value.items, 'folders.items') };
+  }
   createFolder(workspaceId: string, name: string): Promise<WorkspaceFolder> {
     return this.request(`${workspacePath(workspaceId)}/folders`, { method: 'POST', body: JSON.stringify({ name }) });
   }
@@ -201,9 +227,10 @@ export class GoJetWorkspaceClient {
     return this.request(`${workspacePath(workspaceId)}/folders/${folderId}`, { method: 'DELETE' });
   }
 
-  notifications(workspaceId: string, category = 'all', limit = 50): Promise<WorkspaceNotificationsResponse> {
+  async notifications(workspaceId: string, category = 'all', limit = 50): Promise<WorkspaceNotificationsResponse> {
     const query = new URLSearchParams({ category, limit: String(limit) });
-    return this.request(`${workspacePath(workspaceId)}/notifications?${query}`);
+    const value = await this.request<Omit<WorkspaceNotificationsResponse, 'items'> & { items: WorkspaceNotification[] | null }>(`${workspacePath(workspaceId)}/notifications?${query}`);
+    return { ...value, items: normalizeCollection(value.items, 'notifications.items') };
   }
   markNotification(workspaceId: string, notificationId: number, read: boolean): Promise<{ id: number; read: boolean }> {
     return this.request(`${workspacePath(workspaceId)}/notifications/${notificationId}/${read ? 'read' : 'unread'}`, { method: 'POST' });
