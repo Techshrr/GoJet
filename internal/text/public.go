@@ -19,6 +19,8 @@ import (
 
 const publicAuthTTL = 30 * time.Minute
 
+const publicTextCSP = "default-src 'none'; style-src 'sha256-ndr9wehkfVoyup3ouFvWLt2MWpDZ7EKznZDNNtr7uHE='; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+
 type publicPageData struct {
 	State        string
 	Headline     string
@@ -36,7 +38,8 @@ type publicPageData struct {
 
 var publicTextTemplate = template.Must(template.New("public-text").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>{{.Headline}} · GoJet</title></head>
+<meta name="robots" content="noindex,nofollow"><title>{{.Headline}} · GoJet</title>
+<style>*,*::before,*::after{box-sizing:border-box}body{overflow-wrap:anywhere}pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}input,button{max-width:100%}</style></head>
 <body><main aria-labelledby="text-state-heading"><section data-text-state="{{.State}}">
 <h1 id="text-state-heading">{{.Headline}}</h1><p>{{.Message}}</p>
 {{if .ShowPassword}}<form method="post" action="/t/{{.Slug}}"><label for="text-password">Password</label>
@@ -166,6 +169,7 @@ func (a *API) renderPublicState(w http.ResponseWriter, status int, slug, state, 
 
 func (a *API) executePublicPage(w http.ResponseWriter, status int, data publicPageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", publicTextCSP)
 	w.WriteHeader(status)
 	_ = publicTextTemplate.Execute(w, data)
 }
