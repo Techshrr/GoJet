@@ -100,12 +100,20 @@ func main() {
 		logger.Error("configure Bio", "error", err)
 		os.Exit(1)
 	}
+	workspaceHandler, workspaceEnabled, err := buildWorkspaceHandler(db, testAuth)
+	if err != nil {
+		logger.Error("configure Workspace organization", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains, P07 Analytics, P08 QR, conditionally enabled P09 Files, P10 Text
-	// and P11 Bio routes explicitly. Each inner handler retains its own security
-	// headers and test-only auth boundary.
+	// P06 Domains, P07 Analytics, P08 QR, conditionally enabled P09 Files, P10 Text,
+	// P11 Bio and P12 Workspace organization routes explicitly. Each inner handler
+	// retains its own security headers and staged authentication boundary.
 	root := http.NewServeMux()
+	if workspaceEnabled {
+		mountWorkspaceRoutes(root, workspaceHandler)
+	}
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("GET /api/workspaces/{workspaceId}/domains/{domainId}", domainsHandler)
@@ -179,7 +187,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
