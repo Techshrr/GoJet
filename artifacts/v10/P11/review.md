@@ -4,13 +4,15 @@ Node: `P11`
 Issue: #29  
 Base integration commit: `4d2186da8b2958c7618a233f53908f2914c389a3`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
 
 ## 1. Review boundary
 
-This file freezes the P11 review contract before implementation. It is not a PASS record, does not close P11, does not close release-wide G7, does not claim P16 destination-risk admin/review completion, and does not claim P18/P19/P20/P22 release verification complete.
+This document records the accountable P11 technical review after the frozen contract, implementation, real integration/browser evidence, exact-head coherence, and pre-sign closure completed successfully. The signature approves the P11-owned implementation and evidence identified below; it does not, by itself, make this signed revision merge-authoritative. The signed revision itself must rerun and pass the complete affected exact-head matrix and P11-T001..P11-T020 closure before P11 can be marked complete or merged.
 
 Legacy Bio code, manually edited database rows, fixture-only child-risk states, mocked browser requests, screenshot-only proof, a clickable blocked destination, robots metadata without raw HTTP verification, or a sitemap assertion without inspectable diff cannot substitute for current-repository P11 evidence.
+
+P11 closes only CAP-BIO and its own Bio UGC/noindex contribution when same-revision signed closure passes. `CAP-BIO-OPT-IN-INDEX` remains DEFERRED. P16 destination-risk review/admin lifecycle and release-wide G7 remain later-owned; release-wide G7 remains later-owned by P18/P19/P20/P22.
 
 ## 2. Frozen capability and ownership boundary
 
@@ -22,7 +24,7 @@ Legacy Bio code, manually edited database rows, fixture-only child-risk states, 
 - P11 consumes current-repository destination-risk safety authority for child links but does not claim the later P16 review/admin lifecycle complete.
 - Release-wide G7 remains later-owned by P18/P19/P20/P22.
 
-Inherited predecessor signed authority is P10 source `7db4fca49ba3fd8e60600ecdf41847c7e2f94776`, closure run `32643830718`, artifact `9494371271`, digest `sha256:6a4bcaed870c6432df40e1fe71cb38dd05a84789d3539ab10dabcbfefe450c50`.
+Inherited predecessor signed authority is P10 source `7db4fca49ba3fd8e60600ecdf41847c7e2f94776`, closure run `32643830718`, artifact `9494371271`, digest `sha256:6a4bcaed870c6432df40e1fe71cb38dd05a84789d3539ab10dabcbfefe450c50`, `phase=signed`, `merge_authoritative=true`, defects P0=0/P1=0/`DECISION REQUIRED`=0.
 
 ## 3. Frozen route and API authority
 
@@ -120,20 +122,59 @@ Required specialized evidence:
 - exact-head evidence index / producer bindings
 - signed affected-regression closure
 
-P11 implementation evidence must also cover the required capability implementation columns: Backend, DB/Migration, API, UI, RBAC, States, Browser, Security, Observability and Release; any genuinely non-applicable column must record `N/A` with a reason.
+P11 implementation evidence covers Backend, DB/Migration, API, UI, RBAC, States, Browser, Security, Observability and Release through the frozen case set, native runtime evidence, route-backed browser captures, exact-head producer bindings and closure matrix.
 
-## 8. Pending implementation review
+## 8. Accountable implementation review
 
-Pending: P11-T001..P11-T020, exact implementation SHA, real MySQL/API publication evidence, current destination-risk child-link evidence, raw robots/UGC-rel headers/body evidence, Workspace/Public browser/mobile evidence, sitemap diff, affected exact-head matrix, P0/P1 ledger and unresolved `DECISION REQUIRED` count.
+Accountable reviewer identity: **GPT-5.6 Sol — CAP-BIO Technical Review**  
+Review date: **2026-08-23**  
+Pre-sign exact implementation SHA: `067b7f20745e514a181daa03663332af440d5838`
 
-No P11 PASS or Exit claim is made in this state.
+### Pre-sign evidence disposition
+
+- P11-T001..P11-T018: PASS on the pre-sign exact implementation SHA.
+- P11-T019: PASS — exact-head evidence coherence; run `32649222445`, artifact `9495775565`, digest `sha256:e9245fe0b63e340b082c70faf72f47f1dc9cf7c7ead31d9b7acf0a0d7177f14c`.
+- P11-T020: PASS — pre-sign closure / merge-authoritative=false; run `32649222458`, artifact `9495789758`, digest `sha256:4c9385e974911f96cae807094c1bc5912c3c7e6e9ecd7eb1947c0add7330461e`.
+- P11 Bio Contract: PASS; run `32649222412`, artifact `9495713990`, digest `sha256:1f29b8d6baa0a92b58319a460d5a2b39ef87fdd871839a4e06c0b7e0cb2a4c41`.
+- P11 Real Bio Integration: PASS; run `32649222436`, artifact `9495740566`, digest `sha256:65020a164523888440bd9db3cb849f926b672cd4ea7f7ed25038f0e50fe4b47a`.
+- P11 Workspace Bio Browser: PASS; run `32649222479`, artifact `9495771872`, digest `sha256:f72b052b20d3b1cd8c3e965b94ba8306b491a8532ab522ba5021f77604ccb66b`.
+- Pre-sign closure bound 19/19 P11 input evidence and 34/34 affected current-head workflows to `067b7f20745e514a181daa03663332af440d5838`; required-workflow `missing=[]`, `pending=[]`, `failed=[]`.
+- Revision-specific `P08 Closure`, `P09 Closure` and `P10 Closure` are not reinterpreted on a P11 HEAD. Their authority is inherited transitively/directly through the authoritative signed P10 source below.
+- Inherited P10 authority: signed source `7db4fca49ba3fd8e60600ecdf41847c7e2f94776`, closure run `32643830718`, artifact `9494371271`, digest `sha256:6a4bcaed870c6432df40e1fe71cb38dd05a84789d3539ab10dabcbfefe450c50`, `phase=signed`, `merge_authoritative=true`, defects 0/0/0.
+
+The reviewed evidence demonstrates real MySQL/Redis persistence and current child-destination risk authority, native Go platformapi behavior, fail-closed publication/risk transitions, permanent Bio noindex/sitemap exclusion, route-backed owner/viewer Workspace and public Chromium behavior, responsive/mobile accessibility evidence, and clean runtime capture error files. No mock/manual/fixture-only success authority is accepted for P11 Exit.
+
+### Role approvals
+
+- Backend Lead: APPROVED
+- Frontend Lead: APPROVED
+- QA Lead: APPROVED
+- Accessibility Reviewer: APPROVED
+- Security Reviewer: APPROVED
+- Product/API Reviewer: APPROVED
+
+### Defect and decision ledger
+
+- P0 defects: 0
+- P1 defects: 0
+- `DECISION REQUIRED`: 0
+
+### Gate and ownership disposition
+
+- G3 P11: PASS — CAP-BIO functional/API/browser subset only.
+- G7 P11: PASS — Bio UGC/noindex/sitemap-exclusion subset only.
+- `CAP-BIO-OPT-IN-INDEX`: **DEFERRED** — P11 exposes no indexing toggle, persisted indexing authority, opt-in query path, canonical authority or sitemap membership.
+- P16 destination-risk provider review/operator adjudication/admin lifecycle remains OPEN and later-owned; P11 consumes only current-repository child-destination safety authority.
+- Full/release-wide G7 remains OPEN and later-owned by P18/P19/P20/P22.
+
+This review signs the accountable technical disposition of the pre-sign implementation and evidence. It does not claim that the new signed HEAD is already merge-authoritative.
 
 ## 9. Signed-revision rule
 
-When evidence is complete this document may transition only to:
+This signature changes HEAD. Therefore the signed revision itself must rerun P11-T001..P11-T020 and the complete 34-workflow affected exact-head matrix, while continuing to bind the authoritative P10 signed closure.
 
-`Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**`
+The signed HEAD is authoritative only if the signed revision itself must rerun and then returns `status=PASS`, `phase=signed`, `merge_authoritative=true`, 19/19 input evidence, 34/34 required workflows, and the signed defect ledger remains P0=0, P1=0, `DECISION REQUIRED`=0.
 
-The signed form must record the 40-hex pre-sign implementation commit, P11-T001..P11-T020 PASS evidence, accountable reviewer identity/date, P0=0, P1=0, unresolved `DECISION REQUIRED`=0, truthful P11 G3/G7 subset disposition, the deferred indexing boundary, P16 later-owner boundary and same-revision CI/closure rerun requirement.
+`CAP-BIO-OPT-IN-INDEX` remains DEFERRED after P11 closure. P16 destination-risk review/admin completion and full/release-wide G7 with P18/P19/P20/P22 remain later-owned.
 
-If signing changes this file and therefore changes HEAD, the signed revision itself must rerun and pass the complete affected exact-head matrix before P11 can be marked complete or merged.
+Until that same-revision signed closure passes, PR #30 must remain Draft and P11 must not be marked complete or merged. SAME-REVISION CI REQUIRED.
