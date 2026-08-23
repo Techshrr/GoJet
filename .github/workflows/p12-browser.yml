@@ -29,7 +29,7 @@ jobs:
   browser:
     name: P12 real Workspace organization browser evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     services:
       mysql:
         image: mysql:8.4.11
@@ -73,6 +73,7 @@ jobs:
       GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
       GOJET_TEST_WORKSPACE_VIEWER_URL: http://127.0.0.1:4175
       GOJET_TEST_WORKSPACE_INVITEE_URL: http://127.0.0.1:4176
+      GOJET_TEST_WORKSPACE_UNAUTH_URL: http://127.0.0.1:4177
       GOJET_TEST_PLATFORM_BINARY: /tmp/gojet-p12-browser-platformapi
       GOJET_TEST_PLATFORM_PID_FILE: artifacts/v10/P12/runtime/browser-platformapi.pid
       GOJET_TEST_P12_PRODUCER: /tmp/gojet-p12-browser-producer
@@ -122,6 +123,8 @@ jobs:
           git diff --exit-code -- go.mod go.sum
           pnpm install --frozen-lockfile
           node --check scripts/p12/browser.mjs
+          node --check scripts/p12/browser_base.mjs
+          node --check scripts/p12/browser_contract.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
           go test ./internal/workspace ./services/platformapi/cmd/server
@@ -178,6 +181,11 @@ jobs:
             export VITE_GOJET_TEST_DISPLAY_NAME='P12 Invitee'
             pnpm --filter @gojet/workspace exec vite build --outDir dist-p12-invitee
           )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=0
+            unset VITE_GOJET_TEST_WORKSPACE_ID VITE_GOJET_TEST_ACTOR_ID VITE_GOJET_TEST_WORKSPACE_ROLE VITE_GOJET_TEST_EMAIL VITE_GOJET_TEST_DISPLAY_NAME
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p12-unauth
+          )
 
       - name: Start native API and real Workspace builds
         shell: bash
@@ -191,17 +199,21 @@ jobs:
           echo $! > artifacts/v10/P12/runtime/browser-viewer.pid
           pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4176 --outDir dist-p12-invitee > artifacts/v10/P12/runtime/browser-invitee.log 2>&1 &
           echo $! > artifacts/v10/P12/runtime/browser-invitee.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4177 --outDir dist-p12-unauth > artifacts/v10/P12/runtime/browser-unauth.log 2>&1 &
+          echo $! > artifacts/v10/P12/runtime/browser-unauth.pid
           for attempt in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
               && curl -fsS http://127.0.0.1:4174/app >/dev/null \
               && curl -fsS http://127.0.0.1:4175/app >/dev/null \
-              && curl -fsS http://127.0.0.1:4176/app >/dev/null; then exit 0; fi
+              && curl -fsS http://127.0.0.1:4176/app >/dev/null \
+              && curl -fsS http://127.0.0.1:4177/app >/dev/null; then exit 0; fi
             sleep 1
           done
           cat artifacts/v10/P12/runtime/browser-platformapi.log || true
           cat artifacts/v10/P12/runtime/browser-owner.log || true
           cat artifacts/v10/P12/runtime/browser-viewer.log || true
           cat artifacts/v10/P12/runtime/browser-invitee.log || true
+          cat artifacts/v10/P12/runtime/browser-unauth.log || true
           exit 1
 
       - name: Run P12-T019 through P12-T023
@@ -233,6 +245,7 @@ jobs:
               if data.get('implementation_commit') != head: errors.append(f'{cid} exact-head mismatch')
               if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
               if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+              if 'frozen_contract_completion' not in data.get('details', {}): errors.append(f'{cid} missing frozen contract completion evidence')
           if errors: raise SystemExit('\n'.join(errors))
           print(f'P12-T019..T023 exact-head browser evidence PASS on {head}')
           PY
@@ -254,7 +267,7 @@ jobs:
         if: always()
         run: |
           set +e
-          for file in artifacts/v10/P12/runtime/browser-owner.pid artifacts/v10/P12/runtime/browser-viewer.pid artifacts/v10/P12/runtime/browser-invitee.pid artifacts/v10/P12/runtime/browser-platformapi.pid; do
+          for file in artifacts/v10/P12/runtime/browser-owner.pid artifacts/v10/P12/runtime/browser-viewer.pid artifacts/v10/P12/runtime/browser-invitee.pid artifacts/v10/P12/runtime/browser-unauth.pid artifacts/v10/P12/runtime/browser-platformapi.pid; do
             kill "$(cat "$file" 2>/dev/null)" 2>/dev/null || true
           done
           true

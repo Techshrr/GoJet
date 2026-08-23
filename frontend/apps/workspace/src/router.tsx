@@ -3,13 +3,13 @@ import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/re
 import {
   CampaignsPage,
   InvitationPage,
-  MembersPage,
-  NotificationsPage,
   OrganizationPage,
   TagsPage,
   WorkspaceOverviewPage,
   WorkspaceSettingsPage,
 } from './workspace/pages';
+import MembersPage from './workspace/MembersPage';
+import NotificationsPage from './workspace/NotificationsPage';
 
 const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));

@@ -57,10 +57,13 @@ export function P12Shell({ sectionLabel, children }: P12ShellProps) {
         window.location.reload();
       }}
       notificationsContent={recent.length ? (
-        <ul className="p12-shell-notifications" aria-label="Recent notifications">
-          {recent.slice(0, 5).map((item) => <li key={item.id}><strong>{item.title}</strong><span>{item.summary}</span></li>)}
-        </ul>
-      ) : <p>No unread Workspace notifications.</p>}
+        <div className="p12-shell-notifications-wrap">
+          <ul className="p12-shell-notifications" aria-label="Recent notifications">
+            {recent.slice(0, 5).map((item) => <li key={item.id}><strong>{item.title}</strong><span>{item.summary}</span></li>)}
+          </ul>
+          <a href="/app/notifications">View all notifications</a>
+        </div>
+      ) : <div><p>No unread Workspace notifications.</p><a href="/app/notifications">View all notifications</a></div>}
     >
       {children}
     </WorkspaceShell>
