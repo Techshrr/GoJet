@@ -147,6 +147,16 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_offset", "Invalid list offset.")
 		return
 	}
+	tagID, err := optionalUint64(r.URL.Query().Get("tag"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_tag", "Invalid tag filter.")
+		return
+	}
+	folderID, err := optionalUint64(r.URL.Query().Get("folder"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_folder", "Invalid folder filter.")
+		return
+	}
 	from, err := optionalTime(r.URL.Query().Get("updated_from"))
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_updated_from", "Invalid updated_from timestamp.")
@@ -162,6 +172,9 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		Query:       r.URL.Query().Get("q"),
 		Hostname:    r.URL.Query().Get("hostname"),
 		Status:      r.URL.Query().Get("status"),
+		CampaignID:  r.URL.Query().Get("campaign"),
+		TagID:       tagID,
+		FolderID:    folderID,
 		UpdatedFrom: from,
 		UpdatedTo:   to,
 		Limit:       limit,
@@ -175,8 +188,8 @@ func (a *API) listLinks(w http.ResponseWriter, r *http.Request) {
 		"items": publicLinks(result.Items),
 		"total": result.Total,
 		"filters": map[string]any{
-			"implemented": []string{"q", "hostname", "status", "updated_from", "updated_to"},
-			"deferred_to_owners": map[string]string{"campaign": "P07/P12", "tag": "P12"},
+			"implemented": []string{"q", "hostname", "status", "campaign", "tag", "folder", "updated_from", "updated_to"},
+			"deferred_to_owners": map[string]string{},
 		},
 	})
 }
@@ -358,6 +371,18 @@ func optionalInt(value string, fallback int) (int, error) {
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed < 0 {
+		return 0, ErrInvalidInput
+	}
+	return parsed, nil
+}
+
+func optionalUint64(value string) (uint64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseUint(value, 10, 64)
+	if err != nil || parsed == 0 {
 		return 0, ErrInvalidInput
 	}
 	return parsed, nil
