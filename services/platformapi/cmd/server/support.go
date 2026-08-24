@@ -42,6 +42,14 @@ func (r supportTestTicketAdminPermissionResolver) HasPermission(_ context.Contex
 	return permission == support.TicketsManagePermission && strings.TrimSpace(principal.UserID) == r.actorID, nil
 }
 
+type supportTestMailAdminPermissionResolver struct {
+	actorID string
+}
+
+func (r supportTestMailAdminPermissionResolver) HasPermission(_ context.Context, principal support.RequestPrincipal, permission string) (bool, error) {
+	return permission == support.MailManagePermission && strings.TrimSpace(principal.UserID) == r.actorID, nil
+}
+
 func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_SUPPORT_ENABLED") != "1" {
 		return nil, false, nil
@@ -112,25 +120,39 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	}
 
 	// P17 owns the administrator/permission lifecycle. P14 only consumes the
-	// tickets.manage boundary. Production therefore receives no synthetic
-	// permission resolver and Admin Tickets fails closed until P17 is wired.
-	// CI may explicitly opt one server-owned actor into tickets.manage; no
-	// client-supplied role/permission header is authoritative.
-	var adminPermissions support.AdminPermissionResolver
+	// tickets.manage and mail.manage boundaries. Production receives no
+	// synthetic permission resolver, so both Admin surfaces fail closed until
+	// P17 is wired. CI may explicitly opt server-owned actors into each boundary;
+	// no client-supplied role or permission header is authoritative.
+	var ticketAdminPermissions support.AdminPermissionResolver
 	if testAuth && os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED") == "1" {
 		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR"))
 		if actorID == "" {
 			return nil, false, support.ErrAuthenticationUnavailable
 		}
-		adminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
+		ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
 	}
-	adminAPI, err := support.NewAdminAPI(store, principalResolver, adminPermissions, workspaceStore)
+	adminAPI, err := support.NewAdminAPI(store, principalResolver, ticketAdminPermissions, workspaceStore)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var mailAdminPermissions support.AdminPermissionResolver
+	if testAuth && os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ENABLED") == "1" {
+		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR"))
+		if actorID == "" {
+			return nil, false, support.ErrAuthenticationUnavailable
+		}
+		mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
+	}
+	adminMailAPI, err := support.NewAdminMailAPI(store, principalResolver, mailAdminPermissions)
 	if err != nil {
 		return nil, false, err
 	}
 
 	requesterHandler := requesterAPI.Handler()
 	adminHandler := adminAPI.Handler()
+	adminMailHandler := adminMailAPI.Handler()
 	combined := http.NewServeMux()
 	for _, pattern := range []string{
 		"POST /api/public/contact",
@@ -150,6 +172,15 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	} {
 		combined.Handle(pattern, adminHandler)
 	}
+	for _, pattern := range []string{
+		"GET /api/admin/mail/queue",
+		"GET /api/admin/mail/templates",
+		"GET /api/admin/mail/settings",
+		"PATCH /api/admin/mail/settings",
+		"POST /api/admin/mail/test",
+	} {
+		combined.Handle(pattern, adminMailHandler)
+	}
 	return combined, true, nil
 }
 
@@ -165,6 +196,11 @@ func mountSupportRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/admin/support/tickets/{ticketId}",
 		"POST /api/admin/support/tickets/{ticketId}/replies",
 		"PATCH /api/admin/support/tickets/{ticketId}",
+		"GET /api/admin/mail/queue",
+		"GET /api/admin/mail/templates",
+		"GET /api/admin/mail/settings",
+		"PATCH /api/admin/mail/settings",
+		"POST /api/admin/mail/test",
 	}
 	for _, pattern := range patterns {
 		root.Handle(pattern, handler)

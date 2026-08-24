@@ -14,6 +14,10 @@ type MailQueue interface {
 	Complete(ctx context.Context, claimed ClaimedMail, rawClaimToken string, delivery MailDeliveryResult, now time.Time) (MailJob, error)
 }
 
+type MailDispatchGate interface {
+	MailDispatchEnabled(ctx context.Context) (bool, error)
+}
+
 type MailSender interface {
 	Send(ctx context.Context, recipient string, rendered RenderedMail) MailDeliveryResult
 }
@@ -36,6 +40,17 @@ func NewMailWorker(queue MailQueue, sender MailSender) (*MailWorker, error) {
 func (w *MailWorker) RunOnce(ctx context.Context) (bool, error) {
 	if w == nil || w.queue == nil || w.sender == nil || w.now == nil {
 		return false, ErrInvalidInput
+	}
+	if gate, ok := w.queue.(MailDispatchGate); ok {
+		enabled, err := gate.MailDispatchEnabled(ctx)
+		if err != nil {
+			return false, err
+		}
+		if !enabled {
+			// Disabled mail is a deliberate no-work state. Do not claim a durable
+			// job or create an attempt while dispatch is administratively paused.
+			return false, nil
+		}
 	}
 	claimToken, err := newMailClaimToken()
 	if err != nil {
