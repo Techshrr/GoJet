@@ -33,7 +33,7 @@ export async function run(browser) {
   await page.getByLabel('Override reason').fill('P13 browser audited FX override');
   await page.getByRole('button', { name: 'Review override' }).click();
   await waitState(page, 'override-confirm');
-  await page.getByText('Confirm override', { exact: true }).waitFor();
+  await page.locator('.commerce-confirm > strong').waitFor();
   captures.push(await screenshot(page, 'P13-T024', 'override-confirm'));
   observed['override-confirm'] = true;
   await page.getByRole('button', { name: 'Confirm override' }).click();
