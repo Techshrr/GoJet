@@ -12,7 +12,7 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = os.environ.get("GITHUB_SHA") or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+HEAD = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 BASE_URL = os.environ.get("GOJET_TEST_PLATFORM_URL", "http://127.0.0.1:18081").rstrip("/")
 MYSQL_HOST = os.environ.get("GOJET_TEST_MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = os.environ.get("GOJET_TEST_MYSQL_PORT", "3306")
