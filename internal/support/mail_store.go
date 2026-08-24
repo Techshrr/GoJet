@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Techshrr/GoJet/internal/workspace"
 )
 
 var ErrNoMailAvailable = errors.New("no mail job available")
@@ -279,10 +281,85 @@ WHERE mail_job_id=? AND attempt_number=? AND status='sending'`,
 	}); err != nil {
 		return MailJob{}, err
 	}
+	if next.Status == MailFailed {
+		if err := produceMailFailureNotificationTx(ctx, tx, next); err != nil {
+			return MailJob{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return MailJob{}, err
 	}
 	return next, nil
+}
+
+func produceMailFailureNotificationTx(ctx context.Context, tx *sql.Tx, job MailJob) error {
+	if tx == nil || job.Status != MailFailed {
+		return ErrInvalidInput
+	}
+	var ticketID, workspaceID, requesterUserID sql.NullString
+	switch job.ResourceType {
+	case "ticket":
+		err := tx.QueryRowContext(ctx, `
+SELECT id,workspace_id,requester_user_id FROM support_tickets WHERE id=?`, job.ResourceID).
+			Scan(&ticketID, &workspaceID, &requesterUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidInput
+		}
+		if err != nil {
+			return err
+		}
+	case "ticket_message":
+		err := tx.QueryRowContext(ctx, `
+SELECT t.id,t.workspace_id,t.requester_user_id
+FROM support_ticket_messages m JOIN support_tickets t ON t.id=m.ticket_id
+WHERE m.id=?`, job.ResourceID).Scan(&ticketID, &workspaceID, &requesterUserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidInput
+		}
+		if err != nil {
+			return err
+		}
+	case "public_contact", "mail_test":
+		return nil
+	default:
+		return ErrInvalidInput
+	}
+	if !ticketID.Valid || !workspaceID.Valid || !requesterUserID.Valid ||
+		strings.TrimSpace(ticketID.String) == "" || strings.TrimSpace(workspaceID.String) == "" || strings.TrimSpace(requesterUserID.String) == "" {
+		return nil
+	}
+	input, err := buildMailFailureNotification(job, ticketID.String, workspaceID.String, requesterUserID.String)
+	if err != nil {
+		return err
+	}
+	_, _, err = workspace.ProduceNotificationTx(ctx, tx, input)
+	if errors.Is(err, workspace.ErrForbidden) || errors.Is(err, workspace.ErrNotFound) {
+		// P12 current membership remains the recipient authority. A requester who
+		// is no longer a current member must not receive a Workspace notification.
+		return nil
+	}
+	return err
+}
+
+func buildMailFailureNotification(job MailJob, ticketID, workspaceID, requesterUserID string) (workspace.NotificationInput, error) {
+	ticketID = strings.TrimSpace(ticketID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	requesterUserID = strings.TrimSpace(requesterUserID)
+	if job.Status != MailFailed || strings.TrimSpace(job.ID) == "" || ticketID == "" || workspaceID == "" || requesterUserID == "" {
+		return workspace.NotificationInput{}, ErrInvalidInput
+	}
+	dedupeKey := fmt.Sprintf("support:mail_delivery_failed:%s:%s", ticketID, job.ID)
+	if len(dedupeKey) > 160 {
+		return workspace.NotificationInput{}, ErrInvalidInput
+	}
+	return workspace.NotificationInput{
+		WorkspaceID: workspaceID, RecipientUserID: requesterUserID, Category: "support",
+		EventKey: "mail_delivery_failed", DedupeKey: dedupeKey,
+		Title: "Support email delivery failed",
+		Summary: "A support email could not be delivered. Check the support thread for current status.",
+		DeepLink: "/app/support/" + ticketID,
+		ResourceType: "support_ticket", ResourceID: ticketID,
+	}, nil
 }
 
 func mailAuditWorkspaceTx(ctx context.Context, tx *sql.Tx, job MailJob) (string, error) {
