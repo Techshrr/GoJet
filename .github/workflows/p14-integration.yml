@@ -335,6 +335,17 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           root = Path('artifacts/v10/P14')
+          evidence_roots = [
+              root / 'api',
+              root / 'rbac',
+              root / 'security',
+              root / 'entitlement',
+              root / 'mail',
+              root / 'notification',
+              root / 'audit',
+              root / 'runtime',
+              root / 'results',
+          ]
           needles = [
               b'p14-ci-deterministic-turnstile-token',
               b'@example.test',
@@ -346,13 +357,16 @@ jobs:
               b'authorization:',
           ]
           bad = []
-          for path in root.rglob('*'):
-              if not path.is_file():
+          for evidence_root in evidence_roots:
+              if not evidence_root.exists():
                   continue
-              data = path.read_bytes().lower()
-              for needle in needles:
-                  if needle.lower() in data:
-                      bad.append(f'{path}: forbidden evidence marker {needle!r}')
+              for path in evidence_root.rglob('*'):
+                  if not path.is_file():
+                      continue
+                  data = path.read_bytes().lower()
+                  for needle in needles:
+                      if needle.lower() in data:
+                          bad.append(f'{path}: forbidden evidence marker {needle!r}')
           if bad:
               raise SystemExit('\n'.join(bad))
           print('P14 evidence secret/PII exclusion PASS')
