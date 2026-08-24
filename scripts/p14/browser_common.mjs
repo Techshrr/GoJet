@@ -82,7 +82,7 @@ export async function adminApi(path, options = {}) {
 
 export function diagnostics() { return { console_errors: [], page_errors: [], request_failures: [], http_errors: [] }; }
 export function attachDiagnostics(page, report, { allowStatuses = [] } = {}) {
-  page.on('console', (message) => { const text = message.text(); if (message.type() === 'error' && text !== 'Failed to load resource: net::ERR_FAILED' && !allowStatuses.some((status) => text.startsWith(`Failed to load resource: the server responded with a status of ${status} `))) report.console_errors.push(text); });
+  page.on('console', (message) => { const text = message.text(); if (message.type() === 'error' && text !== 'Failed to load resource: net::ERR_FAILED' && text !== 'Failed to load resource: net::ERR_INTERNET_DISCONNECTED' && !allowStatuses.some((status) => text.startsWith(`Failed to load resource: the server responded with a status of ${status} `))) report.console_errors.push(text); });
   page.on('pageerror', (error) => report.page_errors.push(String(error)));
   page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() }));
   page.on('response', (response) => {
