@@ -69,6 +69,7 @@ export function SupportNewPage() {
   const [message, setMessage] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const mutation = useMutation({
+    networkMode: 'always',
     mutationFn: async () => {
       if (!runtime || !client) throw new Error('Support runtime unavailable');
       if (!runtime.turnstileToken) throw new GoJetApiError(400, 'turnstile_rejected', 'Verification is required.');
