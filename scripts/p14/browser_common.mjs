@@ -13,11 +13,17 @@ export const OWNER_URL = process.env.GOJET_TEST_WORKSPACE_URL ?? 'http://127.0.0
 export const NO_TURNSTILE_URL = process.env.GOJET_TEST_WORKSPACE_NO_TURNSTILE_URL ?? 'http://127.0.0.1:4175';
 export const BAD_TURNSTILE_URL = process.env.GOJET_TEST_WORKSPACE_BAD_TURNSTILE_URL ?? 'http://127.0.0.1:4176';
 export const FOREIGN_URL = process.env.GOJET_TEST_WORKSPACE_FOREIGN_URL ?? 'http://127.0.0.1:4177';
+export const SITE_URL = process.env.GOJET_TEST_SITE_URL ?? 'http://127.0.0.1:4180';
+export const SITE_BAD_TURNSTILE_URL = process.env.GOJET_TEST_SITE_BAD_TURNSTILE_URL ?? 'http://127.0.0.1:4181';
+export const ADMIN_URL = process.env.GOJET_TEST_ADMIN_URL ?? 'http://127.0.0.1:4182';
+export const ADMIN_DENIED_URL = process.env.GOJET_TEST_ADMIN_DENIED_URL ?? 'http://127.0.0.1:4183';
 export const WORKSPACE = process.env.GOJET_TEST_WORKSPACE_ID ?? 'ws-p14-browser';
 export const OWNER = process.env.GOJET_TEST_ACTOR_ID ?? 'p14-browser-owner';
 const OWNER_EMAIL = process.env.GOJET_TEST_ACTOR_EMAIL ?? 'p14-browser-owner@example.test';
 const ADMIN = process.env.GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR ?? 'p14-browser-ticket-admin';
 const ADMIN_EMAIL = process.env.GOJET_TEST_SUPPORT_TICKETS_ADMIN_EMAIL ?? 'p14-browser-admin@example.test';
+const MAIL_ADMIN = process.env.GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR ?? 'p14-browser-mail-admin';
+const MAIL_ADMIN_EMAIL = process.env.GOJET_TEST_SUPPORT_MAIL_ADMIN_EMAIL ?? 'p14-browser-mail-admin@example.test';
 
 const MYSQL_HOST = process.env.GOJET_TEST_MYSQL_HOST ?? '127.0.0.1';
 const MYSQL_PORT = process.env.GOJET_TEST_MYSQL_PORT ?? '3306';
@@ -79,6 +85,9 @@ export async function ownerApi(path, options = {}) { return api(path, options); 
 export async function adminApi(path, options = {}) {
   return api(path, { ...options, actor: ADMIN, email: ADMIN_EMAIL, headers: { 'Idempotency-Key': unique('browser-admin'), ...(options.headers ?? {}) } });
 }
+export async function mailAdminApi(path, options = {}) {
+  return api(path, { ...options, actor: MAIL_ADMIN, email: MAIL_ADMIN_EMAIL, headers: { 'Idempotency-Key': unique('browser-mail-admin'), ...(options.headers ?? {}) } });
+}
 
 export function diagnostics() { return { console_errors: [], page_errors: [], request_failures: [], http_errors: [] }; }
 export function attachDiagnostics(page, report, { allowStatuses = [] } = {}) {
@@ -128,8 +137,9 @@ export function writeResult(caseId, status, details, errors = []) {
       browser: executablePath,
       platformapi: PLATFORM_URL,
       workspace_surfaces: [OWNER_URL, NO_TURNSTILE_URL, BAD_TURNSTILE_URL, FOREIGN_URL],
+      p14_t023_surfaces: [SITE_URL, SITE_BAD_TURNSTILE_URL, ADMIN_URL, ADMIN_DENIED_URL],
       canonical_viewports: viewports,
-      authority: 'real MySQL 8.x + real Redis + native Go platformapi + built Workspace; browser interception delays/aborts transport only and never fabricates API success',
+      authority: 'real MySQL 8.x + real Redis + native Go platformapi + built Website/Workspace/Admin; browser interception delays/aborts transport only and never fabricates API success',
     },
     details,
     errors,

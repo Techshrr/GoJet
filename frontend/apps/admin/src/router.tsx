@@ -7,6 +7,9 @@ const CommercePlansPage = lazy(() => import('./routes/CommercePlansPage'));
 const CommercePaymentsPage = lazy(() => import('./routes/CommercePaymentsPage'));
 const CommercePaymentDetailPage = lazy(() => import('./routes/CommercePaymentDetailPage'));
 const CommerceFXPage = lazy(() => import('./routes/CommerceFXPage'));
+const AdminTicketsPage = lazy(() => import('./support/pages').then((module) => ({ default: module.AdminTicketsPage })));
+const AdminTicketDetailPage = lazy(() => import('./support/pages').then((module) => ({ default: module.AdminTicketDetailPage })));
+const AdminMailPage = lazy(() => import('./support/pages').then((module) => ({ default: module.AdminMailPage })));
 const rootRoute = createRootRoute({
   component: () => (
     <Suspense fallback={<main aria-busy="true">Loading admin…</main>}>
@@ -20,9 +23,12 @@ const commercePlans = createRoute({ getParentRoute: () => rootRoute, path: '/adm
 const commercePayments = createRoute({ getParentRoute: () => rootRoute, path: '/admin/commerce/payments', component: CommercePaymentsPage });
 const commercePaymentDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/commerce/payments/$paymentId', component: CommercePaymentDetailPage });
 const commerceFX = createRoute({ getParentRoute: () => rootRoute, path: '/admin/commerce/fx', component: CommerceFXPage });
+const adminTickets = createRoute({ getParentRoute: () => rootRoute, path: '/admin/tickets', component: AdminTicketsPage });
+const adminTicketDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/tickets/$ticketId', component: AdminTicketDetailPage });
+const adminMail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/mail', component: AdminMailPage });
 const sections = ['customers', 'resources', 'trust-safety', 'operations', 'commerce', 'access', 'platform', 'audit'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/admin/${section}`, component: ShellPage }),
 );
-const routeTree = rootRoute.addChildren([home, storageStatus, commercePlans, commercePayments, commercePaymentDetail, commerceFX, ...sections]);
+const routeTree = rootRoute.addChildren([home, storageStatus, commercePlans, commercePayments, commercePaymentDetail, commerceFX, adminTickets, adminTicketDetail, adminMail, ...sections]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

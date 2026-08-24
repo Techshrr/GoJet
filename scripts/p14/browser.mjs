@@ -3,8 +3,12 @@ import { executablePath, writeResult } from './browser_common.mjs';
 
 const index = process.argv.indexOf('--case');
 const caseId = index >= 0 ? process.argv[index + 1] : '';
-if (caseId !== 'P14-T022') throw new Error('current browser batch authorizes P14-T022 only');
-const module = await import('./browser_022.mjs');
+const modules = {
+  'P14-T022': './browser_022.mjs',
+  'P14-T023': './browser_023.mjs',
+};
+if (!(caseId in modules)) throw new Error('current browser batch authorizes P14-T022 and P14-T023 only');
+const module = await import(modules[caseId]);
 const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {
   const details = await module.run(browser);
