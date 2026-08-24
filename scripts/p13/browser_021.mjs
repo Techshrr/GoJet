@@ -73,7 +73,7 @@ export async function run(browser) {
   const targetPlan = seedPlan({ code: 'p13_browser_target', name: 'Target Browser Plan', amount: 2900 });
   await page.goto(`${WORKSPACE_OWNER_URL}/app/billing`, { waitUntil: 'networkidle' });
   await waitState(page, 'active');
-  await page.getByLabel('Plan').selectOption(String(targetPlan));
+  await page.locator('.billing-plan-action').getByRole('combobox').selectOption(String(targetPlan));
   await page.getByRole('button', { name: 'Create order' }).click();
   await page.getByText(/Payment settlement is still pending server authority/i).waitFor();
   const ownerOrders = Number(mysqlScalar(`SELECT COUNT(*) FROM billing_orders WHERE workspace_id='${WORKSPACE}'`));
