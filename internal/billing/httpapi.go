@@ -49,15 +49,21 @@ type DowngradeStore interface {
 }
 
 type API struct {
-	store       APIStore
-	principals  PrincipalResolver
-	memberships WorkspaceRoleResolver
-	callbacks   CallbackRequestVerifier
-	now         func() time.Time
+	store            APIStore
+	principals       PrincipalResolver
+	memberships      WorkspaceRoleResolver
+	callbacks        CallbackRequestVerifier
+	adminPermissions AdminPermissionResolver
+	now              func() time.Time
 }
 
 func NewAPI(store APIStore, principals PrincipalResolver, memberships WorkspaceRoleResolver, callbacks CallbackRequestVerifier) *API {
 	return &API{store: store, principals: principals, memberships: memberships, callbacks: callbacks, now: time.Now}
+}
+
+func (a *API) SetAdminPermissionResolver(resolver AdminPermissionResolver) *API {
+	a.adminPermissions = resolver
+	return a
 }
 
 func (a *API) Handler() http.Handler {
@@ -68,11 +74,12 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/billing/entitlements/{capability}", a.getEntitlement)
 	mux.HandleFunc("POST /api/workspaces/{workspaceId}/billing/downgrade", a.scheduleDowngrade)
 	mux.HandleFunc("POST /api/payments/callbacks/{provider}", a.paymentCallback)
+	a.registerCommerceRoutes(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		if strings.HasPrefix(r.URL.Path, "/api/workspaces/") {
+		if strings.HasPrefix(r.URL.Path, "/api/workspaces/") || strings.HasPrefix(r.URL.Path, "/api/admin/") {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		}

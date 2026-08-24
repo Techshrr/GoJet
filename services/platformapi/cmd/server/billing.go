@@ -45,6 +45,14 @@ func (r billingMembershipResolver) ResolveWorkspaceRole(ctx context.Context, wor
 	return membership.Role, nil
 }
 
+type billingTestAdminPermissionResolver struct {
+	actorID string
+}
+
+func (r billingTestAdminPermissionResolver) HasPermission(_ context.Context, principal billing.RequestPrincipal, permission string) (bool, error) {
+	return permission == billing.BillingManagePermission && strings.TrimSpace(principal.UserID) == r.actorID, nil
+}
+
 type deterministicBillingCallbackVerifier struct {
 	verifier billing.DeterministicTestVerifier
 }
@@ -113,6 +121,17 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 		billingMembershipResolver{store: membershipStore},
 		callbackVerifier,
 	)
+	// P17 owns the real billing.manage permission lifecycle. P13 only consumes
+	// that boundary. Until P17 is wired, production has no resolver and every
+	// admin commerce route fails closed. CI may opt into one explicit server-side
+	// test actor; no client-supplied role or permission header is authoritative.
+	if testAuth && os.Getenv("GOJET_TEST_BILLING_ADMIN_ENABLED") == "1" {
+		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_BILLING_ADMIN_ACTOR"))
+		if actorID == "" {
+			return nil, false, billing.ErrAuthenticationUnavailable
+		}
+		api.SetAdminPermissionResolver(billingTestAdminPermissionResolver{actorID: actorID})
+	}
 	return api.Handler(), true, nil
 }
 
@@ -123,6 +142,18 @@ func mountBillingRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/workspaces/{workspaceId}/orders/{orderId}",
 		"GET /api/workspaces/{workspaceId}/billing/entitlements/{capability}",
 		"POST /api/workspaces/{workspaceId}/billing/downgrade",
+		"GET /api/workspaces/{workspaceId}/invoices",
+		"GET /api/workspaces/{workspaceId}/payments",
+		"GET /api/admin/plans",
+		"POST /api/admin/plans",
+		"GET /api/admin/plans/{planId}",
+		"PUT /api/admin/plans/{planId}",
+		"GET /api/admin/payments",
+		"GET /api/admin/payments/{paymentId}",
+		"GET /api/admin/invoices",
+		"GET /api/admin/fx",
+		"PUT /api/admin/fx/{base}/{quote}",
+		"POST /api/admin/fx/{base}/{quote}/provider-error",
 		"POST /api/payments/callbacks/{provider}",
 	}
 	for _, pattern := range patterns {
