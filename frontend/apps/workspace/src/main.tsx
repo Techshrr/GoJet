@@ -13,6 +13,7 @@ import './qr/qr.css';
 import './files/files.css';
 import './text/text.css';
 import './bio/bio.css';
+import './billing/billing.css';
 import './workspace/workspace.css';
 
 const container = document.getElementById('root');

@@ -1,0 +1,408 @@
+name: P13 Closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'internal/billing/**'
+      - 'internal/domains/**'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p13/**'
+      - 'artifacts/v10/P13/**'
+      - '.github/workflows/p00-*.yml'
+      - '.github/workflows/p01-*.yml'
+      - '.github/workflows/p02-*.yml'
+      - '.github/workflows/p03-*.yml'
+      - '.github/workflows/p04-*.yml'
+      - '.github/workflows/p05-*.yml'
+      - '.github/workflows/p06-*.yml'
+      - '.github/workflows/p07-*.yml'
+      - '.github/workflows/p08-*.yml'
+      - '.github/workflows/p09-*.yml'
+      - '.github/workflows/p10-*.yml'
+      - '.github/workflows/p11-*.yml'
+      - '.github/workflows/p12-*.yml'
+      - '.github/workflows/p13-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p13-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P13 exact-head signed closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify P13 closure validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p13/validate.py scripts/p13/validate_coherence.py scripts/p13/validate_closure.py scripts/p13/validate_contract.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for or dispatch exact-head affected P00-P13 matrix
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P13
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = {
+              'P00 Bootstrap and G0 Traceability': 'p00-bootstrap.yml',
+              'P01 Engineering Foundation': 'p01-engineering.yml',
+              'P02 Brand Foundation': 'p02-brand-foundation.yml',
+              'P03 Design System': 'p03-design-system.yml',
+              'P04 Product Shells': 'p04-product-shells.yml',
+              'P05 Links Domain Contract': 'p05-links-domain-contract.yml',
+              'P05 Real Integration': 'p05-integration.yml',
+              'P05 Workspace Browser': 'p05-browser.yml',
+              'P06 Custom Domains': 'p06-custom-domains.yml',
+              'P06 Real Integration': 'p06-integration.yml',
+              'P06 Workspace Domains Browser': 'p06-browser.yml',
+              'P07 Analytics Contract': 'p07-analytics.yml',
+              'P07 Real Integration': 'p07-integration.yml',
+              'P07 Workspace Analytics Browser': 'p07-browser.yml',
+              'P08 QR Contract': 'p08-qr.yml',
+              'P08 Real QR Integration': 'p08-integration.yml',
+              'P08 Workspace QR Browser': 'p08-browser.yml',
+              'P08 Evidence Coherence': 'p08-evidence.yml',
+              'P09 Files Contract': 'p09-files.yml',
+              'P09 Real Files and ClamAV Integration': 'p09-integration.yml',
+              'P09 Files Health and Installer Preflight': 'p09-health.yml',
+              'P09 Workspace Files Browser': 'p09-browser.yml',
+              'P09 Evidence Coherence': 'p09-evidence.yml',
+              'P10 Text Contract': 'p10-text.yml',
+              'P10 Real Text Integration': 'p10-integration.yml',
+              'P10 Workspace Text Browser': 'p10-browser.yml',
+              'P10 Evidence Coherence': 'p10-evidence.yml',
+              'P11 Bio Contract': 'p11-bio.yml',
+              'P11 Real Bio Integration': 'p11-integration.yml',
+              'P11 Workspace Bio Browser': 'p11-browser.yml',
+              'P11 Evidence Coherence': 'p11-evidence.yml',
+              'P12 Workspace Organization Contract': 'p12-workspace-organization.yml',
+              'P12 Real Workspace Organization Integration': 'p12-integration.yml',
+              'P12 Workspace Organization Browser': 'p12-browser.yml',
+              'P12 Evidence Coherence': 'p12-evidence.yml',
+              'P13 Billing Payments Entitlements Contract': 'p13-billing-payments-entitlements.yml',
+              'P13 Real Billing Payments Entitlements Integration': 'p13-integration.yml',
+              'P13 Billing Commerce Browser': 'p13-browser.yml',
+              'P13 Evidence Coherence': 'p13-evidence.yml',
+          }
+          p13_names = {
+              'P13 Billing Payments Entitlements Contract',
+              'P13 Real Billing Payments Entitlements Integration',
+              'P13 Billing Commerce Browser',
+              'P13 Evidence Coherence',
+          }
+          excluded = {
+              'P05 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P06 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority; P06 functional authority is separately inherited from signed source 4079d1ee7c4876cab3e6bccccc3e4ac62cf97f23',
+              'P07 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P08 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P09 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P10 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P11 Closure': 'revision-specific predecessor closure is inherited through P12 signed authority and is not reinterpreted on a P13 HEAD',
+              'P12 Closure': 'revision-specific P12 signed authority is inherited from source 9d49d5ebf0e697ae9cd6537c432c27a15edc60bd and artifact 9499336765; do not rerun/reinterpret P12 Closure on a P13 HEAD',
+          }
+          sha = os.environ['EXACT_HEAD']
+          head_ref = os.environ['HEAD_REF']
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          manifest_path = Path('artifacts/v10/P13/regression-manifest.json')
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
+          def request_json(url, *, method='GET', body=None):
+              data = None if body is None else json.dumps(body).encode()
+              request = urllib.request.Request(url, data=data, method=method, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  raw = response.read()
+                  return json.loads(raw) if raw else None
+
+          def fetch_runs():
+              query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
+              return request_json(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+
+          def dispatch(workflow_file):
+              encoded = urllib.parse.quote(workflow_file, safe='')
+              request_json(
+                  f'https://api.github.com/repos/{repo}/actions/workflows/{encoded}/dispatches',
+                  method='POST',
+                  body={'ref': head_ref},
+              )
+
+          dispatched = set()
+          deadline = time.time() + 65 * 60
+          while time.time() < deadline:
+              runs = fetch_runs()
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name not in required:
+                      continue
+                  previous = latest.get(name)
+                  if previous is None or int(run.get('id', 0)) > int(previous.get('id', 0)):
+                      latest[name] = run
+
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': {
+                      name: {
+                          'run_id': int(latest[name]['id']),
+                          'run_number': int(latest[name].get('run_number', 0)),
+                          'head_sha': latest[name].get('head_sha'),
+                          'event': latest[name].get('event'),
+                          'status': latest[name].get('status'),
+                          'conclusion': latest[name].get('conclusion'),
+                          'html_url': latest[name].get('html_url'),
+                      }
+                      for name in required if name in latest
+                  },
+                  'excluded_revision_specific_workflows': excluded,
+                  'dispatched_workflows': sorted(dispatched),
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+              if failed:
+                  raise SystemExit('required P13 exact-head workflows failed: ' + ', '.join(failed))
+              if not missing and not pending:
+                  print(f'P00-P13 affected exact-head matrix is green for {sha}')
+                  break
+
+              for name in missing:
+                  if name in p13_names or name in dispatched:
+                      continue
+                  print(f'Dispatching missing exact-head workflow {name} via {required[name]} at {head_ref}')
+                  try:
+                      dispatch(required[name])
+                  except Exception as exc:
+                      raise SystemExit(f'failed to dispatch {name}: {exc}') from exc
+                  dispatched.add(name)
+
+              print(f'Waiting P13 exact-head matrix: missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for P00-P13 affected workflows on {sha}')
+          PY
+
+      - name: Download exact-head P13 coherence evidence
+        shell: bash
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          evidence_run="$(python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P13/regression-manifest.json', encoding='utf-8'))
+          print(data['required_workflows']['P13 Evidence Coherence']['run_id'])
+          PY
+          )"
+          rm -rf /tmp/p13-evidence
+          mkdir -p /tmp/p13-evidence
+          gh run download "$evidence_run" --repo "$REPOSITORY" --name "gojet-v10-p13-evidence-$EXACT_HEAD" --dir /tmp/p13-evidence
+          rm -rf artifacts/v10/P13/contract artifacts/v10/P13/api artifacts/v10/P13/rbac artifacts/v10/P13/security \
+            artifacts/v10/P13/entitlement artifacts/v10/P13/audit artifacts/v10/P13/browser artifacts/v10/P13/captures \
+            artifacts/v10/P13/runtime artifacts/v10/P13/results artifacts/v10/P13/evidence-index.json artifacts/v10/P13/evidence-producer-manifest.json
+          cp -a /tmp/p13-evidence/. artifacts/v10/P13/
+          test -f artifacts/v10/P13/results/P13-T026.json
+          test -f artifacts/v10/P13/evidence-index.json
+          test "$(find artifacts/v10/P13/api artifacts/v10/P13/rbac artifacts/v10/P13/security artifacts/v10/P13/entitlement artifacts/v10/P13/audit artifacts/v10/P13/browser artifacts/v10/P13/results -type f -name 'P13-T*.json' | wc -l)" -eq 26
+
+      - name: Bind inherited authoritative P12 signed closure
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          P12_SOURCE='9d49d5ebf0e697ae9cd6537c432c27a15edc60bd'
+          P12_RUN='32663159008'
+          P12_ART='9499336765'
+          P12_DIG='sha256:72ed65c48303654b589edce23e9118ecc963940a7400e27a0f174d7e8ea07c9a'
+          rm -rf /tmp/p12-authority artifacts/v10/P13/inherited/P12
+          mkdir -p /tmp/p12-authority artifacts/v10/P13/inherited/P12 artifacts/v10/P13/inherited
+
+          REPOSITORY="$REPOSITORY" P12_SOURCE="$P12_SOURCE" P12_RUN="$P12_RUN" P12_ART="$P12_ART" P12_DIG="$P12_DIG" python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          def get(path):
+              request=urllib.request.Request(f'https://api.github.com/repos/{repo}/{path}', headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response: return json.load(response)
+          run=get(f"actions/runs/{os.environ['P12_RUN']}")
+          artifact=get(f"actions/artifacts/{os.environ['P12_ART']}")
+          source=os.environ['P12_SOURCE']; expected=os.environ['P12_DIG']
+          assert run['head_sha'] == source and run['status'] == 'completed' and run['conclusion'] == 'success', run
+          assert int(artifact['id']) == int(os.environ['P12_ART']) and artifact['digest'] == expected and artifact['expired'] is False, artifact
+          assert int(artifact['workflow_run']['id']) == int(os.environ['P12_RUN']) and artifact['workflow_run']['head_sha'] == source, artifact
+          data={'source_commit':source,'closure_run_id':int(os.environ['P12_RUN']),'workflow_status':run['status'],'workflow_conclusion':run['conclusion'],'workflow_head_sha':run['head_sha'],'artifact_id':int(os.environ['P12_ART']),'artifact_name':artifact['name'],'artifact_digest':artifact['digest'],'artifact_expired':artifact['expired'],'archive_sha256':None}
+          Path('artifacts/v10/P13/inherited/p12-authority.json').write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+
+          gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "/repos/$REPOSITORY/actions/artifacts/$P12_ART/zip" > /tmp/p12-authority.zip
+          archive_sha="$(sha256sum /tmp/p12-authority.zip | awk '{print $1}')"
+          test "sha256:$archive_sha" = "$P12_DIG"
+          unzip -q /tmp/p12-authority.zip -d /tmp/p12-authority
+          cp -a /tmp/p12-authority/. artifacts/v10/P13/inherited/P12/
+          ARCHIVE_SHA="$archive_sha" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P13/inherited/p12-authority.json'); data=json.loads(path.read_text(encoding='utf-8')); data['archive_sha256']=os.environ['ARCHIVE_SHA']; path.write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+          test -f artifacts/v10/P13/inherited/P12/closure.json
+          test -f artifacts/v10/P13/inherited/P12/results/P12-T025.json
+          test -f artifacts/v10/P13/inherited/P12/closure-evidence-index.json
+          test -f artifacts/v10/P13/inherited/P12/review.md
+
+      - name: Bind inherited P06 signed functional authority
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          P06_SOURCE='4079d1ee7c4876cab3e6bccccc3e4ac62cf97f23'
+          P06_RUN='32519298309'
+          P06_ART='9460016077'
+          P06_DIG='sha256:21e2fe5898a047e166aac520870070e8072f00885a3c89aaf86736f6ac22a2c8'
+          rm -rf /tmp/p06-authority artifacts/v10/P13/inherited/P06
+          mkdir -p /tmp/p06-authority artifacts/v10/P13/inherited/P06 artifacts/v10/P13/inherited
+
+          REPOSITORY="$REPOSITORY" P06_SOURCE="$P06_SOURCE" P06_RUN="$P06_RUN" P06_ART="$P06_ART" P06_DIG="$P06_DIG" python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          def get(path):
+              request=urllib.request.Request(f'https://api.github.com/repos/{repo}/{path}', headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response: return json.load(response)
+          run=get(f"actions/runs/{os.environ['P06_RUN']}")
+          artifact=get(f"actions/artifacts/{os.environ['P06_ART']}")
+          source=os.environ['P06_SOURCE']; expected=os.environ['P06_DIG']
+          assert run['head_sha'] == source and run['status'] == 'completed' and run['conclusion'] == 'success', run
+          assert int(artifact['id']) == int(os.environ['P06_ART']) and artifact['digest'] == expected and artifact['expired'] is False, artifact
+          assert int(artifact['workflow_run']['id']) == int(os.environ['P06_RUN']) and artifact['workflow_run']['head_sha'] == source, artifact
+          data={'source_commit':source,'closure_run_id':int(os.environ['P06_RUN']),'workflow_status':run['status'],'workflow_conclusion':run['conclusion'],'workflow_head_sha':run['head_sha'],'artifact_id':int(os.environ['P06_ART']),'artifact_name':artifact['name'],'artifact_digest':artifact['digest'],'artifact_expired':artifact['expired'],'archive_sha256':None}
+          Path('artifacts/v10/P13/inherited/p06-authority.json').write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+
+          gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "/repos/$REPOSITORY/actions/artifacts/$P06_ART/zip" > /tmp/p06-authority.zip
+          archive_sha="$(sha256sum /tmp/p06-authority.zip | awk '{print $1}')"
+          test "sha256:$archive_sha" = "$P06_DIG"
+          unzip -q /tmp/p06-authority.zip -d /tmp/p06-authority
+          cp -a /tmp/p06-authority/. artifacts/v10/P13/inherited/P06/
+          ARCHIVE_SHA="$archive_sha" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P13/inherited/p06-authority.json'); data=json.loads(path.read_text(encoding='utf-8')); data['archive_sha256']=os.environ['ARCHIVE_SHA']; path.write_text(json.dumps(data, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          PY
+          test -f artifacts/v10/P13/inherited/P06/results/P06-T024.json
+          test -f artifacts/v10/P13/inherited/P06/evidence-index.json
+          test -f artifacts/v10/P13/inherited/P06/review.md
+
+      - name: Run P13-T027 exact-head accountable closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p13/validate.py --case P13-T027 --closure
+          python3 - <<'PY'
+          import json, subprocess
+          result=json.load(open('artifacts/v10/P13/results/P13-T027.json', encoding='utf-8'))
+          closure=json.load(open('artifacts/v10/P13/closure.json', encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert result['implementation_commit'] == head and result['status'] == 'PASS' and result['errors'] == [], result
+          assert result['details']['input_evidence_count'] == 26, result['details']
+          assert result['details']['regression_workflow_count'] == 39, result['details']
+          p12=result['details']['inherited_p12_signed_closure']; p06=result['details']['inherited_p06_signed_authority']
+          assert p12['source_commit'] == '9d49d5ebf0e697ae9cd6537c432c27a15edc60bd' and p12['phase'] == 'signed' and p12['merge_authoritative'] is True and p12['defects'] == {'p0':0,'p1':0,'decision_required':0}, p12
+          assert p06['source_commit'] == '4079d1ee7c4876cab3e6bccccc3e4ac62cf97f23' and p06['phase'] == 'signed' and p06['merge_authoritative'] is True and p06['defects'] == {'p0':0,'p1':0,'decision_required':0}, p06
+          assert closure['implementation_commit'] == head and closure['status'] == 'PASS', closure
+          if closure['phase'] == 'pre-sign':
+              assert closure['merge_authoritative'] is False, closure
+              assert closure['defects'] == {'p0':None,'p1':None,'decision_required':None}, closure['defects']
+              print(f'P13-T027 pre-sign closure PASS on {head}; merge-authoritative=false')
+          elif closure['phase'] == 'signed':
+              assert closure['merge_authoritative'] is True and closure['defects'] == {'p0':0,'p1':0,'decision_required':0}, closure
+              print(f'P13-T027 signed closure PASS on {head}; merge-authoritative=true')
+          else:
+              raise AssertionError(closure)
+          PY
+
+      - name: Upload P13 closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p13-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P13/regression-manifest.json
+            artifacts/v10/P13/evidence-producer-manifest.json
+            artifacts/v10/P13/evidence-index.json
+            artifacts/v10/P13/closure-evidence-index.json
+            artifacts/v10/P13/closure.json
+            artifacts/v10/P13/contract/
+            artifacts/v10/P13/api/
+            artifacts/v10/P13/rbac/
+            artifacts/v10/P13/security/
+            artifacts/v10/P13/entitlement/
+            artifacts/v10/P13/audit/
+            artifacts/v10/P13/browser/
+            artifacts/v10/P13/captures/
+            artifacts/v10/P13/runtime/
+            artifacts/v10/P13/results/P13-T*.json
+            artifacts/v10/P13/inherited/
+            artifacts/v10/P13/test-plan.json
+            artifacts/v10/P13/review.md

@@ -1,0 +1,314 @@
+name: P13 Billing Commerce Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'internal/billing/**'
+      - 'internal/domains/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p13/**'
+      - 'artifacts/v10/P13/**'
+      - '.github/workflows/p13-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p13-billing-commerce-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: P13 real Workspace and Admin billing browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '1'
+      GOJET_TEST_BILLING_CALLBACK_SECRET: p13-browser-deterministic-secret-2026
+      GOJET_TEST_BILLING_ADMIN_ENABLED: '1'
+      GOJET_TEST_BILLING_ADMIN_ACTOR: p13-admin
+      GOJET_TEST_BILLING_ADMIN_EMAIL: p13-admin@example.test
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_REDIS_HOST: 127.0.0.1
+      GOJET_TEST_REDIS_PORT: '6379'
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_WORKSPACE_ID: ws-p13-browser
+      GOJET_TEST_ACTOR_ID: p13-browser-owner
+      GOJET_TEST_ACTOR_EMAIL: p13-browser-owner@example.test
+      GOJET_TEST_VIEWER_ACTOR: p13-browser-viewer
+      GOJET_TEST_VIEWER_EMAIL: p13-browser-viewer@example.test
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_WORKSPACE_VIEWER_URL: http://127.0.0.1:4175
+      GOJET_TEST_WORKSPACE_UNAUTH_URL: http://127.0.0.1:4176
+      GOJET_TEST_ADMIN_URL: http://127.0.0.1:4180
+      GOJET_TEST_ADMIN_DENIED_URL: http://127.0.0.1:4181
+      GOJET_TEST_ADMIN_UNAUTH_URL: http://127.0.0.1:4182
+      GOJET_TEST_BILLING_DENIED_ACTOR: p13-admin-denied
+      GOJET_TEST_BILLING_DENIED_EMAIL: p13-admin-denied@example.test
+
+    steps:
+      - name: Checkout exact browser candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P13 browser dependency boundary
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P13/browser artifacts/v10/P13/captures artifacts/v10/P13/runtime
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          pnpm install --frozen-lockfile
+          for script in scripts/p13/browser*.mjs; do node --check "$script"; done
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+          pnpm --filter @gojet/admin typecheck
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+
+      - name: Apply P05 through P13 migrations
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql \
+            migrations/000007_bio.sql \
+            migrations/000008_workspace_organization.sql \
+            migrations/000009_billing_payments_entitlements.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build native API and browser variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p13-browser-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p13-browser-platformapi > artifacts/v10/P13/runtime/browser-native-platformapi.sha256
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p13-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p13-browser-owner
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=owner
+            export VITE_GOJET_TEST_EMAIL=p13-browser-owner@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P13 Browser Owner'
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p13-owner
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p13-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p13-browser-viewer
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=viewer
+            export VITE_GOJET_TEST_EMAIL=p13-browser-viewer@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P13 Browser Viewer'
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p13-viewer
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=0
+            unset VITE_GOJET_TEST_WORKSPACE_ID VITE_GOJET_TEST_ACTOR_ID VITE_GOJET_TEST_WORKSPACE_ROLE VITE_GOJET_TEST_EMAIL VITE_GOJET_TEST_DISPLAY_NAME
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p13-unauth
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_ACTOR_ID=p13-admin
+            export VITE_GOJET_TEST_EMAIL=p13-admin@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P13 Billing Admin'
+            pnpm --filter @gojet/admin exec vite build --outDir dist-p13-admin
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_ACTOR_ID=p13-admin-denied
+            export VITE_GOJET_TEST_EMAIL=p13-admin-denied@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P13 Denied Admin'
+            pnpm --filter @gojet/admin exec vite build --outDir dist-p13-admin-denied
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=0
+            unset VITE_GOJET_TEST_ACTOR_ID VITE_GOJET_TEST_EMAIL VITE_GOJET_TEST_DISPLAY_NAME
+            pnpm --filter @gojet/admin exec vite build --outDir dist-p13-admin-unauth
+          )
+
+      - name: Start native API and built Workspace/Admin surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p13-browser-platformapi > artifacts/v10/P13/runtime/browser-platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P13/runtime/browser-platformapi.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 --outDir dist-p13-owner > artifacts/v10/P13/runtime/browser-workspace-owner.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-workspace-owner.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4175 --outDir dist-p13-viewer > artifacts/v10/P13/runtime/browser-workspace-viewer.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-workspace-viewer.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4176 --outDir dist-p13-unauth > artifacts/v10/P13/runtime/browser-workspace-unauth.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-workspace-unauth.pid
+          pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4180 --outDir dist-p13-admin > artifacts/v10/P13/runtime/browser-admin.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-admin.pid
+          pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4181 --outDir dist-p13-admin-denied > artifacts/v10/P13/runtime/browser-admin-denied.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-admin-denied.pid
+          pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4182 --outDir dist-p13-admin-unauth > artifacts/v10/P13/runtime/browser-admin-unauth.log 2>&1 & echo $! > artifacts/v10/P13/runtime/browser-admin-unauth.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS http://127.0.0.1:4174/app/billing >/dev/null \
+              && curl -fsS http://127.0.0.1:4175/app/billing >/dev/null \
+              && curl -fsS http://127.0.0.1:4176/app/billing >/dev/null \
+              && curl -fsS http://127.0.0.1:4180/admin/commerce/plans >/dev/null \
+              && curl -fsS http://127.0.0.1:4181/admin/commerce/plans >/dev/null \
+              && curl -fsS http://127.0.0.1:4182/admin/commerce/plans >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P13/runtime/browser-platformapi.log || true
+          exit 1
+
+      - name: Run P13-T021 through P13-T025
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in 021 022 023 024 025; do
+            GITHUB_SHA="$exact_head" node scripts/p13/browser.mjs --case "P13-T${number}"
+          done
+
+      - name: Verify exact-head P13 browser evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P13/browser')
+          errors = []
+          for number in range(21, 26):
+              cid = f'P13-T{number:03d}'
+              path = root / f'{cid}.json'
+              if not path.is_file(): errors.append(f'missing {path}'); continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('implementation_commit') != head: errors.append(f'{cid} exact-head mismatch')
+              if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+              if data.get('details', {}).get('frozen_contract_completion') is not True: errors.append(f'{cid} missing frozen contract completion')
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f'P13-T021..T025 exact-head browser evidence PASS on {head}')
+          PY
+          test "$(find artifacts/v10/P13/captures -type f -name 'P13-T02*.png' | wc -l)" -ge 20
+
+      - name: Capture safe P13 browser runtime authority
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT code,status,currency,amount_minor,billing_period,version FROM billing_plans ORDER BY id" > artifacts/v10/P13/runtime/browser-plans.tsv 2> artifacts/v10/P13/runtime/browser-plans.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,status,plan_id,version FROM workspace_subscriptions ORDER BY workspace_id,id" > artifacts/v10/P13/runtime/browser-subscriptions.tsv 2> artifacts/v10/P13/runtime/browser-subscriptions.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT base_currency,quote_currency,rate,status,source FROM billing_fx_rates ORDER BY base_currency,quote_currency" > artifacts/v10/P13/runtime/browser-fx.tsv 2> artifacts/v10/P13/runtime/browser-fx.err
+          true
+
+      - name: Verify P13 browser evidence is secret-safe
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE 'p13-browser-deterministic-secret-2026|x-gojet-test-callback-signature|provider_transaction_id.*provider-' artifacts/v10/P13/browser artifacts/v10/P13/runtime --exclude='*.png' || { echo 'unsafe P13 browser evidence content detected' >&2; exit 1; }
+
+      - name: Stop P13 browser services
+        if: always()
+        run: |
+          set +e
+          for file in artifacts/v10/P13/runtime/browser-*.pid; do
+            test -f "$file" && kill "$(cat "$file")" 2>/dev/null || true
+          done
+          true
+
+      - name: Upload P13 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p13-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P13/browser/P13-T021.json
+            artifacts/v10/P13/browser/P13-T022.json
+            artifacts/v10/P13/browser/P13-T023.json
+            artifacts/v10/P13/browser/P13-T024.json
+            artifacts/v10/P13/browser/P13-T025.json
+            artifacts/v10/P13/captures/
+            artifacts/v10/P13/runtime/
+          if-no-files-found: warn
+          retention-days: 30
