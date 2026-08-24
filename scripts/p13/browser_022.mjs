@@ -54,7 +54,11 @@ export async function run(browser) {
   await page.getByRole('button', { name: 'Archive' }).click();
   await waitState(page, 'conflict');
   await page.getByText(/conflicted with a newer version/i).waitFor();
+  const expectedConflictConsole = report.console_errors.filter((message) => /Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(message));
+  assert(expectedConflictConsole.length === 1, `expected exactly one browser 409 conflict console diagnostic, got ${JSON.stringify(expectedConflictConsole)}`);
+  report.console_errors.splice(report.console_errors.indexOf(expectedConflictConsole[0]), 1);
   observed.conflict = true;
+  observed.expected_conflict_console_diagnostic = true;
   captures.push(await screenshot(page, 'P13-T022', 'conflict'));
 
   await page.reload({ waitUntil: 'networkidle' });
