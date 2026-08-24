@@ -318,9 +318,10 @@ def validate_review(head: str, errors: list[str]) -> tuple[str, bool, dict[str, 
     if not REVIEW.is_file():
         return "pre-sign", False, {}
     text = REVIEW.read_text(encoding="utf-8")
-    pending = PENDING in text
-    signed = SIGNED in text
-    req(pending ^ signed, "P14 review must be exactly pending or signed", errors)
+    status_lines = [line.strip() for line in text.splitlines() if line.startswith("Status: **")]
+    pending = status_lines == [PENDING]
+    signed = status_lines == [SIGNED]
+    req(pending or signed, "P14 review must have exactly one valid top-level pending or signed status", errors)
     if pending:
         return "pre-sign", False, {"status": "PENDING", "review_sha256": digest(REVIEW)}
     phase = "signed"
