@@ -47,7 +47,7 @@ def case_016():
     )
     mysql(
         f"UPDATE custom_domain_entitlement_sources SET starts_at=UTC_TIMESTAMP(6)-INTERVAL 30 DAY,"
-        f"degraded_at=UTC_TIMESTAMP(6)-INTERVAL 8 DAY,"
+        f"degraded_at=DATE_SUB(DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 SECOND), INTERVAL 7 DAY),"
         f"grace_until=UTC_TIMESTAMP(6)-INTERVAL 1 SECOND,expires_at=UTC_TIMESTAMP(6)-INTERVAL 1 SECOND "
         f"WHERE workspace_id={sql_quote(ws['id'])} AND source='plan' AND source_key='p13:billing'"
     )
