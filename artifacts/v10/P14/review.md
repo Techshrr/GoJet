@@ -4,7 +4,13 @@ Node: `P14`
 Issue: #35  
 Base integration commit: `a94f1d9894916b995a2379571f6ab3de520fc4ba`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
+
+Pre-sign exact implementation SHA: `f62527a10903c988a902ba502b03ff1eb3073a2b`
+
+Accountable reviewer identity: **GPT-5.6 Sol — P14 Technical Review**
+
+Review date: **2026-08-25**
 
 ## 1. Review boundary
 
@@ -156,3 +162,58 @@ Review date: **YYYY-MM-DD**
 It must also record P14-T001..P14-T025 PASS evidence, P0=0, P1=0, unresolved `DECISION REQUIRED`=0, truthful P14 capability/gate disposition, P06/P09/P12/P13/P15/P17/P19 ownership boundaries and the same-revision CI/closure rerun requirement.
 
 If signing changes this file and therefore changes HEAD, the signed revision itself must rerun and pass the complete affected exact-head matrix before P14 can be marked complete or merged.
+
+## 13. Accountable signed review disposition
+
+The frozen sections above are retained verbatim as the P14 contract record. The top-level signed status and this section record the accountable disposition supported by the pre-sign exact-head evidence; they do not bypass the signed-revision rerun rule.
+
+### Exact-head evidence disposition
+
+- P14-T001..P14-T021: PASS — real MySQL 8.x/Redis/native `platformapi` and `mailworker`, local SMTP protocol sink, inherited real P09 ClamAV, Turnstile/rate/idempotency, requester/Admin support, mail, P06 request-linkage, P12 notification and audit authority.
+- P14-T022: PASS — real Workspace Support browser states, authorization, accessibility, responsive/reflow and recovery evidence.
+- P14-T023: PASS — real Admin Tickets/Mail and public Contact browser states, permission boundaries, accessibility, responsive/reflow and failure/recovery evidence.
+- P14-T024: PASS — exact-head evidence coherence, same-head producer binding, mixed-head rejection, secret/PII-safe evidence and inspectable runtime/browser/mail/ClamAV authority.
+- P14-T025: PASS — pre-sign accountable closure with 24/24 input evidence files and 43/43 affected exact-head workflows.
+
+Pre-sign closure run: `32760609741`
+
+Pre-sign closure artifact: `9532810647`
+
+Pre-sign closure artifact digest: `sha256:891f3c3604cfd42ff7e829d9bf8592c8f5cd8a4b8db79d6990c4656fdc19dea6`
+
+The pre-sign closure is `phase=pre-sign` and `merge_authoritative=false`. P13 signed predecessor authority and inherited P12/P06/P09 functional authorities were live-bound and archive-digest verified.
+
+### Defect and decision ledger
+
+- P0 defects: 0
+- P1 defects: 0
+- `DECISION REQUIRED`: 0
+
+### Accountable approvals
+
+- Backend Lead: APPROVED
+- Frontend Lead: APPROVED
+- QA Lead: APPROVED
+- Accessibility Reviewer: APPROVED
+- Security Reviewer: APPROVED
+- Product/API Reviewer: APPROVED
+
+### Capability, gate and ownership disposition
+
+- `CAP-TICKETS` — P14-owned G3/G6/G10 subset: APPROVED.
+- `CAP-MAIL` — P14-owned G3/G6/G10 subset: APPROVED.
+- `CAP-TURNSTILE` — P14-owned contact/ticket-request G6/G10/G13 subset: APPROVED; P15 identity and P17 administrator lifecycle remain later-owned.
+- `CAP-DOMAIN-ENTITLEMENT` — P14 request-topic/linkage contribution: APPROVED; P06 request/approval/ownership/DNS/HTTPS/risk and P13 billing entitlement remain independent inherited conjunctive authorities. Ticket existence, reply, closure or mail delivery never grants entitlement.
+- `CAP-NOTIFICATIONS` — P14 support/mail producer contribution: APPROVED; P12 remains owner of notification core and recipient/deep-link authorization.
+- P09 remains owner of mandatory ClamAV scanning boundary; P14 closes only its attachment integration with that inherited authority.
+- P12 Workspace membership/RBAC and notification core remain inherited.
+- P13 billing/payment/entitlement authority remains signed predecessor authority and is not reinterpreted by P14.
+- P15 identity/session/OAuth lifecycle remains later-owned.
+- P16 trust/abuse lifecycle remains later-owned.
+- P17 administrator permission lifecycle, including lifecycle ownership of `tickets.manage`, `mail.manage` and domain approval permissions, remains later-owned.
+- P19 final Website/Technical SEO and public-site composition remain later-owned.
+- Release-wide gates and later P20/P21/P22 closure are not closed by this P14 review.
+
+### Same-revision requirement
+
+The signed revision itself must rerun and pass P14-T001..P14-T025 and the complete affected exact-head P00-P14 matrix. Until that signed-revision closure reports `phase=signed`, `merge_authoritative=true`, and defects 0/0/0 with the same P13/P12/P06/P09 authority bindings, this review is not merge authority.
