@@ -4,7 +4,13 @@ Node: `P13`
 Issue: #33  
 Base integration commit: `7f39da389052b08f145e69dac2a715b9d303294d`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
+
+Pre-sign exact implementation SHA: `b4b7cfc8c5df66c50409c934ca350ce18c7998a1`
+
+Accountable reviewer identity: **GPT-5.6 Sol — P13 Technical Review**
+
+Review date: **2026-08-24**
 
 ## 1. Review boundary
 
@@ -167,3 +173,53 @@ Review date: **YYYY-MM-DD**
 It must also record P13-T001..P13-T027 PASS evidence, P0=0, P1=0, unresolved `DECISION REQUIRED`=0, truthful P13 gate/capability disposition, P06/P12/P15/P17/P19 ownership boundaries and the same-revision CI/closure rerun requirement.
 
 If signing changes this file and therefore changes HEAD, the signed revision itself must rerun and pass the complete affected exact-head matrix before P13 can be marked complete or merged.
+
+## 13. Accountable signed review disposition
+
+The frozen sections above are retained verbatim as the P13 contract record. The top-level signed status and this section record the accountable disposition supported by the pre-sign exact-head evidence; they do not bypass the signed-revision rerun rule.
+
+### Exact-head evidence disposition
+
+- P13-T001..P13-T020: PASS — real MySQL/Redis/native platformapi billing, payment, callback and entitlement authority.
+- P13-T021..P13-T025: PASS — real Workspace/Admin browser states, authorization, accessibility, responsive and offline/recovery evidence.
+- P13-T026: PASS — exact-head evidence coherence, same-head producer binding, mixed-head rejection and inspectable runtime/browser evidence.
+- P13-T027: PASS — pre-sign accountable closure with 26/26 input evidence files and 39/39 affected exact-head workflows.
+
+Pre-sign closure run: `32709803168`
+
+Pre-sign closure artifact: `9513961018`
+
+Pre-sign closure artifact digest: `sha256:43f184d5bb2800e187434094b75fa4e0c87737134a0c58c4f847add01c69c2ea`
+
+The pre-sign closure is `phase=pre-sign` and `merge_authoritative=false`. P12 signed predecessor authority and P06 signed functional authority were live-bound and archive-digest verified.
+
+### Defect and decision ledger
+
+- P0 defects: 0
+- P1 defects: 0
+- `DECISION REQUIRED`: 0
+
+### Accountable approvals
+
+- Backend Lead: APPROVED
+- Frontend Lead: APPROVED
+- QA Lead: APPROVED
+- Accessibility Reviewer: APPROVED
+- Security Reviewer: APPROVED
+- Product/API Reviewer: APPROVED
+
+### Capability, gate and ownership disposition
+
+- `CAP-BILLING` — P13-owned G3/G10 subset: APPROVED.
+- `CAP-PAYMENTS` — P13-owned G3/G6/G10 subset: APPROVED.
+- `CAP-PAYMENT-CALLBACKS` — P13-owned G3/G6/G10 subset: APPROVED.
+- `CAP-DOMAIN-ENTITLEMENT` — shared P06/P13 G3/G6 subset: APPROVED for the P13 billing/quota contribution; P06 domain request/approval/ownership/DNS/HTTPS/risk authority remains inherited and conjunctive.
+- P12 Workspace membership and notification core remain inherited; P13 closes only its billing producer contribution.
+- P15 production identity/session/OAuth lifecycle remains later-owned.
+- P17 Admin permission lifecycle, including lifecycle ownership of `billing.manage`, remains later-owned.
+- P19 final Website/SEO and public pricing-page composition remain later-owned.
+- Release-wide gates and later P20/P22 closure are not closed by this P13 review.
+
+### Same-revision requirement
+
+The signed revision itself must rerun and pass P13-T001..P13-T027 and the complete affected exact-head P00-P13 matrix. Until that signed-revision closure reports `phase=signed`, `merge_authoritative=true`, and defects 0/0/0 with the same P12/P06 authority bindings, this review is not merge authority.
