@@ -9,7 +9,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/Techshrr/GoJet/internal/domains"
+	"github.com/Techshrr/GoJet/internal/workspace"
 )
+
+const p13DomainPlanSourceKey = "p13:billing"
 
 func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackCommand) (CallbackResult, error) {
 	if s == nil || s.db == nil {
@@ -72,6 +77,7 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 		return CallbackResult{}, err
 	}
 	var subscription *Subscription
+	stateChanged := false
 	switch cmd.Outcome {
 	case TransactionPaid:
 		if order.Status != OrderPending && order.Status != OrderProcessing && order.Status != OrderPaid {
@@ -88,7 +94,11 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 			if err != nil {
 				return CallbackResult{}, err
 			}
+			if err := projectP06DomainEntitlementTx(ctx, tx, order, sub, cmd.CorrelationID); err != nil {
+				return CallbackResult{}, err
+			}
 			subscription = &sub
+			stateChanged = true
 		}
 	case TransactionFailed:
 		if order.Status != OrderPending && order.Status != OrderProcessing && order.Status != OrderFailed {
@@ -98,12 +108,17 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 			if _, err := tx.ExecContext(ctx, `UPDATE billing_orders SET status='failed',updated_at=? WHERE id=?`, cmd.ReceivedAt.UTC(), order.ID); err != nil {
 				return CallbackResult{}, err
 			}
+			stateChanged = true
 		}
 	case TransactionRefunded:
 		if order.Status != OrderPaid && order.Status != OrderRefunded {
 			return CallbackResult{}, ErrConflict
 		}
 		if order.Status != OrderRefunded {
+			controlsCurrent, err := subscriptionControlsCurrentBillingTx(ctx, tx, order)
+			if err != nil {
+				return CallbackResult{}, err
+			}
 			if _, err := tx.ExecContext(ctx, `UPDATE billing_orders SET status='refunded',updated_at=? WHERE id=?`, cmd.ReceivedAt.UTC(), order.ID); err != nil {
 				return CallbackResult{}, err
 			}
@@ -113,9 +128,20 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 			if err := revokeSubscriptionTx(ctx, tx, order, cmd.ReceivedAt.UTC()); err != nil {
 				return CallbackResult{}, err
 			}
+			if controlsCurrent {
+				if _, err := domains.ExpirePlanSourceTx(ctx, tx, order.WorkspaceID, p13DomainPlanSourceKey, "billing_entitlement_refunded", cmd.CorrelationID); err != nil {
+					return CallbackResult{}, err
+				}
+			}
+			stateChanged = true
 		}
 	default:
 		return CallbackResult{}, ErrInvalidInput
+	}
+	if stateChanged {
+		if err := produceP12BillingNotificationsTx(ctx, tx, order, cmd.Outcome, eventID); err != nil {
+			return CallbackResult{}, err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE payment_callback_events SET status='processed',processed_at=? WHERE id=?`, cmd.ReceivedAt.UTC(), eventID); err != nil {
 		return CallbackResult{}, err
@@ -256,6 +282,107 @@ func revokeSubscriptionTx(ctx context.Context, tx *sql.Tx, order Order, now time
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE entitlement_grants SET revoked_at=COALESCE(revoked_at,?),updated_at=? WHERE workspace_id=? AND source_type='billing' AND source_id=?`, now, now, order.WorkspaceID, subID)
 	return err
+}
+
+func subscriptionControlsCurrentBillingTx(ctx context.Context, tx *sql.Tx, order Order) (bool, error) {
+	var status SubscriptionStatus
+	err := tx.QueryRowContext(ctx, `
+SELECT status FROM workspace_subscriptions
+WHERE id=? AND workspace_id=? FOR UPDATE`, subscriptionIDForOrder(order.ID), order.WorkspaceID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return status == SubscriptionActive || status == SubscriptionGrace || status == SubscriptionOverdue, nil
+}
+
+func projectP06DomainEntitlementTx(ctx context.Context, tx *sql.Tx, order Order, subscription Subscription, correlationID string) error {
+	var limit uint64
+	err := tx.QueryRowContext(ctx, `
+SELECT limit_value FROM billing_plan_entitlements
+WHERE plan_id=? AND capability=?`, order.PlanID, domains.CustomDomainsCapability).Scan(&limit)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, expireErr := domains.ExpirePlanSourceTx(ctx, tx, order.WorkspaceID, p13DomainPlanSourceKey, "billing_plan_custom_domains_not_granted", correlationID)
+		return expireErr
+	}
+	if err != nil {
+		return err
+	}
+	const maxDomainLimit = uint64(^uint32(0))
+	if limit == 0 || limit > maxDomainLimit {
+		return ErrConflict
+	}
+	_, err = domains.UpsertPlanSourceTx(ctx, tx, domains.PlanSourceInput{
+		WorkspaceID:    order.WorkspaceID,
+		SourceKey:      p13DomainPlanSourceKey,
+		Status:         domains.EntitlementActive,
+		DomainLimit:    uint32(limit),
+		StartsAt:       subscription.StartsAt,
+		ExpiresAt:      subscription.CurrentTermEndsAt,
+		DecisionReason: "billing_plan_entitlement_active",
+	}, correlationID)
+	return err
+}
+
+type billingNotificationSpec struct {
+	EventKey string
+	Title    string
+	Summary  string
+}
+
+func billingNotificationSpecs(order Order, outcome TransactionStatus) []billingNotificationSpec {
+	switch outcome {
+	case TransactionPaid:
+		specs := []billingNotificationSpec{{
+			EventKey: "payment_succeeded",
+			Title:    "Payment received",
+			Summary:  "Your billing payment was confirmed.",
+		}}
+		if order.Kind == OrderUpgrade {
+			specs = append(specs, billingNotificationSpec{
+				EventKey: "plan_upgraded",
+				Title:    "Plan upgraded",
+				Summary:  "Your Workspace plan upgrade is active.",
+			})
+		}
+		return specs
+	case TransactionFailed:
+		return []billingNotificationSpec{{
+			EventKey: "payment_failed",
+			Title:    "Payment failed",
+			Summary:  "A billing payment could not be completed.",
+		}}
+	case TransactionRefunded:
+		return []billingNotificationSpec{{
+			EventKey: "refund_processed",
+			Title:    "Refund processed",
+			Summary:  "A billing refund was processed.",
+		}}
+	default:
+		return nil
+	}
+}
+
+func produceP12BillingNotificationsTx(ctx context.Context, tx *sql.Tx, order Order, outcome TransactionStatus, callbackEventID int64) error {
+	specs := billingNotificationSpecs(order, outcome)
+	for _, spec := range specs {
+		if _, err := workspace.ProduceOwnerNotificationsTx(ctx, tx, workspace.NotificationInput{
+			WorkspaceID:  order.WorkspaceID,
+			Category:     "billing",
+			EventKey:     spec.EventKey,
+			DedupeKey:    fmt.Sprintf("billing:%s:callback:%d", spec.EventKey, callbackEventID),
+			Title:        spec.Title,
+			Summary:      spec.Summary,
+			DeepLink:     "/app/billing",
+			ResourceType: "billing_order",
+			ResourceID:   order.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func loadSubscription(ctx context.Context, q rowQueryer, id string) (Subscription, error) {

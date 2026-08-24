@@ -234,7 +234,7 @@ func (s *Store) AuthorizeDeepLink(ctx context.Context, workspaceID, userID, deep
 		return false, nil
 	}
 	switch deepLink {
-	case "/app", "/app/notifications", "/app/organization", "/app/campaigns", "/app/tags", "/app/members", "/app/settings/workspace":
+	case "/app", "/app/notifications", "/app/organization", "/app/campaigns", "/app/tags", "/app/members", "/app/settings/workspace", "/app/billing":
 		return true, nil
 	}
 	prefixes := []struct {

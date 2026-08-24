@@ -43,7 +43,7 @@ func TestNormalizeDeepLinkRejectsSecretBearingOrNonPathTargets(t *testing.T) {
 		}
 	}
 
-	for _, value := range []string{"/app", "/app/notifications", "/app/settings/workspace", "/app/links/123"} {
+	for _, value := range []string{"/app", "/app/notifications", "/app/settings/workspace", "/app/billing", "/app/links/123"} {
 		if got := normalizeDeepLink(value); got != value {
 			t.Fatalf("expected deep link %q to survive normalization, got %q", value, got)
 		}
