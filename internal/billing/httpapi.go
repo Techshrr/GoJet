@@ -44,6 +44,10 @@ type APIStore interface {
 	ApplyAuthenticatedCallback(context.Context, CallbackCommand) (CallbackResult, error)
 }
 
+type DowngradeStore interface {
+	ScheduleDowngrade(context.Context, ScheduleDowngradeInput) (DowngradeSchedule, bool, error)
+}
+
 type API struct {
 	store       APIStore
 	principals  PrincipalResolver
@@ -62,6 +66,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/workspaces/{workspaceId}/orders", a.createOrder)
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/orders/{orderId}", a.getOrder)
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/billing/entitlements/{capability}", a.getEntitlement)
+	mux.HandleFunc("POST /api/workspaces/{workspaceId}/billing/downgrade", a.scheduleDowngrade)
 	mux.HandleFunc("POST /api/payments/callbacks/{provider}", a.paymentCallback)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -161,6 +166,45 @@ func (a *API) getEntitlement(w http.ResponseWriter, r *http.Request) {
 		"limit_value": resolved.LimitValue,
 		"reason":      resolved.Reason,
 	})
+}
+
+func (a *API) scheduleDowngrade(w http.ResponseWriter, r *http.Request) {
+	principal, role, ok := a.workspaceActor(w, r)
+	if !ok {
+		return
+	}
+	if role != "owner" {
+		writeBillingError(w, http.StatusForbidden, "forbidden", "Plan downgrade requires a Workspace owner.")
+		return
+	}
+	store, ok := a.store.(DowngradeStore)
+	if !ok {
+		writeBillingError(w, http.StatusServiceUnavailable, "billing_unavailable", "Billing downgrade is unavailable.")
+		return
+	}
+	var input struct {
+		TargetPlanID    uint64 `json:"target_plan_id"`
+		ExpectedVersion uint64 `json:"expected_version"`
+	}
+	if !decodeBillingJSON(w, r, &input) {
+		return
+	}
+	schedule, created, err := store.ScheduleDowngrade(r.Context(), ScheduleDowngradeInput{
+		WorkspaceID:     r.PathValue("workspaceId"),
+		TargetPlanID:    input.TargetPlanID,
+		ExpectedVersion: input.ExpectedVersion,
+		ActorID:         principal.UserID,
+		Now:             a.now().UTC(),
+	})
+	if err != nil {
+		writeBillingStoreError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeBillingJSON(w, status, map[string]any{"schedule": schedule, "created": created})
 }
 
 func (a *API) paymentCallback(w http.ResponseWriter, r *http.Request) {

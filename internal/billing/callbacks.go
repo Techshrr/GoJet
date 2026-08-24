@@ -90,7 +90,7 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 			if _, err := tx.ExecContext(ctx, `UPDATE billing_invoices SET status='paid',paid_at=COALESCE(paid_at,?) WHERE order_id=?`, cmd.ReceivedAt.UTC(), order.ID); err != nil {
 				return CallbackResult{}, err
 			}
-			sub, err := activateSubscriptionTx(ctx, tx, order, cmd.ReceivedAt.UTC())
+			sub, err := activateSubscriptionTx(ctx, tx, order, cmd.ReceivedAt.UTC(), cmd.CorrelationID)
 			if err != nil {
 				return CallbackResult{}, err
 			}
@@ -124,6 +124,11 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE billing_invoices SET status='refunded',refunded_at=COALESCE(refunded_at,?) WHERE order_id=?`, cmd.ReceivedAt.UTC(), order.ID); err != nil {
 				return CallbackResult{}, err
+			}
+			if controlsCurrent {
+				if err := cancelScheduledDowngradeTx(ctx, tx, order.WorkspaceID, cmd.ReceivedAt.UTC(), cmd.CorrelationID, "billing_current_subscription_refunded"); err != nil {
+					return CallbackResult{}, err
+				}
 			}
 			if err := revokeSubscriptionTx(ctx, tx, order, cmd.ReceivedAt.UTC()); err != nil {
 				return CallbackResult{}, err
@@ -237,13 +242,16 @@ func loadTransactionByProvider(ctx context.Context, q rowQueryer, provider Provi
 	return t, nil
 }
 
-func activateSubscriptionTx(ctx context.Context, tx *sql.Tx, order Order, now time.Time) (Subscription, error) {
+func activateSubscriptionTx(ctx context.Context, tx *sql.Tx, order Order, now time.Time, correlationID string) (Subscription, error) {
 	var period BillingPeriod
 	if err := tx.QueryRowContext(ctx, `SELECT billing_period FROM billing_plans WHERE id=?`, order.PlanID).Scan(&period); err != nil {
 		return Subscription{}, err
 	}
 	termEnd := termEndFor(period, now)
 	subID := subscriptionIDForOrder(order.ID)
+	if err := cancelScheduledDowngradeTx(ctx, tx, order.WorkspaceID, now, correlationID, "authoritative_paid_activation_supersedes_downgrade"); err != nil {
+		return Subscription{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE workspace_subscriptions SET status='expired',current_term_ends_at=COALESCE(current_term_ends_at,?),version=version+1,updated_at=? WHERE workspace_id=? AND status IN ('active','grace','overdue') AND id<>?`, now, now, order.WorkspaceID, subID); err != nil {
 		return Subscription{}, err
 	}
@@ -425,14 +433,17 @@ func termEndFor(period BillingPeriod, start time.Time) *time.Time {
 	end = end.UTC()
 	return &end
 }
+
 func subscriptionIDForOrder(orderID string) string {
 	sum := sha256String(orderID)
 	return "sub_" + sum[:24]
 }
+
 func sha256String(value string) string {
 	sum := sha256Sum([]byte(value))
 	return fmt.Sprintf("%x", sum[:])
 }
+
 func sha256Sum(value []byte) [32]byte { return sha256.Sum256(value) }
 
 func appendAuditTx(ctx context.Context, tx *sql.Tx, workspaceID, actor, action, resourceType, resourceID, reason, correlation, result string, metadata map[string]any) error {
@@ -446,6 +457,7 @@ func appendAuditTx(ctx context.Context, tx *sql.Tx, workspaceID, actor, action, 
 	_, err = tx.ExecContext(ctx, `INSERT INTO billing_audit_events (workspace_id,actor_id,action,resource_type,resource_id,reason,request_correlation_id,result,metadata_json) VALUES (NULLIF(?,''),?,?,?,?,?,?,?,CAST(? AS JSON))`, workspaceID, actor, action, resourceType, resourceID, nullIfBlank(reason), correlation, result, string(raw))
 	return err
 }
+
 func nullIfBlank(value string) any {
 	value = strings.TrimSpace(value)
 	if value == "" {

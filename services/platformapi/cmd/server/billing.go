@@ -122,6 +122,7 @@ func mountBillingRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/workspaces/{workspaceId}/orders",
 		"GET /api/workspaces/{workspaceId}/orders/{orderId}",
 		"GET /api/workspaces/{workspaceId}/billing/entitlements/{capability}",
+		"POST /api/workspaces/{workspaceId}/billing/downgrade",
 		"POST /api/payments/callbacks/{provider}",
 	}
 	for _, pattern := range patterns {
