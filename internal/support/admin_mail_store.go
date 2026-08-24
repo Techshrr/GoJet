@@ -142,6 +142,15 @@ WHERE settings_key='primary' AND version=?`, enabled, expectedVersion)
 		return AdminMailSettings{}, err
 	}
 	if rows != 1 {
+		current, getErr := s.GetAdminMailSettings(ctx)
+		if getErr != nil {
+			return AdminMailSettings{}, getErr
+		}
+		// Exact one-version-behind replay of the already-applied same setting is
+		// accepted so a post-commit audit failure can be repaired safely.
+		if expectedVersion != ^uint64(0) && current.Version == expectedVersion+1 && current.Enabled == enabled {
+			return current, nil
+		}
 		return AdminMailSettings{}, ErrSupportConflict
 	}
 	return s.GetAdminMailSettings(ctx)

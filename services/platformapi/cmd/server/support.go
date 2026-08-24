@@ -60,6 +60,22 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	}
 	workspaceStore := workspace.NewStore(db)
 	domainStore := domains.NewMySQLStore(db)
+	auditedRequesterStore, err := support.NewAuditedSupportStore(store, store)
+	if err != nil {
+		return nil, false, err
+	}
+	auditedDomainProjector, err := support.NewAuditedDomainAccessProjector(domainStore, store)
+	if err != nil {
+		return nil, false, err
+	}
+	auditedAdminTicketStore, err := support.NewAuditedAdminTicketStore(store, store)
+	if err != nil {
+		return nil, false, err
+	}
+	auditedAdminMailStore, err := support.NewAuditedAdminMailStore(store, store)
+	if err != nil {
+		return nil, false, err
+	}
 
 	limit := int64(10)
 	if raw := strings.TrimSpace(os.Getenv("GOJET_SUPPORT_RATE_LIMIT")); raw != "" {
@@ -106,9 +122,9 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 
 	principalResolver := supportPrincipalResolver{testAuth: testAuth}
 	requesterAPI, err := support.NewAPI(
-		store,
+		auditedRequesterStore,
 		workspaceStore,
-		domainStore,
+		auditedDomainProjector,
 		workspaceStore,
 		principalResolver,
 		verifier,
@@ -132,7 +148,7 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		}
 		ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
 	}
-	adminAPI, err := support.NewAdminAPI(store, principalResolver, ticketAdminPermissions, workspaceStore)
+	adminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, principalResolver, ticketAdminPermissions, workspaceStore)
 	if err != nil {
 		return nil, false, err
 	}
@@ -145,7 +161,7 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		}
 		mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
 	}
-	adminMailAPI, err := support.NewAdminMailAPI(store, principalResolver, mailAdminPermissions)
+	adminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, principalResolver, mailAdminPermissions)
 	if err != nil {
 		return nil, false, err
 	}
@@ -181,7 +197,7 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	} {
 		combined.Handle(pattern, adminMailHandler)
 	}
-	return combined, true, nil
+	return support.WithSupportCorrelation(combined), true, nil
 }
 
 func mountSupportRoutes(root *http.ServeMux, handler http.Handler) {

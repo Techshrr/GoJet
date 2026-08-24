@@ -78,11 +78,17 @@ func ProjectTicketDomainAccess(ctx context.Context, projector DomainAccessReques
 		return domains.AccessRequest{}, nil
 	}
 	if resolved.Source == domains.SourceNone && resolved.Status == domains.EntitlementRequested && resolved.SupportTicketID == projection.SupportTicketID {
-		return domains.AccessRequest{
+		request := domains.AccessRequest{
 			WorkspaceID:     projection.WorkspaceID,
 			SupportTicketID: projection.SupportTicketID,
 			SubmittedAt:     submittedAt,
-		}, nil
+		}
+		if recorder, ok := projector.(DomainRequestAuditRecorder); ok {
+			if err := recorder.RecordDomainRequestAudit(ctx, ticket, request); err != nil {
+				return domains.AccessRequest{}, err
+			}
+		}
+		return request, nil
 	}
 
 	request, err := projector.ProjectAccessRequest(ctx, domains.AccessRequestInput{
@@ -96,6 +102,11 @@ func ProjectTicketDomainAccess(ctx context.Context, projector DomainAccessReques
 	}
 	if request.WorkspaceID != projection.WorkspaceID || request.SupportTicketID != projection.SupportTicketID || request.SubmittedAt.IsZero() {
 		return domains.AccessRequest{}, ErrInvalidInput
+	}
+	if recorder, ok := projector.(DomainRequestAuditRecorder); ok {
+		if err := recorder.RecordDomainRequestAudit(ctx, ticket, request); err != nil {
+			return domains.AccessRequest{}, err
+		}
 	}
 	return request, nil
 }

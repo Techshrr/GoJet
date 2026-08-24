@@ -55,7 +55,26 @@ func (s *Store) TransitionAttachment(ctx context.Context, attachmentID string, e
 	if err := next.Validate(); err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var workspaceID sql.NullString
+	var correlationID string
+	err = tx.QueryRowContext(ctx, `
+SELECT t.workspace_id,m.correlation_id
+FROM support_ticket_attachments a
+JOIN support_ticket_messages m ON m.ticket_id=a.ticket_id AND m.id=a.message_id
+JOIN support_tickets t ON t.id=a.ticket_id
+WHERE a.id=? FOR UPDATE`, attachmentID).Scan(&workspaceID, &correlationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSupportNotFound
+	}
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `
 UPDATE support_ticket_attachments
 SET scan_status=?,scan_updated_at=?
 WHERE id=? AND scan_status=?`, string(next.ScanStatus), next.ScanUpdatedAt, attachmentID, string(expected))
@@ -69,5 +88,29 @@ WHERE id=? AND scan_status=?`, string(next.ScanStatus), next.ScanUpdatedAt, atta
 	if rows != 1 {
 		return ErrSupportConflict
 	}
-	return nil
+	action := "attachment_scan_state"
+	switch next.ScanStatus {
+	case AttachmentScanning:
+		action = "attachment_scan_started"
+	case AttachmentClean:
+		action = "attachment_scan_clean"
+	case AttachmentInfected:
+		action = "attachment_scan_infected"
+	case AttachmentScanError:
+		action = "attachment_scan_error"
+	case AttachmentRejected:
+		action = "attachment_scan_rejected"
+	}
+	workspace := ""
+	if workspaceID.Valid {
+		workspace = workspaceID.String
+	}
+	if err := recordSupportAuditExecer(ctx, tx, SupportAuditInput{
+		WorkspaceID: workspace, ActorID: "clamav", Action: action, ResourceType: "attachment", ResourceID: attachmentID,
+		CorrelationID: correlationID, Result: AuditSuccess,
+		Metadata: map[string]string{"previous_status": string(expected), "scan_status": string(next.ScanStatus)},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

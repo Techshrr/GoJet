@@ -96,7 +96,8 @@ type adminMailSettingsPatch struct {
 }
 
 func (a *AdminMailAPI) patchSettings(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.mailAdminActor(w, r); !ok {
+	principal, ok := a.mailAdminActor(w, r)
+	if !ok {
 		return
 	}
 	var body adminMailSettingsPatch
@@ -107,7 +108,8 @@ func (a *AdminMailAPI) patchSettings(w http.ResponseWriter, r *http.Request) {
 		writeSupportError(w, r, http.StatusBadRequest, "invalid_request", "Invalid mail settings mutation.")
 		return
 	}
-	settings, err := a.store.UpdateAdminMailSettings(r.Context(), body.ExpectedVersion, *body.Enabled)
+	storeCtx := WithSupportAuditActor(r.Context(), principal.UserID)
+	settings, err := a.store.UpdateAdminMailSettings(storeCtx, body.ExpectedVersion, *body.Enabled)
 	if err != nil {
 		writeSupportStoreError(w, r, err)
 		return
@@ -147,7 +149,8 @@ func (a *AdminMailAPI) testSend(w http.ResponseWriter, r *http.Request) {
 		writeSupportStoreError(w, r, err)
 		return
 	}
-	job, created, err := a.store.EnqueueAdminTestMail(r.Context(), AdminMailTestInput{
+	storeCtx := WithSupportAuditActor(r.Context(), principal.UserID)
+	job, created, err := a.store.EnqueueAdminTestMail(storeCtx, AdminMailTestInput{
 		ActorID: principal.UserID, Recipient: body.Recipient,
 		CorrelationID: supportRequestCorrelationID(r), IdempotencyKeyHash: hash,
 	})

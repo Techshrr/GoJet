@@ -108,7 +108,8 @@ func (a *AdminAPI) replyTicket(w http.ResponseWriter, r *http.Request) {
 		writeSupportStoreError(w, r, err)
 		return
 	}
-	ticket, message, created, err := a.store.AddAdminMessage(r.Context(), AdminMessageInput{
+	storeCtx := WithSupportAuditActor(r.Context(), principal.UserID)
+	ticket, message, created, err := a.store.AddAdminMessage(storeCtx, AdminMessageInput{
 		TicketID: r.PathValue("ticketId"), ActorID: principal.UserID, Kind: body.Kind, Body: body.Message,
 		CorrelationID: supportRequestCorrelationID(r), IdempotencyKeyHash: hash,
 	})
@@ -139,7 +140,8 @@ type adminPatchTicketRequest struct {
 }
 
 func (a *AdminAPI) patchTicket(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.adminActor(w, r, TicketsManagePermission); !ok {
+	principal, ok := a.adminActor(w, r, TicketsManagePermission)
+	if !ok {
 		return
 	}
 	var body adminPatchTicketRequest
@@ -150,7 +152,8 @@ func (a *AdminAPI) patchTicket(w http.ResponseWriter, r *http.Request) {
 		writeSupportError(w, r, http.StatusBadRequest, "invalid_request", "Invalid ticket mutation.")
 		return
 	}
-	ticket, changed, err := a.store.CloseAdminTicket(r.Context(), r.PathValue("ticketId"), body.ExpectedVersion)
+	storeCtx := WithSupportAuditActor(r.Context(), principal.UserID)
+	ticket, changed, err := a.store.CloseAdminTicket(storeCtx, r.PathValue("ticketId"), body.ExpectedVersion)
 	if err != nil {
 		writeSupportStoreError(w, r, err)
 		return

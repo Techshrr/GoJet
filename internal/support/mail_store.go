@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -259,10 +260,60 @@ WHERE mail_job_id=? AND attempt_number=? AND status='sending'`,
 		attemptStatus, nullableString(next.LastErrorCode), next.UpdatedAt, next.ID, next.AttemptCount); err != nil {
 		return MailJob{}, err
 	}
+	workspaceID, err := mailAuditWorkspaceTx(ctx, tx, next)
+	if err != nil {
+		return MailJob{}, err
+	}
+	metadata := map[string]string{
+		"template_key":   next.TemplateKey,
+		"attempt_number": strconv.FormatUint(uint64(next.AttemptCount), 10),
+		"status":         string(next.Status),
+	}
+	if next.LastErrorCode != "" {
+		metadata["error_code"] = next.LastErrorCode
+	}
+	if err := recordSupportAuditExecer(ctx, tx, SupportAuditInput{
+		WorkspaceID: workspaceID, ActorID: "mailworker", Action: "mail_attempt_" + attemptStatus,
+		ResourceType: "mail_job", ResourceID: next.ID,
+		CorrelationID: fmt.Sprintf("mail:%s:%d", next.ID, next.AttemptCount), Result: AuditSuccess, Metadata: metadata,
+	}); err != nil {
+		return MailJob{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return MailJob{}, err
 	}
 	return next, nil
+}
+
+func mailAuditWorkspaceTx(ctx context.Context, tx *sql.Tx, job MailJob) (string, error) {
+	var workspaceID sql.NullString
+	switch job.ResourceType {
+	case "ticket":
+		err := tx.QueryRowContext(ctx, `SELECT workspace_id FROM support_tickets WHERE id=?`, job.ResourceID).Scan(&workspaceID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrInvalidInput
+		}
+		if err != nil {
+			return "", err
+		}
+	case "ticket_message":
+		err := tx.QueryRowContext(ctx, `
+SELECT t.workspace_id FROM support_ticket_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE m.id=?`, job.ResourceID).Scan(&workspaceID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrInvalidInput
+		}
+		if err != nil {
+			return "", err
+		}
+	case "public_contact", "mail_test":
+		return "", nil
+	default:
+		return "", ErrInvalidInput
+	}
+	if workspaceID.Valid {
+		return workspaceID.String, nil
+	}
+	return "", nil
 }
 
 func nullableString(value string) any {
