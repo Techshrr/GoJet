@@ -250,6 +250,7 @@ export async function run(browser) {
   const contactFocus = await tabToAccessibleName(responsivePage, 'Send message');
   assert(contactFocus.tag === 'BUTTON', `Contact submit keyboard target is not a button: ${JSON.stringify(contactFocus)}`);
   await responsivePage.goto(`${ADMIN_URL}/admin/mail`, { waitUntil: 'networkidle' });
+  await responsivePage.getByLabel('Test recipient').fill('p14-keyboard@example.test');
   const mailFocus = await tabToAccessibleName(responsivePage, 'Queue test message');
   assert(mailFocus.tag === 'BUTTON', `Admin mail test-send keyboard target is not a button: ${JSON.stringify(mailFocus)}`);
 
