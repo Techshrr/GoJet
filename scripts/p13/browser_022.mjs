@@ -24,8 +24,8 @@ export async function run(browser) {
   await waitState(page, 'loading');
   captures.push(await screenshot(page, 'P13-T022', 'loading'));
   releaseLoading();
-  await page.unroute('**/api/admin/plans');
   await waitState(page, 'empty');
+  await page.unroute('**/api/admin/plans');
   await page.getByText('No plans', { exact: true }).waitFor();
   observed.loading = true; observed.empty = true;
   captures.push(await screenshot(page, 'P13-T022', 'empty'));
