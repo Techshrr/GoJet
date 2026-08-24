@@ -265,20 +265,27 @@ func activateSubscriptionTx(ctx context.Context, tx *sql.Tx, order Order, now ti
 	if err != nil {
 		return Subscription{}, err
 	}
-	defer rows.Close()
+	entitlements := []PlanEntitlement{}
 	for rows.Next() {
-		var capability string
-		var limit uint64
-		if err := rows.Scan(&capability, &limit); err != nil {
+		var item PlanEntitlement
+		if err := rows.Scan(&item.Capability, &item.LimitValue); err != nil {
+			rows.Close()
 			return Subscription{}, err
 		}
-		prov, _ := json.Marshal(map[string]any{"plan_id": order.PlanID, "order_id": order.ID, "source": "billing"})
-		if _, err := tx.ExecContext(ctx, `INSERT INTO entitlement_grants (workspace_id,capability,source_type,source_id,limit_value,starts_at,ends_at,revoked_at,provenance_json,created_at,updated_at) VALUES (?,?,'billing',?,?,?,?,NULL,CAST(? AS JSON),?,?) ON DUPLICATE KEY UPDATE limit_value=VALUES(limit_value),starts_at=VALUES(starts_at),ends_at=VALUES(ends_at),revoked_at=NULL,provenance_json=VALUES(provenance_json),updated_at=VALUES(updated_at)`, order.WorkspaceID, capability, subID, limit, now, termEnd, string(prov), now, now); err != nil {
-			return Subscription{}, err
-		}
+		entitlements = append(entitlements, item)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return Subscription{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return Subscription{}, err
+	}
+	for _, item := range entitlements {
+		prov, _ := json.Marshal(map[string]any{"plan_id": order.PlanID, "order_id": order.ID, "source": "billing"})
+		if _, err := tx.ExecContext(ctx, `INSERT INTO entitlement_grants (workspace_id,capability,source_type,source_id,limit_value,starts_at,ends_at,revoked_at,provenance_json,created_at,updated_at) VALUES (?,?,'billing',?,?,?,?,NULL,CAST(? AS JSON),?,?) ON DUPLICATE KEY UPDATE limit_value=VALUES(limit_value),starts_at=VALUES(starts_at),ends_at=VALUES(ends_at),revoked_at=NULL,provenance_json=VALUES(provenance_json),updated_at=VALUES(updated_at)`, order.WorkspaceID, item.Capability, subID, item.LimitValue, now, termEnd, string(prov), now, now); err != nil {
+			return Subscription{}, err
+		}
 	}
 	return loadSubscription(ctx, tx, subID)
 }
