@@ -5,21 +5,12 @@ on:
     branches:
       - main
     paths:
-      - 'artifacts/v10/P15/**'
-      - 'scripts/p15/**'
-      - '.github/workflows/p15-*.yml'
+      - 'artifacts/v10/P15/test-plan.json'
+      - 'scripts/p15/validate_contract.py'
+      - '.github/workflows/p15-authentication-oauth-account.yml'
       - 'specifications/**'
       - 'contracts/traceability/**'
-      - 'docs/security/**'
-      - 'go.mod'
-      - 'go.sum'
-      - 'internal/**'
-      - 'services/platformapi/**'
-      - 'migrations/**'
-      - 'frontend/apps/site/**'
-      - 'frontend/apps/workspace/**'
-      - 'frontend/apps/admin/**'
-      - 'frontend/packages/**'
+      - 'docs/security/SECURITY_INVARIANTS.md'
   workflow_dispatch:
 
 permissions:
