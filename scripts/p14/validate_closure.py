@@ -299,7 +299,14 @@ def validate_p13(errors: list[str]) -> dict[str, Any]:
     req(closure.get("phase") == "signed" and closure.get("merge_authoritative") is True, "P13 predecessor is not signed merge authority", errors)
     req(closure.get("defects") == ZERO_DEFECTS, "P13 predecessor defect ledger is not zero", errors)
     req(t027.get("implementation_commit") == P13_SOURCE and t027.get("status") == "PASS", "P13-T027 signed evidence invalid", errors)
-    req(t027.get("phase") == "signed" and t027.get("merge_authoritative") is True, "P13-T027 is not signed authority", errors)
+    t027_details = t027.get("details", {})
+    req(
+        isinstance(t027_details, dict)
+        and t027_details.get("closure_phase") == "signed"
+        and t027_details.get("merge_authoritative") is True
+        and t027_details.get("defects") == ZERO_DEFECTS,
+        "P13-T027 is not signed authority", errors,
+    )
     req("Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**" in review_text, "P13 signed review marker invalid", errors)
     req("Accountable reviewer identity: **GPT-5.6 Sol — P13 Technical Review**" in review_text, "P13 reviewer identity missing", errors)
     req(isinstance(index, dict) and index.get("implementation_commit") == P13_SOURCE, "P13 closure index head mismatch", errors)
