@@ -54,8 +54,9 @@ export async function run(browser) {
   const positiveReport = diagnostics(); attachDiagnostics(focusPage, positiveReport);
   await focusPage.goto(`${WORKSPACE_OWNER_URL}/app/billing`, { waitUntil: 'networkidle' });
   await waitWorkspace(focusPage);
-  await focusPage.getByLabel('Plan').selectOption(String(planId));
-  await focusPage.getByLabel('Plan').focus();
+  const planSelect = focusPage.locator('.billing-plan-action').getByRole('combobox');
+  await planSelect.selectOption(String(planId));
+  await planSelect.focus();
   await focusPage.keyboard.press('Tab');
   const focus = await focusPage.evaluate(() => {
     const el = document.activeElement;
