@@ -12,8 +12,8 @@ def case_016():
     low = create_plan("P13-T016-low", amount_minor=1200, entitlements={"links": 100, "custom_domains": 1})
     ws, actor, email = create_workspace("P13-T016")
     _, _, _ = paid_subscription("P13-T016-high", ws["id"], actor, email, high)
-    d1 = create_domain(ws["id"], actor, unique("one") + ".example.test")
-    d2 = create_domain(ws["id"], actor, unique("two") + ".example.test")
+    d1 = create_domain(ws["id"], actor, unique("one") + ".example.com")
+    d2 = create_domain(ws["id"], actor, unique("two") + ".example.com")
     expect(d1[0] == d2[0] == 201, f"pre-downgrade domain allocation failed {d1[0]}/{d2[0]}")
     current = mysql_rows(
         f"SELECT id,version FROM workspace_subscriptions WHERE workspace_id={sql_quote(ws['id'])} AND status='active'"
@@ -25,7 +25,7 @@ def case_016():
     )
     expect(scheduled[0] == 201, "downgrade schedule failed")
     schedule = scheduled[3]["schedule"]
-    during = create_domain(ws["id"], actor, unique("during") + ".example.test")
+    during = create_domain(ws["id"], actor, unique("during") + ".example.com")
     expect(during[0] == 409 and err_code(during[3]) == "entitlement_required",
            f"new domain mutation allowed during grace {during[0]} {during[3]}")
     existing_before = int(mysql_scalar(
@@ -59,7 +59,7 @@ def case_016():
     after_ent = get_entitlement(ws["id"], actor, email, "custom_domains")
     expect(after_ent[0] == 200 and after_ent[3]["allowed"] is True and int(after_ent[3]["limit_value"]) == 1,
            f"post-boundary entitlement mismatch {after_ent[3]}")
-    after_mutation = create_domain(ws["id"], actor, unique("after") + ".example.test")
+    after_mutation = create_domain(ws["id"], actor, unique("after") + ".example.com")
     expect(after_mutation[0] == 409 and err_code(after_mutation[3]) == "domain_limit_reached",
            f"over-quota mutation not denied after expiry {after_mutation[0]} {after_mutation[3]}")
     existing_after = int(mysql_scalar(
@@ -79,7 +79,7 @@ def case_017():
     _, _, _ = paid_subscription("P13-T017", ws["id"], actor, email, plan)
     ent = get_entitlement(ws["id"], actor, email, "custom_domains")
     expect(ent[3]["allowed"] is True and int(ent[3]["limit_value"]) == 2, "P13 domain entitlement missing")
-    created = create_domain(ws["id"], actor, unique("p13-t017") + ".example.test")
+    created = create_domain(ws["id"], actor, unique("p13-t017") + ".example.com")
     expect(created[0] == 201, f"P06 domain request blocked despite entitlement {created[0]}")
     domain_id = created[3]["domain"]["id"] if "domain" in created[3] else created[3].get("id")
     states = mysql_rows(
@@ -89,7 +89,7 @@ def case_017():
     expect(states == [["pending", "pending", "pending", "pending", "missing"]],
            f"payment bypassed P06 safety axes {states}")
     no_ent_ws, no_ent_actor, _ = create_workspace("P13-T017", suffix="no-entitlement")
-    denied = create_domain(no_ent_ws["id"], no_ent_actor, unique("p13-t017-denied") + ".example.test")
+    denied = create_domain(no_ent_ws["id"], no_ent_actor, unique("p13-t017-denied") + ".example.com")
     expect(denied[0] == 409 and err_code(denied[3]) == "entitlement_required",
            f"P06 accepted custom domain without P13 plan authority {denied[0]} {denied[3]}")
     return {
