@@ -38,6 +38,7 @@ type SupportStore interface {
 	CreateWorkspaceTicket(ctx context.Context, input CreateWorkspaceTicketInput) (Ticket, bool, error)
 	ListRequesterTickets(ctx context.Context, workspaceID, requesterUserID string, limit int) ([]Ticket, error)
 	GetTicket(ctx context.Context, ticketID string) (Ticket, error)
+	ListTicketMessages(ctx context.Context, ticketID string, includeInternal bool) ([]TicketMessage, error)
 	ReplyRequester(ctx context.Context, input ReplyTicketInput) (Ticket, TicketMessage, bool, error)
 	CloseRequesterTicket(ctx context.Context, ticketID, requesterUserID string) (Ticket, bool, error)
 }
@@ -226,7 +227,12 @@ func (a *API) getTicket(w http.ResponseWriter, r *http.Request) {
 		writeSupportStoreError(w, r, err)
 		return
 	}
-	writeSupportJSON(w, http.StatusOK, map[string]any{"ticket": ticket})
+	messages, err := a.store.ListTicketMessages(r.Context(), ticket.ID, false)
+	if err != nil {
+		writeSupportStoreError(w, r, err)
+		return
+	}
+	writeSupportJSON(w, http.StatusOK, map[string]any{"ticket": ticket, "messages": messages})
 }
 
 type ticketReplyRequest struct {

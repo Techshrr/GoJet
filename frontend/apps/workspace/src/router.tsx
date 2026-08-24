@@ -10,6 +10,7 @@ import {
 } from './workspace/pages';
 import MembersPage from './workspace/MembersPage';
 import NotificationsPage from './workspace/NotificationsPage';
+import { SupportListPage, SupportNewPage, SupportThreadPage } from './support/pages';
 
 const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));
@@ -54,6 +55,9 @@ const textDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/a
 const bioRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/bio', component: BioListPage });
 const bioDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/bio/$pageId', component: BioDetailPage });
 const billingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/billing', component: BillingPage });
+const supportRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/support', component: SupportListPage });
+const supportNewRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/support/new', component: SupportNewPage });
+const supportThreadRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/support/$ticketId', component: SupportThreadPage });
 const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/notifications', component: NotificationsPage });
 const organizationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/organization', component: OrganizationPage });
 const campaignsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/campaigns', component: CampaignsPage });
@@ -67,7 +71,7 @@ const sectionRoutes = ['developer', 'settings'].map((section) =>
 const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
   analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, bioRoute, bioDetailRoute,
-  billingRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute, workspaceSettingsRoute, inviteRoute,
+  billingRoute, supportRoute, supportNewRoute, supportThreadRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute, workspaceSettingsRoute, inviteRoute,
   ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });

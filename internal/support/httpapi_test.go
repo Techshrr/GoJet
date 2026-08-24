@@ -2,17 +2,22 @@ package support
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Techshrr/GoJet/internal/workspace"
 )
 
 type recordingSupportStore struct {
-	publicCreateCalls int
-	ticketCreateCalls int
+	publicCreateCalls       int
+	ticketCreateCalls       int
+	ticket                  Ticket
+	messages                []TicketMessage
+	messageVisibilityChecks []bool
 }
 
 func (s *recordingSupportStore) CreatePublicContact(_ context.Context, _ CreatePublicContactInput) (Ticket, bool, error) {
@@ -29,8 +34,25 @@ func (s *recordingSupportStore) ListRequesterTickets(_ context.Context, _, _ str
 	return nil, nil
 }
 
-func (s *recordingSupportStore) GetTicket(_ context.Context, _ string) (Ticket, error) {
+func (s *recordingSupportStore) GetTicket(_ context.Context, ticketID string) (Ticket, error) {
+	if s.ticket.ID != "" && s.ticket.ID == ticketID {
+		return s.ticket, nil
+	}
 	return Ticket{}, ErrSupportNotFound
+}
+
+func (s *recordingSupportStore) ListTicketMessages(_ context.Context, _ string, includeInternal bool) ([]TicketMessage, error) {
+	s.messageVisibilityChecks = append(s.messageVisibilityChecks, includeInternal)
+	if includeInternal {
+		return append([]TicketMessage(nil), s.messages...), nil
+	}
+	items := make([]TicketMessage, 0, len(s.messages))
+	for _, message := range s.messages {
+		if message.Kind != MessageInternalNote {
+			items = append(items, message)
+		}
+	}
+	return items, nil
 }
 
 func (s *recordingSupportStore) ReplyRequester(_ context.Context, _ ReplyTicketInput) (Ticket, TicketMessage, bool, error) {
@@ -134,6 +156,43 @@ func TestWorkspaceTicketReplayedTurnstileHasZeroStoreMutation(t *testing.T) {
 	}
 	if store.ticketCreateCalls != 0 {
 		t.Fatalf("replayed Turnstile reached durable store: %d", store.ticketCreateCalls)
+	}
+}
+
+func TestRequesterTicketDetailExcludesInternalNotes(t *testing.T) {
+	now := time.Now().UTC()
+	store := &recordingSupportStore{
+		ticket: Ticket{ID: "tkt-detail", WorkspaceID: "ws-1", RequesterUserID: "user-1", Category: "general", Subject: "Help", Status: TicketAwaitingUser, CreatedAt: now, UpdatedAt: now, Version: 2, CorrelationID: "corr-detail"},
+		messages: []TicketMessage{
+			{ID: "msg-requester", TicketID: "tkt-detail", ActorType: ActorRequester, ActorID: "user-1", Kind: MessageRequesterReply, Body: "Visible requester message", CreatedAt: now, CorrelationID: "corr-1"},
+			{ID: "msg-internal", TicketID: "tkt-detail", ActorType: ActorSupport, ActorID: "support-1", Kind: MessageInternalNote, Body: "Secret internal note", CreatedAt: now, CorrelationID: "corr-2"},
+			{ID: "msg-support", TicketID: "tkt-detail", ActorType: ActorSupport, ActorID: "support-1", Kind: MessageSupportReply, Body: "Visible support reply", CreatedAt: now, CorrelationID: "corr-3"},
+		},
+	}
+	api := newSecurityOrderingAPI(t, store, &recordingVerifier{ok: true}, &recordingReplayStore{claim: true})
+	req := httptest.NewRequest(http.MethodGet, "/api/support/tickets/tkt-detail", nil)
+	recorder := httptest.NewRecorder()
+	api.Handler().ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if len(store.messageVisibilityChecks) != 1 || store.messageVisibilityChecks[0] {
+		t.Fatalf("requester detail did not request server-filtered messages: %+v", store.messageVisibilityChecks)
+	}
+	var body struct {
+		Ticket   Ticket          `json:"ticket"`
+		Messages []TicketMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Messages) != 2 {
+		t.Fatalf("requester-visible messages=%d body=%s", len(body.Messages), recorder.Body.String())
+	}
+	for _, message := range body.Messages {
+		if message.Kind == MessageInternalNote || strings.Contains(message.Body, "Secret internal note") {
+			t.Fatalf("internal note leaked: %+v", message)
+		}
 	}
 }
 
