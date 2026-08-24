@@ -121,6 +121,7 @@ export function SupportThreadPage() {
     retry: false,
   });
   const replyMutation = useMutation({
+    networkMode: 'always',
     mutationFn: () => client!.reply(ticketId, reply.trim()),
     onSuccess: async () => {
       setReply('');
