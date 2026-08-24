@@ -1,0 +1,256 @@
+name: P13 Real Billing Payments Entitlements Integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'artifacts/v10/P13/**'
+      - 'scripts/p13/**'
+      - '.github/workflows/p13-*.yml'
+      - 'internal/billing/**'
+      - 'internal/domains/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p13-real-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration:
+    name: P13 real MySQL billing payment entitlement authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '1'
+      GOJET_TEST_BILLING_CALLBACK_SECRET: p13-ci-callback-secret-2026-08-24
+      GOJET_TEST_BILLING_ADMIN_ENABLED: '1'
+      GOJET_TEST_BILLING_ADMIN_ACTOR: p13-admin
+      GOJET_TEST_BILLING_ADMIN_EMAIL: p13-admin@example.test
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_P13_PRODUCER: /tmp/gojet-p13-producer
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify native P13 drivers and packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P13/{api,rbac,security,entitlement,audit,runtime,results}
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          python3 -m py_compile scripts/p13/*.py
+          gofmt -d internal/billing/*.go services/platformapi/cmd/server/*.go scripts/p13/*.go | tee /tmp/p13-gofmt.diff
+          test ! -s /tmp/p13-gofmt.diff
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p13-platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p13-producer ./scripts/p13/producer.go
+          sha256sum /tmp/gojet-p13-platformapi > artifacts/v10/P13/runtime/native-platformapi.sha256
+          sha256sum /tmp/gojet-p13-producer > artifacts/v10/P13/runtime/internal-producer.sha256
+
+      - name: Apply P05 through P13 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql \
+            migrations/000007_bio.sql \
+            migrations/000008_workspace_organization.sql \
+            migrations/000009_billing_payments_entitlements.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e \
+            "SHOW TABLES WHERE Tables_in_gojet_test LIKE 'billing_%' OR Tables_in_gojet_test IN ('workspace_subscriptions','entitlement_grants','payment_callback_events')" \
+            | sort > artifacts/v10/P13/runtime/mysql-p13-tables.txt
+
+      - name: Start native platformapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p13-platformapi > artifacts/v10/P13/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P13/runtime/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat artifacts/v10/P13/runtime/platformapi.log || true
+          exit 1
+
+      - name: Run P13-T001 through P13-T020 on real authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in $(seq -w 1 20); do
+            GITHUB_SHA="$exact_head" python3 scripts/p13/integration.py --case "P13-T0${number}"
+          done
+
+      - name: Verify exact-head P13-T001 through P13-T020 evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          head = os.environ['EXACT_HEAD']
+          root = Path('artifacts/v10/P13')
+          entitlement = {3,10,11,12,14,15,16,17,18}
+          rbac = {4}
+          security = {7,8}
+          audit = {19}
+          errors = []
+          for number in range(1, 21):
+              cid = f'P13-T{number:03d}'
+              directory = 'entitlement' if number in entitlement else ('rbac' if number in rbac else ('security' if number in security else ('audit' if number in audit else 'api')))
+              path = root / directory / f'{cid}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('case_id') != cid: errors.append(f'{cid} case_id mismatch')
+              if data.get('implementation_commit') != head: errors.append(f'{cid} implementation_commit mismatch')
+              if data.get('status') != 'PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors') != []: errors.append(f"{cid} errors={data.get('errors')}")
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print(f'P13-T001..T020 exact-head evidence PASS on {head}')
+          PY
+
+      - name: Capture safe P13 runtime authority evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P13/runtime
+          export MYSQL_PWD=root
+          mysql_base=(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test)
+          "${mysql_base[@]}" -e "SELECT id,code,name,status,currency,amount_minor,billing_period,version FROM billing_plans ORDER BY id" > artifacts/v10/P13/runtime/mysql-plans.tsv 2> artifacts/v10/P13/runtime/mysql-plans.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,plan_id,kind,currency,amount_minor,status FROM billing_orders ORDER BY created_at,id" > artifacts/v10/P13/runtime/mysql-orders.tsv 2> artifacts/v10/P13/runtime/mysql-orders.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,order_id,currency,amount_minor,status,paid_at,refunded_at FROM billing_invoices ORDER BY created_at,id" > artifacts/v10/P13/runtime/mysql-invoices.tsv 2> artifacts/v10/P13/runtime/mysql-invoices.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,order_id,provider,provider_transaction_id,currency,amount_minor,status FROM billing_transactions ORDER BY id" > artifacts/v10/P13/runtime/mysql-transactions.tsv 2> artifacts/v10/P13/runtime/mysql-transactions.err
+          "${mysql_base[@]}" -e "SELECT id,provider,provider_event_id,provider_transaction_id,event_type,status,received_at,processed_at,correlation_id FROM payment_callback_events ORDER BY id" > artifacts/v10/P13/runtime/mysql-callback-events-safe.tsv 2> artifacts/v10/P13/runtime/mysql-callback-events-safe.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,plan_id,status,starts_at,current_term_ends_at,grace_ends_at,cancel_at,version FROM workspace_subscriptions ORDER BY workspace_id,id" > artifacts/v10/P13/runtime/mysql-subscriptions.tsv 2> artifacts/v10/P13/runtime/mysql-subscriptions.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,capability,source_type,source_id,limit_value,starts_at,ends_at,revoked_at FROM entitlement_grants ORDER BY workspace_id,capability,id" > artifacts/v10/P13/runtime/mysql-entitlements-safe.tsv 2> artifacts/v10/P13/runtime/mysql-entitlements-safe.err
+          "${mysql_base[@]}" -e "SELECT base_currency,quote_currency,CAST(rate AS CHAR),source,as_of,status,COALESCE(override_reason,''),updated_at FROM billing_fx_rates ORDER BY base_currency,quote_currency" > artifacts/v10/P13/runtime/mysql-fx.tsv 2> artifacts/v10/P13/runtime/mysql-fx.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,actor_id,action,resource_type,resource_id,COALESCE(reason,''),request_correlation_id,result,metadata_json,created_at FROM billing_audit_events ORDER BY id" > artifacts/v10/P13/runtime/mysql-audit-safe.tsv 2> artifacts/v10/P13/runtime/mysql-audit-safe.err
+          "${mysql_base[@]}" -e "SELECT id,workspace_id,recipient_user_id,category,event_key,dedupe_key,title,summary,COALESCE(deep_link,''),resource_type,resource_id,created_at FROM workspace_notifications WHERE category='billing' ORDER BY id" > artifacts/v10/P13/runtime/mysql-notifications-safe.tsv 2> artifacts/v10/P13/runtime/mysql-notifications-safe.err
+          true
+
+      - name: Verify P13 runtime captures are clean
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for errfile in artifacts/v10/P13/runtime/*.err; do
+            test ! -s "$errfile" || { echo "runtime capture error: $errfile"; cat "$errfile"; exit 1; }
+          done
+          if grep -R -F 'p13-ci-callback-secret-2026-08-24' artifacts/v10/P13 --exclude='*.sha256'; then
+            echo 'callback secret found in P13 evidence'
+            exit 1
+          fi
+          if grep -R -F 'X-GoJet-Test-Callback-Signature' artifacts/v10/P13; then
+            echo 'callback signature header name found in P13 evidence'
+            exit 1
+          fi
+          if grep -R -E '[A-Za-z0-9._%+-]+@example\.test' artifacts/v10/P13; then
+            echo 'test email/PII found in P13 evidence'
+            exit 1
+          fi
+          echo 'P13 runtime captures clean'
+
+      - name: Stop native P13 service
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P13/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload P13 real integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p13-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P13/api/P13-T0*.json
+            artifacts/v10/P13/rbac/P13-T004.json
+            artifacts/v10/P13/security/P13-T007.json
+            artifacts/v10/P13/security/P13-T008.json
+            artifacts/v10/P13/entitlement/P13-T0*.json
+            artifacts/v10/P13/audit/P13-T019.json
+            artifacts/v10/P13/runtime/
+          if-no-files-found: warn
+          retention-days: 30
