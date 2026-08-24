@@ -27,7 +27,7 @@ export async function run(browser) {
   await page.route(summaryPattern, async (route) => { await loadingGate; await route.continue(); });
   await page.goto(`${WORKSPACE_OWNER_URL}/app/billing`, { waitUntil: 'domcontentloaded' });
   await waitState(page, 'loading');
-  assert(await page.getByRole('status', { name: /Loading authoritative billing state/i }).count() > 0, 'loading state missing');
+  await page.locator('[role="status"]').filter({ hasText: 'Loading authoritative billing state' }).waitFor();
   captures.push(await screenshot(page, 'P13-T021', 'loading'));
   releaseLoading();
   await waitState(page, 'active');
