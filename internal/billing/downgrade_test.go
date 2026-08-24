@@ -155,9 +155,42 @@ func TestP06DowngradeGraceHandsOffToLowerTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ResolvedEntitlement intentionally does not expose SourceKey; the limit and
-	// policy axes prove the handoff without relying on private provenance.
 	if at.DomainLimit != 3 || at.GracePeriod || !at.MutationAllowed || !at.ExistingRoutingAllowed {
 		t.Fatalf("lower target must take over at exact grace boundary: %+v", at)
+	}
+}
+
+func TestP06PackageDowngradeUsesGraceEvenWhenDomainLimitIsUnchanged(t *testing.T) {
+	t.Parallel()
+	graceStart := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	effective := graceStart.Add(domains.NormalDowngradeGrace)
+	oldExpiry := graceStart
+	targetExpiry := effective.AddDate(0, 1, 0)
+	current := domains.EntitlementSource{
+		WorkspaceID: "ws-1", Source: domains.SourcePlan, SourceKey: p13DomainPlanSourceKey,
+		Status: domains.EntitlementActive, DomainLimit: 5,
+		StartsAt: graceStart.AddDate(0, -1, 0), ExpiresAt: &oldExpiry,
+		DegradedAt: &graceStart, GraceUntil: &effective, DecisionReason: "billing_plan_downgrade",
+	}
+	target := domains.EntitlementSource{
+		WorkspaceID: "ws-1", Source: domains.SourcePlan, SourceKey: p13DomainTargetPlanSourceKey,
+		Status: domains.EntitlementActive, DomainLimit: 5,
+		StartsAt: effective, ExpiresAt: &targetExpiry, DecisionReason: "billing_downgrade_target_entitlement",
+	}
+
+	grace, err := domains.ResolveEntitlement(graceStart.Add(time.Microsecond), []domains.EntitlementSource{current, target}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !grace.GracePeriod || grace.MutationAllowed || !grace.ExistingRoutingAllowed || grace.DomainLimit != 5 {
+		t.Fatalf("package downgrade must enter P06 grace even with unchanged domain limit: %+v", grace)
+	}
+
+	at, err := domains.ResolveEntitlement(effective, []domains.EntitlementSource{current, target}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at.DomainLimit != 5 || at.GracePeriod || !at.MutationAllowed || !at.ExistingRoutingAllowed {
+		t.Fatalf("same-limit target must resume normal P06 authority after grace: %+v", at)
 	}
 }

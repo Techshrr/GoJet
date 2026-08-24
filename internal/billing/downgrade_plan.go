@@ -112,26 +112,16 @@ func projectP06ScheduledDowngradeTx(
 	}
 	correlationID := fmt.Sprintf("billing-downgrade-%s-v%d", subscription.ID, subscription.Version+1)
 
+	// P06 owns normal custom-domain downgrade semantics. A normal package
+	// downgrade immediately enters its non-extendable seven-day grace whenever
+	// a plan-owned custom-domain entitlement currently exists, even when the
+	// target plan happens to retain the same numeric domain limit. A valid
+	// manual approval remains an independent P06 source and can continue service
+	// through the existing resolver without being rewritten here.
 	if currentLimit == 0 {
 		_, err := domains.ExpirePlanSourceTx(ctx, tx, subscription.WorkspaceID, p13DomainTargetPlanSourceKey, "billing_downgrade_target_not_required", correlationID)
 		return err
 	}
-	if targetLimit == currentLimit {
-		if _, err := domains.ExpirePlanSourceTx(ctx, tx, subscription.WorkspaceID, p13DomainTargetPlanSourceKey, "billing_downgrade_target_not_required", correlationID); err != nil {
-			return err
-		}
-		_, err := domains.UpsertPlanSourceTx(ctx, tx, domains.PlanSourceInput{
-			WorkspaceID:    subscription.WorkspaceID,
-			SourceKey:      p13DomainPlanSourceKey,
-			Status:         domains.EntitlementActive,
-			DomainLimit:    uint32(currentLimit),
-			StartsAt:       subscription.StartsAt,
-			ExpiresAt:      targetTermEnd,
-			DecisionReason: "billing_downgrade_domain_limit_unchanged",
-		}, correlationID)
-		return err
-	}
-
 	if _, err := domains.ApplyNormalPlanDowngradeTx(ctx, tx, domains.NormalPlanDowngradeInput{
 		WorkspaceID:    subscription.WorkspaceID,
 		SourceKey:      p13DomainPlanSourceKey,
