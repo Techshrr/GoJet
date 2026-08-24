@@ -36,8 +36,8 @@ FOR UPDATE`, currentID, targetID)
 	if err := rows.Close(); err != nil {
 		return downgradePlanSnapshot{}, downgradePlanSnapshot{}, err
 	}
-	current, currentOK := plans[currentID]
-	target, targetOK := plans[targetID]
+	_, currentOK := plans[currentID]
+	_, targetOK := plans[targetID]
 	if !currentOK || !targetOK {
 		return downgradePlanSnapshot{}, downgradePlanSnapshot{}, ErrNotFound
 	}
