@@ -4,166 +4,117 @@ Node: `P13`
 Issue: #33  
 Base integration commit: `7f39da389052b08f145e69dac2a715b9d303294d`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
+
+Pre-sign exact implementation SHA: `bf8c0eb186d9d3e230ada03c56d7114e830f63fb`  
+Accountable reviewer identity: **GPT-5.6 Sol — P13 Technical Review**  
+Review date: **2026-08-24**
 
 ## 1. Review boundary
 
-This file freezes the P13 review contract before implementation. It is not a PASS record and does not close P17 Admin permission lifecycle, P19 Website/SEO, P15 production identity lifecycle, or release-wide Gates.
+This signed review covers the frozen P13 Billing, Payments and Entitlements scope only. It approves the P13-owned billing/payment/callback/entitlement implementation and its shared P06/P13 domain-entitlement contribution against the frozen P13 contract.
 
-Frontend price cards, navigation visibility, cached client state, browser-return success pages, generic `features` JSON, unauthenticated provider payloads, screenshot-only proof, or manually edited entitlement rows cannot substitute for authoritative P13 evidence.
+It does **not** close P15 production identity lifecycle, P17 Admin permission lifecycle, P19 final Website/SEO composition, inherited P06 domain safety ownership, inherited P12 notification-core ownership, or release-wide Gates. Production Docker/Compose/Node runtime remains outside the approved production authority.
 
-## 2. Frozen capability and predecessor boundary
+Frontend price cards, navigation visibility, cached client state, browser-return success pages, generic `features` JSON, unauthenticated provider payloads, screenshot-only proof, or manually edited entitlement rows are not billing, payment-settlement, RBAC, or entitlement authority.
 
-- `CAP-BILLING` — REQUIRED — owner P13 — G3/G10.
-- `CAP-PAYMENTS` — REQUIRED — owner P13 — G3/G6/G10.
-- `CAP-PAYMENT-CALLBACKS` — REQUIRED — owner P13 — G3/G6/G10.
-- `CAP-DOMAIN-ENTITLEMENT` — REQUIRED — owners P06/P13 — G3/G6.
-- P13 consumes P12 Workspace membership/notification-core authority but does not redefine it.
-- P13 extends effective entitlement/quota state without duplicating P06 domain request/approval/ownership/DNS/HTTPS/risk authority.
-- P13 consumes current principal and `billing.manage` permission boundaries without claiming P15/P17 lifecycle completion.
-- Production Docker/Compose/Node runtime remains prohibited.
+## 2. Capability and gate disposition
 
-Authoritative predecessor is P12 signed source `9d49d5ebf0e697ae9cd6537c432c27a15edc60bd`, integration commit `7f39da389052b08f145e69dac2a715b9d303294d`, closure run `32663159008`, artifact `9499336765`, digest `sha256:72ed65c48303654b589edce23e9118ecc963940a7400e27a0f174d7e8ea07c9a`, `phase=signed`, `merge_authoritative=true`, defects P0=0/P1=0/`DECISION REQUIRED`=0.
+- `CAP-BILLING` — P13-owned G3/G10 subset: APPROVED.
+- `CAP-PAYMENTS` — P13-owned G3/G6/G10 subset: APPROVED.
+- `CAP-PAYMENT-CALLBACKS` — P13-owned G3/G6/G10 subset: APPROVED.
+- `CAP-DOMAIN-ENTITLEMENT` — shared P06/P13 G3/G6 subset: APPROVED for P13 billing/quota contribution; inherited P06 request/approval/ownership/DNS/HTTPS/risk authority remains conjunctive and independently required.
 
-Inherited P06 domain authority remains source `4079d1ee7c4876cab3e6bccccc3e4ac62cf97f23`, integration `3aa80b566d144963130b8f61fa63a4ee677ebc99`, closure run `32519298309`, artifact `9460016077`, digest `sha256:21e2fe5898a047e166aac520870070e8072f00885a3c89aaf86736f6ac22a2c8`.
+These are P13-scoped gate dispositions only and do not mark release-wide G3/G6/G10 complete.
 
-## 3. Frozen route and authority layers
+## 3. Predecessor and shared authority
 
-IA-authoritative P13-related routes:
+Authoritative predecessor remains P12 signed source `9d49d5ebf0e697ae9cd6537c432c27a15edc60bd`, integration commit `7f39da389052b08f145e69dac2a715b9d303294d`, closure run `32663159008`, artifact `9499336765`, digest `sha256:72ed65c48303654b589edce23e9118ecc963940a7400e27a0f174d7e8ea07c9a`, `phase=signed`, `merge_authoritative=true`, defects 0/0/0.
 
-```text
-APP-BILLING     /app/billing
-WEB-PRICING     /pricing
-ADMIN-PLANS     /admin/commerce/plans
-ADMIN-PAYMENTS  /admin/commerce/payments[/{paymentId}]
-ADMIN-FX        /admin/commerce/fx
-```
+Inherited P06 domain functional authority remains signed source `4079d1ee7c4876cab3e6bccccc3e4ac62cf97f23`, integration commit `3aa80b566d144963130b8f61fa63a4ee677ebc99`, closure run `32519298309`, artifact `9460016077`, digest `sha256:21e2fe5898a047e166aac520870070e8072f00885a3c89aaf86736f6ac22a2c8`, with defects 0/0/0.
 
-IA-exact API dependency:
+P13 consumes P12 Workspace membership and notification core without redefining them. P13 adds billing producer events only. P13 consumes current principal and `billing.manage` permission boundaries without claiming P15/P17 lifecycle completion.
 
-```text
-GET /api/public/plans
-```
+## 4. Route, API and provider disposition
 
-P13 implementation authority freezes the remaining billing namespaces and `POST /api/payments/callbacks/{provider}`; these are **not IA-exact**. `/api/admin/plans*`, payment/invoice families and FX families remain P13 implementation API authority.
+Reviewed P13-related routes are:
 
-There are no invented `/app/billing/plans`, `/app/billing/usage` or `/app/billing/invoices` page aliases. Provider callback routes are payment-subsystem routes and must not be conflated with generic user-configurable `APP-WEBHOOKS`.
+- `APP-BILLING /app/billing`
+- `WEB-PRICING /pricing`
+- `ADMIN-PLANS /admin/commerce/plans`
+- `ADMIN-PAYMENTS /admin/commerce/payments[/{paymentId}]`
+- `ADMIN-FX /admin/commerce/fx`
 
-P13 may supply safe public plan data to `WEB-PRICING`, but P19 retains final Website/SEO ownership.
+Only `GET /api/public/plans` is IA-exact. The Workspace billing/order/invoice/payment families, Admin plan/payment/invoice/FX families, and `POST /api/payments/callbacks/{provider}` remain P13 implementation authority. No invented `/app/billing/plans`, `/app/billing/usage`, or `/app/billing/invoices` aliases are approved. P19 retains final public Website/SEO ownership.
 
-## 4. Frozen payment-provider and callback authority
+Frozen provider identifiers are exactly `alipay`, `wechat`, `epay`, `paypal`, `stripe`, and `crypto`. Provider-specific callback authentication occurs before durable mutation; duplicate/reordered callbacks are idempotent; browser success/return state is not settlement authority; ordinary APIs/logs/evidence exclude raw callback payloads, signatures, credentials, full payer identity, and provider secrets.
 
-Provider identifiers are exactly:
+## 5. Monetary and entitlement disposition
 
-`alipay`, `wechat`, `epay`, `paypal`, `stripe`, `crypto`.
+All authoritative money uses integer minor units plus ISO currency. Plan, subscription, order, invoice, transaction, callback-event, and FX lifecycle transitions were reviewed through real MySQL/native API evidence.
 
-The callback implementation route is `POST /api/payments/callbacks/{provider}`, explicitly P13 implementation authority rather than IA-exact authority.
+The durable server-side entitlement resolver is authoritative. Hard suspension/revoke wins; durable manual/inherited grants retain provenance; billing grants respect term/grace boundaries; baseline/free is last; numeric grants combine by the frozen non-additive maximum rule.
 
-- Unknown provider fails closed.
-- Provider-specific signature/credential verification occurs before durable mutation.
-- Authenticated callbacks normalize to durable provider transaction/event identity.
-- Duplicate/reordered callbacks are idempotent and cannot double-apply money or entitlement.
-- Browser return/success state is never settlement authority.
-- Raw callback body, signature, secret/token/credential, full payer identity and provider evidence are excluded from ordinary logs, API output and evidence artifacts.
-- CI uses deterministic authenticated provider fixtures/adapters; no live production credential or real charge is required.
+Billing refund/expiry removes only billing-source contribution. Existing over-quota resources are preserved on normal downgrade while new violating mutations are denied. Custom-domain use requires both P13 effective quota/entitlement and inherited P06 approval/ownership/DNS/TLS/risk authority; payment cannot bypass P06 safety.
 
-## 5. Frozen monetary and lifecycle authority
+## 6. RBAC, audit and notification disposition
 
-All money is integer minor units plus ISO currency; floating-point money is prohibited.
+Workspace billing reads and mutations re-resolve current P12 membership and tenant scope server-side. Owner mutation authority, safe admin read boundaries, member/viewer denial, cross-Workspace fail-closed behavior, and Admin `billing.manage` enforcement are approved for the P13 scope.
 
-Plan lifecycle: `draft`, `active`, `archived`.
+Billing/admin/callback state changes are auditable without raw provider secrets or unnecessary PII. P13 billing notification producers use the inherited P12 notification core with dedupe, allowlisted/re-authorized links, and redacted summaries; no arbitrary public notification emit authority is introduced.
 
-Subscription lifecycle: `pending`, `active`, `grace`, `overdue`, `canceled`, `expired`.
+## 7. Browser, accessibility and resilience disposition
 
-Order lifecycle: `pending`, `processing`, `paid`, `failed`, `canceled`, `refunded`.
+Real Workspace/Admin browser evidence approves APP-BILLING, ADMIN-PLANS, ADMIN-PAYMENTS, and ADMIN-FX state coverage; canonical desktop/tablet/mobile plus 320 CSS px reflow; keyboard/focus semantics; reduced motion; non-color-only status; authenticated authorization; noindex/no-store; partial/provider-failure/offline states; and recovery behavior.
 
-Invoice lifecycle: `open`, `paid`, `void`, `refunded`.
+The safe public-plan substrate is approved only as P13 data authority and does not claim P19 final pricing-page composition.
 
-Transaction lifecycle: `pending`, `paid`, `failed`, `refunded`.
+## 8. Exact-head evidence disposition
 
-Callback event state: `accepted`, `duplicate`, `invalid`, `ignored`, `processed`.
+Pre-sign exact implementation SHA `bf8c0eb186d9d3e230ada03c56d7114e830f63fb` passed **P13-T001..P13-T027**:
 
-FX state: `current`, `stale`, `provider-error`, `override`.
+- P13-T001..P13-T020: real MySQL/Redis/native platformapi billing/payment/entitlement evidence.
+- P13-T021..P13-T025: real Workspace/Admin browser evidence.
+- P13-T026: exact-head evidence coherence with same-head producer binding, inspectable runtime/browser evidence, mixed-head rejection, and clean runtime error files.
+- P13-T027: PASS in pre-sign accountable closure with 26 input evidence files and the required 39-workflow exact-head affected matrix.
+- P12 signed predecessor authority and P06 signed functional authority were live-bound and archive-digest verified.
 
-Paid/refund/upgrade/downgrade transitions must be durable, idempotent, auditable and driven by authenticated server authority.
+Pre-sign closure run: `32707945039`  
+Pre-sign closure artifact: `9513174699`  
+Pre-sign closure artifact digest: `sha256:78d65e54a815e212b1a93be6545e1453c563e7665575ad904380d3c662811fc6`
 
-## 6. Frozen entitlement precedence
+The pre-sign closure is intentionally `phase=pre-sign` and `merge_authoritative=false`. This signed review records accountable approval but does not bypass the same-revision closure requirement.
 
-One durable server-side resolver is authoritative. Generic `features` JSON is display/supporting metadata only and **must not** be queried as entitlement authority.
+## 9. Defect and decision ledger
 
-Precedence:
+- P0 defects: 0
+- P1 defects: 0
+- `DECISION REQUIRED`: 0
 
-1. hard security/Workspace/admin suspension or explicit durable revoke denies;
-2. active durable manual/inherited grant with provenance;
-3. active billing-plan grant with provenance and term/grace boundaries;
-4. baseline/free default.
+No unresolved P0, P1, or decision-required item remains inside the frozen P13 ownership boundary based on the pre-sign exact-head evidence.
 
-Active numeric grant limits use an explicit non-additive maximum unless a capability-specific frozen rule says otherwise. Billing refund/expiry removes only the billing-source contribution; unrelated manual/inherited grants survive.
+## 10. Accountable approvals
 
-Custom-domain use requires **both** effective P13 domain entitlement/quota **and** inherited P06 request/approval/ownership/DNS/HTTPS/risk authority. Payment cannot bypass P06 safety.
+- Backend Lead: APPROVED
+- Frontend Lead: APPROVED
+- QA Lead: APPROVED
+- Accessibility Reviewer: APPROVED
+- Security Reviewer: APPROVED
+- Product/API Reviewer: APPROVED
 
-Downgrade/expiry may deny new over-limit mutations but does not silently destroy existing resources unless the owning capability contract explicitly requires cleanup.
+## 11. Ownership retained by later/inherited nodes
 
-## 7. Frozen RBAC and tenant authority
-
-- Workspace owner: read/manage P13 Workspace billing.
-- Workspace admin: read plan/usage/status summary only; no plan change, payable-order creation or sensitive provider detail.
-- Member/viewer: no financial ledger or billing mutation; capability enforcement exposes only safe entitlement state/reason.
-- Admin commerce routes require current principal with `billing.manage`; P13 consumes that permission but does not implement P17 permission lifecycle.
-- Every Workspace financial request re-resolves P12 membership and tenant scope server-side.
-- Client/test role headers never authorize billing.
-- Cross-Workspace IDs fail closed without revealing foreign financial existence.
-
-## 8. Frozen notification ownership
-
-P12 remains owner of notification store/read-state/API/UI/deep-link authorization. P13 adds internal-only `billing` producer events such as payment success/failure, refund, upgrade, scheduled downgrade and entitlement expiry.
-
-P13 must not add a public arbitrary notification emit endpoint, and producer content must remain deduped, allowlisted, reauthorized and secret/PII-redacted through the P12 core.
-
-## 9. Frozen browser/state contract
-
-`APP-BILLING`: `loading`, `active`, `payment-pending`, `payment-failed`, `overdue`, `canceled`, `provider-partial`, `error`.
-
-`ADMIN-PLANS`: `loading`, `empty`, `draft`, `active`, `archived`, `validation-error`, `conflict`.
-
-`ADMIN-PAYMENTS`: `loading`, `empty`, `pending`, `paid`, `failed`, `refunded`, `callback-invalid`, `partial`.
-
-`ADMIN-FX`: `loading`, `current`, `stale`, `provider-error`, `override-confirm`, `validation-error`.
-
-P13 browser evidence must cover canonical desktop/tablet/mobile viewports, 320 CSS px reflow, keyboard/focus semantics, reduced motion, no color-only financial status, authenticated authorization, noindex/no-store, partial/offline/provider failure and recovery.
-
-## 10. Evidence and case contract
-
-Required P13 case range: **P13-T001..P13-T027**.
-
-The `P13-Txxx` identifiers are frozen by this P13 contract revision. The Master Plan supplies requirements—not these IDs.
-
-Evidence root: `artifacts/v10/P13/`.
-
-Specialized evidence must include real DB/API/entitlement/security/audit/browser/runtime evidence, provider callback redaction, exact-head producer bindings, coherence and accountable affected-regression closure.
-
-P13-T026 is exact-head evidence coherence. P13-T027 is accountable signed closure.
-
-## 11. Pending implementation review
-
-Pending: P13-T001..P13-T027, exact implementation SHA, billing schema/migrations, provider adapters, callback verification/idempotency, authoritative entitlement resolver, P06 domain continuity, P12 billing notification producers, Workspace/Admin browser evidence, affected exact-head matrix, P0/P1 ledger and unresolved `DECISION REQUIRED` count.
-
-No P13 PASS or Exit claim is made in this state.
+- P06 retains domain request/approval/ownership/DNS/HTTPS/risk and redirect safety authority.
+- P12 retains Workspace membership and notification-core store/read-state/API/UI/deep-link authority.
+- P15 retains production identity/session/OAuth lifecycle.
+- P17 retains Admin permission lifecycle, including the lifecycle that governs `billing.manage`.
+- P19 retains final public Website/SEO and pricing-page composition.
+- Release-wide gates and later P20/P22 closure remain outside this P13 review.
 
 ## 12. Signed-revision rule
 
-When evidence is complete this document may transition only to:
+The signed revision itself must rerun and pass P13-T001..P13-T027 and the complete affected exact-head P00-P13 matrix. Until that signed-revision closure completes with `phase=signed`, `merge_authoritative=true`, defects 0/0/0, and the same predecessor bindings, this review must not be used as merge authority.
 
-`Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**`
+If any implementation, workflow, validator, contract, or review file changes after this signature, the exact-head evidence becomes revision-specific history and another complete affected rerun is required.
 
-The signed form must record:
-
-Pre-sign exact implementation SHA: `<40-hex SHA>`
-
-Accountable reviewer identity: **GPT-5.6 Sol — P13 Technical Review**
-
-Review date: **YYYY-MM-DD**
-
-It must also record P13-T001..P13-T027 PASS evidence, P0=0, P1=0, unresolved `DECISION REQUIRED`=0, truthful P13 gate/capability disposition, P06/P12/P15/P17/P19 ownership boundaries and the same-revision CI/closure rerun requirement.
-
-If signing changes this file and therefore changes HEAD, the signed revision itself must rerun and pass the complete affected exact-head matrix before P13 can be marked complete or merged.
+After the signed revision passes, P13 may be marked complete for its frozen scope only; P06/P12 inherited ownership, P15/P17/P19 later ownership, and broader release gates remain unchanged.
