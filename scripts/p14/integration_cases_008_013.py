@@ -167,7 +167,7 @@ def case_t010():
     expect(ind_rc != 0 and ind_data["attachment"]["scan_status"] == "scan-error", f"indeterminate scan did not fail closed {ind_data}")
 
     states = mysql_rows("SELECT scan_status,COUNT(*) FROM support_ticket_attachments GROUP BY scan_status ORDER BY scan_status")
-    expect(["infected", "1"] in states and ["scan-error", "3"] in states, f"durable failure state counts mismatch {states}")
+    expect(["infected", "1"] in states and ["scan-error", "4"] in states, f"durable failure state counts mismatch {states}")
     for attachment in (infected, unavailable, timeout_attachment, stale_attachment, indeterminate_attachment):
         check = producer("attachment-download-check", attachment["id"], expect_success=False)
         expect(check[0] != 0 and check[1].get("allowed") is False, f"blocked scan state downloadable {attachment['id']}")
