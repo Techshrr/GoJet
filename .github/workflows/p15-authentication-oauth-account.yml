@@ -1,0 +1,101 @@
+name: P15 Authentication OAuth Account Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P15/**'
+      - 'scripts/p15/**'
+      - '.github/workflows/p15-*.yml'
+      - 'specifications/**'
+      - 'contracts/traceability/**'
+      - 'docs/security/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/**'
+      - 'services/platformapi/**'
+      - 'migrations/**'
+      - 'frontend/apps/site/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p15-authentication-oauth-account-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P15 contract freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P15 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p15/validate_contract.py
+
+      - name: Validate frozen P15 contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/validate_contract.py | tee /tmp/p15-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p15-contract.json', encoding='utf-8'))
+          assert data['node'] == 'P15', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['case_range'] == 'P15-T001..P15-T029', data
+          assert data['review_phase'] == 'pending', data
+          assert data['contract_only'] is True, data
+          assert data['implementation_authorized'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Preserve current native compile and unit boundary
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Record exact-head contract evidence
+        id: head
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          test -n "$head"
+          mkdir -p artifacts/v10/P15/contract
+          cp /tmp/p15-contract.json artifacts/v10/P15/contract/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P15/contract/implementation_commit.txt
+          printf '%s\n' '9258cb0f3f913b37b03aa8cf3c2938711314d3aa' > artifacts/v10/P15/contract/base_integration_commit.txt
+          printf '%s\n' 'f079c938dbe49d0f55b8b09995e72201cd0aab6e' > artifacts/v10/P15/contract/predecessor_signed_source.txt
+          printf '%s\n' 'P15-T001..P15-T029' > artifacts/v10/P15/contract/case_range.txt
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P15 contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-authentication-oauth-account-contract-${{ steps.head.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/contract/
+            artifacts/v10/P15/test-plan.json
+            artifacts/v10/P15/review.md
