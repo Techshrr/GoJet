@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: p14-support-tickets-mail-${{ github.event.pull_request.number || github.ref }}
@@ -35,7 +36,7 @@ jobs:
   contract:
     name: P14 contract freeze
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout exact candidate head
         uses: actions/checkout@v4
@@ -96,5 +97,47 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P14/contract/
+            artifacts/v10/P14/test-plan.json
+            artifacts/v10/P14/review.md
+
+      - name: Run P14-T024 exact-head evidence coherence
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/p14/validate.py \
+            scripts/p14/validate_coherence.py \
+            scripts/p14/coherence_ci.py
+          node --check scripts/p14/browser_authority.mjs
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 scripts/p14/coherence_ci.py
+
+      - name: Upload P14 T024 coherence evidence
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p14-evidence-${{ github.event.pull_request.head.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/evidence-producer-manifest.json
+            artifacts/v10/P14/evidence-index.json
+            artifacts/v10/P14/contract/
+            artifacts/v10/P14/api/P14-T*.json
+            artifacts/v10/P14/rbac/P14-T*.json
+            artifacts/v10/P14/security/P14-T*.json
+            artifacts/v10/P14/entitlement/P14-T*.json
+            artifacts/v10/P14/mail/P14-T*.json
+            artifacts/v10/P14/notification/P14-T*.json
+            artifacts/v10/P14/audit/P14-T*.json
+            artifacts/v10/P14/browser/P14-T*.json
+            artifacts/v10/P14/captures/
+            artifacts/v10/P14/runtime/
+            artifacts/v10/P14/results/integration-summary.json
+            artifacts/v10/P14/results/P14-T024.json
             artifacts/v10/P14/test-plan.json
             artifacts/v10/P14/review.md
