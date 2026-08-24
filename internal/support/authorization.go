@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/workspace"
@@ -17,7 +18,11 @@ type WorkspaceMembershipResolver interface {
 	GetMembership(ctx context.Context, workspaceID, userID string) (workspace.Membership, error)
 }
 
+// DomainAccessRequestProjector is intentionally capability-narrow: P14 may read
+// current P06 entitlement state and project an AccessRequest, but it cannot call
+// plan/manual-approval grant or custom-domain mutation methods through this port.
 type DomainAccessRequestProjector interface {
+	ResolveEntitlement(ctx context.Context, workspaceID string, now time.Time) (domains.ResolvedEntitlement, error)
 	ProjectAccessRequest(ctx context.Context, input domains.AccessRequestInput) (domains.AccessRequest, error)
 }
 
@@ -53,9 +58,9 @@ func AuthorizeRequesterTicket(ctx context.Context, memberships WorkspaceMembersh
 	return nil
 }
 
-// ProjectTicketDomainAccess uses only P06's request projection interface. The
-// interface deliberately exposes no plan/manual-approval/domain mutation method,
-// keeping a P14 ticket incapable of becoming grant authority by construction.
+// ProjectTicketDomainAccess uses only P06 request authority. Existing active plan
+// or manual authority suppresses request projection. Replaying the same already-
+// requested ticket is write-free and returns the deterministic linkage instead.
 func ProjectTicketDomainAccess(ctx context.Context, projector DomainAccessRequestProjector, ticket Ticket) (domains.AccessRequest, error) {
 	if projector == nil {
 		return domains.AccessRequest{}, ErrInvalidInput
@@ -64,10 +69,26 @@ func ProjectTicketDomainAccess(ctx context.Context, projector DomainAccessReques
 	if err != nil {
 		return domains.AccessRequest{}, err
 	}
+	submittedAt := ticket.CreatedAt.UTC()
+	resolved, err := projector.ResolveEntitlement(ctx, projection.WorkspaceID, submittedAt)
+	if err != nil {
+		return domains.AccessRequest{}, err
+	}
+	if resolved.Source != domains.SourceNone && resolved.Status == domains.EntitlementActive {
+		return domains.AccessRequest{}, nil
+	}
+	if resolved.Source == domains.SourceNone && resolved.Status == domains.EntitlementRequested && resolved.SupportTicketID == projection.SupportTicketID {
+		return domains.AccessRequest{
+			WorkspaceID:     projection.WorkspaceID,
+			SupportTicketID: projection.SupportTicketID,
+			SubmittedAt:     submittedAt,
+		}, nil
+	}
+
 	request, err := projector.ProjectAccessRequest(ctx, domains.AccessRequestInput{
 		WorkspaceID:     projection.WorkspaceID,
 		SupportTicketID: projection.SupportTicketID,
-		SubmittedAt:     ticket.CreatedAt.UTC(),
+		SubmittedAt:     submittedAt,
 		CorrelationID:   ticket.CorrelationID,
 	})
 	if err != nil {

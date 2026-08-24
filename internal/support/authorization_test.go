@@ -25,9 +25,20 @@ func (f *fakeMembershipResolver) GetMembership(_ context.Context, workspaceID, u
 }
 
 type fakeDomainRequestProjector struct {
-	input domains.AccessRequestInput
-	calls int
-	err   error
+	resolved     domains.ResolvedEntitlement
+	resolveErr   error
+	input        domains.AccessRequestInput
+	resolveCalls int
+	calls        int
+	err          error
+}
+
+func (f *fakeDomainRequestProjector) ResolveEntitlement(_ context.Context, _ string, _ time.Time) (domains.ResolvedEntitlement, error) {
+	f.resolveCalls++
+	if f.resolveErr != nil {
+		return domains.ResolvedEntitlement{}, f.resolveErr
+	}
+	return f.resolved, nil
 }
 
 func (f *fakeDomainRequestProjector) ProjectAccessRequest(_ context.Context, input domains.AccessRequestInput) (domains.AccessRequest, error) {
@@ -95,13 +106,13 @@ func TestProjectTicketDomainAccessUsesP06RequestAuthorityOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projector := &fakeDomainRequestProjector{}
+	projector := &fakeDomainRequestProjector{resolved: domains.ResolvedEntitlement{Source: domains.SourceNone, Status: domains.EntitlementExpired}}
 	request, err := ProjectTicketDomainAccess(context.Background(), projector, ticket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projector.calls != 1 {
-		t.Fatalf("projection calls=%d", projector.calls)
+	if projector.resolveCalls != 1 || projector.calls != 1 {
+		t.Fatalf("resolve/project calls=%d/%d", projector.resolveCalls, projector.calls)
 	}
 	if projector.input.WorkspaceID != ticket.WorkspaceID || projector.input.SupportTicketID != ticket.ID || projector.input.CorrelationID != ticket.CorrelationID {
 		t.Fatalf("projection input=%+v", projector.input)
@@ -117,6 +128,48 @@ func TestProjectTicketDomainAccessUsesP06RequestAuthorityOnly(t *testing.T) {
 	}
 }
 
+func TestProjectTicketDomainAccessSuppressesActiveIndependentEntitlement(t *testing.T) {
+	now := time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC)
+	for _, source := range []domains.EntitlementSourceKind{domains.SourcePlan, domains.SourceManualApproval} {
+		t.Run(string(source), func(t *testing.T) {
+			ticket, err := NewWorkspaceTicket("tkt-domain-active-"+string(source), "ws-1", "user-1", CustomDomainAccessCategory, "Request custom domain access", "corr-active-"+string(source), now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			projector := &fakeDomainRequestProjector{resolved: domains.ResolvedEntitlement{Source: source, Status: domains.EntitlementActive, MutationAllowed: true}}
+			request, err := ProjectTicketDomainAccess(context.Background(), projector, ticket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if request != (domains.AccessRequest{}) {
+				t.Fatalf("active entitlement returned request=%+v", request)
+			}
+			if projector.resolveCalls != 1 || projector.calls != 0 {
+				t.Fatalf("active entitlement resolve/project calls=%d/%d", projector.resolveCalls, projector.calls)
+			}
+		})
+	}
+}
+
+func TestProjectTicketDomainAccessReplayIsWriteFree(t *testing.T) {
+	now := time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC)
+	ticket, err := NewWorkspaceTicket("tkt-domain-replay-1", "ws-1", "user-1", CustomDomainAccessCategory, "Request custom domain access", "corr-domain-replay-1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projector := &fakeDomainRequestProjector{resolved: domains.ResolvedEntitlement{Source: domains.SourceNone, Status: domains.EntitlementRequested, SupportTicketID: ticket.ID}}
+	request, err := ProjectTicketDomainAccess(context.Background(), projector, ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projector.resolveCalls != 1 || projector.calls != 0 {
+		t.Fatalf("replay resolve/project calls=%d/%d", projector.resolveCalls, projector.calls)
+	}
+	if request.WorkspaceID != ticket.WorkspaceID || request.SupportTicketID != ticket.ID || !request.SubmittedAt.Equal(ticket.CreatedAt) {
+		t.Fatalf("replay request=%+v", request)
+	}
+}
+
 func TestProjectTicketDomainAccessRejectsNonRequestCategoryBeforeP06(t *testing.T) {
 	now := time.Date(2026, 8, 24, 10, 0, 0, 0, time.UTC)
 	ticket, err := NewWorkspaceTicket("tkt-general-1", "ws-1", "user-1", "general", "General question", "corr-general-1", now)
@@ -127,7 +180,7 @@ func TestProjectTicketDomainAccessRejectsNonRequestCategoryBeforeP06(t *testing.
 	if _, err := ProjectTicketDomainAccess(context.Background(), projector, ticket); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("non-request category error=%v", err)
 	}
-	if projector.calls != 0 {
-		t.Fatalf("non-request category reached P06: %d", projector.calls)
+	if projector.resolveCalls != 0 || projector.calls != 0 {
+		t.Fatalf("non-request category reached P06 resolve/project: %d/%d", projector.resolveCalls, projector.calls)
 	}
 }
