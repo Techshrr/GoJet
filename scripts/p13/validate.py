@@ -13,7 +13,8 @@ def main() -> int:
         from validate_coherence import run
         return run()
     if args.case == 'P13-T027' and args.closure:
-        raise SystemExit('P13-T027 closure validator is not installed until accountable review/signing stage')
+        from validate_closure import run_closure
+        return run_closure(args.closure)
     raise SystemExit(f'unsupported P13 validator invocation: case={args.case} closure={args.closure}')
 
 
