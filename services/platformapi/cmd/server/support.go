@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"os"
@@ -31,6 +32,14 @@ func (r supportPrincipalResolver) ResolvePrincipal(req *http.Request) (support.R
 		return support.RequestPrincipal{}, support.ErrAuthenticationRequired
 	}
 	return principal, nil
+}
+
+type supportTestTicketAdminPermissionResolver struct {
+	actorID string
+}
+
+func (r supportTestTicketAdminPermissionResolver) HasPermission(_ context.Context, principal support.RequestPrincipal, permission string) (bool, error) {
+	return permission == support.TicketsManagePermission && strings.TrimSpace(principal.UserID) == r.actorID, nil
 }
 
 func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
@@ -87,12 +96,13 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		return nil, false, err
 	}
 
-	api, err := support.NewAPI(
+	principalResolver := supportPrincipalResolver{testAuth: testAuth}
+	requesterAPI, err := support.NewAPI(
 		store,
 		workspaceStore,
 		domainStore,
 		workspaceStore,
-		supportPrincipalResolver{testAuth: testAuth},
+		principalResolver,
 		verifier,
 		guard,
 		guard,
@@ -100,7 +110,47 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	if err != nil {
 		return nil, false, err
 	}
-	return api.Handler(), true, nil
+
+	// P17 owns the administrator/permission lifecycle. P14 only consumes the
+	// tickets.manage boundary. Production therefore receives no synthetic
+	// permission resolver and Admin Tickets fails closed until P17 is wired.
+	// CI may explicitly opt one server-owned actor into tickets.manage; no
+	// client-supplied role/permission header is authoritative.
+	var adminPermissions support.AdminPermissionResolver
+	if testAuth && os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED") == "1" {
+		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR"))
+		if actorID == "" {
+			return nil, false, support.ErrAuthenticationUnavailable
+		}
+		adminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
+	}
+	adminAPI, err := support.NewAdminAPI(store, principalResolver, adminPermissions, workspaceStore)
+	if err != nil {
+		return nil, false, err
+	}
+
+	requesterHandler := requesterAPI.Handler()
+	adminHandler := adminAPI.Handler()
+	combined := http.NewServeMux()
+	for _, pattern := range []string{
+		"POST /api/public/contact",
+		"GET /api/support/tickets",
+		"POST /api/support/tickets",
+		"GET /api/support/tickets/{ticketId}",
+		"POST /api/support/tickets/{ticketId}/replies",
+		"POST /api/support/tickets/{ticketId}/close",
+	} {
+		combined.Handle(pattern, requesterHandler)
+	}
+	for _, pattern := range []string{
+		"GET /api/admin/support/tickets",
+		"GET /api/admin/support/tickets/{ticketId}",
+		"POST /api/admin/support/tickets/{ticketId}/replies",
+		"PATCH /api/admin/support/tickets/{ticketId}",
+	} {
+		combined.Handle(pattern, adminHandler)
+	}
+	return combined, true, nil
 }
 
 func mountSupportRoutes(root *http.ServeMux, handler http.Handler) {
@@ -111,6 +161,10 @@ func mountSupportRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/support/tickets/{ticketId}",
 		"POST /api/support/tickets/{ticketId}/replies",
 		"POST /api/support/tickets/{ticketId}/close",
+		"GET /api/admin/support/tickets",
+		"GET /api/admin/support/tickets/{ticketId}",
+		"POST /api/admin/support/tickets/{ticketId}/replies",
+		"PATCH /api/admin/support/tickets/{ticketId}",
 	}
 	for _, pattern := range patterns {
 		root.Handle(pattern, handler)
