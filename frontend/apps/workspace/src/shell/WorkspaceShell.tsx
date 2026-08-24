@@ -9,7 +9,7 @@ const groups = [
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains'], ['Organization', '/app/organization'], ['Campaigns', '/app/campaigns'], ['Tags', '/app/tags']]],
   ['DEVELOPER', [['Developer', '/app/developer']]],
-  ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings']]],
+  ['WORKSPACE', [['Billing', '/app/billing'], ['Support', '/app/support'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings']]],
 ] as const;
 
 type OverlayName = 'create' | 'command' | 'notifications';
@@ -65,14 +65,14 @@ export function WorkspaceShell({
         <nav aria-label="Workspace navigation">
           {groups.map(([group, items]) => <section key={group}><h2>{group}</h2>{items.map(([label, to]) => <Link key={to} to={to}>{label}</Link>)}</section>)}
         </nav>
-        <a href="/docs/en/">Support</a><span>Signed in user</span>
+        <Link to="/app/support">Support</Link><span>Signed in user</span>
       </aside>
       <div className="workspace-main">
         <header className="workspace-header">
           <nav aria-label="Breadcrumb">{workspaceLabel} / {sectionLabel}</nav>
           <div>
             <Button variant="ghost" onClick={(event) => openOverlay('command', event)}>Command</Button>
-            <a href="/docs/en/">Help</a>
+            <Link to="/app/support">Help</Link>
             <Button variant="ghost" onClick={(event) => openOverlay('notifications', event)} aria-label={notificationLabel}>Notifications{visibleNotificationCount}</Button>
             <button type="button">Avatar</button>
           </div>

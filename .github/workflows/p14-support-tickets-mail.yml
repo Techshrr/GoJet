@@ -1,0 +1,230 @@
+name: P14 Support Tickets and Mail Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P14/**'
+      - 'scripts/p14/**'
+      - '.github/workflows/p14-*.yml'
+      - 'specifications/**'
+      - 'contracts/traceability/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/support/**'
+      - 'internal/mail/**'
+      - 'internal/workspace/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'services/platformapi/**'
+      - 'migrations/**'
+      - 'apps/workspace/**'
+      - 'apps/admin/**'
+      - 'apps/website/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p14-support-tickets-mail-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P14 contract freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P14 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p14/validate_contract.py
+
+      - name: Validate frozen P14 contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p14/validate_contract.py | tee /tmp/p14-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p14-contract.json', encoding='utf-8'))
+          assert data['node'] == 'P14', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['case_range'] == 'P14-T001..P14-T025', data
+          assert data['review_phase'] in {'pending','signed'}, data
+          PY
+
+      - name: Preserve current native compile and unit boundary
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Record exact-head contract evidence
+        id: head
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          test -n "$head"
+          mkdir -p artifacts/v10/P14/contract
+          cp /tmp/p14-contract.json artifacts/v10/P14/contract/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P14/contract/implementation_commit.txt
+          printf '%s\n' 'a94f1d9894916b995a2379571f6ab3de520fc4ba' > artifacts/v10/P14/contract/base_integration_commit.txt
+          printf '%s\n' '24cdbdf848bf722e53e38ed15dce12e1d42eb9d2' > artifacts/v10/P14/contract/predecessor_signed_source.txt
+          printf '%s\n' 'P14-T001..P14-T025' > artifacts/v10/P14/contract/case_range.txt
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P14 contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p14-support-tickets-mail-contract-${{ steps.head.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/contract/
+            artifacts/v10/P14/test-plan.json
+            artifacts/v10/P14/review.md
+
+      - name: Run P14-T024 exact-head evidence coherence
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/p14/validate.py \
+            scripts/p14/validate_coherence.py \
+            scripts/p14/coherence_ci.py
+          node --check scripts/p14/browser_authority.mjs
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 scripts/p14/coherence_ci.py
+
+      - name: Upload P14 T024 coherence evidence
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p14-evidence-${{ github.event.pull_request.head.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/evidence-producer-manifest.json
+            artifacts/v10/P14/evidence-index.json
+            artifacts/v10/P14/contract/
+            artifacts/v10/P14/api/P14-T*.json
+            artifacts/v10/P14/rbac/P14-T*.json
+            artifacts/v10/P14/security/P14-T*.json
+            artifacts/v10/P14/entitlement/P14-T*.json
+            artifacts/v10/P14/mail/P14-T*.json
+            artifacts/v10/P14/notification/P14-T*.json
+            artifacts/v10/P14/audit/P14-T*.json
+            artifacts/v10/P14/browser/P14-T*.json
+            artifacts/v10/P14/captures/
+            artifacts/v10/P14/runtime/
+            artifacts/v10/P14/results/integration-summary.json
+            artifacts/v10/P14/results/P14-T024.json
+            artifacts/v10/P14/test-plan.json
+            artifacts/v10/P14/review.md
+
+  closure:
+    name: P14 exact-head accountable closure
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact closure candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify P14 closure validators
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/p14/validate.py \
+            scripts/p14/validate_contract.py \
+            scripts/p14/validate_coherence.py \
+            scripts/p14/validate_closure.py \
+            scripts/p14/closure_ci.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Run P14-T025 accountable exact-head closure
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+          LOCAL_CONTRACT_RESULT: ${{ needs.contract.result }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p14/closure_ci.py
+
+      - name: Verify P14-T025 closure phase
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('artifacts/v10/P14/results/P14-T025.json').read_text(encoding='utf-8'))
+          closure=json.loads(Path('artifacts/v10/P14/closure.json').read_text(encoding='utf-8'))
+          assert result['status'] == 'PASS' and result['errors'] == [], result
+          assert result['implementation_commit'] == closure['implementation_commit'], (result, closure)
+          assert result['phase'] in {'pre-sign','signed'}, result
+          if result['phase'] == 'pre-sign':
+              assert result['merge_authoritative'] is False, result
+          else:
+              assert result['merge_authoritative'] is True, result
+          assert result['defects'] == {'p0':0,'p1':0,'decision_required':0}, result
+          assert result['input_evidence_count'] == 24, result
+          assert result['required_regression_workflow_count'] == 43, result
+          print(f"P14-T025 {result['phase']} closure PASS on {result['implementation_commit']}")
+          PY
+
+      - name: Upload P14 exact-head closure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p14-closure-${{ github.event.pull_request.head.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/closure.json
+            artifacts/v10/P14/closure-evidence-index.json
+            artifacts/v10/P14/regression-manifest.json
+            artifacts/v10/P14/evidence-index.json
+            artifacts/v10/P14/evidence-producer-manifest.json
+            artifacts/v10/P14/results/P14-T024.json
+            artifacts/v10/P14/results/P14-T025.json
+            artifacts/v10/P14/api/P14-T*.json
+            artifacts/v10/P14/rbac/P14-T*.json
+            artifacts/v10/P14/security/P14-T*.json
+            artifacts/v10/P14/entitlement/P14-T*.json
+            artifacts/v10/P14/mail/P14-T*.json
+            artifacts/v10/P14/notification/P14-T*.json
+            artifacts/v10/P14/audit/P14-T*.json
+            artifacts/v10/P14/browser/P14-T*.json
+            artifacts/v10/P14/captures/
+            artifacts/v10/P14/runtime/
+            artifacts/v10/P14/inherited/
+            artifacts/v10/P14/test-plan.json
+            artifacts/v10/P14/review.md

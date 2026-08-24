@@ -1,0 +1,401 @@
+name: P14 Real Support Tickets and Mail Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/support/**'
+      - 'internal/workspace/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'scripts/p14/**'
+      - '.github/workflows/p14-integration.yml'
+      - 'artifacts/v10/P14/test-plan.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p14-real-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-integration:
+    name: P14 real MySQL Redis ClamAV SMTP integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_SUPPORT_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TURNSTILE_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TURNSTILE_TOKEN: p14-ci-deterministic-turnstile-token
+      GOJET_SUPPORT_RATE_LIMIT: '10'
+      GOJET_SUPPORT_RATE_WINDOW: 5m
+      GOJET_SUPPORT_TURNSTILE_REPLAY_TTL: 10m
+      GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR: p14-ticket-admin
+      GOJET_TEST_SUPPORT_MAIL_ADMIN_ENABLED: '1'
+      GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR: p14-mail-admin
+      GOJET_TEST_P14_PRODUCER: /tmp/gojet-p14/producer
+      GOJET_TEST_P14_MAILWORKER: /tmp/gojet-p14/mailworker
+      GOJET_TEST_P14_ATTACHMENT_ROOT: /tmp/gojet-p14/attachments
+      GOJET_TEST_P14_ATTACHMENT_POLICY: txt=text/plain
+      GOJET_TEST_P14_ATTACHMENT_MAX_BYTES: '65536'
+      GOJET_TEST_P14_CLAMAV_NETWORK: tcp
+      GOJET_TEST_P14_CLAMAV_ADDRESS: 127.0.0.1:3310
+      GOJET_TEST_P14_CLAMAV_DIAL_TIMEOUT: 2s
+      GOJET_TEST_P14_CLAMAV_SCAN_TIMEOUT: 5s
+      GOJET_TEST_P14_CLAMAV_MAX_SIGNATURE_AGE: 48h
+      GOJET_TEST_P14_SMTP_STATE: /tmp/gojet-p14/smtp-state.json
+      GOJET_TEST_P14_SMTP_MODE: /tmp/gojet-p14/smtp-mode
+      GOJET_TEST_P14_TMP: /tmp/gojet-p14
+      GOJET_SMTP_ADDR: 127.0.0.1:2525
+      GOJET_SMTP_FROM: no-reply@gojet.local
+      GOJET_MAILWORKER_INTERVAL: 250ms
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL Redis and native ClamAV clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools clamav clamav-daemon clamav-freshclam
+          mysql --version
+          redis-cli --version
+          clamd --version
+          freshclam --version
+
+      - name: Ensure ClamAV signatures and start native clamd
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p14 artifacts/v10/P14/runtime artifacts/v10/P14/security
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket 2>/dev/null || true
+          refreshed=0
+          for attempt in 1 2 3; do
+            if sudo freshclam --stdout >"/tmp/gojet-p14/freshclam-${attempt}.log" 2>&1; then
+              refreshed=1
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [ "$refreshed" -ne 1 ]; then
+            echo 'freshclam did not refresh during this run; validating installed signature database' >&2
+          fi
+          test -n "$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)"
+          cat > /tmp/gojet-p14/clamd.conf <<'EOF'
+          Foreground true
+          TCPSocket 3310
+          TCPAddr 127.0.0.1
+          DatabaseDirectory /var/lib/clamav
+          LogTime true
+          LogFile /tmp/gojet-p14/clamd.log
+          PidFile /tmp/gojet-p14/clamd.pid
+          MaxFileSize 100M
+          MaxScanSize 100M
+          StreamMaxLength 100M
+          EOF
+          clamd --config-file=/tmp/gojet-p14/clamd.conf >/tmp/gojet-p14/clamd-stdout.log 2>&1 &
+          echo $! > /tmp/gojet-p14/clamd-process.pid
+          python3 - <<'PY'
+          import socket, time
+          deadline = time.monotonic() + 30
+          last = None
+          while time.monotonic() < deadline:
+              try:
+                  with socket.create_connection(('127.0.0.1', 3310), timeout=1) as sock:
+                      sock.sendall(b'zVERSION\0')
+                      data = sock.recv(4096)
+                      if data:
+                          text = data.rstrip(b'\0').decode('utf-8', 'replace')
+                          print(text)
+                          open('artifacts/v10/P14/runtime/clamav-version.txt', 'w', encoding='utf-8').write(text + '\n')
+                          raise SystemExit(0)
+              except OSError as exc:
+                  last = exc
+                  time.sleep(1)
+          raise SystemExit(f'clamd did not become ready: {last}')
+          PY
+
+      - name: Verify source drivers and dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile \
+            scripts/p14/validate_contract.py \
+            scripts/p14/integration_common.py \
+            scripts/p14/integration_cases_001_007.py \
+            scripts/p14/integration_cases_008_013.py \
+            scripts/p14/integration_cases_014_018.py \
+            scripts/p14/integration_cases_019_021.py \
+            scripts/p14/integration.py \
+            scripts/p14/smtp_sink.py \
+            scripts/p09/clamd_fault_server.py
+          gofmt -d scripts/p14/producer.go | tee /tmp/p14-producer-gofmt.diff
+          test ! -s /tmp/p14-producer-gofmt.diff
+          go test ./...
+          go vet ./internal/support ./internal/workspace ./internal/domains ./internal/files ./services/platformapi/cmd/server ./services/platformapi/cmd/mailworker
+
+      - name: Apply immutable migrations through P14
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "applying $migration"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test < "$migration"
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e \
+            "SELECT settings_key,enabled,version FROM mail_settings WHERE settings_key='primary'" \
+            > artifacts/v10/P14/runtime/mail-settings-initial.txt
+          test "$(cat artifacts/v10/P14/runtime/mail-settings-initial.txt)" = $'primary\t1\t1'
+
+      - name: Build native P14 runtime binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p14/attachments
+          go build -o /tmp/gojet-p14/platformapi ./services/platformapi/cmd/server
+          go build -o /tmp/gojet-p14/mailworker ./services/platformapi/cmd/mailworker
+          go build -o /tmp/gojet-p14/producer ./scripts/p14/producer.go
+          test -x /tmp/gojet-p14/platformapi
+          test -x /tmp/gojet-p14/mailworker
+          test -x /tmp/gojet-p14/producer
+
+      - name: Start deterministic local SMTP protocol sink
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' success > "$GOJET_TEST_P14_SMTP_MODE"
+          python3 scripts/p14/smtp_sink.py \
+            --host 127.0.0.1 --port 2525 \
+            --state "$GOJET_TEST_P14_SMTP_STATE" \
+            --mode-file "$GOJET_TEST_P14_SMTP_MODE" \
+            >/tmp/gojet-p14/smtp-sink.log 2>&1 &
+          echo $! > /tmp/gojet-p14/smtp-sink.pid
+          python3 - <<'PY'
+          import socket, time
+          deadline = time.monotonic() + 15
+          last = None
+          while time.monotonic() < deadline:
+              try:
+                  with socket.create_connection(('127.0.0.1', 2525), timeout=1) as sock:
+                      banner = sock.recv(1024)
+                      if banner.startswith(b'220 '):
+                          print('SMTP sink READY')
+                          raise SystemExit(0)
+              except OSError as exc:
+                  last = exc
+                  time.sleep(.25)
+          raise SystemExit(f'SMTP sink did not become ready: {last}')
+          PY
+
+      - name: Start native platformapi with deterministic test authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p14/platformapi >/tmp/gojet-p14/platformapi.log 2>&1 &
+          echo $! > /tmp/gojet-p14/platformapi.pid
+          python3 - <<'PY'
+          import http.client, time
+          deadline = time.monotonic() + 20
+          last = None
+          while time.monotonic() < deadline:
+              try:
+                  conn = http.client.HTTPConnection('127.0.0.1', 18081, timeout=1)
+                  conn.request('GET', '/api/support/tickets?workspace_id=probe')
+                  response = conn.getresponse()
+                  response.read()
+                  status = response.status
+                  conn.close()
+                  if status == 401:
+                      print('platformapi READY')
+                      raise SystemExit(0)
+                  last = RuntimeError(f'unexpected status {status}')
+              except Exception as exc:
+                  last = exc
+              time.sleep(.25)
+          raise SystemExit(f'platformapi did not become ready: {last}')
+          PY
+
+      - name: Run real P14 T001 through T021 cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for index in $(seq 1 21); do
+            case_id="$(printf 'P14-T%03d' "$index")"
+            echo "running $case_id"
+            python3 scripts/p14/integration.py --case "$case_id"
+          done
+
+      - name: Verify complete exact-head P14 real integration evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          export P14_HEAD="$head"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path('artifacts/v10/P14')
+          mapping = {
+              1:'api',2:'rbac',3:'api',4:'security',5:'entitlement',6:'entitlement',7:'entitlement',
+              8:'security',9:'security',10:'security',11:'security',12:'security',13:'api',14:'mail',15:'mail',
+              16:'mail',17:'mail',18:'notification',19:'rbac',20:'api',21:'audit',
+          }
+          head = os.environ['P14_HEAD']
+          errors = []
+          cases = []
+          for i in range(1,22):
+              case_id = f'P14-T{i:03d}'
+              path = root / mapping[i] / f'{case_id}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('case_id') != case_id:
+                  errors.append(f'{case_id}: case id mismatch')
+              if data.get('implementation_commit') != head:
+                  errors.append(f'{case_id}: mixed head')
+              if data.get('status') != 'PASS' or data.get('errors') != []:
+                  errors.append(f'{case_id}: not PASS')
+              cases.append({'case_id': case_id, 'status': data.get('status'), 'implementation_commit': data.get('implementation_commit')})
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          runtime = root / 'runtime'
+          runtime.mkdir(parents=True, exist_ok=True)
+          (runtime / 'implementation_commit.txt').write_text(head + '\n', encoding='utf-8')
+          (runtime / 'case-range.txt').write_text('P14-T001..P14-T021\n', encoding='utf-8')
+          (root / 'results').mkdir(parents=True, exist_ok=True)
+          (root / 'results' / 'integration-summary.json').write_text(json.dumps({
+              'node':'P14','implementation_commit':head,'case_range':'P14-T001..P14-T021','status':'PASS','cases':cases,'errors':[]
+          }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce evidence secret and PII exclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('artifacts/v10/P14')
+          evidence_roots = [
+              root / 'api',
+              root / 'rbac',
+              root / 'security',
+              root / 'entitlement',
+              root / 'mail',
+              root / 'notification',
+              root / 'audit',
+              root / 'runtime',
+              root / 'results',
+          ]
+          needles = [
+              b'p14-ci-deterministic-turnstile-token',
+              b'@example.test',
+              b'@gojet.local',
+              b'recipient_value',
+              b'smtp_password',
+              b'smtp_username',
+              b'claim_token',
+              b'authorization:',
+          ]
+          bad = []
+          for evidence_root in evidence_roots:
+              if not evidence_root.exists():
+                  continue
+              for path in evidence_root.rglob('*'):
+                  if not path.is_file():
+                      continue
+                  data = path.read_bytes().lower()
+                  for needle in needles:
+                      if needle.lower() in data:
+                          bad.append(f'{path}: forbidden evidence marker {needle!r}')
+          if bad:
+              raise SystemExit('\n'.join(bad))
+          print('P14 evidence secret/PII exclusion PASS')
+          PY
+
+      - name: Upload exact-head P14 real integration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p14-real-integration-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/api/
+            artifacts/v10/P14/rbac/
+            artifacts/v10/P14/security/
+            artifacts/v10/P14/entitlement/
+            artifacts/v10/P14/mail/
+            artifacts/v10/P14/notification/
+            artifacts/v10/P14/audit/
+            artifacts/v10/P14/runtime/
+            artifacts/v10/P14/results/integration-summary.json
+
+      - name: Stop local P14 runtime
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          for pid_file in /tmp/gojet-p14/platformapi.pid /tmp/gojet-p14/smtp-sink.pid /tmp/gojet-p14/clamd-process.pid; do
+            if [ -f "$pid_file" ]; then
+              kill "$(cat "$pid_file")" 2>/dev/null || true
+            fi
+          done

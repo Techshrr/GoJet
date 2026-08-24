@@ -1,0 +1,287 @@
+name: P14 Workspace Support Browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'internal/support/**'
+      - 'internal/workspace/**'
+      - 'internal/domains/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p14/browser*.mjs'
+      - 'artifacts/v10/P14/test-plan.json'
+      - '.github/workflows/p14-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p14-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workspace-support:
+    name: P14 real Workspace Support browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_SUPPORT_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TURNSTILE_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TURNSTILE_TOKEN: p14-browser-valid-turnstile-token
+      GOJET_SUPPORT_RATE_LIMIT: '4'
+      GOJET_SUPPORT_RATE_WINDOW: 10m
+      GOJET_SUPPORT_TURNSTILE_REPLAY_TTL: 10m
+      GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED: '1'
+      GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR: p14-browser-ticket-admin
+      GOJET_TEST_SUPPORT_TICKETS_ADMIN_EMAIL: p14-browser-admin@example.test
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_WORKSPACE_ID: ws-p14-browser
+      GOJET_TEST_ACTOR_ID: p14-browser-owner
+      GOJET_TEST_ACTOR_EMAIL: p14-browser-owner@example.test
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
+      GOJET_TEST_WORKSPACE_NO_TURNSTILE_URL: http://127.0.0.1:4175
+      GOJET_TEST_WORKSPACE_BAD_TURNSTILE_URL: http://127.0.0.1:4176
+      GOJET_TEST_WORKSPACE_FOREIGN_URL: http://127.0.0.1:4177
+
+    steps:
+      - name: Checkout exact browser candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P14 browser dependency boundary
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P14/browser artifacts/v10/P14/captures artifacts/v10/P14/runtime/browser
+          go mod verify
+          pnpm install --frozen-lockfile
+          node --check scripts/p14/browser_common.mjs
+          node --check scripts/p14/browser_022.mjs
+          node --check scripts/p14/browser.mjs
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/workspace typecheck
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/admin typecheck
+          go test ./internal/support ./internal/workspace ./internal/domains ./services/platformapi/cmd/server
+          go vet ./internal/support ./internal/workspace ./internal/domains ./services/platformapi/cmd/server
+
+      - name: Apply immutable migrations through P14
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build native API and required browser surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p14-browser-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p14-browser-platformapi > artifacts/v10/P14/runtime/browser/native-platformapi.sha256
+          pnpm --filter @gojet/site exec vite build --outDir dist-p14-contract
+          pnpm --filter @gojet/admin exec vite build --outDir dist-p14-contract
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p14-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p14-browser-owner
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=owner
+            export VITE_GOJET_TEST_EMAIL=p14-browser-owner@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P14 Browser Owner'
+            export VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN=p14-browser-valid-turnstile-token
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p14-owner
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p14-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p14-browser-owner
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=owner
+            export VITE_GOJET_TEST_EMAIL=p14-browser-owner@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P14 Browser Owner'
+            unset VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p14-no-turnstile
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p14-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p14-browser-owner
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=owner
+            export VITE_GOJET_TEST_EMAIL=p14-browser-owner@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P14 Browser Owner'
+            export VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN=p14-browser-invalid-token
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p14-bad-turnstile
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_WORKSPACE_ID=ws-p14-browser
+            export VITE_GOJET_TEST_ACTOR_ID=p14-browser-foreign
+            export VITE_GOJET_TEST_WORKSPACE_ROLE=viewer
+            export VITE_GOJET_TEST_EMAIL=p14-browser-foreign@example.test
+            export VITE_GOJET_TEST_DISPLAY_NAME='P14 Foreign Actor'
+            unset VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN
+            pnpm --filter @gojet/workspace exec vite build --outDir dist-p14-foreign
+          )
+
+      - name: Start native API and built Workspace variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p14-browser-platformapi > artifacts/v10/P14/runtime/browser/platformapi.log 2>&1 & echo $! > artifacts/v10/P14/runtime/browser/platformapi.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 --outDir dist-p14-owner > artifacts/v10/P14/runtime/browser/workspace-owner.log 2>&1 & echo $! > artifacts/v10/P14/runtime/browser/workspace-owner.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4175 --outDir dist-p14-no-turnstile > artifacts/v10/P14/runtime/browser/workspace-no-turnstile.log 2>&1 & echo $! > artifacts/v10/P14/runtime/browser/workspace-no-turnstile.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4176 --outDir dist-p14-bad-turnstile > artifacts/v10/P14/runtime/browser/workspace-bad-turnstile.log 2>&1 & echo $! > artifacts/v10/P14/runtime/browser/workspace-bad-turnstile.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4177 --outDir dist-p14-foreign > artifacts/v10/P14/runtime/browser/workspace-foreign.log 2>&1 & echo $! > artifacts/v10/P14/runtime/browser/workspace-foreign.pid
+          for attempt in $(seq 1 60); do
+            if curl -sS -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18081/api/support/tickets?workspace_id=probe' | grep -qx '401' \
+              && curl -fsS http://127.0.0.1:4174/app/support >/dev/null \
+              && curl -fsS http://127.0.0.1:4175/app/support/new >/dev/null \
+              && curl -fsS http://127.0.0.1:4176/app/support/new >/dev/null \
+              && curl -fsS http://127.0.0.1:4177/app/support >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P14/runtime/browser/platformapi.log || true
+          exit 1
+
+      - name: Run P14-T022 Workspace Support browser contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p14/browser.mjs --case P14-T022
+
+      - name: Verify exact-head P14-T022 browser evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('artifacts/v10/P14/browser/P14-T022.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          errors = []
+          if data.get('case_id') != 'P14-T022': errors.append('case id mismatch')
+          if data.get('implementation_commit') != os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
+          if data.get('status') != 'PASS': errors.append(f"status={data.get('status')}")
+          if data.get('errors') != []: errors.append(f"errors={data.get('errors')}")
+          details = data.get('details', {})
+          if details.get('frozen_contract_completion') is not True: errors.append('frozen contract completion missing')
+          if details.get('closure_claim') is not False: errors.append('T022 must not claim closure')
+          expected = {
+            'app_support': {'loading','empty','open','awaiting-user','awaiting-support','closed','error'},
+            'app_support_new': {'input','attachment','Turnstile-required','submitting','success','rate-limited','error'},
+            'app_support_thread': {'loading','open','replying','awaiting','closed','forbidden','attachment-blocked','error'},
+          }
+          for surface, states in expected.items():
+              actual = set(details.get('states', {}).get(surface, []))
+              if not states.issubset(actual): errors.append(f'{surface} missing {sorted(states-actual)}')
+          if details.get('screenshot_count', 0) < 20: errors.append('insufficient browser captures')
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f"P14-T022 exact-head browser evidence PASS on {os.environ['EXACT_HEAD']}")
+          PY
+          test "$(find artifacts/v10/P14/captures -type f -name 'P14-T022-*.png' | wc -l)" -ge 20
+
+      - name: Verify P14 browser evidence is secret and PII safe
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE 'p14-browser-valid-turnstile-token|p14-browser-invalid-token|@example\.test|recipient_value|smtp_password|smtp_username|authorization:' artifacts/v10/P14/browser artifacts/v10/P14/runtime/browser --exclude='*.png' || { echo 'unsafe P14 browser evidence content detected' >&2; exit 1; }
+
+      - name: Stop P14 browser services
+        if: always()
+        run: |
+          set +e
+          for file in artifacts/v10/P14/runtime/browser/*.pid; do
+            [ -f "$file" ] && kill "$(cat "$file")" 2>/dev/null || true
+          done
+
+      - name: Upload exact-head P14-T022 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p14-browser-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P14/browser/P14-T022.json
+            artifacts/v10/P14/captures/P14-T022-*.png
+            artifacts/v10/P14/runtime/browser/
+          if-no-files-found: error
+          retention-days: 30

@@ -234,8 +234,21 @@ func (s *Store) AuthorizeDeepLink(ctx context.Context, workspaceID, userID, deep
 		return false, nil
 	}
 	switch deepLink {
-	case "/app", "/app/notifications", "/app/organization", "/app/campaigns", "/app/tags", "/app/members", "/app/settings/workspace", "/app/billing":
+	case "/app", "/app/notifications", "/app/organization", "/app/campaigns", "/app/tags", "/app/members", "/app/settings/workspace", "/app/billing", "/app/support":
 		return true, nil
+	}
+	if strings.HasPrefix(deepLink, "/app/support/") {
+		id := strings.TrimPrefix(deepLink, "/app/support/")
+		if id == "" || strings.Contains(id, "/") {
+			return false, nil
+		}
+		var count uint64
+		if err := s.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM support_tickets
+WHERE workspace_id=? AND requester_user_id=? AND id=?`, workspaceID, userID, id).Scan(&count); err != nil {
+			return false, err
+		}
+		return count == 1, nil
 	}
 	prefixes := []struct {
 		prefix string

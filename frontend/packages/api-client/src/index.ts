@@ -66,3 +66,10 @@ export type {
   WorkspaceNotificationState, WorkspaceNotificationsResponse, WorkspaceOrganization, WorkspaceOverview,
   WorkspaceRecord, WorkspaceRole, WorkspaceTag,
 } from './workspace';
+
+export { GoJetSupportClient } from './support';
+export type {
+  SupportActorType, SupportMessage, SupportMessageKind, SupportTicket, SupportTicketCloseResponse,
+  SupportTicketCreateInput, SupportTicketCreateResponse, SupportTicketDetailResponse,
+  SupportTicketListResponse, SupportTicketReplyResponse, SupportTicketStatus,
+} from './support';
