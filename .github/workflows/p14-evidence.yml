@@ -1,0 +1,269 @@
+name: P14 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P14/**'
+      - 'scripts/p14/**'
+      - '.github/workflows/p14-*.yml'
+      - 'internal/support/**'
+      - 'internal/workspace/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p14-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P14 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P14 coherence validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p14/validate.py scripts/p14/validate_coherence.py scripts/p14/validate_contract.py
+          node --check scripts/p14/browser_authority.mjs
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P14 evidence producers and bind artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P14
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = {
+              'P14 Support Tickets and Mail Contract': lambda sha: f'p14-support-tickets-mail-contract-{sha}',
+              'P14 Real Support Tickets and Mail Integration': lambda sha: f'p14-real-integration-{sha}',
+              'P14 Workspace Support Browser': lambda sha: f'gojet-v10-p14-browser-{sha}',
+              'P14 Admin Tickets Mail Contact Browser': lambda sha: f'gojet-v10-p14-browser-t023-{sha}',
+          }
+          sha = os.environ['EXACT_HEAD']
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          path = Path('artifacts/v10/P14/evidence-producer-manifest.json')
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
+          def get(url):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          deadline = time.time() + 35 * 60
+          while time.time() < deadline:
+              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name in required and (name not in latest or int(run.get('id', 0)) > int(latest[name].get('id', 0))):
+                      latest[name] = run
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [
+                  name for name in required
+                  if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success'
+              ]
+              entries = {}
+              if not missing and not pending and not failed:
+                  for name, run in latest.items():
+                      artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
+                      expected = required[name](sha)
+                      matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
+                      if len(matches) != 1:
+                          failed.append(f'{name}:artifact:{expected}')
+                          continue
+                      artifact = matches[0]
+                      entries[name] = {
+                          'run_id': int(run['id']),
+                          'run_number': int(run.get('run_number', 0)),
+                          'head_sha': run.get('head_sha'),
+                          'status': run.get('status'),
+                          'conclusion': run.get('conclusion'),
+                          'html_url': run.get('html_url'),
+                          'artifact': {
+                              'id': int(artifact['id']),
+                              'name': artifact['name'],
+                              'digest': artifact.get('digest'),
+                              'size_in_bytes': int(artifact.get('size_in_bytes', 0)),
+                          },
+                      }
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': entries,
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+              if failed:
+                  raise SystemExit('required P14 producer/artifact failed: ' + ', '.join(failed))
+              if not missing and not pending and len(entries) == len(required):
+                  print(f'P14 producers/artifacts green for {sha}')
+                  break
+              print(f'Waiting P14 producers missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for P14 producers on {sha}')
+          PY
+
+      - name: Download exact-head P14 evidence artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          read_run() { python3 - "$1" <<'PY'
+          import json, sys
+          data = json.load(open('artifacts/v10/P14/evidence-producer-manifest.json', encoding='utf-8'))
+          print(data['required_workflows'][sys.argv[1]]['run_id'])
+          PY
+          }
+          contract_run="$(read_run 'P14 Support Tickets and Mail Contract')"
+          integration_run="$(read_run 'P14 Real Support Tickets and Mail Integration')"
+          browser_022_run="$(read_run 'P14 Workspace Support Browser')"
+          browser_023_run="$(read_run 'P14 Admin Tickets Mail Contact Browser')"
+
+          rm -rf /tmp/p14-contract /tmp/p14-integration /tmp/p14-browser-022 /tmp/p14-browser-023
+          mkdir -p /tmp/p14-contract /tmp/p14-integration /tmp/p14-browser-022 /tmp/p14-browser-023 \
+            artifacts/v10/P14/contract artifacts/v10/P14/api artifacts/v10/P14/rbac \
+            artifacts/v10/P14/security artifacts/v10/P14/entitlement artifacts/v10/P14/mail \
+            artifacts/v10/P14/notification artifacts/v10/P14/audit artifacts/v10/P14/browser \
+            artifacts/v10/P14/captures artifacts/v10/P14/runtime artifacts/v10/P14/results
+
+          gh run download "$contract_run" --repo "$REPOSITORY" --name "p14-support-tickets-mail-contract-$EXACT_HEAD" --dir /tmp/p14-contract
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "p14-real-integration-$EXACT_HEAD" --dir /tmp/p14-integration
+          gh run download "$browser_022_run" --repo "$REPOSITORY" --name "gojet-v10-p14-browser-$EXACT_HEAD" --dir /tmp/p14-browser-022
+          gh run download "$browser_023_run" --repo "$REPOSITORY" --name "gojet-v10-p14-browser-t023-$EXACT_HEAD" --dir /tmp/p14-browser-023
+
+          for name in contract.json implementation_commit.txt base_integration_commit.txt predecessor_signed_source.txt case_range.txt; do
+            source="$(find /tmp/p14-contract -type f -name "$name" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P14/contract/$name"
+          done
+          test "$(cat artifacts/v10/P14/contract/implementation_commit.txt)" = "$EXACT_HEAD"
+
+          case_dir() {
+            case "$1" in
+              001|003|013|020) echo api ;;
+              002|019) echo rbac ;;
+              004|008|009|010|011|012) echo security ;;
+              005|006|007) echo entitlement ;;
+              014|015|016|017) echo mail ;;
+              018) echo notification ;;
+              021) echo audit ;;
+              *) return 1 ;;
+            esac
+          }
+          for number in $(seq -w 1 21); do
+            padded="0${number}"
+            directory="$(case_dir "$padded")"
+            source="$(find /tmp/p14-integration -type f -name "P14-T${padded}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P14/$directory/P14-T${padded}.json"
+          done
+
+          summary_source="$(find /tmp/p14-integration -type f -name 'integration-summary.json' -print -quit)"
+          test -n "$summary_source"
+          cp "$summary_source" artifacts/v10/P14/results/integration-summary.json
+
+          integration_runtime="$(find /tmp/p14-integration -type d -name runtime -print -quit)"
+          test -n "$integration_runtime"
+          cp -a "$integration_runtime"/. artifacts/v10/P14/runtime/
+
+          source="$(find /tmp/p14-browser-022 -type f -name 'P14-T022.json' -print -quit)"
+          test -n "$source"
+         Ü‰ÛÝ\˜ÙHˆ\Y˜XÝËÝŒLÔMØœ›ÝÜÙ\‹ÔMUŒ‹šœÛÛ‚ˆš[™Ý\ÜMXœ›ÝÜÙ\‹LŒˆ]\Hˆ[˜[YH	ÔMUŒ‹J‹œ™ÉÈ\š[Y^XÈÜ	ÞßIÈ\Y˜XÝËÝŒLÔMØØ\\™\ËÈ	ÎÉÂˆœ›ÝÜÙ\—ÌŒ—Ü[[YOH‰
+š[™Ý\ÜMXœ›ÝÜÙ\‹LŒˆ]\H[˜[YHœ›ÝÜÙ\ˆ\š[\]Z]
+H‚ˆ\Ý[ˆ‰œ›ÝÜÙ\—ÌŒ—Ü[[YH‚ˆZÙ\ˆ\\Y˜XÝËÝŒLÔMÜ[[YKØœ›ÝÜÙ\‚ˆÜXH‰œ›ÝÜÙ\—ÌŒ—Ü[[YH‹Ëˆ\Y˜XÝËÝŒLÔMÜ[[YKØœ›ÝÜÙ\‹Â‚ˆÛÝ\˜ÙOH‰
+š[™Ý\ÜMXœ›ÝÜÙ\‹LŒÈ]\Hˆ[˜[YH	ÔMUŒËšœÛÛ‰È\š[\]Z]
+H‚ˆ\Ý[ˆ‰ÛÝ\˜ÙH‚ˆÜ‰ÛÝ\˜ÙHˆ\Y˜XÝËÝŒLÔMØœ›ÝÜÙ\‹ÔMUŒËšœÛÛ‚ˆš[™Ý\ÜMXœ›ÝÜÙ\‹LŒÈ]\Hˆ[˜[YH	ÔMUŒËJ‹œ™ÉÈ\š[Y^XÈÜ	ÞßIÈ\Y˜XÝËÝŒLÔMØØ\\™\ËÈ	ÎÉÂˆœ›ÝÜÙ\—ÌŒ×Ü[[YOH‰
+š[™Ý\ÜMXœ›ÝÜÙ\‹LŒÈ]\H[˜[YHœ›ÝÜÙ\‹LŒÈ\š[\]Z]
+H‚ˆ\Ý[ˆ‰œ›ÝÜÙ\—ÌŒ×Ü[[YH‚ˆZÙ\ˆ\\Y˜XÝËÝŒLÔMÜ[[YKØœ›ÝÜÙ\‹LŒÂˆÜXH‰œ›ÝÜÙ\—ÌŒ×Ü[[YH‹Ëˆ\Y˜XÝËÝŒLÔMÜ[[YKØœ›ÝÜÙ\‹LŒËÂ‚ˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMØ\H[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\Hˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMÜ˜˜XÈ[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\H‚ˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMÜÙXÝ\š]H[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\H‚ˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMÙ[][Y[[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\HÂˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMÛXZ[[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\Hˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMÛ›ÝYšXØ][Ûˆ[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\HBˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMØ]Y][X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\HBˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMØœ›ÝÜÙ\ˆ[X^\H]\Hˆ[˜[YH	ÔMU
+‹šœÛÛ‰ÈØÈ[
+HˆY\H‚ˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMØØ\\™\È[X^\H]\Hˆ[˜[YH	ÔMUŒ‹J‹œ™ÉÈØÈ[
+HˆYÙHŒˆ\Ý‰
+š[™\Y˜XÝËÝŒLÔMØØ\\™\È[X^\H]\Hˆ[˜[YH	ÔMUŒËJ‹œ™ÉÈØÈ[
+HˆYÙHÍ‚‚ˆH˜[YNˆ[ˆMU^XÝZXY]šY[˜ÙHÛÚ\™[˜ÙBˆ[Ž‚ˆVPÕÒPQˆ	ÞÈÚ]X‹™]™[œ[Ü™\]Y\ÝšXYœÚHÚ]X‹œÚH_Bˆ[ŽˆˆÙ]Y][È\Y˜Z[ˆ]ÛŒÈØÜš\ËÜMÝ˜[Y]KœHKXØ\ÙHMUˆ]ÛŒÈH	ÔIÂˆ[\ÜœÛÛ‹ÝXœ›ØÙ\ÜÂˆ]HHœÛÛ‹›ØY
+Ü[Š	Ø\Y˜XÝËÝŒLÔMÜ™\Ý[ËÔMUšœÛÛ‰Ë[˜ÛÙ[™ÏIÝ]‹N	ÊJBˆXYHÝXœ›ØÙ\ÜË˜ÚXÚ×ÛÝ]]
+ÉÙÚ]	Ë	Ü™]‹\\œÙIË	ÒPQ	×K^UYJKœÝš\
+
+Bˆ\ÜÙ\]VÉÜÝ]\É×HOH	ÔTÔÉÈ[™]VÉÙ\œ›ÜœÉ×HOH×K]Bˆ\ÜÙ\]VÉÚ[\[Y[][Û—ØÛÛ[Z]	×HOHXY]BˆØœÈH]VÉÛØœÙ\˜][ÛœÉ×Bˆ\ÜÙ\ØœÖÉÚ[œ]Ù]šY[˜ÙWØÛÝ[	×HOHŒÈ[™ØœÖÉÜØ[YWÙ^XÝÚXY	×H\ÈYKØœÂˆ\ÜÙ\ØœÖÉÝŒ—ØØ\\™WØÛÝ[	×HHŒ[™ØœÖÉÝŒ×ØØ\\™WØÛÝ[	×HHÍ‹ØœÂˆ\ÜÙ\ØœÖÉÜÙXÜ™]ÜØY™I×H\ÈYKØœÂˆ\ÜÙ\ØœÖÉÛZ^YÚXYÜ™Z™XÝY	×H\ÈYKØœÂˆ\ÜÙ\ØœÖÉÚ[œÜXÝX›WÜ[[YWØœ›ÝÜÙ\—ÛXZ[ØÛ[X]—Ù]šY[˜ÙI×H\ÈYKØœÂˆ\ÜÙ\Ù]
+ØœÖÉÜ›ÙXÙ\—Ü[—ÚYÉ×JHOHÂˆ	ÔMÝ\ÜXÚÙ]È[™XZ[ÛÛ˜XÝ	Ëˆ	ÔM™X[Ý\ÜXÚÙ]È[™XZ[[YÜ˜][Û‰Ëˆ	ÔMÛÜšÜÜXÙHÝ\Üœ›ÝÜÙ\‰Ëˆ	ÔMYZ[ˆXÚÙ]ÈXZ[ÛÛXÝœ›ÝÜÙ\‰ËˆKØœÂˆ›Üˆ˜[YH[ˆØœÖÉÜ›ÙXÙ\—Ø\Y˜XÝÉ×K˜[Y\Ê
+N‚ˆ\ÜÙ\˜[YVÉÚY	×Hˆ[™˜[YVÉÙYÙ\Ý	×KœÝ\ÝÚ]
+	ÜÚLMŽ‰ÊH[™˜[YVÉÜÚ^™WÚ[—Øž]\É×Hˆ˜[YBˆš[
+‰ÔMU^XÝZXYÛÚ\™[˜ÙHTÔÈÛˆÚXYIÊBˆB‚ˆH˜[YNˆ\ØYMÛÚ\™[˜ÙH]šY[˜ÙBˆYŽˆ[Ø^\Ê
+Bˆ\Ù\ÎˆXÝ[ÛœËÝ\ØYX\Y˜XÝˆÚ]‚ˆ˜[YNˆÛÚ™]]ŒL\MY]šY[˜ÙKIÞÈÚ]X‹™]™[œ[Ü™\]Y\ÝšXYœÚHÚ]X‹œÚH_BˆY‹[›ËYš[\ËY›Ý[™ˆ\œ›Ü‚ˆ™][[Û‹Y^\ÎˆÌˆ]ˆˆ\Y˜XÝËÝŒLÔMÙ]šY[˜ÙK\›ÙXÙ\‹[X[šY™\ÝšœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÙ]šY[˜ÙKZ[™^šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMØÛÛ˜XÝÂˆ\Y˜XÝËÝŒLÔMØ\KÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÜ˜˜XËÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÜÙXÝ\š]KÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÙ[][Y[ÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÛXZ[ÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÛ›ÝYšXØ][Û‹ÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMØ]Y]ÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMØœ›ÝÜÙ\‹ÔMU
+‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMØØ\\™\ËÂˆ\Y˜XÝËÝŒLÔMÜ[[YKÂˆ\Y˜XÝËÝŒLÔMÜ™\Ý[ËÚ[YÜ˜][Û‹\Ý[[X\žKšœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÜ™\Ý[ËÔMUšœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÝ\Ý\[‹šœÛÛ‚ˆ\Y˜XÝËÝŒLÔMÜ™]šY]Ë›Y
