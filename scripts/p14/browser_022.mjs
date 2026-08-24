@@ -17,8 +17,10 @@ async function expectState(page, pageName, state) {
 async function delayedRoute(page, matcher) {
   let release;
   let seenResolve;
+  let handledResolve;
   const gate = new Promise((resolve) => { release = resolve; });
   const seen = new Promise((resolve) => { seenResolve = resolve; });
+  const handled = new Promise((resolve) => { handledResolve = resolve; });
   let matched = false;
   const handler = async (route) => {
     if (!matched && matcher(route.request())) {
@@ -26,12 +28,20 @@ async function delayedRoute(page, matcher) {
       seenResolve();
       await gate;
       await route.continue();
+      handledResolve();
       return;
     }
     await route.continue();
   };
   await page.route('**/api/**', handler);
-  return { seen, release: () => release(), dispose: () => page.unroute('**/api/**', handler) };
+  return {
+    seen,
+    release: () => release(),
+    dispose: async () => {
+      await handled;
+      await page.unroute('**/api/**', handler);
+    },
+  };
 }
 
 async function fillNewTicket(page, suffix) {
