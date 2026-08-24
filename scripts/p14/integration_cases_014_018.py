@@ -9,7 +9,7 @@ import time
 
 from integration_common import (
     MAIL_ADMIN, PRODUCER, SMTP_MODE, admin_mail, admin_ticket, create_ticket, expect, mysql, mysql_rows,
-    mysql_scalar, redis, reset_p14, seed_member, seed_workspace, set_smtp_mode, smtp_state, sql_quote,
+    mysql_scalar, producer, redis, reset_p14, seed_member, seed_workspace, set_smtp_mode, smtp_state, sql_quote,
     support, ticket_admin_headers, unique, wait_for,
 )
 
