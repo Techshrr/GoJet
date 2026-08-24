@@ -40,7 +40,7 @@ export async function run(browser) {
   await page.waitForFunction(() => document.querySelector('[data-page="admin-commerce-fx"]')?.getAttribute('data-state') === 'current');
   const fxRows = mysqlScalar("SELECT CONCAT(rate,'|',status,'|',COALESCE(override_reason,'')) FROM billing_fx_rates WHERE base_currency='USD' AND quote_currency='EUR'");
   assert(fxRows.includes('|override|P13 browser audited FX override'), `FX override not durable: ${fxRows}`);
-  const fxAudits = Number(mysqlScalar("SELECT COUNT(*) FROM billing_audit_events WHERE action='billing.fx.upsert' AND actor_id='p13-admin' AND result='success'"));
+  const fxAudits = Number(mysqlScalar("SELECT COUNT(*) FROM billing_audit_events WHERE action='billing.fx.override' AND actor_id='p13-admin' AND result='success'"));
   assert(fxAudits >= 1, `FX override audit count=${fxAudits}`);
   observed.override_applied = { decimal_string_persisted: true, audit_count: fxAudits };
 
