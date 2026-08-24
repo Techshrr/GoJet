@@ -103,6 +103,8 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 	}
 	store := billing.NewStore(db)
 	membershipStore := workspace.NewStore(db)
+	principalResolver := billingPrincipalResolver{testAuth: testAuth}
+	membershipResolver := billingMembershipResolver{store: membershipStore}
 	var callbackVerifier billing.CallbackRequestVerifier
 	if testAuth && os.Getenv("GOJET_TEST_BILLING_CALLBACKS_ENABLED") == "1" {
 		secret := []byte(os.Getenv("GOJET_TEST_BILLING_CALLBACK_SECRET"))
@@ -117,8 +119,8 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 	}
 	api := billing.NewAPI(
 		store,
-		billingPrincipalResolver{testAuth: testAuth},
-		billingMembershipResolver{store: membershipStore},
+		principalResolver,
+		membershipResolver,
 		callbackVerifier,
 	)
 	// P17 owns the real billing.manage permission lifecycle. P13 only consumes
@@ -132,12 +134,16 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 		}
 		api.SetAdminPermissionResolver(billingTestAdminPermissionResolver{actorID: actorID})
 	}
-	return api.Handler(), true, nil
+	combined := http.NewServeMux()
+	combined.Handle("GET /api/workspaces/{workspaceId}/billing", billing.NewWorkspaceBillingSummaryHandler(store, principalResolver, membershipResolver))
+	combined.Handle("/", api.Handler())
+	return combined, true, nil
 }
 
 func mountBillingRoutes(root *http.ServeMux, handler http.Handler) {
 	patterns := []string{
 		"GET /api/public/plans",
+		"GET /api/workspaces/{workspaceId}/billing",
 		"POST /api/workspaces/{workspaceId}/orders",
 		"GET /api/workspaces/{workspaceId}/orders/{orderId}",
 		"GET /api/workspaces/{workspaceId}/billing/entitlements/{capability}",
