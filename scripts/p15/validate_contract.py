@@ -7,6 +7,9 @@ import subprocess
 from pathlib import Path
 
 BASE = "9258cb0f3f913b37b03aa8cf3c2938711314d3aa"
+CONTRACT_AUTHORITY = "9ba89a42281709087b40cdcf0cb2eebd54952a99"
+TEST_PLAN_BLOB = "d48614b82da24074e4be44118405dd7761114160"
+PENDING_REVIEW_BLOB = "2bcc0f9ecbc4f26b950b52042586c2b0831eabe5"
 P14_SOURCE = "f079c938dbe49d0f55b8b09995e72201cd0aab6e"
 P14_RUN = 32763705854
 P14_ARTIFACT = 9533837642
@@ -89,28 +92,44 @@ def main() -> int:
     need(plan_path.is_file(), "missing P15 test-plan.json", errors)
     need(review_path.is_file(), "missing P15 review.md", errors)
     if errors:
-        print(json.dumps({"node":"P15","status":"FAIL","errors":errors}, indent=2))
+        print(json.dumps({"node": "P15", "status": "FAIL", "errors": errors}, indent=2))
         return 1
 
     try:
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(json.dumps({"node":"P15","status":"FAIL","errors":[f"test-plan parse failed: {exc}"]}, indent=2))
+        print(json.dumps({"node": "P15", "status": "FAIL", "errors": [f"test-plan parse failed: {exc}"]}, indent=2))
         return 1
     review = review_path.read_text(encoding="utf-8")
-
     head = git("rev-parse", "HEAD")
-    try:
-        merge_base = git("merge-base", BASE, "HEAD")
-        need(merge_base == BASE, f"P15 contract history must descend only from exact P14 integration {BASE}, got merge-base {merge_base}", errors)
-    except Exception as exc:
-        errors.append(f"cannot resolve contract merge-base: {exc}")
 
+    base_ok = False
+    authority_ok = False
+    try:
+        base_ok = git("merge-base", BASE, "HEAD") == BASE
+        need(base_ok, f"P15 history must descend from exact P14 integration {BASE}", errors)
+    except Exception as exc:
+        errors.append(f"cannot resolve P14 integration ancestry: {exc}")
+    try:
+        authority_ok = git("merge-base", CONTRACT_AUTHORITY, "HEAD") == CONTRACT_AUTHORITY
+        need(authority_ok, f"P15 implementation must descend from frozen contract authority {CONTRACT_AUTHORITY}", errors)
+    except Exception as exc:
+        errors.append(f"cannot resolve P15 contract authority ancestry: {exc}")
+
+    contract_only = False
     try:
         changed = {line for line in git("diff", "--name-only", f"{BASE}..HEAD").splitlines() if line}
-        need(changed == EXPECTED_CONTRACT_FILES, f"contract-only diff drift: {sorted(changed)}", errors)
+        contract_only = head == CONTRACT_AUTHORITY and changed == EXPECTED_CONTRACT_FILES
+        if head == CONTRACT_AUTHORITY:
+            need(contract_only, f"contract authority base-to-head diff drift: {sorted(changed)}", errors)
     except Exception as exc:
-        errors.append(f"cannot verify contract-only diff: {exc}")
+        errors.append(f"cannot inspect base-to-head diff: {exc}")
+
+    try:
+        need(git("rev-parse", "HEAD:artifacts/v10/P15/test-plan.json") == TEST_PLAN_BLOB,
+             "frozen P15 test-plan blob drift", errors)
+    except Exception as exc:
+        errors.append(f"cannot bind frozen P15 test-plan blob: {exc}")
 
     for path, expected in FROZEN_BLOBS.items():
         try:
@@ -135,21 +154,21 @@ def main() -> int:
     }
     need(actual_caps == EXPECTED_CAPABILITIES, f"capability contract drift: {actual_caps}", errors)
     need(cap.get("master_predecessors") == ["P04", "P14"], "P15 Master predecessor list must be P04/P14", errors)
-    need(cap.get("master_required_tests") == ["CSRF","Origin","rate limit","token expiry/reuse","OAuth state","session revoke"], "Master required-test list drift", errors)
+    need(cap.get("master_required_tests") == ["CSRF", "Origin", "rate limit", "token expiry/reuse", "OAuth state", "session revoke"], "Master required-test list drift", errors)
     scope = str(cap.get("scope", ""))
     for marker in ("P04", "P12", "P14", "P17", "P19", "P20-P22"):
-        need(marker in scope, f"scope missing later/inherited boundary {marker}", errors)
+        need(marker in scope, f"scope missing inherited/later boundary {marker}", errors)
 
     pred = plan.get("predecessor_signed_authority", {})
     need(pred == {
-        "node":"P14",
-        "integration_commit":BASE,
-        "signed_source_commit":P14_SOURCE,
-        "closure_run_id":P14_RUN,
-        "artifact_id":P14_ARTIFACT,
-        "artifact_digest":P14_DIGEST,
-        "phase":"signed",
-        "merge_authoritative":True,
+        "node": "P14",
+        "integration_commit": BASE,
+        "signed_source_commit": P14_SOURCE,
+        "closure_run_id": P14_RUN,
+        "artifact_id": P14_ARTIFACT,
+        "artifact_digest": P14_DIGEST,
+        "phase": "signed",
+        "merge_authoritative": True,
     }, "P14 predecessor signed authority drift", errors)
 
     p04 = plan.get("inherited_p04_authority", {})
@@ -175,8 +194,8 @@ def main() -> int:
     auth_rules = "\n".join(auth.get("rules", []))
     for marker in ("localStorage", "CSRF", "Origin", "Forgot-password", "one-time", "Session revocation", "raw verification/reset"):
         need(marker.lower() in auth_rules.lower(), f"auth rule missing {marker}", errors)
-    need(auth.get("session_states") == ["active","revoked","expired"], "session state contract drift", errors)
-    need(auth.get("account_browser_sections") == ["profile","security","sessions","connected-accounts"], "account browser section drift", errors)
+    need(auth.get("session_states") == ["active", "revoked", "expired"], "session state contract drift", errors)
+    need(auth.get("account_browser_sections") == ["profile", "security", "sessions", "connected-accounts"], "account browser section drift", errors)
     need("P17" in str(auth.get("mfa_scope", "")), "MFA scope must preserve P17 boundary", errors)
 
     oauth = plan.get("oauth_contract", {})
@@ -193,8 +212,8 @@ def main() -> int:
 
     browser = plan.get("browser_contract", {})
     expected_state_keys = {
-        "auth_login","auth_register","auth_verify","auth_forgot","auth_reset",
-        "auth_oauth_callback","auth_social_registration","app_settings_account","admin_oauth",
+        "auth_login", "auth_register", "auth_verify", "auth_forgot", "auth_reset",
+        "auth_oauth_callback", "auth_social_registration", "app_settings_account", "admin_oauth",
     }
     need(set(browser.get("states", {}).keys()) == expected_state_keys, "browser state-family set drift", errors)
     browser_rules = "\n".join(browser.get("rules", []))
@@ -202,7 +221,7 @@ def main() -> int:
         need(marker.lower() in browser_rules.lower(), f"browser rule missing {marker}", errors)
 
     env = plan.get("environment_contract", {})
-    for key in ("mysql","redis","platformapi","mailworker","oauth","turnstile","browser","production_docker_compose_node"):
+    for key in ("mysql", "redis", "platformapi", "mailworker", "oauth", "turnstile", "browser", "production_docker_compose_node"):
         need(bool(str(env.get(key, "")).strip()), f"environment contract missing {key}", errors)
     need(env.get("production_docker_compose_node") == "PROHIBITED", "production Docker/Compose/Node boundary drift", errors)
 
@@ -210,7 +229,7 @@ def main() -> int:
     need(closure.get("same_exact_head_required") is True, "same exact head closure must be required", errors)
     need(closure.get("required_case_range") == "P15-T001..P15-T029", "P15 case range drift", errors)
     need(closure.get("review_required") is True, "accountable review must be required", errors)
-    need(closure.get("defect_limits") == {"p0":0,"p1":0,"decision_required":0}, "defect limits drift", errors)
+    need(closure.get("defect_limits") == {"p0": 0, "p1": 0, "decision_required": 0}, "defect limits drift", errors)
 
     cases = plan.get("cases", [])
     expected_ids = [f"P15-T{i:03d}" for i in range(1, 30)]
@@ -220,7 +239,7 @@ def main() -> int:
         if not isinstance(item, dict):
             errors.append("non-object case entry")
             continue
-        for field in ("id","name","driver","oracle","evidence","owner"):
+        for field in ("id", "name", "driver", "oracle", "evidence", "owner"):
             need(bool(str(item.get(field, "")).strip()), f"{item.get('id')} missing {field}", errors)
         need(str(item.get("evidence", "")).startswith("artifacts/v10/P15/"), f"{item.get('id')} evidence outside P15 root", errors)
     need(cases[-2].get("id") == "P15-T028" and "coherence" in cases[-2].get("name", "").lower(), "T028 must be coherence", errors)
@@ -233,6 +252,11 @@ def main() -> int:
     signed = active_status == SIGNED
     need(pending or signed, f"unrecognized active review status: {active_status}", errors)
     if pending:
+        try:
+            need(git("rev-parse", "HEAD:artifacts/v10/P15/review.md") == PENDING_REVIEW_BLOB,
+                 "pending P15 review blob drift before accountable signing", errors)
+        except Exception as exc:
+            errors.append(f"cannot bind pending P15 review blob: {exc}")
         for marker in ("No P15 PASS", "P15-T001..P15-T029", P14_SOURCE, BASE, "AUTH-INVITE", "localStorage", "google", "rainbow", "P17"):
             need(marker.lower() in review.lower(), f"pending review missing {marker}", errors)
     if signed:
@@ -240,16 +264,28 @@ def main() -> int:
         for marker in ("P15-T029", "P0", "P1", "DECISION REQUIRED", "same-revision"):
             need(marker.lower() in review.lower(), f"signed review missing {marker}", errors)
 
+    if head == CONTRACT_AUTHORITY:
+        mode = "contract-freeze"
+    elif pending:
+        mode = "implementation-guard"
+    elif signed:
+        mode = "signed-review-guard"
+    else:
+        mode = "invalid"
+
     result = {
-        "node":"P15",
-        "status":"PASS" if not errors else "FAIL",
-        "errors":errors,
-        "implementation_commit":head,
-        "base_integration_commit":BASE,
-        "case_range":"P15-T001..P15-T029",
-        "review_phase":"pending" if pending else "signed" if signed else "invalid",
-        "contract_only": not errors and pending,
-        "implementation_authorized": not errors and pending,
+        "node": "P15",
+        "status": "PASS" if not errors else "FAIL",
+        "errors": errors,
+        "implementation_commit": head,
+        "base_integration_commit": BASE,
+        "contract_authority": CONTRACT_AUTHORITY,
+        "case_range": "P15-T001..P15-T029",
+        "review_phase": "pending" if pending else "signed" if signed else "invalid",
+        "mode": mode,
+        "contract_only": contract_only,
+        "frozen_contract_preserved": not errors and base_ok and authority_ok,
+        "implementation_authorized": not errors and authority_ok and pending,
         "merge_authoritative": False,
     }
     print(json.dumps(result, indent=2, sort_keys=True))

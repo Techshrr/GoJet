@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   contract:
-    name: P15 contract freeze
+    name: P15 contract guard
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/p15/validate_contract.py
 
-      - name: Validate frozen P15 contract
+      - name: Validate frozen P15 contract and ancestry
         run: |
           set -euo pipefail
           python3 scripts/p15/validate_contract.py | tee /tmp/p15-contract.json
@@ -55,9 +55,11 @@ jobs:
           assert data['status'] == 'PASS', data
           assert data['errors'] == [], data
           assert data['case_range'] == 'P15-T001..P15-T029', data
-          assert data['review_phase'] == 'pending', data
-          assert data['contract_only'] is True, data
-          assert data['implementation_authorized'] is True, data
+          assert data['contract_authority'] == '9ba89a42281709087b40cdcf0cb2eebd54952a99', data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['review_phase'] in ('pending','signed'), data
+          if data['review_phase'] == 'pending':
+              assert data['implementation_authorized'] is True, data
           assert data['merge_authoritative'] is False, data
           PY
 
@@ -66,27 +68,27 @@ jobs:
           set -euo pipefail
           go test ./...
 
-      - name: Record exact-head contract evidence
+      - name: Record exact-head contract guard evidence
         id: head
         run: |
           set -euo pipefail
           head="$(git rev-parse HEAD)"
           test -n "$head"
-          mkdir -p artifacts/v10/P15/contract
-          cp /tmp/p15-contract.json artifacts/v10/P15/contract/contract.json
-          printf '%s\n' "$head" > artifacts/v10/P15/contract/implementation_commit.txt
-          printf '%s\n' '9258cb0f3f913b37b03aa8cf3c2938711314d3aa' > artifacts/v10/P15/contract/base_integration_commit.txt
-          printf '%s\n' 'f079c938dbe49d0f55b8b09995e72201cd0aab6e' > artifacts/v10/P15/contract/predecessor_signed_source.txt
-          printf '%s\n' 'P15-T001..P15-T029' > artifacts/v10/P15/contract/case_range.txt
+          mkdir -p artifacts/v10/P15/contract-guard
+          cp /tmp/p15-contract.json artifacts/v10/P15/contract-guard/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P15/contract-guard/implementation_commit.txt
+          printf '%s\n' '9258cb0f3f913b37b03aa8cf3c2938711314d3aa' > artifacts/v10/P15/contract-guard/base_integration_commit.txt
+          printf '%s\n' '9ba89a42281709087b40cdcf0cb2eebd54952a99' > artifacts/v10/P15/contract-guard/contract_authority.txt
+          printf '%s\n' 'P15-T001..P15-T029' > artifacts/v10/P15/contract-guard/case_range.txt
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload P15 contract evidence
+      - name: Upload P15 contract guard evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p15-authentication-oauth-account-contract-${{ steps.head.outputs.sha }}
+          name: p15-authentication-oauth-account-contract-guard-${{ steps.head.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            artifacts/v10/P15/contract/
+            artifacts/v10/P15/contract-guard/
             artifacts/v10/P15/test-plan.json
             artifacts/v10/P15/review.md
