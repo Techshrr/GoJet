@@ -199,9 +199,13 @@ export async function run(browser) {
   assert(mailJobId && !/^\d+$/.test(mailJobId), `mail test job id invalid: ${mailJobId}`);
   assert(await mailPage.getByText('p14-browser-recipient@example.test').count() === 0, 'Admin mail queue exposed recipient value');
   for (const status of ['sending', 'sent', 'failed', 'retrying']) {
-    const errorCode = status === 'failed' ? "'smtp_rejected'" : 'NULL';
-    const nextAttempt = status === 'retrying' ? 'DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 1 MINUTE)' : 'NULL';
-    mysql(`UPDATE mail_jobs SET status=${sqlLiteral(status)},last_error_code=${errorCode},next_attempt_at=${nextAttempt},updated_at=CURRENT_TIMESTAMP(6) WHERE id=${sqlLiteral(mailJobId)}`);
+    if (status === 'sending') {
+      mysql(`UPDATE mail_jobs SET status='sending',attempt_count=CASE WHEN attempt_count=0 THEN 1 ELSE attempt_count END,last_error_code=NULL,next_attempt_at=NULL,claim_token_hash=UNHEX(REPEAT('ab',32)),claim_expires_at=DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 2 MINUTE),updated_at=CURRENT_TIMESTAMP(6) WHERE id=${sqlLiteral(mailJobId)}`);
+    } else {
+      const errorCode = status === 'failed' ? "'smtp_rejected'" : status === 'retrying' ? "'smtp_transient'" : 'NULL';
+      const nextAttempt = status === 'retrying' ? 'DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 1 MINUTE)' : 'NULL';
+      mysql(`UPDATE mail_jobs SET status=${sqlLiteral(status)},last_error_code=${errorCode},next_attempt_at=${nextAttempt},claim_token_hash=NULL,claim_expires_at=NULL,updated_at=CURRENT_TIMESTAMP(6) WHERE id=${sqlLiteral(mailJobId)}`);
+    }
     await mailPage.reload({ waitUntil: 'networkidle' });
     covered.admin_mail.push(await expectState(mailPage, 'admin-mail', status));
     captures.push(await screenshot(mailPage, CASE, `admin-mail-${status}`));
