@@ -1,0 +1,273 @@
+name: P13 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P13/**'
+      - 'scripts/p13/**'
+      - '.github/workflows/p13-*.yml'
+      - 'internal/billing/**'
+      - 'internal/domains/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p13-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P13 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P13 coherence validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p13/validate.py scripts/p13/validate_coherence.py scripts/p13/validate_contract.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P13 evidence producers and bind artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P13
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = {
+              'P13 Billing Payments Entitlements Contract': lambda sha: f'p13-billing-payments-entitlements-contract-{sha}',
+              'P13 Real Billing Payments Entitlements Integration': lambda sha: f'gojet-v10-p13-integration-{sha}',
+              'P13 Billing Commerce Browser': lambda sha: f'gojet-v10-p13-browser-{sha}',
+          }
+          sha = os.environ['EXACT_HEAD']
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          path = Path('artifacts/v10/P13/evidence-producer-manifest.json')
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
+          def get(url):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          deadline = time.time() + 35 * 60
+          while time.time() < deadline:
+              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name in required and (name not in latest or int(run.get('id', 0)) > int(latest[name].get('id', 0))):
+                      latest[name] = run
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+              entries = {}
+              if not missing and not pending and not failed:
+                  for name, run in latest.items():
+                      artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
+                      expected = required[name](sha)
+                      matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
+                      if len(matches) != 1:
+                          failed.append(f'{name}:artifact:{expected}')
+                          continue
+                      artifact = matches[0]
+                      entries[name] = {
+                          'run_id': int(run['id']),
+                          'run_number': int(run.get('run_number', 0)),
+                          'head_sha': run.get('head_sha'),
+                          'status': run.get('status'),
+                          'conclusion': run.get('conclusion'),
+                          'html_url': run.get('html_url'),
+                          'artifact': {
+                              'id': int(artifact['id']),
+                              'name': artifact['name'],
+                              'digest': artifact.get('digest'),
+                              'size_in_bytes': int(artifact.get('size_in_bytes', 0)),
+                          },
+                      }
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': entries,
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+              if failed:
+                  raise SystemExit('required P13 producer/artifact failed: ' + ', '.join(failed))
+              if not missing and not pending and len(entries) == len(required):
+                  print(f'P13 producers/artifacts green for {sha}')
+                  break
+              print(f'Waiting P13 producers missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for P13 producers on {sha}')
+          PY
+
+      - name: Download exact-head P13 evidence artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          read_run() { python3 - "$1" <<'PY'
+          import json, sys
+          data = json.load(open('artifacts/v10/P13/evidence-producer-manifest.json', encoding='utf-8'))
+          print(data['required_workflows'][sys.argv[1]]['run_id'])
+          PY
+          }
+          contract_run="$(read_run 'P13 Billing Payments Entitlements Contract')"
+          integration_run="$(read_run 'P13 Real Billing Payments Entitlements Integration')"
+          browser_run="$(read_run 'P13 Billing Commerce Browser')"
+
+          rm -rf /tmp/p13-contract /tmp/p13-integration /tmp/p13-browser
+          mkdir -p /tmp/p13-contract /tmp/p13-integration /tmp/p13-browser \
+            artifacts/v10/P13/contract artifacts/v10/P13/api artifacts/v10/P13/rbac \
+            artifacts/v10/P13/security artifacts/v10/P13/entitlement artifacts/v10/P13/audit \
+            artifacts/v10/P13/browser artifacts/v10/P13/captures artifacts/v10/P13/runtime artifacts/v10/P13/results
+
+          gh run download "$contract_run" --repo "$REPOSITORY" --name "p13-billing-payments-entitlements-contract-$EXACT_HEAD" --dir /tmp/p13-contract
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p13-integration-$EXACT_HEAD" --dir /tmp/p13-integration
+          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p13-browser-$EXACT_HEAD" --dir /tmp/p13-browser
+
+          for name in contract.json implementation_commit.txt base_integration_commit.txt predecessor_signed_source.txt case_range.txt capabilities.txt route-authority.txt provider-authority.txt entitlement-authority.txt; do
+            source="$(find /tmp/p13-contract -type f -name "$name" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P13/contract/$name"
+          done
+          test "$(cat artifacts/v10/P13/contract/implementation_commit.txt)" = "$EXACT_HEAD"
+
+          case_dir() {
+            case "$1" in
+              003|010|011|012|014|015|016|017|018) echo entitlement ;;
+              004) echo rbac ;;
+              007|008) echo security ;;
+              019) echo audit ;;
+              *) echo api ;;
+            esac
+          }
+          for number in $(seq -w 1 20); do
+            padded="0${number}"
+            directory="$(case_dir "$padded")"
+            source="$(find /tmp/p13-integration -type f -name "P13-T${padded}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P13/$directory/P13-T${padded}.json"
+          done
+          if [ -d /tmp/p13-integration/runtime ]; then cp -a /tmp/p13-integration/runtime/. artifacts/v10/P13/runtime/; else
+            runtime_source="$(find /tmp/p13-integration -type d -name runtime -print -quit)"
+            test -n "$runtime_source"
+            cp -a "$runtime_source"/. artifacts/v10/P13/runtime/
+          fi
+
+          for number in 021 022 023 024 025; do
+            source="$(find /tmp/p13-browser -type f -name "P13-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P13/browser/P13-T${number}.json"
+          done
+          find /tmp/p13-browser -type f -name 'P13-T02*.png' -print -exec cp '{}' artifacts/v10/P13/captures/ ';'
+          browser_runtime="$(find /tmp/p13-browser -type d -name runtime -print -quit)"
+          test -n "$browser_runtime"
+          cp -a "$browser_runtime"/. artifacts/v10/P13/runtime/
+
+          test "$(find artifacts/v10/P13/api -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 7
+          test "$(find artifacts/v10/P13/rbac -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 1
+          test "$(find artifacts/v10/P13/security -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 2
+          test "$(find artifacts/v10/P13/entitlement -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 9
+          test "$(find artifacts/v10/P13/audit -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 1
+          test "$(find artifacts/v10/P13/browser -maxdepth 1 -type f -name 'P13-T*.json' | wc -l)" -eq 5
+          test "$(find artifacts/v10/P13/captures -maxdepth 1 -type f -name 'P13-T02*.png' | wc -l)" -ge 20
+
+          for name in \
+            mysql-plans.err mysql-orders.err mysql-invoices.err mysql-transactions.err \
+            mysql-callback-events-safe.err mysql-subscriptions.err mysql-entitlements-safe.err mysql-fx.err \
+            mysql-audit-safe.err mysql-notifications-safe.err \
+            browser-plans.err browser-subscriptions.err browser-fx.err; do
+            test -f "artifacts/v10/P13/runtime/$name"
+            test ! -s "artifacts/v10/P13/runtime/$name"
+          done
+
+      - name: Run P13-T026 exact-head evidence coherence
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p13/validate.py --case P13-T026
+          python3 - <<'PY'
+          import json, subprocess
+          data = json.load(open('artifacts/v10/P13/results/P13-T026.json', encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert data['status'] == 'PASS' and data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          obs = data['observations']
+          assert obs['input_evidence_count'] == 25 and obs['same_exact_head'] is True, obs
+          assert obs['capture_count'] >= 20 and obs['runtime_error_files_clean'] is True, obs
+          assert obs['mixed_head_rejected'] is True and obs['inspectable_runtime_and_browser_evidence'] is True, obs
+          assert set(obs['producer_run_ids']) == {
+              'P13 Billing Payments Entitlements Contract',
+              'P13 Real Billing Payments Entitlements Integration',
+              'P13 Billing Commerce Browser',
+          }, obs
+          for value in obs['producer_artifacts'].values():
+              assert value['id'] > 0 and value['digest'].startswith('sha256:') and value['size_in_bytes'] > 0, value
+          print(f'P13-T026 exact-head coherence PASS on {head}')
+          PY
+
+      - name: Upload P13 coherence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p13-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P13/evidence-producer-manifest.json
+            artifacts/v10/P13/evidence-index.json
+            artifacts/v10/P13/contract/
+            artifacts/v10/P13/api/P13-T*.json
+            artifacts/v10/P13/rbac/P13-T*.json
+            artifacts/v10/P13/security/P13-T*.json
+            artifacts/v10/P13/entitlement/P13-T*.json
+            artifacts/v10/P13/audit/P13-T*.json
+            artifacts/v10/P13/browser/P13-T*.json
+            artifacts/v10/P13/captures/
+            artifacts/v10/P13/runtime/
+            artifacts/v10/P13/results/P13-T026.json
+            artifacts/v10/P13/test-plan.json
+            artifacts/v10/P13/review.md
