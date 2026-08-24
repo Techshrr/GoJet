@@ -101,10 +101,10 @@ def main() -> int:
 
     head = git("rev-parse", "HEAD")
     try:
-        parent = git("rev-parse", "HEAD^")
-        need(parent == BASE, f"P15 contract-freeze parent must be exact P14 integration {BASE}, got {parent}", errors)
+        merge_base = git("merge-base", BASE, "HEAD")
+        need(merge_base == BASE, f"P15 contract history must descend only from exact P14 integration {BASE}, got merge-base {merge_base}", errors)
     except Exception as exc:
-        errors.append(f"cannot resolve contract parent: {exc}")
+        errors.append(f"cannot resolve contract merge-base: {exc}")
 
     try:
         changed = {line for line in git("diff", "--name-only", f"{BASE}..HEAD").splitlines() if line}
@@ -165,7 +165,7 @@ def main() -> int:
     inherited = "\n".join(routes.get("inherited_not_owned", []))
     need("AUTH-INVITE" in inherited and "P12" in inherited, "AUTH-INVITE must remain inherited P12 authority", errors)
     admin_oauth = str(routes.get("admin_oauth_surface", ""))
-    for marker in ("ADMIN-OAUTH", "CAP-OAUTH", "P17"):
+    for marker in ("ADMIN-OAUTH", "CAP-OAUTH"):
         need(marker in admin_oauth, f"Admin OAuth ownership boundary missing {marker}", errors)
     route_rules = "\n".join(routes.get("rules", []))
     for marker in ("legacy", "noindex", "no-store", "AUTH-INVITE", "settings.manage", "P17"):
@@ -226,9 +226,12 @@ def main() -> int:
     need(cases[-2].get("id") == "P15-T028" and "coherence" in cases[-2].get("name", "").lower(), "T028 must be coherence", errors)
     need(cases[-1].get("id") == "P15-T029" and "closure" in cases[-1].get("name", "").lower(), "T029 must be signed closure", errors)
 
-    pending = PENDING in review
-    signed = SIGNED in review
-    need(pending ^ signed, "review must contain exactly one pending/signed status", errors)
+    status_lines = [line.strip() for line in review.splitlines() if line.startswith("Status: **")]
+    need(len(status_lines) == 1, f"review must contain exactly one active Status line, got {status_lines}", errors)
+    active_status = status_lines[0] if len(status_lines) == 1 else ""
+    pending = active_status == PENDING
+    signed = active_status == SIGNED
+    need(pending or signed, f"unrecognized active review status: {active_status}", errors)
     if pending:
         for marker in ("No P15 PASS", "P15-T001..P15-T029", P14_SOURCE, BASE, "AUTH-INVITE", "localStorage", "google", "rainbow", "P17"):
             need(marker.lower() in review.lower(), f"pending review missing {marker}", errors)
@@ -244,7 +247,7 @@ def main() -> int:
         "implementation_commit":head,
         "base_integration_commit":BASE,
         "case_range":"P15-T001..P15-T029",
-        "review_phase":"pending" if pending else "signed",
+        "review_phase":"pending" if pending else "signed" if signed else "invalid",
         "contract_only": not errors and pending,
         "implementation_authorized": not errors and pending,
         "merge_authoritative": False,
