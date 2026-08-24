@@ -91,14 +91,16 @@ export function SupportNewPage() {
         {blockedAttachment ? <InlineMessage variant="warning">Attachment “{attachmentName}” is held locally and has not been uploaded. P14 does not invent an unapproved attachment HTTP route; submission remains blocked until bytes can enter the inherited P09 quarantine/scan authority.</InlineMessage> : null}
         {error ? <InlineMessage variant={error.variant}>{error.text}</InlineMessage> : null}
         {mutation.isSuccess ? <InlineMessage variant="success">Ticket created successfully. <Link to="/app/support/$ticketId" params={{ ticketId: mutation.data.ticket.id }}>Open ticket</Link></InlineMessage> : null}
-        <Card as="form" className="support-form" onSubmit={(event) => { event.preventDefault(); if (canSubmit) mutation.mutate(); }}>
-          <label>Category<select aria-label="Support category" value={category} onChange={(event) => setCategory(event.currentTarget.value)} disabled={mutation.isPending}><option value="general">General support</option><option value="custom-domain-access">Custom domain access request</option></select></label>
-          <label>Subject<input aria-label="Support subject" value={subject} onChange={(event) => setSubject(event.currentTarget.value)} maxLength={300} required disabled={mutation.isPending} /></label>
-          <label>Message<textarea aria-label="Support message" value={message} onChange={(event) => setMessage(event.currentTarget.value)} rows={8} required disabled={mutation.isPending} /></label>
-          <label>Attachment<input aria-label="Support attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={mutation.isPending} /></label>
-          {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
-          <Button type="submit" disabled={!canSubmit}>{mutation.isPending ? 'Submitting…' : 'Submit ticket'}</Button>
-        </Card>
+        <form className="support-form" onSubmit={(event) => { event.preventDefault(); if (canSubmit) mutation.mutate(); }}>
+          <Card as="section" className="support-form-card">
+            <label>Category<select aria-label="Support category" value={category} onChange={(event) => setCategory(event.currentTarget.value)} disabled={mutation.isPending}><option value="general">General support</option><option value="custom-domain-access">Custom domain access request</option></select></label>
+            <label>Subject<input aria-label="Support subject" value={subject} onChange={(event) => setSubject(event.currentTarget.value)} maxLength={300} required disabled={mutation.isPending} /></label>
+            <label>Message<textarea aria-label="Support message" value={message} onChange={(event) => setMessage(event.currentTarget.value)} rows={8} required disabled={mutation.isPending} /></label>
+            <label>Attachment<input aria-label="Support attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={mutation.isPending} /></label>
+            {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
+            <Button type="submit" disabled={!canSubmit}>{mutation.isPending ? 'Submitting…' : 'Submit ticket'}</Button>
+          </Card>
+        </form>
       </section>
     </WorkspaceShell>
   );
@@ -151,12 +153,16 @@ export function SupportThreadPage() {
         {detail ? <div className="support-thread" aria-label="Ticket messages">{detail.messages.map((item) => (
           <Card as="article" key={item.id} className="support-message" data-kind={item.kind}><header><strong>{item.actor_type === 'support' ? 'Support' : 'You'}</strong><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></header><p>{item.body}</p></Card>
         ))}</div> : null}
-        {ticket && ticket.status !== 'closed' ? <Card as="form" className="support-form" onSubmit={(event) => { event.preventDefault(); if (reply.trim() && !blockedAttachment && !replyMutation.isPending) replyMutation.mutate(); }}>
-          <label>Reply<textarea aria-label="Ticket reply" value={reply} onChange={(event) => setReply(event.currentTarget.value)} rows={6} required disabled={replyMutation.isPending || closeMutation.isPending} /></label>
-          <label>Attachment<input aria-label="Reply attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={replyMutation.isPending || closeMutation.isPending} /></label>
-          {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
-          <div className="support-actions"><Button type="submit" disabled={!reply.trim() || blockedAttachment || replyMutation.isPending}>{replyMutation.isPending ? 'Sending…' : 'Send reply'}</Button><Button type="button" variant="ghost" disabled={closeMutation.isPending} onClick={() => closeMutation.mutate()}>{closeMutation.isPending ? 'Closing…' : 'Close ticket'}</Button></div>
-        </Card> : null}
+        {ticket && ticket.status !== 'closed' ? (
+          <form className="support-form" onSubmit={(event) => { event.preventDefault(); if (reply.trim() && !blockedAttachment && !replyMutation.isPending) replyMutation.mutate(); }}>
+            <Card as="section" className="support-form-card">
+              <label>Reply<textarea aria-label="Ticket reply" value={reply} onChange={(event) => setReply(event.currentTarget.value)} rows={6} required disabled={replyMutation.isPending || closeMutation.isPending} /></label>
+              <label>Attachment<input aria-label="Reply attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={replyMutation.isPending || closeMutation.isPending} /></label>
+              {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
+              <div className="support-actions"><Button type="submit" disabled={!reply.trim() || blockedAttachment || replyMutation.isPending}>{replyMutation.isPending ? 'Sending…' : 'Send reply'}</Button><Button type="button" variant="ghost" disabled={closeMutation.isPending} onClick={() => closeMutation.mutate()}>{closeMutation.isPending ? 'Closing…' : 'Close ticket'}</Button></div>
+            </Card>
+          </form>
+        ) : null}
         {ticket?.status === 'closed' ? <InlineMessage variant="info">This ticket is closed. Closing changes ticket state only and grants no other authority.</InlineMessage> : null}
       </section>
     </WorkspaceShell>
