@@ -6,10 +6,11 @@ const proxy = {
   '/api': { target: apiTarget, changeOrigin: false },
   '/f/': { target: apiTarget, changeOrigin: false },
 };
+const privateHeaders = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 
 export default defineConfig({
   plugins: [react()],
   build: { outDir: 'dist', emptyOutDir: true, manifest: true, sourcemap: false },
-  server: { proxy },
-  preview: { proxy },
+  server: { proxy, headers: privateHeaders },
+  preview: { proxy, headers: privateHeaders },
 });
