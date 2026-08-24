@@ -27,11 +27,11 @@ export async function run(browser) {
   await page.route(summaryPattern, async (route) => { await loadingGate; await route.continue(); });
   await page.goto(`${WORKSPACE_OWNER_URL}/app/billing`, { waitUntil: 'domcontentloaded' });
   await waitState(page, 'loading');
-  assert(await page.getByRole('status', { name: /Loading authoritative billing state/i }).count() >= 0, 'loading state missing');
+  assert(await page.getByRole('status', { name: /Loading authoritative billing state/i }).count() > 0, 'loading state missing');
   captures.push(await screenshot(page, 'P13-T021', 'loading'));
   releaseLoading();
-  await page.unroute(summaryPattern);
   await waitState(page, 'active');
+  await page.unroute(summaryPattern);
   observed.loading_to_active = true;
 
   const scenarios = [
