@@ -1,0 +1,100 @@
+name: P14 Support Tickets and Mail Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P14/**'
+      - 'scripts/p14/**'
+      - '.github/workflows/p14-*.yml'
+      - 'specifications/**'
+      - 'contracts/traceability/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/support/**'
+      - 'internal/mail/**'
+      - 'internal/workspace/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'services/platformapi/**'
+      - 'migrations/**'
+      - 'apps/workspace/**'
+      - 'apps/admin/**'
+      - 'apps/website/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p14-support-tickets-mail-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P14 contract freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P14 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p14/validate_contract.py
+
+      - name: Validate frozen P14 contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p14/validate_contract.py | tee /tmp/p14-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p14-contract.json', encoding='utf-8'))
+          assert data['node'] == 'P14', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['case_range'] == 'P14-T001..P14-T025', data
+          assert data['review_phase'] in {'pending','signed'}, data
+          PY
+
+      - name: Preserve current native compile and unit boundary
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Record exact-head contract evidence
+        id: head
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          test -n "$head"
+          mkdir -p artifacts/v10/P14/contract
+          cp /tmp/p14-contract.json artifacts/v10/P14/contract/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P14/contract/implementation_commit.txt
+          printf '%s\n' 'a94f1d9894916b995a2379571f6ab3de520fc4ba' > artifacts/v10/P14/contract/base_integration_commit.txt
+          printf '%s\n' '24cdbdf848bf722e53e38ed15dce12e1d42eb9d2' > artifacts/v10/P14/contract/predecessor_signed_source.txt
+          printf '%s\n' 'P14-T001..P14-T025' > artifacts/v10/P14/contract/case_range.txt
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P14 contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p14-support-tickets-mail-contract-${{ steps.head.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P14/contract/
+            artifacts/v10/P14/test-plan.json
+            artifacts/v10/P14/review.md
