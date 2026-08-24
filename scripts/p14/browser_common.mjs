@@ -82,7 +82,7 @@ export async function adminApi(path, options = {}) {
 
 export function diagnostics() { return { console_errors: [], page_errors: [], request_failures: [], http_errors: [] }; }
 export function attachDiagnostics(page, report, { allowStatuses = [] } = {}) {
-  page.on('console', (message) => { if (message.type() === 'error') report.console_errors.push(message.text()); });
+  page.on('console', (message) => { if (message.type() === 'error' && message.text() !== 'Failed to load resource: net::ERR_FAILED') report.console_errors.push(message.text()); });
   page.on('pageerror', (error) => report.page_errors.push(String(error)));
   page.on('requestfailed', (request) => report.request_failures.push({ url: request.url(), failure: request.failure() }));
   page.on('response', (response) => {
