@@ -62,6 +62,31 @@ CASE_CONFIG = {
             "p15-t002-schema-secret",
         ),
     },
+    "P15-T003": {
+        "runner": "./scripts/p15/t003_runner",
+        "evidence": Path("artifacts/v10/P15/security/P15-T003.json"),
+        "environment": "native Go P15 email-verification consumption service with durable MySQL one-time grant authority",
+        "source_paths": {
+            "migration_000015": "migrations/000015_authentication_oauth_account.sql",
+            "migration_000016": "migrations/000016_auth_verification_mail.sql",
+            "auth_registration": "internal/auth/registration.go",
+            "auth_verification": "internal/auth/verification.go",
+            "auth_store": "internal/auth/store.go",
+            "secure_token_derivation": "internal/securetoken/grant.go",
+            "t003_runner": "scripts/p15/t003_runner/main.go",
+        },
+        "evidence_policy": {
+            "raw_password_present": False,
+            "raw_verification_code_present": False,
+            "raw_grant_key_present": False,
+            "raw_session_token_present": False,
+            "raw_oauth_token_present": False,
+        },
+        "forbidden_fragments": (
+            "gvc_",
+            "GOJET_AUTH_GRANT_KEY_HEX",
+        ),
+    },
 }
 
 
@@ -94,9 +119,9 @@ def main() -> int:
         fail(f"P15 integration case is not implemented at this stage: {args.case}")
     if not os.environ.get("GOJET_MYSQL_DSN", "").strip():
         fail("GOJET_MYSQL_DSN is required")
-    if args.case == "P15-T002":
+    if args.case in ("P15-T002", "P15-T003"):
         if not os.environ.get("GOJET_AUTH_GRANT_KEY_ID", "").strip() or not os.environ.get("GOJET_AUTH_GRANT_KEY_HEX", "").strip():
-            fail("P15-T002 grant-key runtime configuration is required")
+            fail(f"{args.case} grant-key runtime configuration is required")
 
     head = git("rev-parse", "HEAD")
     try:
