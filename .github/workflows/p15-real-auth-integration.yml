@@ -8,9 +8,12 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'internal/auth/**'
+      - 'internal/securetoken/**'
+      - 'internal/support/mail_enqueue.go'
       - 'migrations/**'
       - 'scripts/p15/integration.py'
       - 'scripts/p15/t001_runner.go'
+      - 'scripts/p15/t002_runner.go'
       - '.github/workflows/p15-real-auth-integration.yml'
       - 'artifacts/v10/P15/test-plan.json'
   workflow_dispatch:
@@ -23,10 +26,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001:
-    name: P15-T001 real identity session schema evidence
+  t001-t002:
+    name: P15-T001/T002 real identity and registration evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     services:
       mysql:
         image: mysql:8.4.11
@@ -43,6 +46,8 @@ jobs:
 
     env:
       GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_AUTH_GRANT_KEY_ID: p15-ci-fixture-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
 
     steps:
       - name: Checkout exact P15 candidate head
@@ -66,16 +71,21 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
           mysql --version
 
-      - name: Verify T001 source boundary
+      - name: Verify P15 T001-T002 source boundary
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
           python3 -m py_compile scripts/p15/integration.py
-          gofmt -d scripts/p15/t001_runner.go | tee /tmp/p15-gofmt.diff
+          gofmt -d \
+            scripts/p15/t001_runner.go \
+            scripts/p15/t002_runner.go \
+            internal/auth/registration.go \
+            internal/securetoken/grant.go \
+            internal/support/mail_enqueue.go | tee /tmp/p15-gofmt.diff
           test ! -s /tmp/p15-gofmt.diff
-          go test ./internal/auth
-          go vet ./internal/auth
+          go test ./internal/auth ./internal/securetoken ./internal/support
+          go vet ./internal/auth ./internal/securetoken ./internal/support
           python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
           python3 - <<'PY'
           import json
@@ -85,7 +95,7 @@ jobs:
           assert data['frozen_contract_preserved'] is True,data
           PY
 
-      - name: Apply immutable migrations through P15
+      - name: Apply immutable migrations through current P15 head
         shell: bash
         run: |
           set -euo pipefail
@@ -103,33 +113,41 @@ jobs:
           done
 
       - name: Run frozen P15-T001 driver
-        id: evidence
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/p15/integration.py --case P15-T001 | tee /tmp/p15-t001-result.json
+
+      - name: Run frozen P15-T002 driver
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T002 | tee /tmp/p15-t002-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json,subprocess
-          path='artifacts/v10/P15/api/P15-T001.json'
-          data=json.load(open(path,encoding='utf-8'))
           head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-          assert data['node']=='P15',data
-          assert data['case']=='P15-T001',data
-          assert data['status']=='PASS',data
-          assert data['exact_head']==head,(data['exact_head'],head)
-          assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
-          assert data['checks'] and all(data['checks'].values()),data
-          assert not any(data['evidence_policy'].values()),data
+          for case in ('P15-T001','P15-T002'):
+              path=f'artifacts/v10/P15/api/{case}.json'
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P15',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P15-T001 evidence
+      - name: Upload exact-head P15 T001-T002 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p15-t001-real-auth-${{ steps.evidence.outputs.sha }}
+          name: p15-t001-t002-real-auth-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
             artifacts/v10/P15/api/P15-T001.json
+            artifacts/v10/P15/api/P15-T002.json
             artifacts/v10/P15/test-plan.json

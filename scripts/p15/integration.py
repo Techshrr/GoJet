@@ -10,8 +10,59 @@ import sys
 from pathlib import Path
 
 CONTRACT_AUTHORITY = "9ba89a42281709087b40cdcf0cb2eebd54952a99"
-CASE = "P15-T001"
-EVIDENCE = Path("artifacts/v10/P15/api/P15-T001.json")
+CASE_CONFIG = {
+    "P15-T001": {
+        "runner": "./scripts/p15/t001_runner.go",
+        "evidence": Path("artifacts/v10/P15/api/P15-T001.json"),
+        "environment": "native Go internal/auth Store against durable MySQL",
+        "source_paths": {
+            "migration_000015": "migrations/000015_authentication_oauth_account.sql",
+            "auth_store": "internal/auth/store.go",
+            "auth_model": "internal/auth/model.go",
+            "auth_opaque": "internal/auth/opaque.go",
+            "t001_runner": "scripts/p15/t001_runner.go",
+        },
+        "evidence_policy": {
+            "raw_password_present": False,
+            "raw_session_token_present": False,
+            "raw_csrf_secret_present": False,
+            "raw_oauth_subject_present": False,
+            "raw_oauth_token_present": False,
+        },
+        "forbidden_fragments": (
+            "gst_",
+            "gcs_",
+            "p15-t001-provider-subject-",
+            "p15-t001-schema-fixture:",
+        ),
+    },
+    "P15-T002": {
+        "runner": "./scripts/p15/t002_runner.go",
+        "evidence": Path("artifacts/v10/P15/api/P15-T002.json"),
+        "environment": "native Go P15 registration service with durable MySQL and inherited P14 mail queue/template authority",
+        "source_paths": {
+            "migration_000015": "migrations/000015_authentication_oauth_account.sql",
+            "migration_000016": "migrations/000016_auth_verification_mail.sql",
+            "auth_registration": "internal/auth/registration.go",
+            "secure_token_derivation": "internal/securetoken/grant.go",
+            "p14_mail_enqueue_boundary": "internal/support/mail_enqueue.go",
+            "p14_mail_core": "internal/support/mail.go",
+            "p14_mail_store": "internal/support/mail_store.go",
+            "t002_runner": "scripts/p15/t002_runner.go",
+        },
+        "evidence_policy": {
+            "raw_password_present": False,
+            "raw_verification_code_present": False,
+            "raw_grant_key_present": False,
+            "raw_session_token_present": False,
+            "raw_oauth_token_present": False,
+        },
+        "forbidden_fragments": (
+            "gvc_",
+            "p15-t002-schema-secret",
+        ),
+    },
+}
 
 
 def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -38,10 +89,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    if args.case != CASE:
-        fail(f"only {CASE} is implemented at this stage; got {args.case}")
+    config = CASE_CONFIG.get(args.case)
+    if config is None:
+        fail(f"P15 integration case is not implemented at this stage: {args.case}")
     if not os.environ.get("GOJET_MYSQL_DSN", "").strip():
         fail("GOJET_MYSQL_DSN is required")
+    if args.case == "P15-T002":
+        if not os.environ.get("GOJET_AUTH_GRANT_KEY_ID", "").strip() or not os.environ.get("GOJET_AUTH_GRANT_KEY_HEX", "").strip():
+            fail("P15-T002 grant-key runtime configuration is required")
 
     head = git("rev-parse", "HEAD")
     try:
@@ -50,76 +105,64 @@ def main() -> int:
     except subprocess.CalledProcessError as exc:
         fail(f"cannot verify P15 contract ancestry: {exc.stderr.strip()}")
 
-    proc = run("go", "run", "./scripts/p15/t001_runner.go", check=False)
+    proc = run("go", "run", config["runner"], check=False)
     if not proc.stdout.strip():
         sys.stderr.write(proc.stderr)
-        fail("P15-T001 runner produced no JSON output")
+        fail(f"{args.case} runner produced no JSON output")
     try:
         runner = json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         sys.stderr.write(proc.stdout)
         sys.stderr.write(proc.stderr)
-        fail(f"P15-T001 runner output is not JSON: {exc}")
+        fail(f"{args.case} runner output is not JSON: {exc}")
 
     checks = runner.get("checks") or {}
     all_checks_pass = bool(checks) and all(value is True for value in checks.values())
-    runner_pass = proc.returncode == 0 and runner.get("case") == CASE and runner.get("status") == "PASS" and all_checks_pass
+    runner_pass = proc.returncode == 0 and runner.get("case") == args.case and runner.get("status") == "PASS" and all_checks_pass
+
+    source_blobs = {
+        name: blob(path)
+        for name, path in config["source_paths"].items()
+    }
+    source_blobs["integration_driver"] = blob("scripts/p15/integration.py")
+    source_blobs["frozen_test_plan"] = blob("artifacts/v10/P15/test-plan.json")
 
     evidence = {
         "node": "P15",
-        "case": CASE,
+        "case": args.case,
         "status": "PASS" if runner_pass else "FAIL",
         "exact_head": head,
         "contract_authority": CONTRACT_AUTHORITY,
-        "driver": "python3 scripts/p15/integration.py --case P15-T001",
+        "driver": f"python3 scripts/p15/integration.py --case {args.case}",
         "environment": {
             "mysql": "real MySQL 8.x service",
             "mysql_version": runner.get("mysql_version", ""),
-            "platform_state": "native Go internal/auth Store against durable MySQL",
+            "platform_state": config["environment"],
         },
         "record_counts": runner.get("record_counts", {}),
         "checks": checks,
-        "source_blobs": {
-            "migration_000015": blob("migrations/000015_authentication_oauth_account.sql"),
-            "auth_store": blob("internal/auth/store.go"),
-            "auth_model": blob("internal/auth/model.go"),
-            "auth_opaque": blob("internal/auth/opaque.go"),
-            "t001_runner": blob("scripts/p15/t001_runner.go"),
-            "integration_driver": blob("scripts/p15/integration.py"),
-            "frozen_test_plan": blob("artifacts/v10/P15/test-plan.json"),
-        },
-        "evidence_policy": {
-            "raw_password_present": False,
-            "raw_session_token_present": False,
-            "raw_csrf_secret_present": False,
-            "raw_oauth_subject_present": False,
-            "raw_oauth_token_present": False,
-        },
+        "source_blobs": source_blobs,
+        "evidence_policy": dict(config["evidence_policy"]),
     }
 
     encoded = json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    forbidden_fragments = (
-        "gst_",
-        "gcs_",
-        "p15-t001-provider-subject-",
-        "p15-t001-schema-fixture:",
-    )
-    leaked = [fragment for fragment in forbidden_fragments if fragment in encoded]
+    leaked = [fragment for fragment in config["forbidden_fragments"] if fragment in encoded]
     if leaked:
         evidence["status"] = "FAIL"
         evidence["evidence_policy"]["forbidden_fragment_detected"] = True
         encoded = json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         runner_pass = False
 
-    EVIDENCE.parent.mkdir(parents=True, exist_ok=True)
-    EVIDENCE.write_text(encoded, encoding="utf-8")
+    evidence_path: Path = config["evidence"]
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(encoded, encoding="utf-8")
 
     digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
     print(json.dumps({
-        "case": CASE,
+        "case": args.case,
         "status": evidence["status"],
         "exact_head": head,
-        "evidence": str(EVIDENCE),
+        "evidence": str(evidence_path),
         "evidence_sha256": digest,
     }, indent=2))
 
