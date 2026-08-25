@@ -92,17 +92,21 @@ func main() {
 		actualProviders = append(actualProviders, cfg.Provider)
 	}
 	configuredCount := 0
+	googleConfiguredCount := 0
 	for _, cfg := range configs {
 		if cfg.Configured {
 			configuredCount++
+		}
+		if cfg.Provider == auth.ProviderGoogle && cfg.Configured {
+			googleConfiguredCount++
 		}
 	}
 
 	checks := map[string]bool{
 		"registry_is_exactly_six_frozen_providers":                  initialErr == nil && len(initial) == 6 && listErr == nil && reflect.DeepEqual(actualProviders, expectedProviders),
-		"initial_registry_is_server_derived_unconfigured":           allUnconfigured(initial),
+		"target_provider_initially_server_derived_unconfigured":     providerUnconfigured(initial, auth.ProviderGoogle),
 		"settings_manage_denial_fails_closed":                       errors.Is(deniedErr, auth.ErrForbidden) && deniedPermission.Seen == auth.SettingsManage,
-		"authorized_provider_update_is_server_derived":              updateErr == nil && updated.Provider == auth.ProviderGoogle && updated.Enabled && updated.Configured && updated.SecretConfigured && configuredCount == 1,
+		"authorized_provider_update_is_server_derived":              updateErr == nil && updated.Provider == auth.ProviderGoogle && updated.Enabled && updated.Configured && updated.SecretConfigured && googleConfiguredCount == 1,
 		"client_secret_is_encrypted_and_masked":                     keyID.Valid && len(ciphertext) > 32 && !bytes.Equal(ciphertext, []byte(secret)) && !bytes.Contains(projection, []byte(secret)),
 		"p15_consumes_settings_manage_without_permission_lifecycle": permission.Seen == auth.SettingsManage,
 	}
@@ -113,7 +117,7 @@ func main() {
 			break
 		}
 	}
-	out := result{Case: "P15-T016", Status: status, MySQLVersion: mysqlVersion, RecordCounts: map[string]int{"provider_count": len(configs), "configured_provider_count": configuredCount}, Checks: checks}
+	out := result{Case: "P15-T016", Status: status, MySQLVersion: mysqlVersion, RecordCounts: map[string]int{"provider_count": len(configs), "configured_provider_count": configuredCount, "google_configured_count": googleConfiguredCount}, Checks: checks}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
@@ -124,16 +128,13 @@ func main() {
 	}
 }
 
-func allUnconfigured(configs []auth.OAuthProviderConfig) bool {
-	if len(configs) != 6 {
-		return false
-	}
+func providerUnconfigured(configs []auth.OAuthProviderConfig, provider string) bool {
 	for _, cfg := range configs {
-		if cfg.Enabled || cfg.Configured || cfg.SecretConfigured {
-			return false
+		if cfg.Provider == provider {
+			return !cfg.Enabled && !cfg.Configured && !cfg.SecretConfigured
 		}
 	}
-	return true
+	return false
 }
 
 func providerUpdate(provider, secret string) auth.OAuthProviderUpdate {

@@ -90,8 +90,9 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	past := now.Add(-time.Minute).Truncate(time.Microsecond)
-	if _, err := db.ExecContext(ctx, `UPDATE oauth_states SET expires_at=? WHERE id=?`, past, expiredStart.StateID); err != nil {
+	pastCreated := now.Add(-2 * time.Minute).Truncate(time.Microsecond)
+	pastExpiry := now.Add(-time.Minute).Truncate(time.Microsecond)
+	if _, err := db.ExecContext(ctx, `UPDATE oauth_states SET created_at=?,expires_at=? WHERE id=?`, pastCreated, pastExpiry, expiredStart.StateID); err != nil {
 		fail(err)
 	}
 	expiredAdapter := &runnerutil.DeterministicOAuthAdapter{ExpectedProvider: auth.ProviderGitHub, ExpectedCode: "unused", ExpectedClientID: cfg.ClientID, ExpectedClientSecret: secret, ExpectedRedirectURI: cfg.RedirectURI, ExpectedPKCEVerifier: expiredStart.PKCEVerifier, Claim: auth.OAuthProviderClaim{Subject: "unused"}}
