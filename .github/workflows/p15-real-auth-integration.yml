@@ -16,6 +16,9 @@ on:
       - 'scripts/p15/t002_runner/**'
       - 'scripts/p15/t003_runner/**'
       - 'scripts/p15/t004_runner/**'
+      - 'scripts/p15/t005_runner/**'
+      - 'scripts/p15/t006_runner/**'
+      - 'scripts/p15/t007_runner/**'
       - '.github/workflows/p15-real-auth-integration.yml'
       - 'artifacts/v10/P15/test-plan.json'
   workflow_dispatch:
@@ -28,10 +31,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001-t004:
-    name: P15-T001/T004 real registration verification and login evidence
+  t001-t007:
+    name: P15-T001/T007 real auth token and recovery evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     services:
       mysql:
         image: mysql:8.4.11
@@ -73,7 +76,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
           mysql --version
 
-      - name: Verify P15 T001-T004 source boundary
+      - name: Verify P15 T001-T007 source boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -84,15 +87,23 @@ jobs:
             scripts/p15/t002_runner/main.go \
             scripts/p15/t003_runner/main.go \
             scripts/p15/t004_runner/main.go \
+            scripts/p15/t005_runner/main.go \
+            scripts/p15/t006_runner/main.go \
+            scripts/p15/t007_runner/main.go \
             internal/auth/registration.go \
             internal/auth/verification.go \
             internal/auth/password.go \
             internal/auth/login.go \
+            internal/auth/email_code.go \
+            internal/auth/recovery.go \
+            internal/auth/errors.go \
             internal/securetoken/grant.go \
             internal/support/mail_enqueue.go | tee /tmp/p15-gofmt.diff
           test ! -s /tmp/p15-gofmt.diff
           go test ./...
-          go vet ./internal/auth ./internal/securetoken ./internal/support ./scripts/p15/t001_runner ./scripts/p15/t002_runner ./scripts/p15/t003_runner ./scripts/p15/t004_runner
+          go vet ./internal/auth ./internal/securetoken ./internal/support \
+            ./scripts/p15/t001_runner ./scripts/p15/t002_runner ./scripts/p15/t003_runner ./scripts/p15/t004_runner \
+            ./scripts/p15/t005_runner ./scripts/p15/t006_runner ./scripts/p15/t007_runner
           python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
           python3 - <<'PY'
           import json
@@ -120,29 +131,23 @@ jobs:
           done
 
       - name: Run frozen P15-T001 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p15/integration.py --case P15-T001 | tee /tmp/p15-t001-result.json
-
+        run: python3 scripts/p15/integration.py --case P15-T001 | tee /tmp/p15-t001-result.json
       - name: Run frozen P15-T002 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p15/integration.py --case P15-T002 | tee /tmp/p15-t002-result.json
-
+        run: python3 scripts/p15/integration.py --case P15-T002 | tee /tmp/p15-t002-result.json
       - name: Run frozen P15-T003 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p15/integration.py --case P15-T003 | tee /tmp/p15-t003-result.json
-
+        run: python3 scripts/p15/integration.py --case P15-T003 | tee /tmp/p15-t003-result.json
       - name: Run frozen P15-T004 driver
+        run: python3 scripts/p15/integration.py --case P15-T004 | tee /tmp/p15-t004-result.json
+      - name: Run frozen P15-T005 driver
+        run: python3 scripts/p15/integration.py --case P15-T005 | tee /tmp/p15-t005-result.json
+      - name: Run frozen P15-T006 driver
+        run: python3 scripts/p15/integration.py --case P15-T006 | tee /tmp/p15-t006-result.json
+      - name: Run frozen P15-T007 driver
         id: evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p15/integration.py --case P15-T004 | tee /tmp/p15-t004-result.json
+          python3 scripts/p15/integration.py --case P15-T007 | tee /tmp/p15-t007-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json,subprocess
@@ -152,6 +157,9 @@ jobs:
               'P15-T002':'artifacts/v10/P15/api/P15-T002.json',
               'P15-T003':'artifacts/v10/P15/security/P15-T003.json',
               'P15-T004':'artifacts/v10/P15/api/P15-T004.json',
+              'P15-T005':'artifacts/v10/P15/security/P15-T005.json',
+              'P15-T006':'artifacts/v10/P15/security/P15-T006.json',
+              'P15-T007':'artifacts/v10/P15/security/P15-T007.json',
           }
           for case,path in paths.items():
               data=json.load(open(path,encoding='utf-8'))
@@ -165,10 +173,10 @@ jobs:
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P15 T001-T004 evidence
+      - name: Upload exact-head P15 T001-T007 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p15-t001-t004-real-auth-${{ steps.evidence.outputs.sha }}
+          name: p15-t001-t007-real-auth-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -176,4 +184,7 @@ jobs:
             artifacts/v10/P15/api/P15-T002.json
             artifacts/v10/P15/security/P15-T003.json
             artifacts/v10/P15/api/P15-T004.json
+            artifacts/v10/P15/security/P15-T005.json
+            artifacts/v10/P15/security/P15-T006.json
+            artifacts/v10/P15/security/P15-T007.json
             artifacts/v10/P15/test-plan.json
