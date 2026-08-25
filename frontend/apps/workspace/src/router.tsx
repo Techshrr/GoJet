@@ -11,6 +11,12 @@ import {
 import MembersPage from './workspace/MembersPage';
 import NotificationsPage from './workspace/NotificationsPage';
 import { SupportListPage, SupportNewPage, SupportThreadPage } from './support/pages';
+import {
+  ConnectedAccountsPage,
+  ProfileSettingsPage,
+  SecuritySettingsPage,
+  SessionsSettingsPage,
+} from './account/pages';
 
 const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));
@@ -64,6 +70,10 @@ const campaignsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/ap
 const tagsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/tags', component: TagsPage });
 const membersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/members', component: MembersPage });
 const workspaceSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/workspace', component: WorkspaceSettingsPage });
+const profileSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/profile', component: ProfileSettingsPage });
+const securitySettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/security', component: SecuritySettingsPage });
+const sessionsSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/sessions', component: SessionsSettingsPage });
+const connectedAccountsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/connected-accounts', component: ConnectedAccountsPage });
 const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/invite/$token', component: InvitationPage });
 const sectionRoutes = ['developer', 'settings'].map((section) =>
   createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
@@ -71,7 +81,8 @@ const sectionRoutes = ['developer', 'settings'].map((section) =>
 const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
   analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, bioRoute, bioDetailRoute,
-  billingRoute, supportRoute, supportNewRoute, supportThreadRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute, workspaceSettingsRoute, inviteRoute,
+  billingRoute, supportRoute, supportNewRoute, supportThreadRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute,
+  workspaceSettingsRoute, profileSettingsRoute, securitySettingsRoute, sessionsSettingsRoute, connectedAccountsRoute, inviteRoute,
   ...sectionRoutes,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });

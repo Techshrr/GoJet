@@ -16,6 +16,7 @@ import './bio/bio.css';
 import './billing/billing.css';
 import './support/support.css';
 import './workspace/workspace.css';
+import './account/account.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('GoJet application root is missing');
