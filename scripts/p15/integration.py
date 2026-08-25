@@ -87,6 +87,38 @@ CASE_CONFIG = {
             "GOJET_AUTH_GRANT_KEY_HEX",
         ),
     },
+    "P15-T004": {
+        "runner": "./scripts/p15/t004_runner",
+        "evidence": Path("artifacts/v10/P15/api/P15-T004.json"),
+        "environment": "native Go P15 password credential/login services with durable MySQL account/session authority",
+        "source_paths": {
+            "migration_000015": "migrations/000015_authentication_oauth_account.sql",
+            "migration_000016": "migrations/000016_auth_verification_mail.sql",
+            "auth_password": "internal/auth/password.go",
+            "auth_login": "internal/auth/login.go",
+            "auth_registration": "internal/auth/registration.go",
+            "auth_verification": "internal/auth/verification.go",
+            "auth_store": "internal/auth/store.go",
+            "auth_opaque": "internal/auth/opaque.go",
+            "t004_runner": "scripts/p15/t004_runner/main.go",
+        },
+        "evidence_policy": {
+            "raw_password_present": False,
+            "raw_verification_code_present": False,
+            "raw_session_token_present": False,
+            "raw_csrf_secret_present": False,
+            "raw_grant_key_present": False,
+            "client_asserted_identity_present": False,
+        },
+        "forbidden_fragments": (
+            "P15-T004 Active Password!",
+            "P15-T004 Pending Password!",
+            "P15-T004 Locked Password!",
+            "gst_",
+            "gcs_",
+            "GOJET_AUTH_GRANT_KEY_HEX",
+        ),
+    },
 }
 
 
@@ -119,7 +151,7 @@ def main() -> int:
         fail(f"P15 integration case is not implemented at this stage: {args.case}")
     if not os.environ.get("GOJET_MYSQL_DSN", "").strip():
         fail("GOJET_MYSQL_DSN is required")
-    if args.case in ("P15-T002", "P15-T003"):
+    if args.case in ("P15-T002", "P15-T003", "P15-T004"):
         if not os.environ.get("GOJET_AUTH_GRANT_KEY_ID", "").strip() or not os.environ.get("GOJET_AUTH_GRANT_KEY_HEX", "").strip():
             fail(f"{args.case} grant-key runtime configuration is required")
 
