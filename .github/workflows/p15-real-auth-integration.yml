@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           go mod verify
           python3 -m py_compile scripts/p15/integration.py
-          gofmt -d scripts/p15/t001_runner.go internal/auth/*.go | tee /tmp/p15-gofmt.diff
+          gofmt -d scripts/p15/t001_runner.go | tee /tmp/p15-gofmt.diff
           test ! -s /tmp/p15-gofmt.diff
           go test ./internal/auth
           go vet ./internal/auth

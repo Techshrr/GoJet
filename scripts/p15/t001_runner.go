@@ -17,10 +17,10 @@ import (
 )
 
 type result struct {
-	Case         string         `json:"case"`
-	Status       string         `json:"status"`
-	MySQLVersion string         `json:"mysql_version"`
-	RecordCounts map[string]int `json:"record_counts"`
+	Case         string          `json:"case"`
+	Status       string          `json:"status"`
+	MySQLVersion string          `json:"mysql_version"`
+	RecordCounts map[string]int  `json:"record_counts"`
 	Checks       map[string]bool `json:"checks"`
 }
 
@@ -166,8 +166,8 @@ WHERE TABLE_SCHEMA=DATABASE()
 	var tokenHashType, csrfHashType, subjectHashType string
 	var tokenHashLength, csrfHashLength, subjectHashLength sql.NullInt64
 	for _, probe := range []struct {
-		table  string
-		column string
+		table   string
+		column  string
 		typeOut *string
 		lenOut  *sql.NullInt64
 	}{
@@ -199,21 +199,21 @@ WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?`, probe.table, 
 	}
 
 	checks := map[string]bool{
-		"user_id_is_opaque_server_identifier":             strings.HasPrefix(user.ID, "usr_") && len(user.ID) >= 20,
-		"session_id_is_opaque_server_identifier":          strings.HasPrefix(sessionSecret.Session.ID, "ses_") && len(sessionSecret.Session.ID) >= 20,
-		"oauth_identity_id_is_opaque_server_identifier":   strings.HasPrefix(identity.ID, "oid_") && len(identity.ID) >= 20,
-		"credential_record_is_durable_and_non_plaintext":  credentialLength >= 32 && credentialAlgorithm == "p15-t001-schema-fixture",
-		"session_token_is_hash_only_at_rest":              len(storedTokenHash) == 32 && auth.EqualOpaqueHash(tokenExpected, bytesToHash(storedTokenHash)),
-		"session_csrf_is_hash_only_at_rest":               len(storedCSRFHash) == 32 && auth.EqualOpaqueHash(csrfExpected, bytesToHash(storedCSRFHash)),
-		"oauth_subject_is_hash_only_at_rest":              len(storedSubjectHash) == 32 && auth.EqualOpaqueHash(subjectExpected, bytesToHash(storedSubjectHash)),
-		"session_lookup_is_server_authoritative":          loadedSession.ID == sessionSecret.Session.ID && loadedSession.UserID == user.ID && loadedSession.Status == auth.SessionStatusActive,
-		"correlation_survives_session_round_trip":         storedCorrelation == correlationID && loadedSession.CorrelationID == correlationID,
-		"audit_correlation_matches_session_authority":     auditCorrelationCount == 1,
-		"unsafe_plain_secret_columns_are_absent":          unsafePlainColumns == 0,
-		"session_token_hash_schema_is_binary32":           strings.EqualFold(tokenHashType, "binary") && tokenHashLength.Valid && tokenHashLength.Int64 == 32,
-		"session_csrf_hash_schema_is_binary32":            strings.EqualFold(csrfHashType, "binary") && csrfHashLength.Valid && csrfHashLength.Int64 == 32,
-		"oauth_subject_hash_schema_is_binary32":           strings.EqualFold(subjectHashType, "binary") && subjectHashLength.Valid && subjectHashLength.Int64 == 32,
-		"required_records_exist":                          counts["auth_users"] >= 1 && counts["auth_credentials"] >= 1 && counts["auth_sessions"] >= 1 && counts["oauth_identities"] >= 1 && counts["auth_audit_events"] >= 1,
+		"user_id_is_opaque_server_identifier":            strings.HasPrefix(user.ID, "usr_") && len(user.ID) >= 20,
+		"session_id_is_opaque_server_identifier":         strings.HasPrefix(sessionSecret.Session.ID, "ses_") && len(sessionSecret.Session.ID) >= 20,
+		"oauth_identity_id_is_opaque_server_identifier":  strings.HasPrefix(identity.ID, "oid_") && len(identity.ID) >= 20,
+		"credential_record_is_durable_and_non_plaintext": credentialLength >= 32 && credentialAlgorithm == "p15-t001-schema-fixture",
+		"session_token_is_hash_only_at_rest":             len(storedTokenHash) == 32 && auth.EqualOpaqueHash(tokenExpected, bytesToHash(storedTokenHash)),
+		"session_csrf_is_hash_only_at_rest":              len(storedCSRFHash) == 32 && auth.EqualOpaqueHash(csrfExpected, bytesToHash(storedCSRFHash)),
+		"oauth_subject_is_hash_only_at_rest":             len(storedSubjectHash) == 32 && auth.EqualOpaqueHash(subjectExpected, bytesToHash(storedSubjectHash)),
+		"session_lookup_is_server_authoritative":         loadedSession.ID == sessionSecret.Session.ID && loadedSession.UserID == user.ID && loadedSession.Status == auth.SessionStatusActive,
+		"correlation_survives_session_round_trip":        storedCorrelation == correlationID && loadedSession.CorrelationID == correlationID,
+		"audit_correlation_matches_session_authority":    auditCorrelationCount == 1,
+		"unsafe_plain_secret_columns_are_absent":         unsafePlainColumns == 0,
+		"session_token_hash_schema_is_binary32":          strings.EqualFold(tokenHashType, "binary") && tokenHashLength.Valid && tokenHashLength.Int64 == 32,
+		"session_csrf_hash_schema_is_binary32":           strings.EqualFold(csrfHashType, "binary") && csrfHashLength.Valid && csrfHashLength.Int64 == 32,
+		"oauth_subject_hash_schema_is_binary32":          strings.EqualFold(subjectHashType, "binary") && subjectHashLength.Valid && subjectHashLength.Int64 == 32,
+		"required_records_exist":                         counts["auth_users"] >= 1 && counts["auth_credentials"] >= 1 && counts["auth_sessions"] >= 1 && counts["oauth_identities"] >= 1 && counts["auth_audit_events"] >= 1,
 	}
 
 	status := "PASS"
