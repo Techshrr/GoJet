@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	OAuthBrowserHandoffTTL      = 5 * time.Minute
-	OAuthSocialRegistrationTTL  = 15 * time.Minute
-	OAuthHandoffKindCallback    = "callback"
-	OAuthHandoffKindSocial      = "social_registration"
+	OAuthBrowserHandoffTTL     = 5 * time.Minute
+	OAuthSocialRegistrationTTL = 15 * time.Minute
+	OAuthHandoffKindCallback   = "callback"
+	OAuthHandoffKindSocial     = "social_registration"
 )
 
 type OAuthBrowserHandoff struct {
@@ -149,11 +149,11 @@ func (s *OAuthService) ExchangeBrowserHandoff(ctx context.Context, rawCode, corr
 
 	var (
 		handoffID, provider, intent, displayName string
-		userID, identityID, email             sql.NullString
-		subjectHash                           []byte
-		providerEmailVerified                 bool
-		expiresAt                             time.Time
-		consumedAt                            sql.NullTime
+		userID, identityID, email                sql.NullString
+		subjectHash                              []byte
+		providerEmailVerified                    bool
+		expiresAt                                time.Time
+		consumedAt                               sql.NullTime
 	)
 	err = tx.QueryRowContext(ctx, `
 SELECT id,provider,intent,user_id,oauth_identity_id,provider_subject_hash,email_normalized,
