@@ -5,7 +5,7 @@ switch (caseId) {
     await import('./browser_auth.mjs');
     break;
   case 'P15-T025':
-    await import('./browser_account.mjs');
+    await import('./browser_account_guard.mjs');
     break;
   default:
     throw new Error(`Unsupported P15 browser case: ${caseId || '<missing>'}`);
