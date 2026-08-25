@@ -145,15 +145,15 @@ WHERE user_id=? AND action='auth.mail.attempt.sent' AND resource_type='mail_job'
 
 	checks := map[string]bool{
 		"p14_mailworker_delivers_all_three_auth_grant_mail_types": strings.Join(templates, ",") == strings.Join(expected, ",") && sentRows == 3 && sender.deliveries == 3,
-		"mail_delivery_does_not_consume_auth_grants":             unconsumedAfter == 3,
-		"delivery_payloads_render_from_server_derived_grants":    sender.deliveries == 3,
-		"mailworker_uses_inherited_p14_claim_complete_lifecycle": attemptRows == 3 && !drained,
-		"auth_mail_completion_records_auth_owned_safe_audit":     auditRows == 3,
+		"mail_delivery_does_not_consume_auth_grants":              unconsumedAfter == 3,
+		"delivery_payloads_render_from_server_derived_grants":     sender.deliveries == 3,
+		"mailworker_uses_inherited_p14_claim_complete_lifecycle":  attemptRows == 3 && !drained,
+		"auth_mail_completion_records_auth_owned_safe_audit":      auditRows == 3,
 	}
 	return checks, map[string]int{
-		"auth_mail_jobs_sent":               sentRows,
+		"auth_mail_jobs_sent":              sentRows,
 		"grants_unconsumed_after_delivery": unconsumedAfter,
-		"mail_attempts_sent":                attemptRows,
-		"auth_mail_audit_rows":              auditRows,
+		"mail_attempts_sent":               attemptRows,
+		"auth_mail_audit_rows":             auditRows,
 	}, nil
 }
