@@ -115,11 +115,15 @@ func main() {
 		logger.Error("configure Support Tickets and Mail")
 		os.Exit(1)
 	}
+	authHandler, authEnabled, err := buildAuthHandler(db, testAuth)
+	if err != nil {
+		logger.Error("configure Authentication, OAuth and Account", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains, P07 Analytics, P08 QR, conditionally enabled P09 Files, P10 Text,
-	// P11 Bio, P12 Workspace organization, P13 Billing and P14 Support routes explicitly.
-	// Each inner handler retains its own security headers and staged authentication boundary.
+	// P06 Domains through P15 Authentication routes explicitly. Each inner handler
+	// retains its own security headers and staged authentication boundary.
 	root := http.NewServeMux()
 	if workspaceEnabled {
 		mountWorkspaceRoutes(root, workspaceHandler)
@@ -129,6 +133,9 @@ func main() {
 	}
 	if supportEnabled {
 		mountSupportRoutes(root, supportHandler)
+	}
+	if authEnabled {
+		mountAuthRoutes(root, authHandler)
 	}
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -203,7 +210,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)

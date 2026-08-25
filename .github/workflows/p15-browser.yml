@@ -1,0 +1,243 @@
+name: P15 Auth Route Browser Authority
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'internal/auth/**'
+      - 'internal/securetoken/**'
+      - 'internal/support/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/api-client/**'
+      - 'frontend/packages/ui/**'
+      - 'frontend/packages/tokens/**'
+      - 'scripts/p15/browser.mjs'
+      - 'artifacts/v10/P15/test-plan.json'
+      - '.github/workflows/p15-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p15-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-route-browser:
+    name: P15-T024 real Auth route browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_GRANT_KEY_ID: p15-browser-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p15-browser-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_SITE_URL: http://127.0.0.1:4184
+
+    steps:
+      - name: Checkout exact P15 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P15-T024 source boundary
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P15/browser artifacts/v10/P15/captures artifacts/v10/P15/runtime/browser-024
+          go mod verify
+          pnpm install --frozen-lockfile
+          node --check scripts/p15/browser.mjs
+          gofmt -d services/platformapi/cmd/server/auth.go | tee /tmp/p15-auth-http-gofmt.diff
+          test ! -s /tmp/p15-auth-http-gofmt.diff
+          go test ./internal/auth ./internal/securetoken ./internal/support ./services/platformapi/cmd/server
+          go vet ./internal/auth ./internal/securetoken ./internal/support ./services/platformapi/cmd/server
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/site typecheck
+          python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p15-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through current P15 head
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "applying $migration"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build native API and Website Auth surface
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p15-browser-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p15-browser-platformapi > artifacts/v10/P15/runtime/browser-024/native-platformapi.sha256
+          pnpm --filter @gojet/site exec vite build --outDir dist-p15-auth
+
+      - name: Start native API and built Website Auth surface
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p15-browser-platformapi > artifacts/v10/P15/runtime/browser-024/platformapi.log 2>&1 & echo $! > artifacts/v10/P15/runtime/browser-024/platformapi.pid
+          pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4184 --outDir dist-p15-auth > artifacts/v10/P15/runtime/browser-024/site.log 2>&1 & echo $! > artifacts/v10/P15/runtime/browser-024/site.pid
+          for attempt in $(seq 1 60); do
+            api_status="$(curl -sS -o /tmp/p15-providers.json -w '%{http_code}' http://127.0.0.1:18081/api/public/auth/providers || true)"
+            if [ "$api_status" = 200 ] && curl -fsS http://127.0.0.1:4184/login >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat artifacts/v10/P15/runtime/browser-024/platformapi.log || true
+          cat artifacts/v10/P15/runtime/browser-024/site.log || true
+          exit 1
+
+      - name: Run frozen P15-T024 browser authority
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p15/browser.mjs --case P15-T024
+
+      - name: Verify exact-head P15-T024 evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P15/browser/P15-T024.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          errors=[]
+          if data.get('case_id')!='P15-T024': errors.append('case id mismatch')
+          if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
+          if data.get('status')!='PASS': errors.append(f"status={data.get('status')}")
+          if data.get('errors')!=[]: errors.append(f"errors={data.get('errors')}")
+          details=data.get('details',{})
+          if details.get('real_local_api') is not True: errors.append('real local API authority missing')
+          if details.get('provider_registry_count')!=6: errors.append('provider registry mismatch')
+          if details.get('closure_claim') is not False: errors.append('T024 must not claim closure')
+          expected={
+            'login': {'input','invalid','success'},
+            'register': {'input','code-sent'},
+            'verify': {'verifying','success','reused-token'},
+            'forgot': {'input','submitted-neutral'},
+            'reset': {'input','success','invalid-token'},
+            'oauth': {'processing','state-error'},
+            'social': {'loading-handoff','expired-handoff'},
+          }
+          for surface, required in expected.items():
+            actual=set(details.get('states',{}).get(surface,[]))
+            if not required.issubset(actual): errors.append(f'{surface} missing {sorted(required-actual)}')
+          security=details.get('security',{})
+          for key in ('noindex','private_headers','secure_cookie','web_storage_secret_free','raw_callback_not_rendered'):
+            if security.get(key) is not True: errors.append(f'security {key} missing')
+          accessibility=details.get('accessibility',{})
+          for key in ('keyboard_focus','error_focus','labels'):
+            if accessibility.get(key) is not True: errors.append(f'accessibility {key} missing')
+          if details.get('screenshot_count',0)<12: errors.append('insufficient browser captures')
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f"P15-T024 exact-head browser evidence PASS on {os.environ['EXACT_HEAD']}")
+          PY
+          test "$(find artifacts/v10/P15/captures -type f -name 'P15-T024-*.png' | wc -l)" -ge 12
+
+      - name: Enforce P15-T024 evidence secret and PII exclusion
+        if: always()
+        run: |
+          set -euo pipefail
+          ! grep -RIE 'gvc_|grp_|glc_|goh_|gsr_|gos_|gpk_|@example\.test|P15-Browser-|001122334455|89abcdef01234567|authorization:' artifacts/v10/P15/browser/P15-T024.json artifacts/v10/P15/runtime/browser-024 --exclude='*.png' || { echo 'unsafe P15-T024 evidence content detected' >&2; exit 1; }
+
+      - name: Stop P15-T024 browser services
+        if: always()
+        run: |
+          set -euo pipefail
+          for pid_file in artifacts/v10/P15/runtime/browser-024/*.pid; do
+            [ -f "$pid_file" ] || continue
+            kill "$(cat "$pid_file")" 2>/dev/null || true
+          done
+
+      - name: Upload exact-head P15-T024 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t024-auth-browser-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/browser/P15-T024.json
+            artifacts/v10/P15/captures/P15-T024-*.png
+            artifacts/v10/P15/runtime/browser-024/native-platformapi.sha256
