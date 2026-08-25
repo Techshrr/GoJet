@@ -120,6 +120,11 @@ func main() {
 		logger.Error("configure Authentication, OAuth and Account", "error", err)
 		os.Exit(1)
 	}
+	accountHandler, accountEnabled, err := buildAccountHandler(db, redisClient)
+	if err != nil {
+		logger.Error("configure Account settings", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
 	// P06 Domains through P15 Authentication routes explicitly. Each inner handler
@@ -136,6 +141,9 @@ func main() {
 	}
 	if authEnabled {
 		mountAuthRoutes(root, authHandler)
+	}
+	if accountEnabled {
+		mountAccountRoutes(root, accountHandler)
 	}
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -210,7 +218,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled, "account_enabled", accountEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
