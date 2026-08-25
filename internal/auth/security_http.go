@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	SessionCookieName = "__Host-gojet_session"
-	CSRFHeaderName    = "X-CSRF-Token"
-	csrfPrefix        = "gcf_"
+	SessionCookieName         = "__Host-gojet_session"
+	CSRFHeaderName            = "X-CSRF-Token"
+	csrfPrefix                = "gcf_"
 	AuthContentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; img-src 'self' data:; style-src 'self'"
 )
 
