@@ -11,9 +11,15 @@ from pathlib import Path
 
 from case_config_account_oauth import ACCOUNT_OAUTH_CASE_CONFIG
 from case_config_core import CORE_CASE_CONFIG
+from case_config_handoff_mail_audit import HANDOFF_MAIL_AUDIT_CASE_CONFIG
 from case_config_security import SECURITY_CASE_CONFIG
 
-CASE_CONFIG = {**CORE_CASE_CONFIG, **SECURITY_CASE_CONFIG, **ACCOUNT_OAUTH_CASE_CONFIG}
+CASE_CONFIG = {
+    **CORE_CASE_CONFIG,
+    **SECURITY_CASE_CONFIG,
+    **ACCOUNT_OAUTH_CASE_CONFIG,
+    **HANDOFF_MAIL_AUDIT_CASE_CONFIG,
+}
 
 CONTRACT_AUTHORITY = "9ba89a42281709087b40cdcf0cb2eebd54952a99"
 
@@ -87,6 +93,7 @@ def main() -> int:
     source_blobs["core_case_configuration"] = blob("scripts/p15/case_config_core.py")
     source_blobs["security_case_configuration"] = blob("scripts/p15/case_config_security.py")
     source_blobs["account_oauth_case_configuration"] = blob("scripts/p15/case_config_account_oauth.py")
+    source_blobs["handoff_mail_audit_case_configuration"] = blob("scripts/p15/case_config_handoff_mail_audit.py")
     source_blobs["frozen_test_plan"] = blob("artifacts/v10/P15/test-plan.json")
 
     environment = {
