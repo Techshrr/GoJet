@@ -3,7 +3,6 @@ package handoffbatch
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +11,18 @@ import (
 	"github.com/Techshrr/GoJet/internal/support"
 	"github.com/Techshrr/GoJet/scripts/p15/runnerutil"
 )
+
+type t022MailSender struct {
+	deliveries int
+}
+
+func (s *t022MailSender) Send(_ context.Context, recipient string, rendered support.RenderedMail) support.MailDeliveryResult {
+	if strings.TrimSpace(recipient) == "" || strings.TrimSpace(rendered.Subject) == "" || strings.TrimSpace(rendered.Text) == "" {
+		return support.MailDeliveryResult{ErrorCode: "invalid_rendered_mail"}
+	}
+	s.deliveries++
+	return support.MailDeliveryResult{Success: true}
+}
 
 func runT022(ctx context.Context, db *sql.DB) (map[string]bool, map[string]int, error) {
 	key, err := runnerutil.GrantKey()
@@ -59,48 +70,90 @@ func runT022(ctx context.Context, db *sql.DB) (map[string]bool, map[string]int, 
 	if err != nil {
 		return nil, nil, err
 	}
-	templates := make([]string, 0, 3)
-	unconsumedBefore := 0
-	unconsumedAfter := 0
+	sender := &t022MailSender{}
+	worker, err := support.NewMailWorker(queue, sender)
+	if err != nil {
+		return nil, nil, err
+	}
 	for i := 0; i < 3; i++ {
-		claim := fmt.Sprintf("p15-t022-mail-claim-%d", i)
-		claimed, err := queue.ClaimNext(ctx, claim, time.Now().UTC().Add(time.Duration(i+1)*time.Second))
+		worked, err := worker.RunOnce(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		payload, err := queue.LoadDelivery(ctx, claimed)
-		if err != nil {
+		if !worked {
+			return nil, nil, support.ErrNoMailAvailable
+		}
+	}
+	drained, err := worker.RunOnce(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rows, err := db.QueryContext(ctx, `
+SELECT template_key
+FROM mail_jobs
+WHERE status='sent' AND resource_type='auth_one_time_grant' AND recipient_value=?
+ORDER BY template_key`, registered.User.Email)
+	if err != nil {
+		return nil, nil, err
+	}
+	templates := make([]string, 0, 3)
+	for rows.Next() {
+		var templateKey string
+		if err := rows.Scan(&templateKey); err != nil {
+			rows.Close()
 			return nil, nil, err
 		}
-		if _, err := support.RenderMailTemplate(payload.Template, payload.Values); err != nil {
-			return nil, nil, err
-		}
-		templates = append(templates, claimed.Job.TemplateKey)
-		var consumed sql.NullTime
-		if err := db.QueryRowContext(ctx, `SELECT consumed_at FROM auth_one_time_grants WHERE id=?`, claimed.Job.ResourceID).Scan(&consumed); err != nil {
-			return nil, nil, err
-		}
-		if !consumed.Valid {
-			unconsumedBefore++
-		}
-		if _, err := queue.Complete(ctx, claimed, claim, support.MailDeliveryResult{Success: true}, time.Now().UTC().Add(time.Duration(i+4)*time.Second)); err != nil {
-			return nil, nil, err
-		}
-		if err := db.QueryRowContext(ctx, `SELECT consumed_at FROM auth_one_time_grants WHERE id=?`, claimed.Job.ResourceID).Scan(&consumed); err != nil {
-			return nil, nil, err
-		}
-		if !consumed.Valid {
-			unconsumedAfter++
-		}
+		templates = append(templates, templateKey)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
 	}
 	sort.Strings(templates)
 	expected := []string{"auth-email-verification", "auth-login-email-code", "auth-password-reset"}
-	sentRows, _ := runnerutil.Count(ctx, db, `SELECT COUNT(*) FROM mail_jobs WHERE status='sent' AND resource_type='auth_one_time_grant' AND recipient_value=?`, registered.User.Email)
-	checks := map[string]bool{
-		"p14_queue_delivers_all_three_auth_grant_mail_types":   strings.Join(templates, ",") == strings.Join(expected, ",") && sentRows == 3,
-		"mail_delivery_does_not_consume_auth_grants":           unconsumedBefore == 3 && unconsumedAfter == 3,
-		"delivery_payloads_render_from_server_derived_grants":  len(templates) == 3,
-		"mail_claim_complete_uses_inherited_p14_state_machine": sentRows == 3,
+
+	sentRows, err := runnerutil.Count(ctx, db, `SELECT COUNT(*) FROM mail_jobs WHERE status='sent' AND resource_type='auth_one_time_grant' AND recipient_value=?`, registered.User.Email)
+	if err != nil {
+		return nil, nil, err
 	}
-	return checks, map[string]int{"auth_mail_jobs_sent": sentRows, "grants_unconsumed_after_delivery": unconsumedAfter}, nil
+	unconsumedAfter, err := runnerutil.Count(ctx, db, `
+SELECT COUNT(*)
+FROM auth_one_time_grants g
+JOIN mail_jobs m ON m.resource_type='auth_one_time_grant' AND m.resource_id=g.id
+WHERE m.recipient_value=? AND m.status='sent' AND g.consumed_at IS NULL`, registered.User.Email)
+	if err != nil {
+		return nil, nil, err
+	}
+	attemptRows, err := runnerutil.Count(ctx, db, `
+SELECT COUNT(*)
+FROM mail_attempts a
+JOIN mail_jobs m ON m.id=a.mail_job_id
+WHERE m.recipient_value=? AND m.resource_type='auth_one_time_grant' AND a.status='sent'`, registered.User.Email)
+	if err != nil {
+		return nil, nil, err
+	}
+	auditRows, err := runnerutil.Count(ctx, db, `
+SELECT COUNT(*)
+FROM auth_audit_events
+WHERE user_id=? AND action='auth.mail.attempt.sent' AND resource_type='mail_job' AND result='success'`, registered.User.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	checks := map[string]bool{
+		"p14_mailworker_delivers_all_three_auth_grant_mail_types": strings.Join(templates, ",") == strings.Join(expected, ",") && sentRows == 3 && sender.deliveries == 3,
+		"mail_delivery_does_not_consume_auth_grants":             unconsumedAfter == 3,
+		"delivery_payloads_render_from_server_derived_grants":    sender.deliveries == 3,
+		"mailworker_uses_inherited_p14_claim_complete_lifecycle": attemptRows == 3 && !drained,
+		"auth_mail_completion_records_auth_owned_safe_audit":     auditRows == 3,
+	}
+	return checks, map[string]int{
+		"auth_mail_jobs_sent":               sentRows,
+		"grants_unconsumed_after_delivery": unconsumedAfter,
+		"mail_attempts_sent":                attemptRows,
+		"auth_mail_audit_rows":              auditRows,
+	}, nil
 }

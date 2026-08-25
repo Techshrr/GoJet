@@ -145,15 +145,35 @@ jobs:
           done
 
       - name: Run frozen P15-T019 driver
-        run: python3 scripts/p15/integration.py --case P15-T019 | tee /tmp/p15-t019-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T019 | tee /tmp/p15-t019-result.json
+
       - name: Run frozen P15-T020 driver
-        run: python3 scripts/p15/integration.py --case P15-T020 | tee /tmp/p15-t020-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T020 | tee /tmp/p15-t020-result.json
+
       - name: Run frozen P15-T021 driver
-        run: python3 scripts/p15/integration.py --case P15-T021 | tee /tmp/p15-t021-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T021 | tee /tmp/p15-t021-result.json
+
       - name: Run frozen P15-T022 driver
-        run: python3 scripts/p15/integration.py --case P15-T022 | tee /tmp/p15-t022-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T022 | tee /tmp/p15-t022-result.json
+
       - name: Run frozen P15-T023 driver
-        run: python3 scripts/p15/integration.py --case P15-T023 | tee /tmp/p15-t023-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T023 | tee /tmp/p15-t023-result.json
+
       - name: Run frozen P15-T027 driver and verify exact-head evidence
         id: evidence
         shell: bash

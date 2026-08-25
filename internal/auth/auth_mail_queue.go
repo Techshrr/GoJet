@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 
 // AuthMailQueue is a narrow P15 adapter over the signed P14 MySQL mail queue.
 // Claim/retry/idempotency/dispatch remain P14-owned. P15 only resolves active
-// auth grant variables from a server-held derivation key at delivery time.
+// auth grant variables from a server-held derivation key at delivery time and
+// records auth-owned completion audit without routing auth resources through
+// P14 support-ticket workspace audit semantics.
 type AuthMailQueue struct {
 	db       *sql.DB
 	base     *support.MySQLMailStore
@@ -40,10 +43,101 @@ func (q *AuthMailQueue) ClaimNext(ctx context.Context, rawClaimToken string, now
 }
 
 func (q *AuthMailQueue) Complete(ctx context.Context, claimed support.ClaimedMail, rawClaimToken string, delivery support.MailDeliveryResult, now time.Time) (support.MailJob, error) {
-	if q == nil || q.base == nil {
+	if q == nil || q.db == nil || q.base == nil {
 		return support.MailJob{}, support.ErrInvalidInput
 	}
-	return q.base.Complete(ctx, claimed, rawClaimToken, delivery, now)
+	if claimed.Job.ResourceType != "auth_one_time_grant" {
+		return q.base.Complete(ctx, claimed, rawClaimToken, delivery, now)
+	}
+
+	next, err := support.CompleteMailJob(claimed.Job, rawClaimToken, delivery, now.UTC())
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
+UPDATE mail_jobs
+SET status=?,next_attempt_at=?,claim_token_hash=NULL,claim_expires_at=NULL,last_error_code=?,updated_at=?
+WHERE id=? AND status='sending' AND claim_token_hash=? AND attempt_count=?`,
+		string(next.Status), next.NextAttemptAt, nullableAuthMailString(next.LastErrorCode), next.UpdatedAt,
+		next.ID, claimed.Job.ClaimTokenHash[:], claimed.Job.AttemptCount)
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	if rows != 1 {
+		return support.MailJob{}, support.ErrMailClaim
+	}
+
+	attemptStatus := "terminal_failure"
+	auditResult := "failed"
+	if delivery.Success {
+		attemptStatus = "sent"
+		auditResult = "success"
+	} else if delivery.Transient && next.Status == support.MailRetrying {
+		attemptStatus = "transient_failure"
+	}
+	attemptResult, err := tx.ExecContext(ctx, `
+UPDATE mail_attempts
+SET status=?,error_code=?,completed_at=?
+WHERE mail_job_id=? AND attempt_number=? AND status='sending'`,
+		attemptStatus, nullableAuthMailString(next.LastErrorCode), next.UpdatedAt, next.ID, next.AttemptCount)
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	attemptRows, err := attemptResult.RowsAffected()
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	if attemptRows != 1 {
+		return support.MailJob{}, support.ErrMailState
+	}
+
+	var userID sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT user_id FROM auth_one_time_grants WHERE id=?`, next.ResourceID).Scan(&userID); errors.Is(err, sql.ErrNoRows) {
+		return support.MailJob{}, support.ErrInvalidInput
+	} else if err != nil {
+		return support.MailJob{}, err
+	}
+	var userValue any
+	if userID.Valid && strings.TrimSpace(userID.String) != "" {
+		userValue = userID.String
+	}
+	metadata := map[string]any{
+		"template_key":   next.TemplateKey,
+		"attempt_number": next.AttemptCount,
+		"status":         string(next.Status),
+	}
+	if next.LastErrorCode != "" {
+		metadata["error_code"] = next.LastErrorCode
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return support.MailJob{}, err
+	}
+	correlationID := fmt.Sprintf("mail:%s:%d", next.ID, next.AttemptCount)
+	if !validCorrelationID(correlationID) {
+		return support.MailJob{}, support.ErrInvalidInput
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO auth_audit_events
+(actor_kind,actor_id,user_id,action,resource_type,resource_id,result,request_correlation_id,metadata_json,created_at)
+VALUES ('system','',?,?, 'mail_job',?,?,?, ?,?)`,
+		userValue, "auth.mail.attempt."+attemptStatus, next.ID, auditResult, correlationID, metadataJSON, next.UpdatedAt); err != nil {
+		return support.MailJob{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return support.MailJob{}, err
+	}
+	return next, nil
 }
 
 func (q *AuthMailQueue) MailDispatchEnabled(ctx context.Context) (bool, error) {
@@ -141,4 +235,12 @@ FROM auth_one_time_grants WHERE id=?`, claimed.Job.ResourceID).
 		Values:    map[string]string{variable: code},
 		Recipient: claimed.Job.RecipientValue,
 	}, nil
+}
+
+func nullableAuthMailString(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return value
 }

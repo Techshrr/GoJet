@@ -79,7 +79,7 @@ HANDOFF_MAIL_AUDIT_CASE_CONFIG = {
     "P15-T022": {
         "runner": "./scripts/p15/t022_runner",
         "evidence": "artifacts/v10/P15/mail/P15-T022.json",
-        "environment": "native Go P15 verification/login-code/recovery grants delivered through signed P14 durable MySQL mail queue semantics",
+        "environment": "native Go P15 verification/login-code/recovery grants delivered through signed P14 MailWorker and durable MySQL mail queue semantics",
         "requires_grant_key": True,
         "source_paths": {
             "auth_registration": "internal/auth/registration.go",
@@ -88,6 +88,7 @@ HANDOFF_MAIL_AUDIT_CASE_CONFIG = {
             "auth_mail_queue": "internal/auth/auth_mail_queue.go",
             "support_mail": "internal/support/mail.go",
             "support_mail_store": "internal/support/mail_store.go",
+            "support_mail_worker": "internal/support/mail_worker.go",
             "runner_util": "scripts/p15/runnerutil/util.go",
             "batch_runner": "scripts/p15/handoffbatch/runner.go",
             "case_runner": "scripts/p15/handoffbatch/case_t022.go",
