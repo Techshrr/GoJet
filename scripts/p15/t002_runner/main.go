@@ -106,15 +106,15 @@ SELECT COUNT(*),MAX(status) FROM auth_users WHERE email_normalized=?`, strings.T
 	}
 
 	var (
-		grantCount        int
-		grantPurpose      string
-		grantTokenHash    []byte
-		grantTokenKeyID   sql.NullString
-		grantExpiresAt    time.Time
-		grantConsumedAt   sql.NullTime
-		grantInvalidated  sql.NullTime
-		grantCorrelation  string
-		grantCreatedAt    time.Time
+		grantCount       int
+		grantPurpose     string
+		grantTokenHash   []byte
+		grantTokenKeyID  sql.NullString
+		grantExpiresAt   time.Time
+		grantConsumedAt  sql.NullTime
+		grantInvalidated sql.NullTime
+		grantCorrelation string
+		grantCreatedAt   time.Time
 	)
 	if err := db.QueryRowContext(ctx, `
 SELECT COUNT(*),MAX(purpose),MAX(token_hash),MAX(token_key_id),MAX(expires_at),MAX(consumed_at),MAX(invalidated_at),MAX(correlation_id),MAX(created_at)
@@ -124,13 +124,13 @@ FROM auth_one_time_grants WHERE user_id=? AND purpose='email_verification'`, reg
 	}
 
 	var (
-		mailCount       int
-		mailTemplate    string
+		mailCount         int
+		mailTemplate      string
 		mailRecipientKind string
-		mailResourceType string
-		mailStatus      string
-		mailAttemptCount int
-		mailHash        []byte
+		mailResourceType  string
+		mailStatus        string
+		mailAttemptCount  int
+		mailHash          []byte
 	)
 	if err := db.QueryRowContext(ctx, `
 SELECT COUNT(*),MAX(template_key),MAX(recipient_kind),MAX(resource_type),MAX(status),MAX(attempt_count),MAX(idempotency_key_hash)
@@ -173,18 +173,18 @@ WHERE user_id=? AND action='auth.registration.created' AND resource_type='auth_o
 		"registration_audit_rows": auditCount,
 	}
 	checks := map[string]bool{
-		"invalid_registration_rejected_without_mutation": errors.Is(invalidErr, auth.ErrInvalid) && usersBeforeInvalid == usersAfterInvalid,
-		"normalized_account_is_unique":                   userCount == 1 && userStatus == auth.UserStatusPendingVerification,
+		"invalid_registration_rejected_without_mutation":      errors.Is(invalidErr, auth.ErrInvalid) && usersBeforeInvalid == usersAfterInvalid,
+		"normalized_account_is_unique":                        userCount == 1 && userStatus == auth.UserStatusPendingVerification,
 		"duplicate_registration_fails_without_second_account": errors.Is(duplicateErr, auth.ErrConflict) && userCount == 1,
-		"verification_grant_is_single_and_pending":       grantCount == 1 && grantPurpose == "email_verification" && !grantConsumedAt.Valid && !grantInvalidated.Valid,
-		"verification_grant_is_expiry_bound":             expiryDelta >= auth.EmailVerificationTTL-time.Second && expiryDelta <= auth.EmailVerificationTTL+time.Second && grantExpiresAt.After(registeredAt),
-		"verification_grant_is_hash_only_at_rest":        len(grantTokenHash) == 32 && expectedHash == storedHash,
-		"verification_code_is_runtime_opaque":            strings.HasPrefix(registration.VerificationCode, "gvc_") && len(registration.VerificationCode) >= 40 && registration.VerificationCode == derivedAgain,
-		"verification_key_identity_is_durable":           grantTokenKeyID.Valid && grantTokenKeyID.String == grantKey.ID() && registration.Grant.TokenKeyID == grantKey.ID(),
-		"verification_correlation_is_preserved":          grantCorrelation == correlationID && registration.Grant.CorrelationID == correlationID,
-		"p14_mail_job_is_queued_once":                    mailCount == 1 && mailTemplate == "auth-email-verification" && mailRecipientKind == "auth_user" && mailResourceType == "auth_one_time_grant" && mailStatus == "queued" && mailAttemptCount == 0 && len(mailHash) == 32,
-		"p14_versioned_template_is_present":               templateCount == 1,
-		"registration_is_audited_by_correlation":         auditCount == 1,
+		"verification_grant_is_single_and_pending":            grantCount == 1 && grantPurpose == "email_verification" && !grantConsumedAt.Valid && !grantInvalidated.Valid,
+		"verification_grant_is_expiry_bound":                  expiryDelta >= auth.EmailVerificationTTL-time.Second && expiryDelta <= auth.EmailVerificationTTL+time.Second && grantExpiresAt.After(registeredAt),
+		"verification_grant_is_hash_only_at_rest":             len(grantTokenHash) == 32 && expectedHash == storedHash,
+		"verification_code_is_runtime_opaque":                 strings.HasPrefix(registration.VerificationCode, "gvc_") && len(registration.VerificationCode) >= 40 && registration.VerificationCode == derivedAgain,
+		"verification_key_identity_is_durable":                grantTokenKeyID.Valid && grantTokenKeyID.String == grantKey.ID() && registration.Grant.TokenKeyID == grantKey.ID(),
+		"verification_correlation_is_preserved":               grantCorrelation == correlationID && registration.Grant.CorrelationID == correlationID,
+		"p14_mail_job_is_queued_once":                         mailCount == 1 && mailTemplate == "auth-email-verification" && mailRecipientKind == "auth_user" && mailResourceType == "auth_one_time_grant" && mailStatus == "queued" && mailAttemptCount == 0 && len(mailHash) == 32,
+		"p14_versioned_template_is_present":                   templateCount == 1,
+		"registration_is_audited_by_correlation":              auditCount == 1,
 	}
 
 	status := "PASS"
