@@ -9,10 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from case_config_account_oauth import ACCOUNT_OAUTH_CASE_CONFIG
 from case_config_core import CORE_CASE_CONFIG
 from case_config_security import SECURITY_CASE_CONFIG
 
-CASE_CONFIG = {**CORE_CASE_CONFIG, **SECURITY_CASE_CONFIG}
+CASE_CONFIG = {**CORE_CASE_CONFIG, **SECURITY_CASE_CONFIG, **ACCOUNT_OAUTH_CASE_CONFIG}
 
 CONTRACT_AUTHORITY = "9ba89a42281709087b40cdcf0cb2eebd54952a99"
 
@@ -49,6 +50,9 @@ def require_runtime(config: dict[str, object], case: str) -> None:
         fail(f"{case} GOJET_REDIS_ADDR is required")
     if config.get("requires_csrf_key") and not os.environ.get("GOJET_AUTH_CSRF_KEY_HEX", "").strip():
         fail(f"{case} GOJET_AUTH_CSRF_KEY_HEX is required")
+    if config.get("requires_oauth_key"):
+        if not os.environ.get("GOJET_OAUTH_KEY_ID", "").strip() or not os.environ.get("GOJET_OAUTH_KEY_HEX", "").strip():
+            fail(f"{case} OAuth encryption runtime configuration is required")
 
 
 def main() -> int:
@@ -82,6 +86,7 @@ def main() -> int:
     source_blobs["integration_driver"] = blob("scripts/p15/integration.py")
     source_blobs["core_case_configuration"] = blob("scripts/p15/case_config_core.py")
     source_blobs["security_case_configuration"] = blob("scripts/p15/case_config_security.py")
+    source_blobs["account_oauth_case_configuration"] = blob("scripts/p15/case_config_account_oauth.py")
     source_blobs["frozen_test_plan"] = blob("artifacts/v10/P15/test-plan.json")
 
     environment = {
@@ -93,6 +98,8 @@ def main() -> int:
         environment["redis"] = "real Redis service"
     if config.get("requires_csrf_key"):
         environment["csrf_key"] = "server-held 32-byte HMAC fixture; raw key excluded from evidence"
+    if config.get("requires_oauth_key"):
+        environment["oauth_key"] = "server-held 32-byte authenticated-encryption fixture; raw key excluded from evidence"
 
     evidence = {
         "node": "P15",

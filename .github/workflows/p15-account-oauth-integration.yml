@@ -1,0 +1,196 @@
+name: P15 Account OAuth Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'internal/auth/**'
+      - 'internal/securetoken/**'
+      - 'internal/support/**'
+      - 'migrations/**'
+      - 'scripts/p15/integration.py'
+      - 'scripts/p15/case_config_*.py'
+      - 'scripts/p15/runnerutil/**'
+      - 'scripts/p15/t013_runner/**'
+      - 'scripts/p15/t014_runner/**'
+      - 'scripts/p15/t015_runner/**'
+      - 'scripts/p15/t016_runner/**'
+      - 'scripts/p15/t017_runner/**'
+      - 'scripts/p15/t018_runner/**'
+      - 'artifacts/v10/P15/test-plan.json'
+      - '.github/workflows/p15-account-oauth-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p15-account-oauth-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t013-t018:
+    name: P15-T013/T018 account and OAuth evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_AUTH_GRANT_KEY_ID: p15-ci-fixture-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_OAUTH_KEY_ID: p15-oauth-ci-fixture-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+
+    steps:
+      - name: Checkout exact P15 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify service clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P15 T013-T018 source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p15/integration.py scripts/p15/case_config_core.py scripts/p15/case_config_security.py scripts/p15/case_config_account_oauth.py
+          gofmt -d \
+            internal/auth/account.go \
+            internal/auth/mutation_authority.go \
+            internal/auth/oauth_types.go \
+            internal/auth/oauth_provider.go \
+            internal/auth/oauth_flow.go \
+            internal/auth/oauth_connected.go \
+            internal/auth/oauth_crypto.go \
+            scripts/p15/runnerutil/util.go \
+            scripts/p15/t013_runner/main.go \
+            scripts/p15/t014_runner/main.go \
+            scripts/p15/t015_runner/main.go \
+            scripts/p15/t016_runner/main.go \
+            scripts/p15/t017_runner/main.go \
+            scripts/p15/t018_runner/main.go | tee /tmp/p15-account-oauth-gofmt.diff
+          test ! -s /tmp/p15-account-oauth-gofmt.diff
+          go test ./...
+          go vet ./internal/auth ./internal/securetoken ./internal/support
+          python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p15-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through current P15 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Run frozen P15-T013 driver
+        run: python3 scripts/p15/integration.py --case P15-T013 | tee /tmp/p15-t013-result.json
+      - name: Run frozen P15-T014 driver
+        run: python3 scripts/p15/integration.py --case P15-T014 | tee /tmp/p15-t014-result.json
+      - name: Run frozen P15-T015 driver
+        run: python3 scripts/p15/integration.py --case P15-T015 | tee /tmp/p15-t015-result.json
+      - name: Run frozen P15-T016 driver
+        run: python3 scripts/p15/integration.py --case P15-T016 | tee /tmp/p15-t016-result.json
+      - name: Run frozen P15-T017 driver
+        run: python3 scripts/p15/integration.py --case P15-T017 | tee /tmp/p15-t017-result.json
+      - name: Run frozen P15-T018 driver
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T018 | tee /tmp/p15-t018-result.json
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P15-T013':'artifacts/v10/P15/api/P15-T013.json',
+              'P15-T014':'artifacts/v10/P15/api/P15-T014.json',
+              'P15-T015':'artifacts/v10/P15/oauth/P15-T015.json',
+              'P15-T016':'artifacts/v10/P15/oauth/P15-T016.json',
+              'P15-T017':'artifacts/v10/P15/oauth/P15-T017.json',
+              'P15-T018':'artifacts/v10/P15/oauth/P15-T018.json',
+          }
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P15',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P15 T013-T018 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t013-t018-account-oauth-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/api/P15-T013.json
+            artifacts/v10/P15/api/P15-T014.json
+            artifacts/v10/P15/oauth/P15-T015.json
+            artifacts/v10/P15/oauth/P15-T016.json
+            artifacts/v10/P15/oauth/P15-T017.json
+            artifacts/v10/P15/oauth/P15-T018.json
+            artifacts/v10/P15/test-plan.json
+            scripts/p15/case_config_account_oauth.py
