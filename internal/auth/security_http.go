@@ -19,6 +19,7 @@ const (
 	SessionCookieName = "__Host-gojet_session"
 	CSRFHeaderName    = "X-CSRF-Token"
 	csrfPrefix        = "gcf_"
+	AuthContentSecurityPolicy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; img-src 'self' data:; style-src 'self'"
 )
 
 type DigestReplayStore interface {
@@ -29,6 +30,11 @@ func ApplyPrivateAuthHeaders(header http.Header) {
 	header.Set("Cache-Control", "no-store, private")
 	header.Set("Pragma", "no-cache")
 	header.Set("X-Robots-Tag", "noindex, nofollow")
+	header.Set("Content-Security-Policy", AuthContentSecurityPolicy)
+	header.Set("Referrer-Policy", "no-referrer")
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("X-Frame-Options", "DENY")
+	header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 }
 
 func NewSessionCookie(rawToken string, expiresAt time.Time) (*http.Cookie, error) {
