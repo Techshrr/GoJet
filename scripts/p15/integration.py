@@ -12,7 +12,7 @@ from pathlib import Path
 CONTRACT_AUTHORITY = "9ba89a42281709087b40cdcf0cb2eebd54952a99"
 CASE_CONFIG = {
     "P15-T001": {
-        "runner": "./scripts/p15/t001_runner.go",
+        "runner": "./scripts/p15/t001_runner",
         "evidence": Path("artifacts/v10/P15/api/P15-T001.json"),
         "environment": "native Go internal/auth Store against durable MySQL",
         "source_paths": {
@@ -20,7 +20,7 @@ CASE_CONFIG = {
             "auth_store": "internal/auth/store.go",
             "auth_model": "internal/auth/model.go",
             "auth_opaque": "internal/auth/opaque.go",
-            "t001_runner": "scripts/p15/t001_runner.go",
+            "t001_runner": "scripts/p15/t001_runner/main.go",
         },
         "evidence_policy": {
             "raw_password_present": False,
@@ -37,7 +37,7 @@ CASE_CONFIG = {
         ),
     },
     "P15-T002": {
-        "runner": "./scripts/p15/t002_runner.go",
+        "runner": "./scripts/p15/t002_runner",
         "evidence": Path("artifacts/v10/P15/api/P15-T002.json"),
         "environment": "native Go P15 registration service with durable MySQL and inherited P14 mail queue/template authority",
         "source_paths": {
@@ -48,7 +48,7 @@ CASE_CONFIG = {
             "p14_mail_enqueue_boundary": "internal/support/mail_enqueue.go",
             "p14_mail_core": "internal/support/mail.go",
             "p14_mail_store": "internal/support/mail_store.go",
-            "t002_runner": "scripts/p15/t002_runner.go",
+            "t002_runner": "scripts/p15/t002_runner/main.go",
         },
         "evidence_policy": {
             "raw_password_present": False,
