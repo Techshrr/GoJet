@@ -15,17 +15,20 @@ import (
 type AuthRateSurface string
 
 const (
-	AuthRateRegister AuthRateSurface = "register"
-	AuthRateLogin    AuthRateSurface = "login"
+	AuthRateRegister  AuthRateSurface = "register"
+	AuthRateLogin     AuthRateSurface = "login"
 	AuthRateEmailCode AuthRateSurface = "login-email-code"
 	AuthRateRecovery  AuthRateSurface = "recovery"
 )
 
 const authRateScript = `
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
-local ttl = redis.call('PTTL', KEYS[1])
-return {count, ttl}
+local identity_count = redis.call('INCR', KEYS[1])
+if identity_count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+local identity_ttl = redis.call('PTTL', KEYS[1])
+local ip_count = redis.call('INCR', KEYS[2])
+if ip_count == 1 then redis.call('PEXPIRE', KEYS[2], ARGV[1]) end
+local ip_ttl = redis.call('PTTL', KEYS[2])
+return {identity_count, identity_ttl, ip_count, ip_ttl}
 `
 
 type RedisDigestReplayStore struct {
@@ -51,9 +54,11 @@ func (s *RedisDigestReplayStore) ClaimDigest(ctx context.Context, digest [32]byt
 }
 
 type RateDecision struct {
-	Allowed    bool
-	RetryAfter time.Duration
-	Count      int64
+	Allowed       bool
+	RetryAfter    time.Duration
+	Count         int64
+	IdentityCount int64
+	IPCount       int64
 }
 
 type RedisAuthRateLimiter struct {
@@ -73,25 +78,43 @@ func (l *RedisAuthRateLimiter) Allow(ctx context.Context, surface AuthRateSurfac
 	if l == nil || l.client == nil || !validAuthRateSurface(surface) {
 		return RateDecision{Allowed: false}, ErrInvalid
 	}
-	key := authRateKey(surface, identity, remoteAddr)
-	values, err := l.client.Eval(ctx, authRateScript, []string{key}, l.window.Milliseconds()).Slice()
-	if err != nil || len(values) != 2 {
+	identityKey, ipKey := authRateKeys(surface, identity, remoteAddr)
+	values, err := l.client.Eval(ctx, authRateScript, []string{identityKey, ipKey}, l.window.Milliseconds()).Slice()
+	if err != nil || len(values) != 4 {
 		return RateDecision{Allowed: false}, err
 	}
-	count, ok1 := values[0].(int64)
-	ttlMS, ok2 := values[1].(int64)
-	if !ok1 || !ok2 {
+	identityCount, ok1 := redisInt64(values[0])
+	identityTTLMS, ok2 := redisInt64(values[1])
+	ipCount, ok3 := redisInt64(values[2])
+	ipTTLMS, ok4 := redisInt64(values[3])
+	if !ok1 || !ok2 || !ok3 || !ok4 {
 		return RateDecision{Allowed: false}, ErrInvalid
 	}
-	if ttlMS < 0 {
-		ttlMS = l.window.Milliseconds()
+	if identityTTLMS < 0 {
+		identityTTLMS = l.window.Milliseconds()
 	}
-	retry := time.Duration(ttlMS) * time.Millisecond
+	if ipTTLMS < 0 {
+		ipTTLMS = l.window.Milliseconds()
+	}
+	retryMS := identityTTLMS
+	if ipTTLMS > retryMS {
+		retryMS = ipTTLMS
+	}
+	retry := time.Duration(retryMS) * time.Millisecond
 	if retry > l.window {
 		retry = l.window
 	}
-	decision := RateDecision{Allowed: count <= l.limit, RetryAfter: retry, Count: count}
-	return decision, nil
+	count := identityCount
+	if ipCount > count {
+		count = ipCount
+	}
+	return RateDecision{
+		Allowed:       identityCount <= l.limit && ipCount <= l.limit,
+		RetryAfter:    retry,
+		Count:         count,
+		IdentityCount: identityCount,
+		IPCount:       ipCount,
+	}, nil
 }
 
 func validAuthRateSurface(surface AuthRateSurface) bool {
@@ -103,8 +126,11 @@ func validAuthRateSurface(surface AuthRateSurface) bool {
 	}
 }
 
-func authRateKey(surface AuthRateSurface, identity, remoteAddr string) string {
+func authRateKeys(surface AuthRateSurface, identity, remoteAddr string) (string, string) {
 	identity = strings.ToLower(strings.TrimSpace(identity))
+	if identity == "" {
+		identity = "anonymous"
+	}
 	host := strings.TrimSpace(remoteAddr)
 	if parsed, _, err := net.SplitHostPort(host); err == nil {
 		host = parsed
@@ -112,6 +138,19 @@ func authRateKey(surface AuthRateSurface, identity, remoteAddr string) string {
 	if host == "" {
 		host = "unknown"
 	}
-	sum := sha256.Sum256([]byte(identity + "\x00" + host))
-	return fmt.Sprintf("auth:rate:%s:%s", surface, hex.EncodeToString(sum[:16]))
+	identityHash := sha256.Sum256([]byte(identity))
+	ipHash := sha256.Sum256([]byte(host))
+	return fmt.Sprintf("auth:rate:%s:identity:%s", surface, hex.EncodeToString(identityHash[:16])),
+		fmt.Sprintf("auth:rate:%s:ip:%s", surface, hex.EncodeToString(ipHash[:16]))
+}
+
+func redisInt64(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	default:
+		return 0, false
+	}
 }

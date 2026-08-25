@@ -101,10 +101,11 @@ func normalizeOrigin(raw string) (string, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
 		return "", ErrInvalid
 	}
-	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "https" && scheme != "http" {
 		return "", ErrInvalid
 	}
-	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host), nil
+	return scheme + "://" + strings.ToLower(parsed.Host), nil
 }
 
 type CSRFManager struct {
