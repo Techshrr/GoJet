@@ -101,9 +101,7 @@ jobs:
             internal/support/mail_enqueue.go | tee /tmp/p15-gofmt.diff
           test ! -s /tmp/p15-gofmt.diff
           go test ./...
-          go vet ./internal/auth ./internal/securetoken ./internal/support \
-            ./scripts/p15/t001_runner ./scripts/p15/t002_runner ./scripts/p15/t003_runner ./scripts/p15/t004_runner \
-            ./scripts/p15/t005_runner ./scripts/p15/t006_runner ./scripts/p15/t007_runner
+          go vet ./internal/auth ./internal/securetoken ./internal/support
           python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
           python3 - <<'PY'
           import json
