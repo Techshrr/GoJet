@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
@@ -46,6 +46,12 @@ type MeResponse = {
 type ApiFailure = Error & { status?: number };
 
 const providers = ['google', 'facebook', 'github', 'qq', 'wechat', 'rainbow'] as const;
+const accountTabs = [
+  ['Profile', '/app/settings/profile'],
+  ['Security', '/app/settings/security'],
+  ['Sessions', '/app/settings/sessions'],
+  ['Connected accounts', '/app/settings/connected-accounts'],
+] as const;
 
 async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
@@ -72,6 +78,22 @@ async function currentAccount(): Promise<MeResponse> {
 }
 
 function AccountFrame({ title, state, children }: { title: string; state: AccountState; children: ReactNode }) {
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const links = Array.from(event.currentTarget.querySelectorAll<HTMLAnchorElement>('a[data-account-tab]'));
+    const current = links.indexOf(document.activeElement as HTMLAnchorElement);
+    if (current < 0 || links.length === 0) return;
+
+    let next = current;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = links.length - 1;
+    else if (event.key === 'ArrowRight') next = (current + 1) % links.length;
+    else next = (current - 1 + links.length) % links.length;
+
+    event.preventDefault();
+    links[next]?.focus();
+  };
+
   return (
     <WorkspaceShell state="notification-attention" sectionLabel={`Settings / ${title}`}>
       <section className="p15-account" data-account-state={state} aria-busy={state === 'loading'}>
@@ -79,11 +101,15 @@ function AccountFrame({ title, state, children }: { title: string; state: Accoun
           <span className="p15-account__eyebrow">Account settings</span>
           <h1>{title}</h1>
         </header>
-        <nav className="p15-account__tabs" aria-label="Account settings">
-          <a href="/app/settings/profile">Profile</a>
-          <a href="/app/settings/security">Security</a>
-          <a href="/app/settings/sessions">Sessions</a>
-          <a href="/app/settings/connected-accounts">Connected accounts</a>
+        <nav className="p15-account__tabs" aria-label="Account settings" onKeyDown={handleTabKeyDown}>
+          {accountTabs.map(([label, href]) => {
+            const active = label === title;
+            return (
+              <a key={href} href={href} data-account-tab aria-current={active ? 'page' : undefined} tabIndex={active ? 0 : -1}>
+                {label}
+              </a>
+            );
+          })}
         </nav>
         {children}
       </section>
