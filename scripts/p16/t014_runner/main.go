@@ -189,14 +189,14 @@ func run() (output, error) {
 		"clicks_after_final_allow": clicksAfterAccepted,
 	}
 	out.Checks = map[string]bool{
-		"custom_domain_axis_blocks_before_destination_risk": customResult.Status == http.StatusServiceUnavailable && customResult.Location == "" && strings.Contains(strings.ToLower(customResult.Body), "domain unavailable"),
-		"link_state_blocks_before_destination_risk": pausedResult.Location == "" && clicksAfterRisk == 0 && !strings.Contains(pausedResult.Body, pausedTarget),
-		"non_allow_risk_blocks_before_routing_ab_utm_password_and_counters": riskReview.Location == "" && clicksAfterRisk == 0 && !strings.Contains(strings.ToLower(riskReview.Body), "password required") && strings.Contains(strings.ToLower(riskReview.Body), "under review"),
-		"access_challenge_occurs_only_after_exact_risk_allow": passwordChallenge.Location == "" && clicksAfterChallenge == 0 && strings.Contains(strings.ToLower(passwordChallenge.Body), "password required"),
-		"routing_and_utm_reach_location_only_after_password_and_counter_authority": accepted.Status == 302 && acceptedURL.Hostname() == "route-secret-t014.example" && acceptedQuery.Get("existing") == "1" && acceptedQuery.Get("utm_source") == "p16-runtime" && acceptedQuery.Get("utm_campaign") == "safety-order" && clicksAfterAccepted == 1,
+		"custom_domain_axis_blocks_before_destination_risk":                          customResult.Status == http.StatusServiceUnavailable && customResult.Location == "" && strings.Contains(strings.ToLower(customResult.Body), "domain unavailable"),
+		"link_state_blocks_before_destination_risk":                                  pausedResult.Location == "" && clicksAfterRisk == 0 && !strings.Contains(pausedResult.Body, pausedTarget),
+		"non_allow_risk_blocks_before_routing_ab_utm_password_and_counters":          riskReview.Location == "" && clicksAfterRisk == 0 && !strings.Contains(strings.ToLower(riskReview.Body), "password required") && strings.Contains(strings.ToLower(riskReview.Body), "under review"),
+		"access_challenge_occurs_only_after_exact_risk_allow":                        passwordChallenge.Location == "" && clicksAfterChallenge == 0 && strings.Contains(strings.ToLower(passwordChallenge.Body), "password required"),
+		"routing_and_utm_reach_location_only_after_password_and_counter_authority":   accepted.Status == 302 && acceptedURL.Hostname() == "route-secret-t014.example" && acceptedQuery.Get("existing") == "1" && acceptedQuery.Get("utm_source") == "p16-runtime" && acceptedQuery.Get("utm_campaign") == "safety-order" && clicksAfterAccepted == 1,
 		"one_time_click_limit_is_after_risk_and_access_and_prevents_second_location": exhausted.Location == "" && clicksAfterExhausted == 1 && (exhausted.Status == http.StatusGone || exhausted.Status == http.StatusOK),
-		"safety_surfaces_are_no_store_noindex": strings.Contains(strings.ToLower(riskReview.Headers.Get("Cache-Control")), "no-store") && strings.Contains(strings.ToLower(riskReview.Headers.Get("X-Robots-Tag")), "noindex") && strings.Contains(strings.ToLower(customResult.Headers.Get("Cache-Control")), "no-store"),
-		"safety_responses_disclose_no_target_provider_threshold_or_bypass": nonDisclosure,
+		"safety_surfaces_are_no_store_noindex":                                       strings.Contains(strings.ToLower(riskReview.Headers.Get("Cache-Control")), "no-store") && strings.Contains(strings.ToLower(riskReview.Headers.Get("X-Robots-Tag")), "noindex") && strings.Contains(strings.ToLower(customResult.Headers.Get("Cache-Control")), "no-store"),
+		"safety_responses_disclose_no_target_provider_threshold_or_bypass":           nonDisclosure,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
