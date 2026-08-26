@@ -40,11 +40,14 @@ func (s *Store) CurrentDestinationDecision(ctx context.Context, workspaceID stri
 SELECT workspace_id,primary_destination,routing_json,ab_json,risk_fingerprint
 FROM links
 WHERE id=? AND deleted_at IS NULL`, linkID).Scan(&storedWorkspace, &primary, &routingRaw, &abRaw, &storedFingerprint)
-	if errors.Is(err, sql.ErrNoRows) || storedWorkspace != workspaceID {
+	if errors.Is(err, sql.ErrNoRows) {
 		return DestinationDecision{}, ErrNotFound
 	}
 	if err != nil {
 		return DestinationDecision{}, err
+	}
+	if storedWorkspace != workspaceID {
+		return DestinationDecision{}, ErrNotFound
 	}
 	var routing []links.RoutingRule
 	var variants []links.ABVariant
