@@ -24,8 +24,42 @@ const previewProviderFallback: Plugin = {
   },
 };
 
+function isPublicTrustPage(pathname: string | undefined) {
+  return pathname === '/linkunavailable' || pathname === '/abuse/report';
+}
+
+const publicTrustHeaders: Plugin = {
+  name: 'gojet-public-trust-headers',
+  configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const pathname = request.url?.split('?', 1)[0];
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) {
+        response.setHeader('Cache-Control', 'no-store, max-age=0');
+        response.setHeader('Pragma', 'no-cache');
+        response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        response.setHeader('Referrer-Policy', 'no-referrer');
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+      }
+      next();
+    });
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const pathname = request.url?.split('?', 1)[0];
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) {
+        response.setHeader('Cache-Control', 'no-store, max-age=0');
+        response.setHeader('Pragma', 'no-cache');
+        response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        response.setHeader('Referrer-Policy', 'no-referrer');
+        response.setHeader('X-Content-Type-Options', 'nosniff');
+      }
+      next();
+    });
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), previewProviderFallback],
+  plugins: [react(), previewProviderFallback, publicTrustHeaders],
   build: { outDir: 'dist', emptyOutDir: true, manifest: true, sourcemap: false },
   server: { proxy: devProxy },
   preview: { proxy: previewProxy },
