@@ -43,11 +43,11 @@ func main() {
 
 func run() (output, error) {
 	out := output{
-		Case:   "P16-T025",
-		Status: "FAIL",
-		Fixture: "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving domains.risk.manage list/detail/revalidate RBAC, idempotency/rate rules, independent P06 axes and provider-evidence non-disclosure",
-		RecordCounts: map[string]int{},
-		Checks:       map[string]bool{},
+		Case:          "P16-T025",
+		Status:        "FAIL",
+		Fixture:       "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving domains.risk.manage list/detail/revalidate RBAC, idempotency/rate rules, independent P06 axes and provider-evidence non-disclosure",
+		RecordCounts:  map[string]int{},
+		Checks:        map[string]bool{},
 	}
 	db, redisClient, err := runtimefixture.Open()
 	if err != nil {
@@ -236,20 +236,20 @@ WHERE evaluation_id=?`,
 		"successful_revalidations":     latestAllow,
 	}
 	out.Checks = map[string]bool{
-		"p15_session_is_required":                            unauthenticated.Status == http.StatusUnauthorized,
-		"domains_risk_manage_rejects_unprivileged_session":   denied.Status == http.StatusForbidden,
-		"security_manage_does_not_grant_domain_risk_access":  securityPermissionDenied.Status == http.StatusForbidden,
+		"p15_session_is_required":                                  unauthenticated.Status == http.StatusUnauthorized,
+		"domains_risk_manage_rejects_unprivileged_session":         denied.Status == http.StatusForbidden,
+		"security_manage_does_not_grant_domain_risk_access":        securityPermissionDenied.Status == http.StatusForbidden,
 		"domain_risk_permission_does_not_grant_destination_access": crossPermission.Status == http.StatusForbidden,
-		"domain_list_is_private_and_noindex":                 list.Status == http.StatusOK && adminfixture.NoStoreNoIndex(list),
-		"domain_detail_is_private_and_noindex":               detail.Status == http.StatusOK && adminfixture.NoStoreNoIndex(detail),
-		"invalid_admin_query_is_consistent_bad_request":      invalidLimit.Status == http.StatusBadRequest,
-		"domain_control_dto_preserves_independent_axes":      strings.Contains(detail.Raw, domain.Hostname) && strings.Contains(detail.Raw, "verified") && strings.Contains(detail.Raw, "valid") && strings.Contains(detail.Raw, "active") && strings.Contains(detail.Raw, "enabled") && axesUnchanged == 1,
-		"provider_evidence_never_leaves_server":              !strings.Contains(allHTTP, secretMarker) && !strings.Contains(allHTTP, unsafeTarget) && !strings.Contains(strings.ToLower(allHTTP), "authorization"),
-		"authorized_revalidation_completes_current_allow":    revalidate.Status == http.StatusOK && revalidateCreated && latestAllow == 1,
-		"revalidation_idempotency_replays_without_duplicate": replay.Status == http.StatusOK && !replayCreated && idempotentRows == 1,
-		"unsafe_mutation_requires_p15_csrf":                  missingCSRF.Status == http.StatusForbidden && evaluationRows == 2,
-		"immediate_second_revalidation_is_rate_limited":      rateLimited.Status == http.StatusConflict && rateAuditRows == 1,
-		"admin_responses_do_not_offer_bypass":                !strings.Contains(strings.ToLower(allHTTP), "continue anyway") && !strings.Contains(strings.ToLower(allHTTP), "bypass"),
+		"domain_list_is_private_and_noindex":                       list.Status == http.StatusOK && adminfixture.NoStoreNoIndex(list),
+		"domain_detail_is_private_and_noindex":                     detail.Status == http.StatusOK && adminfixture.NoStoreNoIndex(detail),
+		"invalid_admin_query_is_consistent_bad_request":            invalidLimit.Status == http.StatusBadRequest,
+		"domain_control_dto_preserves_independent_axes":            strings.Contains(detail.Raw, domain.Hostname) && strings.Contains(detail.Raw, "verified") && strings.Contains(detail.Raw, "valid") && strings.Contains(detail.Raw, "active") && strings.Contains(detail.Raw, "enabled") && axesUnchanged == 1,
+		"provider_evidence_never_leaves_server":                    !strings.Contains(allHTTP, secretMarker) && !strings.Contains(allHTTP, unsafeTarget) && !strings.Contains(strings.ToLower(allHTTP), "authorization"),
+		"authorized_revalidation_completes_current_allow":          revalidate.Status == http.StatusOK && revalidateCreated && latestAllow == 1,
+		"revalidation_idempotency_replays_without_duplicate":       replay.Status == http.StatusOK && !replayCreated && idempotentRows == 1,
+		"unsafe_mutation_requires_p15_csrf":                        missingCSRF.Status == http.StatusForbidden && evaluationRows == 2,
+		"immediate_second_revalidation_is_rate_limited":            rateLimited.Status == http.StatusConflict && rateAuditRows == 1,
+		"admin_responses_do_not_offer_bypass":                      !strings.Contains(strings.ToLower(allHTTP), "continue anyway") && !strings.Contains(strings.ToLower(allHTTP), "bypass"),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
