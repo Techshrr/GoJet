@@ -159,13 +159,13 @@ WHERE r.workspace_id=? AND r.resource_type='short-link-risk' AND r.resource_id=?
 		"sensitive_schema_columns":      sensitiveColumns,
 	}
 	out.Checks = map[string]bool{
-		"safe_resource_authority_is_server_resolved_and_correlated": resp.Status == http.StatusCreated && correlated == 1,
-		"reporter_details_are_redacted_before_durable_storage": strings.Contains(redactedDetails, "[redacted-url]") && strings.Contains(redactedDetails, "[redacted-email]") && strings.Contains(redactedDetails, "[redacted]") && !strings.Contains(allDurable, rawSecret) && !strings.Contains(allDurable, rawEmail) && !strings.Contains(allDurable, rawBearer) && !strings.Contains(allDurable, rawJWT),
-		"turnstile_and_remote_identity_have_no_durable_columns": sensitiveColumns == 0,
-		"idempotency_and_request_authority_are_hash_only": len(requestFingerprint) == 64 && len(idempotencyHash) == 64 && idempotencyHash != idempotencyKey && requestFingerprint != details,
-		"evidence_reference_is_opaque_not_provider_evidence": strings.HasPrefix(evidenceRef, "abuse-report:abr_") && !strings.Contains(evidenceRef, "http") && !strings.Contains(evidenceRef, rawSecret),
-		"immutable_event_metadata_is_minimized": strings.Contains(metadata, "resource_type") && strings.Contains(metadata, "details_present") && !strings.Contains(metadata, link.Hostname) && !strings.Contains(metadata, link.Code) && !strings.Contains(metadata, link.Fingerprint),
-		"public_receipt_exposes_no_resource_or_reporter_context": !strings.Contains(publicRaw, link.WorkspaceID) && !strings.Contains(publicRaw, link.Hostname) && !strings.Contains(publicRaw, link.Code) && !strings.Contains(publicRaw, link.Fingerprint) && !strings.Contains(publicRaw, rawSecret) && !strings.Contains(publicRaw, rawEmail),
+		"safe_resource_authority_is_server_resolved_and_correlated":   resp.Status == http.StatusCreated && correlated == 1,
+		"reporter_details_are_redacted_before_durable_storage":        strings.Contains(redactedDetails, "[redacted-url]") && strings.Contains(redactedDetails, "[redacted-email]") && strings.Contains(redactedDetails, "[redacted]") && !strings.Contains(allDurable, rawSecret) && !strings.Contains(allDurable, rawEmail) && !strings.Contains(allDurable, rawBearer) && !strings.Contains(allDurable, rawJWT),
+		"turnstile_and_remote_identity_have_no_durable_columns":       sensitiveColumns == 0,
+		"idempotency_and_request_authority_are_hash_only":             len(requestFingerprint) == 64 && len(idempotencyHash) == 64 && idempotencyHash != idempotencyKey && requestFingerprint != details,
+		"evidence_reference_is_opaque_not_provider_evidence":          strings.HasPrefix(evidenceRef, "abuse-report:abr_") && !strings.Contains(evidenceRef, "http") && !strings.Contains(evidenceRef, rawSecret),
+		"immutable_event_metadata_is_minimized":                       strings.Contains(metadata, "resource_type") && strings.Contains(metadata, "details_present") && !strings.Contains(metadata, link.Hostname) && !strings.Contains(metadata, link.Code) && !strings.Contains(metadata, link.Fingerprint),
+		"public_receipt_exposes_no_resource_or_reporter_context":      !strings.Contains(publicRaw, link.WorkspaceID) && !strings.Contains(publicRaw, link.Hostname) && !strings.Contains(publicRaw, link.Code) && !strings.Contains(publicRaw, link.Fingerprint) && !strings.Contains(publicRaw, rawSecret) && !strings.Contains(publicRaw, rawEmail),
 		"ordinary_platformapi_log_contains_no_reporter_secret_or_pii": logSafe,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
