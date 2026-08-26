@@ -193,7 +193,7 @@ func FinalizeDecision(ctx context.Context, store *trust.Store, link LinkFixture,
 	if _, err := store.RecordProviderObservation(ctx, trust.RecordProviderObservationInput{
 		WorkspaceID: link.WorkspaceID, ScanID: enqueued.Scan.ID,
 		Observation: trust.ProviderObservation{Provider: "semantic-fixture", Outcome: outcome, SignalCode: "runtime-" + string(outcome), Evidence: map[string]any{"fixture": "p16-runtime"}, ObservedAt: time.Now().UTC()},
-		ActorID: "p16-runtime-worker", CorrelationID: key,
+		ActorID:     "p16-runtime-worker", CorrelationID: key,
 	}); err != nil {
 		return trust.DestinationDecision{}, err
 	}
