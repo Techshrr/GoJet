@@ -14,13 +14,13 @@ import (
 const abuseAdminTransitionAction = "abuse.admin-transition"
 
 type AbuseAdminTransitionInput struct {
-	ReportID       uint64
+	ReportID        uint64
 	ExpectedVersion uint64
-	ToStatus       AbuseStatus
-	Reason         string
-	ActorID        string
-	CorrelationID  string
-	IdempotencyKey string
+	ToStatus        AbuseStatus
+	Reason          string
+	ActorID         string
+	CorrelationID   string
+	IdempotencyKey  string
 }
 
 type AbuseAdminTransitionResult struct {
@@ -55,6 +55,15 @@ func (s *Store) TransitionAbuseReport(ctx context.Context, input AbuseAdminTrans
 
 	if existing, eventErr := loadAbuseEventIdempotency(ctx, tx, report.ID, abuseAdminTransitionAction, idempotencyHash); eventErr == nil {
 		if existing.RequestFingerprint != requestFingerprint || existing.ToStatus != input.ToStatus || existing.Result != "success" {
+			if auditErr := appendAbuseReportEventTx(ctx, tx, report, input.ActorID, abuseAdminTransitionAction, &report.Status, &input.ToStatus, "conflict", "idempotency-conflict", input.CorrelationID, "", requestFingerprint, map[string]any{
+				"expected_version": input.ExpectedVersion,
+				"requested_status": string(input.ToStatus),
+			}); auditErr != nil {
+				return AbuseAdminTransitionResult{}, auditErr
+			}
+			if err := tx.Commit(); err != nil {
+				return AbuseAdminTransitionResult{}, err
+			}
 			return AbuseAdminTransitionResult{}, ErrConflict
 		}
 		if err := tx.Commit(); err != nil {
@@ -105,9 +114,9 @@ WHERE id=? AND version=? AND status=?`, string(input.ToStatus), report.ID, input
 	}
 
 	if err := appendAbuseReportEventTx(ctx, tx, report, input.ActorID, abuseAdminTransitionAction, &previous, &input.ToStatus, "success", abuseTransitionReasonCategory(input.ToStatus), input.CorrelationID, idempotencyHash, requestFingerprint, map[string]any{
-		"expected_version": input.ExpectedVersion,
+		"expected_version":  input.ExpectedVersion,
 		"resulting_version": input.ExpectedVersion + 1,
-		"reason_redacted": SanitizeAbuseDetails(input.Reason),
+		"reason_redacted":   SanitizeAbuseDetails(input.Reason),
 	}); err != nil {
 		if mysqlDuplicate(err) {
 			return AbuseAdminTransitionResult{}, ErrConflict
