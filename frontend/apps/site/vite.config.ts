@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -28,12 +29,19 @@ function isPublicTrustPage(pathname: string | undefined) {
   return pathname === '/linkunavailable' || pathname === '/abuse/report';
 }
 
-function applyPublicTrustHeaders(response: Parameters<Parameters<NonNullable<Plugin['configureServer']>>[0]['middlewares']['use']>[0] extends never ? never : any) {
-  response.setHeader('Cache-Control', 'no-store, max-age=0');
-  response.setHeader('Pragma', 'no-cache');
-  response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
-  response.setHeader('Referrer-Policy', 'no-referrer');
-  response.setHeader('X-Content-Type-Options', 'nosniff');
+const publicTrustHeaderValues: Readonly<Record<string, string>> = {
+  'cache-control': 'no-store, max-age=0',
+  pragma: 'no-cache',
+  'x-robots-tag': 'noindex, nofollow, noarchive',
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+};
+
+function preservePublicTrustHeaders(response: ServerResponse) {
+  const setHeader = response.setHeader.bind(response);
+  response.setHeader = ((name: string, value: string | number | readonly string[]) =>
+    setHeader(name, publicTrustHeaderValues[name.toLowerCase()] ?? value)) as typeof response.setHeader;
+  for (const [name, value] of Object.entries(publicTrustHeaderValues)) setHeader(name, value);
 }
 
 const publicTrustHeaders: Plugin = {
@@ -41,28 +49,14 @@ const publicTrustHeaders: Plugin = {
   configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split('?', 1)[0];
-      if (request.method === 'GET' && isPublicTrustPage(pathname)) {
-        applyPublicTrustHeaders(response);
-        const writeHead = response.writeHead;
-        response.writeHead = function (...args: any[]) {
-          applyPublicTrustHeaders(response);
-          return writeHead.apply(this, args as any);
-        } as typeof response.writeHead;
-      }
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) preservePublicTrustHeaders(response);
       next();
     });
   },
   configurePreviewServer(server) {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split('?', 1)[0];
-      if (request.method === 'GET' && isPublicTrustPage(pathname)) {
-        applyPublicTrustHeaders(response);
-        const writeHead = response.writeHead;
-        response.writeHead = function (...args: any[]) {
-          applyPublicTrustHeaders(response);
-          return writeHead.apply(this, args as any);
-        } as typeof response.writeHead;
-      }
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) preservePublicTrustHeaders(response);
       next();
     });
   },
