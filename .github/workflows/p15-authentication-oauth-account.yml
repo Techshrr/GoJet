@@ -7,6 +7,8 @@ on:
     paths:
       - 'artifacts/v10/P15/test-plan.json'
       - 'scripts/p15/validate_contract.py'
+      - 'scripts/p15/validate_coherence.py'
+      - 'scripts/p15/coherence_ci.py'
       - '.github/workflows/p15-authentication-oauth-account.yml'
       - 'specifications/**'
       - 'contracts/traceability/**'
@@ -15,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: p15-authentication-oauth-account-${{ github.event.pull_request.number || github.ref }}
@@ -22,9 +25,9 @@ concurrency:
 
 jobs:
   contract:
-    name: P15 contract guard
+    name: P15 contract guard and T028 coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout exact candidate head
         uses: actions/checkout@v4
@@ -39,10 +42,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Compile P15 contract validator
+      - name: Compile P15 contract and coherence validators
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/p15/validate_contract.py
+          python3 -m py_compile \
+            scripts/p15/validate_contract.py \
+            scripts/p15/validate_coherence.py \
+            scripts/p15/coherence_ci.py
 
       - name: Validate frozen P15 contract and ancestry
         run: |
@@ -90,5 +96,61 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P15/contract-guard/
+            artifacts/v10/P15/test-plan.json
+            artifacts/v10/P15/review.md
+
+      - name: Run frozen P15-T028 exact-head evidence coherence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EXACT_HEAD: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/coherence_ci.py
+
+      - name: Verify frozen P15-T028 result
+        env:
+          EXACT_HEAD: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P15/results/P15-T028.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data.get('case_id') == 'P15-T028', data
+          assert data.get('status') == 'PASS', data
+          assert data.get('implementation_commit') == os.environ['EXACT_HEAD'], data
+          assert data.get('errors') == [], data
+          observations=data.get('observations', {})
+          assert observations.get('input_evidence_count') == 27, data
+          assert observations.get('same_exact_head') is True, data
+          assert observations.get('producer_coherent') is True, data
+          assert observations.get('secret_safe') is True, data
+          assert observations.get('mixed_head_rejected') is True, data
+          assert observations.get('unsafe_evidence_rejected') is True, data
+          assert observations.get('reviewable_hashed_case_evidence') is True, data
+          PY
+
+      - name: Upload exact-head P15-T028 coherence evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t028-evidence-coherence-${{ steps.head.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/evidence-producer-manifest.json
+            artifacts/v10/P15/evidence-index.json
+            artifacts/v10/P15/results/P15-T028.json
+            artifacts/v10/P15/contract-guard/
+            artifacts/v10/P15/api/
+            artifacts/v10/P15/security/
+            artifacts/v10/P15/oauth/
+            artifacts/v10/P15/mail/
+            artifacts/v10/P15/audit/
+            artifacts/v10/P15/browser/
+            artifacts/v10/P15/captures/
+            artifacts/v10/P15/runtime/
             artifacts/v10/P15/test-plan.json
             artifacts/v10/P15/review.md
