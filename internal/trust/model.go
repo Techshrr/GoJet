@@ -59,14 +59,14 @@ type ScanTarget struct {
 }
 
 type ProviderObservation struct {
-	ID         uint64         `json:"id"`
-	ScanID     uint64         `json:"scan_id"`
-	Provider   string         `json:"provider"`
+	ID         uint64          `json:"id"`
+	ScanID     uint64          `json:"scan_id"`
+	Provider   string          `json:"provider"`
 	Outcome    ProviderOutcome `json:"outcome"`
-	SignalCode string         `json:"signal_code"`
-	Evidence   map[string]any `json:"evidence"`
-	ObservedAt time.Time      `json:"observed_at"`
-	CreatedAt  time.Time      `json:"created_at"`
+	SignalCode string          `json:"signal_code"`
+	Evidence   map[string]any  `json:"evidence"`
+	ObservedAt time.Time       `json:"observed_at"`
+	CreatedAt  time.Time       `json:"created_at"`
 }
 
 type ProviderOutcome string
