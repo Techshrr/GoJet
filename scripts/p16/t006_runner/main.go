@@ -251,15 +251,15 @@ WHERE s.workspace_id=? AND (
 		"secret_matches":        secretCount,
 	}
 	out.Checks = map[string]bool{
-		"timeout_maps_to_unavailable_non_allow":       scenarioMatches(scenarios, "timeout"),
-		"transport_error_maps_to_unavailable_non_allow": scenarioMatches(scenarios, "transport"),
-		"partial_response_maps_to_unknown_non_allow":  scenarioMatches(scenarios, "partial"),
-		"malformed_payload_maps_to_unknown_non_allow": scenarioMatches(scenarios, "malformed"),
-		"provider_503_maps_to_unavailable_non_allow":  scenarioMatches(scenarios, "unavailable"),
-		"no_failure_mode_can_produce_allow":            allowCount == 0 && allNonAllow(scenarios),
+		"timeout_maps_to_unavailable_non_allow":          scenarioMatches(scenarios, "timeout"),
+		"transport_error_maps_to_unavailable_non_allow":  scenarioMatches(scenarios, "transport"),
+		"partial_response_maps_to_unknown_non_allow":     scenarioMatches(scenarios, "partial"),
+		"malformed_payload_maps_to_unknown_non_allow":    scenarioMatches(scenarios, "malformed"),
+		"provider_503_maps_to_unavailable_non_allow":     scenarioMatches(scenarios, "unavailable"),
+		"no_failure_mode_can_produce_allow":              allowCount == 0 && allNonAllow(scenarios),
 		"failure_observations_and_decisions_are_durable": observationCount == 5 && decisionCount == 5,
-		"failure_scans_close_with_explicit_authority":  completedCount == 5 && allCompleted(scenarios),
-		"failure_evidence_is_redacted_and_safe":        secretCount == 0 && allFailureEvidenceSafe(scenarios),
+		"failure_scans_close_with_explicit_authority":    completedCount == 5 && allCompleted(scenarios),
+		"failure_evidence_is_redacted_and_safe":          secretCount == 0 && allFailureEvidenceSafe(scenarios),
 		"correlated_audit_covers_each_failure_lifecycle": auditCount == 15,
 	}
 	if allTrue(out.Checks) {
