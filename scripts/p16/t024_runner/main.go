@@ -42,11 +42,11 @@ func main() {
 
 func run() (output, error) {
 	out := output{
-		Case:          "P16-T024",
-		Status:        "FAIL",
-		Fixture:       "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving security.manage destination-risk list/detail/rescan/override RBAC and provider/target non-disclosure",
-		RecordCounts:  map[string]int{},
-		Checks:        map[string]bool{},
+		Case:         "P16-T024",
+		Status:       "FAIL",
+		Fixture:      "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving security.manage destination-risk list/detail/rescan/override RBAC and provider/target non-disclosure",
+		RecordCounts: map[string]int{},
+		Checks:       map[string]bool{},
 	}
 	db, redisClient, err := runtimefixture.Open()
 	if err != nil {
@@ -113,7 +113,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 	if err != nil {
 		return out, err
 	}
-	denied, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", deniedSession, "", "", "", "", nil)
+	denied, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", deniedSession, "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -130,11 +130,11 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		return out, fmt.Errorf("T024 list did not issue CSRF token")
 	}
 	detailPath := "/api/admin/destination-risks/" + strconv.FormatUint(decision.ScanID, 10)
-	detail, err := adminfixture.Request(ctx, http.MethodGet, detailPath, securitySession, "", "", "", "", nil)
+	detail, err := adminfixture.Request(ctx, http.MethodGet, detailPath, securitySession, "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
-	crossPermission, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/domain-risks", securitySession, "", "", "", "", nil)
+	crossPermission, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/domain-risks", securitySession, "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -147,7 +147,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 	rescanID := uint64(number(rescan.Body["risk_id"]))
 	rescanCreated, _ := rescan.Body["created"].(bool)
 
-	freshList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", "", nil)
+	freshList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -163,7 +163,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		return out, err
 	}
 
-	overrideList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", "", nil)
+	overrideList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
