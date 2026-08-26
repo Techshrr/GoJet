@@ -333,7 +333,7 @@ func insertActiveAbuseHoldTx(ctx context.Context, tx *sql.Tx, report AbuseReport
 	res, err := tx.ExecContext(ctx, `
 INSERT INTO abuse_resource_holds
 (report_id,workspace_id,resource_type,resource_id,exact_fingerprint,state,reason_category,actor_id,correlation_id,idempotency_key_hash,request_fingerprint)
-VALUES (?,?,?,?,?,'active',?,?,?,?,?,?)`, report.ID, report.WorkspaceID, string(report.ResourceType), report.ResourceID, exact, reasonCategory, input.ActorID, input.CorrelationID, idempotencyHash, requestFingerprint)
+VALUES (?,?,?,?,?,'active',?,?,?,?,?)`, report.ID, report.WorkspaceID, string(report.ResourceType), report.ResourceID, exact, reasonCategory, input.ActorID, input.CorrelationID, idempotencyHash, requestFingerprint)
 	if err != nil {
 		if mysqlDuplicate(err) {
 			return AbuseResourceHold{}, ErrConflict

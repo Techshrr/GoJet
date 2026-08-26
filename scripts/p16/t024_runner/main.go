@@ -208,7 +208,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		"security_manage_does_not_grant_domain_risk_access":        crossPermission.Status == http.StatusForbidden,
 		"destination_list_is_private_and_noindex":                  list.Status == http.StatusOK && adminfixture.NoStoreNoIndex(list),
 		"destination_detail_is_private_and_noindex":                detail.Status == http.StatusOK && adminfixture.NoStoreNoIndex(detail),
-		"admin_dto_contains_control_state_not_reachable_targets":    strings.Contains(list.Raw, strconv.FormatUint(decision.ScanID, 10)) && strings.Contains(detail.Raw, link.Fingerprint) && !strings.Contains(allHTTP, link.Primary),
+		"admin_dto_contains_control_state_not_reachable_targets":   strings.Contains(list.Raw, strconv.FormatUint(decision.ScanID, 10)) && strings.Contains(detail.Raw, link.Fingerprint) && !strings.Contains(allHTTP, link.Primary),
 		"provider_evidence_and_unsafe_target_never_leave_server":   !strings.Contains(allHTTP, secretMarker) && !strings.Contains(allHTTP, unsafeTarget) && !strings.Contains(strings.ToLower(allHTTP), "authorization"),
 		"rescan_requires_exact_security_authority":                 rescan.Status == http.StatusAccepted && rescanCreated && rescanID > 0 && rescanID != decision.ScanID,
 		"rescan_idempotency_replays_without_duplicate_queue_row":   rescanReplay.Status == http.StatusAccepted && !replayCreated && replayID == rescanID && rescanRows == 1,

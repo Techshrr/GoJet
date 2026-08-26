@@ -90,6 +90,7 @@ export async function addSessionCookie(context, sessions, kind) {
     value,
     url: ADMIN_URL,
     httpOnly: true,
+    secure: true,
     sameSite: 'Lax',
   }]);
 }
