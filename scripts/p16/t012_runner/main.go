@@ -172,18 +172,18 @@ func run() (output, error) {
 		"permission_checks":          len(allowAuthorizer.Permissions) + len(denyAuthorizer.Permissions),
 	}
 	out.Checks = map[string]bool{
-		"security_manage_is_required": errors.Is(unauthorizedErr, trust.ErrUnauthorized) && len(denyAuthorizer.Permissions) == 1 && denyAuthorizer.Permissions[0] == trust.SecurityManagePermission,
-		"crafted_fingerprint_fails_closed": errors.Is(wrongFingerprintErr, trust.ErrStaleFingerprint),
-		"crafted_policy_context_fails_closed": errors.Is(wrongContextErr, trust.ErrConflict),
-		"non_empty_reason_is_required": errors.Is(missingReasonErr, trust.ErrInvalid),
-		"override_validity_is_bounded": errors.Is(unboundedErr, trust.ErrInvalid),
-		"permission_consumer_uses_only_security_manage": permissionExact,
-		"valid_override_is_exact_authority_bound": override.ID > 0 && override.RiskFingerprint == link.Fingerprint && override.PolicyVersion == policyVersion && override.BaseDecisionID == base.ID && override.ActorID == valid.ActorID && override.CorrelationID == valid.CorrelationID,
-		"duplicate_same_correlation_is_idempotent": replayed.ID == override.ID && overrideRows == 1 && auditRows == 1,
+		"security_manage_is_required":                                       errors.Is(unauthorizedErr, trust.ErrUnauthorized) && len(denyAuthorizer.Permissions) == 1 && denyAuthorizer.Permissions[0] == trust.SecurityManagePermission,
+		"crafted_fingerprint_fails_closed":                                  errors.Is(wrongFingerprintErr, trust.ErrStaleFingerprint),
+		"crafted_policy_context_fails_closed":                               errors.Is(wrongContextErr, trust.ErrConflict),
+		"non_empty_reason_is_required":                                      errors.Is(missingReasonErr, trust.ErrInvalid),
+		"override_validity_is_bounded":                                      errors.Is(unboundedErr, trust.ErrInvalid),
+		"permission_consumer_uses_only_security_manage":                     permissionExact,
+		"valid_override_is_exact_authority_bound":                           override.ID > 0 && override.RiskFingerprint == link.Fingerprint && override.PolicyVersion == policyVersion && override.BaseDecisionID == base.ID && override.ActorID == valid.ActorID && override.CorrelationID == valid.CorrelationID,
+		"duplicate_same_correlation_is_idempotent":                          replayed.ID == override.ID && overrideRows == 1 && auditRows == 1,
 		"immutable_audit_binds_actor_reason_correlation_fingerprint_policy": auditBoundRows == 1,
-		"effective_authority_is_manual_override": authority.Source == "manual-override" && authority.Override != nil && authority.Override.ID == override.ID && authority.State == trust.DecisionAllow,
-		"override_projects_through_existing_exact_redis_authority": projection.Runtime.Decision == links.RiskAllow && projection.Runtime.Fingerprint == link.Fingerprint && projection.Runtime.PolicyVersion == policyVersion,
-		"valid_override_can_reach_customer_only_through_native_redirect": redirect.Status == 302 && strings.HasPrefix(redirect.Location, "https://customer.example/t012"),
+		"effective_authority_is_manual_override":                            authority.Source == "manual-override" && authority.Override != nil && authority.Override.ID == override.ID && authority.State == trust.DecisionAllow,
+		"override_projects_through_existing_exact_redis_authority":          projection.Runtime.Decision == links.RiskAllow && projection.Runtime.Fingerprint == link.Fingerprint && projection.Runtime.PolicyVersion == policyVersion,
+		"valid_override_can_reach_customer_only_through_native_redirect":    redirect.Status == 302 && strings.HasPrefix(redirect.Location, "https://customer.example/t012"),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
