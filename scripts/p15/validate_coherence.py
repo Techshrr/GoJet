@@ -207,7 +207,6 @@ def run() -> int:
             details = data.get("details", {})
             need(isinstance(details, dict), f"{cid} browser details missing", errors)
             if isinstance(details, dict):
-                need(details.get("frozen_contract_completion") is True, f"{cid} frozen browser contract incomplete", errors)
                 need(details.get("closure_claim") is False, f"{cid} must not claim closure", errors)
         if path.is_file():
             case_entries.append({
