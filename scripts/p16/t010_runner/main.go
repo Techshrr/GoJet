@@ -197,13 +197,13 @@ func run() (output, error) {
 		"ready_custom_domains":   domainRows,
 	}
 	out.Checks = map[string]bool{
-		"official_custom_exact_fingerprint_parity":                fingerprintParity && pairCount == 3,
-		"review_fails_closed_identically_on_both_hosts":           reviewParity,
+		"official_custom_exact_fingerprint_parity":                  fingerprintParity && pairCount == 3,
+		"review_fails_closed_identically_on_both_hosts":             reviewParity,
 		"allow_enforcement_releases_both_hosts_only_after_approval": allowEnforcementParity,
-		"primary_routing_ab_selection_is_valid_on_both_hosts":     selectedKindCorrect,
+		"primary_routing_ab_selection_is_valid_on_both_hosts":       selectedKindCorrect,
 		"every_selected_target_on_both_hosts_is_fingerprint_member": reachableMembership,
-		"custom_host_used_real_independent_p06_axes":              customAxesUsed,
-		"all_three_frozen_target_classes_are_covered":             pairCount == 3 && redirectCount == 6,
+		"custom_host_used_real_independent_p06_axes":                customAxesUsed,
+		"all_three_frozen_target_classes_are_covered":               pairCount == 3 && redirectCount == 6,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
