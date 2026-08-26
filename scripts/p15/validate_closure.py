@@ -279,21 +279,40 @@ def validate_p14(errors: list[str]) -> dict[str, Any]:
     return authority
 
 
+def primary_review_status(text: str, errors: list[str]) -> str | None:
+    lines = re.findall(r"^Status: \*\*[^\n]+\*\*$", text, flags=re.MULTILINE)
+    req(len(lines) == 1, f"P15 review must contain exactly one primary Status line, got {len(lines)}", errors)
+    if len(lines) != 1:
+        return None
+    status = lines[0]
+    req(status in (PENDING, SIGNED), f"unsupported P15 primary review status: {status}", errors)
+    return status
+
+
+def validate_review_phase_parser(errors: list[str]) -> None:
+    sample = PENDING + "\n\n`" + SIGNED + "`\n"
+    req(
+        primary_review_status(sample, errors) == PENDING,
+        "P15 review phase parser accepted a quoted future signed marker as authority",
+        errors,
+    )
+
+
 def parse_review(head: str, errors: list[str]) -> dict[str, Any]:
     req(REVIEW.is_file(), "missing P15 review.md", errors)
     if not REVIEW.is_file():
         return {"phase": "invalid", "merge_authoritative": False}
     text = REVIEW.read_text(encoding="utf-8")
-    pending = PENDING in text
-    signed = SIGNED in text
-    req(pending ^ signed, "P15 review must be exactly pending or signed", errors)
-    if pending:
+    status = primary_review_status(text, errors)
+    if status == PENDING:
         return {
             "phase": "pre-sign",
             "status": "PENDING",
             "merge_authoritative": False,
             "review_sha256": digest(REVIEW),
         }
+    if status != SIGNED:
+        return {"phase": "invalid", "status": "INVALID", "merge_authoritative": False, "review_sha256": digest(REVIEW)}
 
     def grab(label: str, pattern: str) -> str | None:
         match = re.search(pattern, text)
@@ -354,6 +373,7 @@ def parse_review(head: str, errors: list[str]) -> dict[str, Any]:
 
 def main() -> int:
     errors: list[str] = []
+    validate_review_phase_parser(errors)
     head = git("rev-parse", "HEAD")
     plan = validate_plan(errors)
     regression = validate_regression(head, errors)
