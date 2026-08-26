@@ -203,15 +203,15 @@ func run() (output, error) {
 		"durable_decisions":        4,
 	}
 	out.Checks = map[string]bool{
-		"missing_fails_closed":                  nonAllow["missing"],
-		"malformed_fails_closed":                nonAllow["malformed"],
-		"stale_fails_closed":                    nonAllow["stale"],
-		"review_fails_closed":                   nonAllow["review"],
-		"block_fails_closed":                    nonAllow["block"],
-		"pending_is_not_projectable_or_redirectable": errors.Is(pendingProjectionErr, trust.ErrConflict) && nonAllow["pending"],
-		"unknown_is_not_projectable_or_redirectable": errors.Is(unknownProjectionErr, trust.ErrConflict) && nonAllow["unknown"],
-		"provider_unavailable_is_non_allow":      unavailableDecision.State == trust.DecisionReview && unavailableDecision.ReasonCategory == "provider-unavailable" && nonAllow["provider-unavailable"],
-		"all_frozen_non_allow_states_fail_closed": allClosed && len(nonAllow) == 8,
+		"missing_fails_closed":                           nonAllow["missing"],
+		"malformed_fails_closed":                         nonAllow["malformed"],
+		"stale_fails_closed":                             nonAllow["stale"],
+		"review_fails_closed":                            nonAllow["review"],
+		"block_fails_closed":                             nonAllow["block"],
+		"pending_is_not_projectable_or_redirectable":     errors.Is(pendingProjectionErr, trust.ErrConflict) && nonAllow["pending"],
+		"unknown_is_not_projectable_or_redirectable":     errors.Is(unknownProjectionErr, trust.ErrConflict) && nonAllow["unknown"],
+		"provider_unavailable_is_non_allow":              unavailableDecision.State == trust.DecisionReview && unavailableDecision.ReasonCategory == "provider-unavailable" && nonAllow["provider-unavailable"],
+		"all_frozen_non_allow_states_fail_closed":        allClosed && len(nonAllow) == 8,
 		"exact_current_allow_is_sole_redirect_authority": allowDecision.State == trust.DecisionAllow && allowProjection.Runtime.Decision == links.RiskAllow && allowResult.Status == 302 && strings.HasPrefix(allowResult.Location, "https://customer.example/allow"),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
