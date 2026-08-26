@@ -36,7 +36,7 @@ func (s *MySQLStore) RestoreDomainSecuritySuspension(ctx context.Context, input 
 		return Domain{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	domain, err := loadDomainByIDForUpdate(ctx, tx, input.WorkspaceID, input.DomainID)
+	domain, err := loadDomainForSecurityRestore(ctx, tx, input.WorkspaceID, input.DomainID)
 	if err != nil {
 		return Domain{}, err
 	}
@@ -62,11 +62,16 @@ func (s *MySQLStore) RestoreDomainSecuritySuspension(ctx context.Context, input 
 	if domain.RiskStatus != RiskAllow {
 		return Domain{}, ErrDomainRiskEvaluation
 	}
-	if _, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 UPDATE custom_domains
 SET routing_state='enabled',security_category=NULL,grace_started_at=NULL,grace_until=NULL
-WHERE workspace_id=? AND id=? AND routing_state='suspended' AND security_category=?`, input.WorkspaceID, input.DomainID, string(input.ExpectedCategory)); err != nil {
+WHERE workspace_id=? AND id=? AND routing_state='suspended' AND security_category=?`, input.WorkspaceID, input.DomainID, string(input.ExpectedCategory))
+	if err != nil {
 		return Domain{}, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil || rows != 1 {
+		return Domain{}, ErrDomainSecuritySuspended
 	}
 	updated, err := loadDomainByID(ctx, tx, input.WorkspaceID, input.DomainID)
 	if err != nil {
@@ -88,4 +93,18 @@ WHERE workspace_id=? AND id=? AND routing_state='suspended' AND security_categor
 		return Domain{}, err
 	}
 	return updated, nil
+}
+
+func loadDomainForSecurityRestore(ctx context.Context, tx *sql.Tx, workspaceID string, domainID uint64) (Domain, error) {
+	row := tx.QueryRowContext(ctx, `
+SELECT id, workspace_id, hostname_ascii, display_hostname, routing_state,
+       ownership_status, ingress_dns_status, https_status, risk_status,
+       ownership_token_version, ownership_secret_issued_at, ownership_verified_at,
+       ingress_dns_checked_at, https_checked_at, risk_checked_at, risk_policy_version,
+       risk_evidence_ref, grace_started_at, grace_until, security_category,
+       created_at, updated_at, removed_at
+FROM custom_domains
+WHERE workspace_id=? AND id=?
+FOR UPDATE`, workspaceID, domainID)
+	return scanDomain(row)
 }
