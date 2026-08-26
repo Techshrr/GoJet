@@ -70,7 +70,7 @@ func run() (output, error) {
 
 	runtime := links.NewRedisRiskStore(redisClient)
 	workspace := "p16-t010-workspace"
-	customHost := "safe-t010.example.test"
+	customHost := "safe-t010.example.com"
 	if err := runtimefixture.CreateReadyCustomDomain(ctx, db, workspace, customHost, time.Now().UTC()); err != nil {
 		return out, err
 	}
