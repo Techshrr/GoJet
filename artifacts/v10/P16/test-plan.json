@@ -1,0 +1,236 @@
+{
+  "node": "P16",
+  "title": "Trust, Destination Risk and Abuse",
+  "base_integration_commit": "dd70eacf02d4dd79fe82063f3d43610ab11885e8",
+  "case_ids_frozen_by": "P16 contract-freeze revision; Master Plan supplies requirements, not P16-Txxx identifiers",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capabilities": [
+      {"id":"CAP-DESTINATION-RISK","status":"REQUIRED","owner":"P05/P16","gates":["G6","G10","G13"]},
+      {"id":"CAP-DOMAIN-RISK","status":"REQUIRED","owner":"P06/P16/P17","gates":["G6","G13"]},
+      {"id":"CAP-ABUSE","status":"REQUIRED","owner":"P16/P17","gates":["G6","G10"]},
+      {"id":"CAP-LINK-ROUTING","status":"REQUIRED","owner":"P05/P16","gates":["G3","G6"]},
+      {"id":"CAP-LINK-AB","status":"REQUIRED","owner":"P05/P16","gates":["G3","G6"]},
+      {"id":"CAP-NOTIFICATIONS","status":"REQUIRED","owner":"P12/P13-P17","gates":["G3","G5","G6","G10"]}
+    ],
+    "master_predecessors": ["P05","P06","P09","P15"],
+    "inherited_authorities": [
+      "P05 normalized reachable-target fingerprint and redirect risk-before-routing ordering",
+      "P06 custom-domain entitlement/ownership/ingress-DNS/HTTPS/risk independent axes",
+      "P09 Files quarantine/mandatory ClamAV fail-closed authority; ClamAV is not a URL classifier",
+      "P12 notification center/read-state/dedupe/deep-link core",
+      "P15 customer authentication/session/CSRF/Origin/rate authority"
+    ],
+    "master_required_tests": ["official/custom parity","all target variants","SSRF","provider failure","manual override invalidation","abuse suspension"],
+    "scope": "P16 closes its scanning/provider/review/override/revalidation/public-report/resource-risk governance contributions without re-owning P05 routing/A-B, P06 domain axes, P09 file scanning, P12 notification center, P15 auth/session or P17 administrator/permission lifecycle. P17 and release-wide G10/G13 remain later-owned where specified."
+  },
+  "predecessor_signed_authority": {
+    "node": "P15",
+    "integration_commit": "dd70eacf02d4dd79fe82063f3d43610ab11885e8",
+    "signed_source_commit": "6f39d87f1d94f71590fd79d4551cdd1cea652a76",
+    "closure_run_id": 32931945354,
+    "artifact_id": 9593689993,
+    "artifact_digest": "sha256:5a43c87ea26f86081523d371de260e100a20c5c05b3581f48223fb70e68cd233",
+    "phase": "signed",
+    "merge_authoritative": true
+  },
+  "inherited_seam_authority": {
+    "p05_integration_commit": "ed82747f9f7ddb7696534cdda110f2f7f594b46a",
+    "p06_integration_commit": "3aa80b566d144963130b8f61fa63a4ee677ebc99",
+    "p09_integration_commit": "0c43b9e5fa9abb9da7231e4ab5bd6d8a76f6d9a8",
+    "p12_integration_commit": "7f39da389052b08f145e69dac2a715b9d303294d",
+    "p05_fingerprint_blob": "5cc3f2aec99fe44e826356c2b3b4cbc39d784f89",
+    "p05_risk_redis_blob": "2cecf2285262a3a161333bec3860eb9d02c87a56",
+    "p05_redirect_http_blob": "217201f11b5a7902272f155c24de61e04a196e46",
+    "p06_domain_model_blob": "822dab7236331807dbcbc8072a41b09477bfff9c",
+    "scope": "These blobs are inherited behavioral seams at the P16 base. P16 may integrate with them but cannot weaken target-set fingerprint semantics, risk-before-routing ordering or independent domain-axis readiness."
+  },
+  "route_contract": {
+    "public_routes": [
+      "PUB-SHORT-OFFICIAL https://{official-short-host}/{code}",
+      "PUB-SHORT-CUSTOM https://{custom-host}/{code}",
+      "PUB-LINK-UNAVAILABLE /linkunavailable?reason={allowlisted}&code={safe-code}",
+      "PUB-ABUSE-REPORT /abuse/report"
+    ],
+    "admin_routes": [
+      "ADMIN-DEST-RISK /admin/trust/destination-risk[/{riskId}]",
+      "ADMIN-DOMAIN-RISK /admin/trust/domain-risk[/{domainId}]",
+      "ADMIN-ABUSE /admin/trust/abuse[/{reportId}]"
+    ],
+    "ia_exact_apis": [
+      "POST /api/public/abuse-reports",
+      "GET /api/admin/domain-risks",
+      "GET /api/admin/domain-risks/{domainId}",
+      "POST /api/admin/domain-risks/{domainId}/revalidate"
+    ],
+    "p16_implementation_api_authority": [
+      "GET /api/admin/destination-risks",
+      "GET /api/admin/destination-risks/{riskId}",
+      "POST /api/admin/destination-risks/{riskId}/rescan",
+      "POST /api/admin/destination-risks/{riskId}/override",
+      "GET /api/admin/abuse",
+      "GET /api/admin/abuse/{reportId}",
+      "POST /api/admin/abuse/{reportId}/actions"
+    ],
+    "inherited_workspace_states": {
+      "APP-LINK-NEW": ["risk-pending"],
+      "APP-LINK-DETAIL": ["risk-pending","risk-review","risk-block"],
+      "APP-QR": ["risk-denied"],
+      "APP-QR-DETAIL": ["source-link-review","source-link-block"],
+      "APP-BIO-DETAIL": ["child-link-review","child-link-block"],
+      "APP-DOMAIN-NEW": ["risk-review"],
+      "APP-DOMAIN-DETAIL": ["risk-review","suspended","revoked"]
+    },
+    "rules": [
+      "No legacy trust/safety aliases or silent compatibility routes may be invented.",
+      "Public safety and abuse surfaces are noindex; abuse intake is no-store; safety surfaces never disclose unsafe target/provider evidence/thresholds/bypass instructions.",
+      "Admin trust surfaces are no-store/noindex and consume dedicated server permissions; UI visibility is never authorization.",
+      "P16 consumes security.manage and domains.risk.manage without implementing P17 administrator/role/permission lifecycle.",
+      "P19 retains final Website/Security/Legal content and technical SEO ownership."
+    ]
+  },
+  "destination_risk_contract": {
+    "durable_states": ["pending","allow","review","block","unknown"],
+    "runtime_non_allow": ["missing","unknown","malformed","stale","pending","review","block","provider-unavailable"],
+    "rules": [
+      "Reachable target authority is inherited from P05: normalized primary plus every enabled routing and enabled A/B destination form one deterministic exact fingerprint.",
+      "Only exact-current allow may proceed; every other state fails closed before routing, A/B, UTM, password, expiry, click-limit and one-time logic.",
+      "Any reachable target mutation invalidates prior authority immediately; semantically equivalent reorder/deduplication does not create false approval.",
+      "Official and custom hostnames use the identical destination-risk contract.",
+      "Durable policy/provider observations are projected to Redis runtime state only when exact fingerprint, policy version and validity remain current.",
+      "External semantic/reputation providers are signals only and cannot be sole allow authority."
+    ]
+  },
+  "ssrf_contract": {
+    "allowed_schemes": ["http","https"],
+    "deny_classes": ["loopback","private","link-local","unspecified","multicast","reserved","metadata-service","userinfo-authority"],
+    "rules": [
+      "Target inspection resolves and validates every connection address server-side before connecting.",
+      "Redirect chains are revalidated hop-by-hop and cannot redirect from public to denied address space.",
+      "DNS rebinding and mixed public/private answer sets fail closed according to the security policy.",
+      "Provider endpoints come only from reviewed server configuration; arbitrary client provider URLs are prohibited."
+    ]
+  },
+  "domain_risk_contract": {
+    "states": ["missing","pending","allow","review","block","malformed","stale","provider-partial","revalidating"],
+    "rules": [
+      "Domain risk remains independent from entitlement, ownership, ingress DNS and HTTPS.",
+      "P16 owns reputation/provider/revalidation contribution; P06 domain identity and other axes remain inherited.",
+      "Provider outage/partial/malformed/stale evidence never becomes allow.",
+      "Security/abuse suspension is immediate and receives no billing/domain grace.",
+      "User-facing reasons are allowlisted categories; raw provider evidence and bypass criteria remain internal."
+    ]
+  },
+  "abuse_contract": {
+    "states": ["open","investigating","resolved","dismissed"],
+    "p16_action_scope": ["destination-fingerprint","short-link-risk","custom-domain-risk"],
+    "rules": [
+      "Public abuse intake is server-validated, Turnstile/rate/idempotency controlled and no-store/noindex.",
+      "P16 actions operate on risk-controlled resources; broader administrator/user/workspace governance remains P17-owned.",
+      "Every high-risk action requires dedicated permission, actor, reason, correlation and immutable before/after audit.",
+      "Restore is never unconditional; current destination/domain safety authority must permit recovery.",
+      "Reports and notifications redact provider evidence, secrets and unnecessary PII."
+    ]
+  },
+  "override_contract": {
+    "permission": "security.manage",
+    "required_fields": ["exact_fingerprint","decision","reason","expires_at","policy_context"],
+    "rules": [
+      "Override authority is exact-fingerprint bound, expiry-bound and auditable.",
+      "Fingerprint change, expiry or incompatible policy authority invalidates the override.",
+      "Override mutation never changes P17 permission lifecycle and cannot bypass independent custom-domain axes."
+    ]
+  },
+  "worker_contract": {
+    "service_identity": "SVC-OPS-MONITOR operationsmonitor risk-task contribution",
+    "target_source_path": "services/platformapi/cmd/operationsmonitor",
+    "rules": [
+      "P16 must not create a ninth production daemon; risk queue execution is contributed to the fixed eight-service architecture.",
+      "Queue jobs are durable/idempotent, carry correlation and recover abandoned/retryable work.",
+      "A worker crash/provider failure cannot leave an implicit allow runtime projection."
+    ]
+  },
+  "browser_contract": {
+    "states": {
+      "admin_destination_risk": ["loading","empty","pending","allow","review","block","stale-fingerprint","provider-partial","destructive-confirm"],
+      "admin_domain_risk": ["loading","empty","pending","allow","review","block","revalidating","stale","provider-partial"],
+      "admin_abuse": ["loading","empty","open","investigating","resolved","dismissed","destructive-confirm","error"],
+      "public_link_unavailable": ["pending","review","blocked","domain-suspended","domain-revoked","domain-expired","operational-unavailable"],
+      "public_abuse_report": ["input","submitting","success-persistent","validation-error","Turnstile-error","rate-limited"]
+    },
+    "rules": [
+      "Use Design System exact tokens/components and preserve Admin shell authority rather than creating a parallel shell.",
+      "Browser evidence covers canonical desktop/tablet/mobile plus 320 CSS px reflow where applicable, keyboard/focus/name-role-value and reduced motion.",
+      "High-risk actions use visible triggers, reason/impact confirmation and persistent audit result; not hover-only or toast-only.",
+      "Public safety surfaces contain no target URL, provider name/evidence, threshold or continue-anyway action.",
+      "Direct URL loads and APIs repeat server permission/tenant checks; stale client state is never security authority."
+    ]
+  },
+  "notification_contract": {
+    "owner": "P12 CAP-NOTIFICATIONS core",
+    "p16_contribution": "security/domain/resource producer events only",
+    "rules": [
+      "P16 events preserve inherited P12 read-state, dedupe, deep-link authorization and secret-redaction contracts.",
+      "A notification is not risk decision or audit authority.",
+      "Security notification deep links reveal only context the recipient is authorized to read."
+    ]
+  },
+  "environment_contract": {
+    "mysql": "Real MySQL 8.x for durable scan jobs, risk decisions/history, domain reputation/revalidation, abuse reports/actions and audit evidence.",
+    "redis": "Real Redis for inherited exact-fingerprint redirect projection plus queue/rate/idempotency coordination where implemented.",
+    "platformapi": "Real native Go platformapi for public/admin trust APIs.",
+    "redirectengine": "Real native Go redirectengine preserving inherited risk-before-routing safety order.",
+    "risk_worker": "Fixed SVC-OPS-MONITOR operationsmonitor contribution; no ninth production daemon.",
+    "semantic_provider": "Deterministic local provider/protocol fixtures in CI exercise real policy/error paths; live production provider credentials are prohibited.",
+    "ssrf": "Controlled local DNS/HTTP fixtures exercise public/private/link-local/rebinding/redirect resolution without accessing external private networks.",
+    "turnstile": "Inherited server-side deterministic CI verifier for public abuse intake; production bypass prohibited.",
+    "browser": "Built Admin/Public surfaces with real local APIs and redirectengine where required.",
+    "production_docker_compose_node": "PROHIBITED"
+  },
+  "closure": {
+    "same_exact_head_required": true,
+    "required_case_range": "P16-T001..P16-T029",
+    "review_required": true,
+    "defect_limits": {"p0":0,"p1":0,"decision_required":0},
+    "phases": {
+      "pre-sign": {"review_status":"PENDING","merge_authoritative":false},
+      "signed": {"review_status":"SIGNED","merge_authoritative":true}
+    },
+    "scope_rule": "P16 closes its G6 trust/destination-risk/domain-risk/abuse contribution only. P17 administrator permission/governance and release-wide P20/P22 G10/G13 remain separately owned."
+  },
+  "cases": [
+    {"id":"P16-T001","name":"Durable destination-risk schema and correlation","driver":"python3 scripts/p16/integration.py --case P16-T001","oracle":"Destination scan jobs, target observations, policy decisions and exact-fingerprint authority are durable, correlated and contain no raw provider secrets.","evidence":"artifacts/v10/P16/api/P16-T001.json","owner":"Backend Lead"},
+    {"id":"P16-T002","name":"Exact-fingerprint scan enqueue, dedupe and rescan","driver":"python3 scripts/p16/integration.py --case P16-T002","oracle":"Initial scan/rescan queueing is exact-fingerprint bound, idempotent under duplicate requests and never reuses authority for a different reachable-target set.","evidence":"artifacts/v10/P16/api/P16-T002.json","owner":"Backend Lead"},
+    {"id":"P16-T003","name":"Destination normalization and unsafe URL forms","driver":"python3 scripts/p16/integration.py --case P16-T003","oracle":"Only reviewed HTTP/HTTPS destination forms enter scanning; relative, userinfo, unsupported-scheme and malformed targets fail closed before provider access.","evidence":"artifacts/v10/P16/security/P16-T003.json","owner":"Security Reviewer"},
+    {"id":"P16-T004","name":"SSRF address policy and DNS rebinding resistance","driver":"python3 scripts/p16/integration.py --case P16-T004","oracle":"Loopback, private, link-local, reserved/metadata addresses and DNS rebinding/redirect-to-private paths are rejected for target/provider inspection with no outbound bypass.","evidence":"artifacts/v10/P16/security/P16-T004.json","owner":"Security Reviewer"},
+    {"id":"P16-T005","name":"Semantic provider and policy decision mapping","driver":"python3 scripts/p16/integration.py --case P16-T005","oracle":"Deterministic provider observations are normalized into versioned allow/review/block policy decisions without making any external provider the sole control authority.","evidence":"artifacts/v10/P16/risk/P16-T005.json","owner":"Security Reviewer"},
+    {"id":"P16-T006","name":"Provider outage, partial and malformed fail-closed behavior","driver":"python3 scripts/p16/integration.py --case P16-T006","oracle":"Timeout, transport error, partial response, malformed payload and unavailable provider states never become implicit allow and remain review/pending/unavailable according to policy.","evidence":"artifacts/v10/P16/security/P16-T006.json","owner":"Security Reviewer"},
+    {"id":"P16-T007","name":"Risk worker idempotency, retry and recovery","driver":"python3 scripts/p16/integration.py --case P16-T007","oracle":"The P16 risk task contribution executes inside the fixed eight-service architecture, retries idempotently, recovers abandoned work and cannot produce duplicate final authority.","evidence":"artifacts/v10/P16/risk/P16-T007.json","owner":"Backend Lead"},
+    {"id":"P16-T008","name":"Redis exact-fingerprint runtime projection","driver":"python3 scripts/p16/integration.py --case P16-T008","oracle":"Only a durable current decision is projected to the inherited Redis risk key for the exact link/fingerprint with bounded validity and policy version; stale projection is not authority.","evidence":"artifacts/v10/P16/risk/P16-T008.json","owner":"Backend Lead"},
+    {"id":"P16-T009","name":"Runtime non-allow fail-closed matrix","driver":"python3 scripts/p16/integration.py --case P16-T009","oracle":"Missing, unknown, malformed, stale, pending, review, block and provider-unavailable states cannot reach any customer destination; exact current allow is the sole redirect authority.","evidence":"artifacts/v10/P16/security/P16-T009.json","owner":"Security Reviewer"},
+    {"id":"P16-T010","name":"Official/custom parity across primary, routing and A/B targets","driver":"python3 scripts/p16/integration.py --case P16-T010","oracle":"The same normalized primary/routing/A-B target set and exact fingerprint receives identical destination-risk enforcement on official and custom hostnames.","evidence":"artifacts/v10/P16/security/P16-T010.json","owner":"Security Reviewer"},
+    {"id":"P16-T011","name":"Target mutation invalidation and reorder stability","driver":"python3 scripts/p16/integration.py --case P16-T011","oracle":"Any reachable target mutation invalidates prior allow immediately, while semantically identical target reorder/deduplication does not create a bypass or false new approval.","evidence":"artifacts/v10/P16/security/P16-T011.json","owner":"Security Reviewer"},
+    {"id":"P16-T012","name":"Manual destination override authority and audit","driver":"python3 scripts/p16/integration.py --case P16-T012","oracle":"Destination override requires security.manage, exact fingerprint, actor, non-empty reason, correlation, bounded validity/policy context and immutable audit; unauthorized/crafted requests fail closed.","evidence":"artifacts/v10/P16/audit/P16-T012.json","owner":"Security Reviewer"},
+    {"id":"P16-T013","name":"Override invalidation on fingerprint/policy authority change","driver":"python3 scripts/p16/integration.py --case P16-T013","oracle":"A manual override cannot survive a different target fingerprint, incompatible policy version, expiry or explicitly invalidating provider/policy authority change.","evidence":"artifacts/v10/P16/security/P16-T013.json","owner":"Security Reviewer"},
+    {"id":"P16-T014","name":"Redirect safety ordering and target non-disclosure","driver":"python3 scripts/p16/integration.py --case P16-T014","oracle":"Inherited redirect ordering remains link/domain authority then exact-current risk allow before routing/A-B/UTM/access; safety responses expose no unsafe target, provider evidence or continue-anyway path.","evidence":"artifacts/v10/P16/security/P16-T014.json","owner":"Security Reviewer"},
+    {"id":"P16-T015","name":"Durable domain reputation decision and independent axes","driver":"python3 scripts/p16/integration.py --case P16-T015","oracle":"Domain reputation/review evidence is durable and domain risk remains independent from entitlement, ownership, ingress DNS and HTTPS; only risk allow can satisfy the inherited risk axis.","evidence":"artifacts/v10/P16/domain/P16-T015.json","owner":"Backend Lead"},
+    {"id":"P16-T016","name":"Domain risk revalidation lifecycle and stale handling","driver":"python3 scripts/p16/integration.py --case P16-T016","oracle":"Revalidation is rate/idempotency controlled, records last/next policy check, enters revalidating/pending safely and stale decisions fail closed without overwriting other domain axes.","evidence":"artifacts/v10/P16/domain/P16-T016.json","owner":"Security Reviewer"},
+    {"id":"P16-T017","name":"Domain reputation provider failure and partial evidence","driver":"python3 scripts/p16/integration.py --case P16-T017","oracle":"Domain provider outage/partial/malformed results cannot produce allow; safe reason categories are user-visible while provider evidence remains internal and redacted.","evidence":"artifacts/v10/P16/security/P16-T017.json","owner":"Security Reviewer"},
+    {"id":"P16-T018","name":"Immediate security/abuse suspension without grace","driver":"python3 scripts/p16/integration.py --case P16-T018","oracle":"A validated security/abuse action immediately suspends affected P16-controlled link/domain risk authority with no billing/domain grace fallback or official-host fallback.","evidence":"artifacts/v10/P16/security/P16-T018.json","owner":"Security Reviewer"},
+    {"id":"P16-T019","name":"Public abuse report validation, Turnstile and rate authority","driver":"python3 scripts/p16/integration.py --case P16-T019","oracle":"POST /api/public/abuse-reports validates allowlisted report fields, verifies Turnstile server-side, rate/idempotency controls duplicate intake and returns persistent safe success without exposing internal state.","evidence":"artifacts/v10/P16/abuse/P16-T019.json","owner":"Backend Lead"},
+    {"id":"P16-T020","name":"Abuse evidence correlation and secret/PII minimization","driver":"python3 scripts/p16/integration.py --case P16-T020","oracle":"Abuse reports correlate safe resource/workspace/request identifiers and evidence references while ordinary logs/audit/CI redact raw provider evidence, secrets and unnecessary PII.","evidence":"artifacts/v10/P16/abuse/P16-T020.json","owner":"Security Reviewer"},
+    {"id":"P16-T021","name":"Admin abuse lifecycle","driver":"python3 scripts/p16/integration.py --case P16-T021","oracle":"Authorized admin review moves reports through open/investigating/resolved/dismissed with reasoned immutable audit and optimistic/idempotent conflict handling.","evidence":"artifacts/v10/P16/abuse/P16-T021.json","owner":"Backend Lead"},
+    {"id":"P16-T022","name":"Abuse resource action, recovery and audit","driver":"python3 scripts/p16/integration.py --case P16-T022","oracle":"P16 risk-controlled suspend/block/restore actions require security.manage, reason and correlation; restore succeeds only when current safety authority allows it, with immutable before/after audit.","evidence":"artifacts/v10/P16/audit/P16-T022.json","owner":"Security Reviewer"},
+    {"id":"P16-T023","name":"Security/domain notification producer contract","driver":"python3 scripts/p16/integration.py --case P16-T023","oracle":"P16 produces deduplicated, redacted, authorization-safe security/domain/resource notifications with valid deep-link context while preserving the inherited P12 notification-center authority.","evidence":"artifacts/v10/P16/notifications/P16-T023.json","owner":"Backend Lead"},
+    {"id":"P16-T024","name":"Admin destination-risk API and RBAC","driver":"python3 scripts/p16/integration.py --case P16-T024","oracle":"Destination-risk list/detail/rescan/override APIs require server-side security.manage, consistent errors/rate/idempotency where applicable, no cross-tenant leakage and complete reason/audit authority.","evidence":"artifacts/v10/P16/api/P16-T024.json","owner":"Security Reviewer"},
+    {"id":"P16-T025","name":"Admin domain-risk API and RBAC","driver":"python3 scripts/p16/integration.py --case P16-T025","oracle":"GET/list/detail and POST revalidate domain-risk APIs require domains.risk.manage for actions, preserve independent domain axes, rate/idempotency/error/audit rules and no cross-tenant leakage.","evidence":"artifacts/v10/P16/api/P16-T025.json","owner":"Security Reviewer"},
+    {"id":"P16-T026","name":"Admin Trust & Safety browser authority","driver":"node scripts/p16/browser.mjs --case P16-T026","oracle":"Real built Admin destination-risk/domain-risk/abuse surfaces cover required IA states, dedicated permission denials, rescan/override/abuse confirmations, provider-partial/stale behavior, audit result, accessibility and no-store/noindex.","evidence":"artifacts/v10/P16/browser/P16-T026.json","owner":"QA + Security Reviewer"},
+    {"id":"P16-T027","name":"Public safety and abuse-report browser authority","driver":"node scripts/p16/browser.mjs --case P16-T027","oracle":"Real public safety/interstitial and abuse-report surfaces preserve noindex/no-store as applicable, allowlisted copy, target/provider non-disclosure, Turnstile/rate/error/persistent-success states, responsive/accessibility and no bypass link.","evidence":"artifacts/v10/P16/browser/P16-T027.json","owner":"QA + Accessibility Reviewer"},
+    {"id":"P16-T028","name":"Exact-head P16 evidence coherence","driver":"python3 scripts/p16/validate_coherence.py","oracle":"All P16-T001..P16-T027 evidence is producer-coherent, secret-safe, reviewable and bound to the same exact implementation revision; mixed-head or unsafe evidence is rejected.","evidence":"artifacts/v10/P16/results/P16-T028.json","owner":"QA Lead"},
+    {"id":"P16-T029","name":"Accountable signed exact-head closure","driver":"python3 scripts/p16/validate_closure.py","oracle":"Signed review, P16-T001..P16-T028, complete affected exact-head regression matrix, inherited signed authorities and defect ledger agree on one signed revision with P0/P1/DECISION REQUIRED all zero.","evidence":"artifacts/v10/P16/results/P16-T029.json","owner":"Security Reviewer + QA Lead"}
+  ]
+}
