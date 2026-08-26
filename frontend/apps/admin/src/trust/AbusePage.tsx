@@ -161,7 +161,7 @@ export function AbuseDetailPage() {
           <Card as="section" className="trust-actions" aria-labelledby="abuse-actions-title">
             <div><h2 id="abuse-actions-title">Accountable actions</h2><p className="trust-confirm-note">Visible actions reflect current report state. The server still re-checks permission, version, fingerprint and independent safety authority.</p></div>
             <div className="trust-action-row">
-              {lifecycleActions.map((value) => <Button key={value} variant={value === 'dismiss' ? 'ghost' : undefined} onClick={() => { setValidation(''); setAction(value); }}>{actionCopy[value].title}</Button>)}
+              {lifecycleActions.map((value) => <Button key={value} variant={value === 'dismiss' ? 'ghost' : 'secondary'} onClick={() => { setValidation(''); setAction(value); }}>{actionCopy[value].title}</Button>)}
               {resourceActions.map((value) => <Button key={value} variant="ghost" onClick={() => { setValidation(''); setAction(value); }}>{actionCopy[value].title}</Button>)}
               {lifecycleActions.length === 0 && resourceActions.length === 0 ? <span>No further action is available from this report state.</span> : null}
             </div>
