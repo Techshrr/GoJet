@@ -22,7 +22,7 @@ type AbuseCategory string
 type AbuseStatus string
 
 const (
-	AbuseShortLinkRisk   AbuseResourceType = "short-link-risk"
+	AbuseShortLinkRisk    AbuseResourceType = "short-link-risk"
 	AbuseCustomDomainRisk AbuseResourceType = "custom-domain-risk"
 
 	AbusePhishing      AbuseCategory = "phishing"
@@ -60,15 +60,15 @@ type AbuseReport struct {
 }
 
 type SubmitAbuseInput struct {
-	ResourceType    AbuseResourceType
-	Hostname        string
-	Code            string
-	Category        AbuseCategory
-	Details         string
-	TurnstileToken  string
-	IdempotencyKey  string
-	CorrelationID   string
-	RemoteAddr      string
+	ResourceType   AbuseResourceType
+	Hostname       string
+	Code           string
+	Category       AbuseCategory
+	Details        string
+	TurnstileToken string
+	IdempotencyKey string
+	CorrelationID  string
+	RemoteAddr     string
 }
 
 type SubmitAbuseResult struct {
