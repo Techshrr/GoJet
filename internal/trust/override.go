@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	SecurityManagePermission       = "security.manage"
-	OverrideAuthorityVersion       = "p16-destination-risk-v1"
-	maximumDestinationOverrideTTL  = 24 * time.Hour
+	SecurityManagePermission      = "security.manage"
+	OverrideAuthorityVersion      = "p16-destination-risk-v1"
+	maximumDestinationOverrideTTL = 24 * time.Hour
 )
 
 type PermissionAuthorizer interface {
@@ -23,9 +23,9 @@ type PermissionAuthorizer interface {
 }
 
 type DestinationOverridePolicyContext struct {
-	AuthorityVersion string        `json:"authority_version"`
-	PolicyVersion    string        `json:"policy_version"`
-	BaseDecisionID   uint64        `json:"base_decision_id"`
+	AuthorityVersion  string        `json:"authority_version"`
+	PolicyVersion     string        `json:"policy_version"`
+	BaseDecisionID    uint64        `json:"base_decision_id"`
 	BaseDecisionState DecisionState `json:"base_decision_state"`
 }
 
@@ -71,13 +71,13 @@ type InvalidateDestinationOverrideInput struct {
 }
 
 type DestinationAuthority struct {
-	Decision    DestinationDecision `json:"decision"`
-	Override    *DestinationOverride `json:"override,omitempty"`
-	State       DecisionState        `json:"state"`
-	Fingerprint string               `json:"fingerprint"`
-	PolicyVersion string             `json:"policy_version"`
-	ValidUntil  *time.Time           `json:"valid_until,omitempty"`
-	Source      string               `json:"source"`
+	Decision      DestinationDecision  `json:"decision"`
+	Override      *DestinationOverride `json:"override,omitempty"`
+	State         DecisionState        `json:"state"`
+	Fingerprint   string               `json:"fingerprint"`
+	PolicyVersion string               `json:"policy_version"`
+	ValidUntil    *time.Time           `json:"valid_until,omitempty"`
+	Source        string               `json:"source"`
 }
 
 func (s *Store) CreateDestinationOverride(ctx context.Context, in CreateDestinationOverrideInput, authorizer PermissionAuthorizer, now time.Time) (DestinationOverride, error) {
@@ -182,14 +182,14 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 	if err := appendRiskAuditTx(ctx, tx, in.WorkspaceID, &in.LinkID, nil, in.ActorID,
 		"destination-risk.override-create", "success", in.Reason, in.CorrelationID,
 		map[string]any{
-			"override_id":       override.ID,
-			"risk_fingerprint":  override.RiskFingerprint,
-			"policy_version":    override.PolicyVersion,
-			"base_decision_id":  override.BaseDecisionID,
+			"override_id":         override.ID,
+			"risk_fingerprint":    override.RiskFingerprint,
+			"policy_version":      override.PolicyVersion,
+			"base_decision_id":    override.BaseDecisionID,
 			"base_decision_state": string(override.BaseDecisionState),
-			"override_decision": string(override.Decision),
-			"expires_at":        override.ExpiresAt.Format(time.RFC3339Nano),
-			"authority_version": override.PolicyContext.AuthorityVersion,
+			"override_decision":   string(override.Decision),
+			"expires_at":          override.ExpiresAt.Format(time.RFC3339Nano),
+			"authority_version":   override.PolicyContext.AuthorityVersion,
 		}); err != nil {
 		return DestinationOverride{}, err
 	}
@@ -237,9 +237,9 @@ WHERE id=? AND workspace_id=? AND invalidated_at IS NULL`, now, in.ActorID, in.R
 	if err := appendRiskAuditTx(ctx, tx, override.WorkspaceID, &override.LinkID, nil, in.ActorID,
 		"destination-risk.override-invalidate", "success", in.Reason, in.CorrelationID,
 		map[string]any{
-			"override_id":      override.ID,
-			"risk_fingerprint": override.RiskFingerprint,
-			"policy_version":   override.PolicyVersion,
+			"override_id":       override.ID,
+			"risk_fingerprint":  override.RiskFingerprint,
+			"policy_version":    override.PolicyVersion,
 			"previous_decision": string(override.Decision),
 		}); err != nil {
 		return DestinationOverride{}, err
@@ -260,7 +260,7 @@ func (s *Store) CurrentDestinationAuthority(ctx context.Context, workspaceID str
 	if s == nil || s.db == nil || workspaceID == "" || linkID == 0 || policyVersion == "" {
 		return DestinationAuthority{}, ErrInvalid
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return DestinationAuthority{}, err
 	}
