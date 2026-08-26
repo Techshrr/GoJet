@@ -57,12 +57,12 @@ func (p deterministicDomainRiskProvider) Observe(_ context.Context, _ string) (t
 }
 
 type trustAdminHTTPHandler struct {
-	store       *trust.Store
-	domainRisk  *trust.DomainRiskService
-	authStore   *authn.Store
-	csrf        *authn.CSRFManager
-	origins     *authn.OriginPolicy
-	authorizer  trust.PermissionAuthorizer
+	store      *trust.Store
+	domainRisk *trust.DomainRiskService
+	authStore  *authn.Store
+	csrf       *authn.CSRFManager
+	origins    *authn.OriginPolicy
+	authorizer trust.PermissionAuthorizer
 }
 
 func buildTrustAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
@@ -106,9 +106,9 @@ func buildTrustAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth bool
 		return nil, false, trust.ErrInvalid
 	}
 	authorizer := trustAdminPermissionAuthorizer{
-		testAuth: testAuth,
+		testAuth:      testAuth,
 		securityActor: securityActor,
-		domainActor: domainActor,
+		domainActor:   domainActor,
 	}
 
 	store := trust.NewStore(db)
@@ -117,11 +117,11 @@ func buildTrustAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth bool
 		return nil, false, err
 	}
 	h := &trustAdminHTTPHandler{
-		store: store,
+		store:      store,
 		domainRisk: domainRisk,
-		authStore: authn.NewStore(db),
-		csrf: csrf,
-		origins: originPolicy,
+		authStore:  authn.NewStore(db),
+		csrf:       csrf,
+		origins:    originPolicy,
 		authorizer: authorizer,
 	}
 	mux := http.NewServeMux()
@@ -151,11 +151,11 @@ func buildAdminDomainRiskService(store *trust.Store, testAuth bool) (*trust.Doma
 		return nil, nil
 	}
 	policy := trust.DomainRiskPolicy{
-		Version: policyVersion,
+		Version:           policyVersion,
 		RequiredProviders: []string{providerName},
-		AllowTTL: durationEnvValue("GOJET_DOMAIN_RISK_ALLOW_TTL", 15*time.Minute, time.Minute, 24*time.Hour),
-		RevalidateAfter: durationEnvValue("GOJET_DOMAIN_RISK_REVALIDATE_AFTER", 10*time.Minute, time.Minute, 24*time.Hour),
-		RetryAfter: durationEnvValue("GOJET_DOMAIN_RISK_RETRY_AFTER", 2*time.Minute, time.Second, 24*time.Hour),
+		AllowTTL:          durationEnvValue("GOJET_DOMAIN_RISK_ALLOW_TTL", 15*time.Minute, time.Minute, 24*time.Hour),
+		RevalidateAfter:   durationEnvValue("GOJET_DOMAIN_RISK_REVALIDATE_AFTER", 10*time.Minute, time.Minute, 24*time.Hour),
+		RetryAfter:        durationEnvValue("GOJET_DOMAIN_RISK_RETRY_AFTER", 2*time.Minute, time.Second, 24*time.Hour),
 	}
 	if !policy.Validate() {
 		return nil, trust.ErrInvalid
@@ -187,8 +187,8 @@ func buildAdminDomainRiskService(store *trust.Store, testAuth bool) (*trust.Doma
 		return nil, nil
 	}
 	provider := trust.SemanticProviderClient{
-		Name: providerName,
-		Endpoint: endpoint,
+		Name:       providerName,
+		Endpoint:   endpoint,
 		HTTPClient: trust.NewInspectionHTTPClient(nil, nil),
 	}
 	return trust.NewDomainRiskService(store, policy, provider)
@@ -304,9 +304,9 @@ func (h *trustAdminHTTPHandler) handleDestinationRiskRescan(w http.ResponseWrite
 		return
 	}
 	result, err := h.store.AdminRescanDestinationRisk(r.Context(), trust.AdminDestinationRescanInput{
-		RiskID: riskID,
-		ActorID: session.UserID,
-		CorrelationID: correlationID,
+		RiskID:         riskID,
+		ActorID:        session.UserID,
+		CorrelationID:  correlationID,
 		IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key")),
 	}, h.authorizer)
 	if err != nil {
@@ -316,7 +316,7 @@ func (h *trustAdminHTTPHandler) handleDestinationRiskRescan(w http.ResponseWrite
 	writeAuthJSON(w, http.StatusAccepted, map[string]any{
 		"risk_id": result.Scan.ID,
 		"created": result.Created,
-		"status": result.Scan.Status,
+		"status":  result.Scan.Status,
 	})
 }
 
@@ -343,12 +343,12 @@ func (h *trustAdminHTTPHandler) handleDestinationRiskOverride(w http.ResponseWri
 		return
 	}
 	override, err := h.store.AdminOverrideDestinationRisk(r.Context(), trust.AdminDestinationOverrideInput{
-		RiskID: riskID,
-		Decision: body.Decision,
-		Reason: body.Reason,
-		ActorID: session.UserID,
+		RiskID:        riskID,
+		Decision:      body.Decision,
+		Reason:        body.Reason,
+		ActorID:       session.UserID,
 		CorrelationID: correlationID,
-		ExpiresAt: body.ExpiresAt,
+		ExpiresAt:     body.ExpiresAt,
 	}, h.authorizer, time.Now().UTC())
 	if err != nil {
 		writeTrustAdminError(w, err)
@@ -356,8 +356,8 @@ func (h *trustAdminHTTPHandler) handleDestinationRiskOverride(w http.ResponseWri
 	}
 	writeAuthJSON(w, http.StatusOK, map[string]any{
 		"override_id": override.ID,
-		"decision": override.Decision,
-		"expires_at": override.ExpiresAt,
+		"decision":    override.Decision,
+		"expires_at":  override.ExpiresAt,
 	})
 }
 
@@ -424,12 +424,12 @@ func (h *trustAdminHTTPHandler) handleDomainRiskRevalidate(w http.ResponseWriter
 		return
 	}
 	result, err := h.domainRisk.AdminRevalidateDomainRisk(r.Context(), trust.AdminDomainRevalidateInput{
-		DomainID: domainID,
-		ActorID: session.UserID,
-		Reason: body.Reason,
-		CorrelationID: correlationID,
+		DomainID:       domainID,
+		ActorID:        session.UserID,
+		Reason:         body.Reason,
+		CorrelationID:  correlationID,
 		IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key")),
-		Now: time.Now().UTC(),
+		Now:            time.Now().UTC(),
 	}, h.authorizer)
 	if err != nil {
 		writeTrustAdminError(w, err)

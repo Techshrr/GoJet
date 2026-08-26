@@ -237,28 +237,28 @@ func run() (output, error) {
 	}
 
 	out.RecordCounts = map[string]int{
-		"active_link_holds_after_restore":       activeLinkHolds,
-		"active_domain_holds_after_restore":     activeDomainHolds,
-		"abuse_success_action_events":           abuseSuccessEvents,
-		"abuse_permission_denied_events":        abuseDeniedEvents,
-		"destination_risk_action_audits":        destinationAudits,
-		"p06_domain_security_action_audits":     p06DomainAudits,
-		"p16_domain_risk_action_audits":         p16DomainAudits,
+		"active_link_holds_after_restore":   activeLinkHolds,
+		"active_domain_holds_after_restore": activeDomainHolds,
+		"abuse_success_action_events":       abuseSuccessEvents,
+		"abuse_permission_denied_events":    abuseDeniedEvents,
+		"destination_risk_action_audits":    destinationAudits,
+		"p06_domain_security_action_audits": p06DomainAudits,
+		"p16_domain_risk_action_audits":     p16DomainAudits,
 	}
 	out.Checks = map[string]bool{
-		"security_manage_denial_is_fail_closed_and_audited": errors.Is(deniedErr, trust.ErrUnauthorized) && denied.calls == 1 && abuseDeniedEvents == 1,
-		"short_link_was_reachable_before_abuse_block":       beforeBlock.Status == 302 && beforeBlock.Location != "",
+		"security_manage_denial_is_fail_closed_and_audited":  errors.Is(deniedErr, trust.ErrUnauthorized) && denied.calls == 1 && abuseDeniedEvents == 1,
+		"short_link_was_reachable_before_abuse_block":        beforeBlock.Status == 302 && beforeBlock.Location != "",
 		"short_link_block_creates_exact_active_hold":         blocked.Changed && blocked.Hold.State == "active" && blocked.Hold.ExactFingerprint == link.Fingerprint,
 		"short_link_block_immediately_fails_redirect_closed": afterBlock.Status != 302 && afterBlock.Location == "",
-		"background_projection_cannot_overwrite_abuse_hold": projectedWhileHeld.Source == "abuse-hold" && projectedWhileHeld.Runtime.Decision == links.RiskBlock,
+		"background_projection_cannot_overwrite_abuse_hold":  projectedWhileHeld.Source == "abuse-hold" && projectedWhileHeld.Runtime.Decision == links.RiskBlock,
 		"short_link_restore_rejects_non_allow_safety":        errors.Is(unsafeRestoreErr, trust.ErrConflict),
 		"short_link_restore_requires_current_allow":          restoredLink.Changed && restoredLink.Hold.State == "released" && activeLinkHolds == 0 && afterRestore.Status == 302 && afterRestore.Location != "",
-		"domain_suspend_is_immediate_and_clears_grace":      suspended.Changed && domainAfterSuspend.RoutingState == domains.RoutingSuspended && domainAfterSuspend.SecurityCategory == string(domains.DomainSecurityAbuse) && domainAfterSuspend.GraceStartedAt == nil && domainAfterSuspend.GraceUntil == nil,
+		"domain_suspend_is_immediate_and_clears_grace":       suspended.Changed && domainAfterSuspend.RoutingState == domains.RoutingSuspended && domainAfterSuspend.SecurityCategory == string(domains.DomainSecurityAbuse) && domainAfterSuspend.GraceStartedAt == nil && domainAfterSuspend.GraceUntil == nil,
 		"domain_restore_rejects_review_authority":            errors.Is(unsafeDomainRestoreErr, trust.ErrConflict),
-		"domain_restore_rechecks_all_p06_axes":                restoredDomain.Changed && restoredDomain.Hold.State == "released" && domainAfterRestore.RoutingState == domains.RoutingEnabled && domainAfterRestore.SecurityCategory == "" && domainAfterRestore.OwnershipStatus == domains.OwnershipVerified && domainAfterRestore.IngressDNSStatus == domains.IngressValid && domainAfterRestore.HTTPSStatus == domains.HTTPSActive && domainAfterRestore.RiskStatus == domains.RiskAllow && activeDomainHolds == 0,
-		"before_after_actions_have_immutable_abuse_audit":     abuseSuccessEvents == 4,
-		"destination_actions_have_risk_audit":                 destinationAudits == 2,
-		"domain_actions_have_p06_and_p16_audit":               p06DomainAudits == 2 && p16DomainAudits == 2,
+		"domain_restore_rechecks_all_p06_axes":               restoredDomain.Changed && restoredDomain.Hold.State == "released" && domainAfterRestore.RoutingState == domains.RoutingEnabled && domainAfterRestore.SecurityCategory == "" && domainAfterRestore.OwnershipStatus == domains.OwnershipVerified && domainAfterRestore.IngressDNSStatus == domains.IngressValid && domainAfterRestore.HTTPSStatus == domains.HTTPSActive && domainAfterRestore.RiskStatus == domains.RiskAllow && activeDomainHolds == 0,
+		"before_after_actions_have_immutable_abuse_audit":    abuseSuccessEvents == 4,
+		"destination_actions_have_risk_audit":                destinationAudits == 2,
+		"domain_actions_have_p06_and_p16_audit":              p06DomainAudits == 2 && p16DomainAudits == 2,
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"

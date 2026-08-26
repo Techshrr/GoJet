@@ -11,45 +11,45 @@ import (
 const DomainsRiskManagePermission = "domains.risk.manage"
 
 type AdminDestinationRiskRecord struct {
-	ID              uint64        `json:"id"`
-	WorkspaceID     string        `json:"workspace_id"`
-	LinkID          uint64        `json:"link_id"`
-	RiskFingerprint string        `json:"risk_fingerprint"`
-	PolicyVersion   string        `json:"policy_version"`
-	RequestKind     ScanRequestKind `json:"request_kind"`
-	ScanStatus      ScanStatus    `json:"scan_status"`
-	DecisionState   DecisionState `json:"decision_state"`
-	ReasonCategory  string        `json:"reason_category"`
-	Attempts        uint32        `json:"attempts"`
-	MaxAttempts     uint32        `json:"max_attempts"`
-	TargetCount     uint32        `json:"target_count"`
-	ProviderCount   uint32        `json:"provider_count"`
-	HasActiveOverride bool        `json:"has_active_override"`
-	ValidUntil      *time.Time    `json:"valid_until,omitempty"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
+	ID                uint64          `json:"id"`
+	WorkspaceID       string          `json:"workspace_id"`
+	LinkID            uint64          `json:"link_id"`
+	RiskFingerprint   string          `json:"risk_fingerprint"`
+	PolicyVersion     string          `json:"policy_version"`
+	RequestKind       ScanRequestKind `json:"request_kind"`
+	ScanStatus        ScanStatus      `json:"scan_status"`
+	DecisionState     DecisionState   `json:"decision_state"`
+	ReasonCategory    string          `json:"reason_category"`
+	Attempts          uint32          `json:"attempts"`
+	MaxAttempts       uint32          `json:"max_attempts"`
+	TargetCount       uint32          `json:"target_count"`
+	ProviderCount     uint32          `json:"provider_count"`
+	HasActiveOverride bool            `json:"has_active_override"`
+	ValidUntil        *time.Time      `json:"valid_until,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 type AdminDomainRiskRecord struct {
-	EvaluationID       uint64          `json:"evaluation_id"`
-	WorkspaceID        string          `json:"workspace_id"`
-	DomainID           uint64          `json:"domain_id"`
-	HostnameASCII      string          `json:"hostname_ascii"`
-	PolicyVersion      string          `json:"policy_version"`
-	RequestKind        DomainRiskRequestKind `json:"request_kind"`
-	State              DomainRiskState `json:"state"`
-	ReasonCategory     string          `json:"reason_category"`
-	EntitlementStatus  string          `json:"entitlement_status"`
-	OwnershipStatus    string          `json:"ownership_status"`
-	IngressDNSStatus   string          `json:"ingress_dns_status"`
-	HTTPSStatus        string          `json:"https_status"`
-	RoutingStatus      string          `json:"routing_status"`
-	ProviderCount      uint32          `json:"provider_count"`
-	ValidUntil         *time.Time      `json:"valid_until,omitempty"`
-	CheckedAt          *time.Time      `json:"checked_at,omitempty"`
-	NextDueAt          *time.Time      `json:"next_due_at,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
+	EvaluationID      uint64                `json:"evaluation_id"`
+	WorkspaceID       string                `json:"workspace_id"`
+	DomainID          uint64                `json:"domain_id"`
+	HostnameASCII     string                `json:"hostname_ascii"`
+	PolicyVersion     string                `json:"policy_version"`
+	RequestKind       DomainRiskRequestKind `json:"request_kind"`
+	State             DomainRiskState       `json:"state"`
+	ReasonCategory    string                `json:"reason_category"`
+	EntitlementStatus string                `json:"entitlement_status"`
+	OwnershipStatus   string                `json:"ownership_status"`
+	IngressDNSStatus  string                `json:"ingress_dns_status"`
+	HTTPSStatus       string                `json:"https_status"`
+	RoutingStatus     string                `json:"routing_status"`
+	ProviderCount     uint32                `json:"provider_count"`
+	ValidUntil        *time.Time            `json:"valid_until,omitempty"`
+	CheckedAt         *time.Time            `json:"checked_at,omitempty"`
+	NextDueAt         *time.Time            `json:"next_due_at,omitempty"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
 }
 
 type AdminDestinationRescanInput struct {
@@ -126,15 +126,15 @@ func (s *Store) AdminRescanDestinationRisk(ctx context.Context, input AdminDesti
 		return EnqueueDestinationScanResult{}, err
 	}
 	return s.EnqueueDestinationScan(ctx, EnqueueDestinationScanInput{
-		WorkspaceID: record.WorkspaceID,
-		LinkID: record.LinkID,
+		WorkspaceID:     record.WorkspaceID,
+		LinkID:          record.LinkID,
 		RiskFingerprint: record.RiskFingerprint,
-		PolicyVersion: record.PolicyVersion,
-		RequestKind: ScanRequestRescan,
-		IdempotencyKey: input.IdempotencyKey,
-		CorrelationID: input.CorrelationID,
-		ActorID: input.ActorID,
-		MaxAttempts: 5,
+		PolicyVersion:   record.PolicyVersion,
+		RequestKind:     ScanRequestRescan,
+		IdempotencyKey:  input.IdempotencyKey,
+		CorrelationID:   input.CorrelationID,
+		ActorID:         input.ActorID,
+		MaxAttempts:     5,
 	})
 }
 
@@ -161,21 +161,21 @@ func (s *Store) AdminOverrideDestinationRisk(ctx context.Context, input AdminDes
 		return DestinationOverride{}, ErrStaleFingerprint
 	}
 	return s.CreateDestinationOverride(ctx, CreateDestinationOverrideInput{
-		WorkspaceID: record.WorkspaceID,
-		LinkID: record.LinkID,
+		WorkspaceID:     record.WorkspaceID,
+		LinkID:          record.LinkID,
 		RiskFingerprint: record.RiskFingerprint,
-		PolicyVersion: record.PolicyVersion,
-		Decision: input.Decision,
-		Reason: input.Reason,
+		PolicyVersion:   record.PolicyVersion,
+		Decision:        input.Decision,
+		Reason:          input.Reason,
 		PolicyContext: DestinationOverridePolicyContext{
-			AuthorityVersion: OverrideAuthorityVersion,
-			PolicyVersion: record.PolicyVersion,
-			BaseDecisionID: authority.Decision.ID,
+			AuthorityVersion:  OverrideAuthorityVersion,
+			PolicyVersion:     record.PolicyVersion,
+			BaseDecisionID:    authority.Decision.ID,
 			BaseDecisionState: authority.Decision.State,
 		},
-		ActorID: input.ActorID,
+		ActorID:       input.ActorID,
 		CorrelationID: input.CorrelationID,
-		ExpiresAt: input.ExpiresAt.UTC(),
+		ExpiresAt:     input.ExpiresAt.UTC(),
 	}, authorizer, now)
 }
 
@@ -232,14 +232,14 @@ func (s *DomainRiskService) AdminRevalidateDomainRisk(ctx context.Context, input
 		return EvaluateDomainRiskResult{}, err
 	}
 	return s.Evaluate(ctx, EvaluateDomainRiskInput{
-		WorkspaceID: record.WorkspaceID,
-		DomainID: record.DomainID,
-		RequestKind: DomainRiskRevalidation,
+		WorkspaceID:    record.WorkspaceID,
+		DomainID:       record.DomainID,
+		RequestKind:    DomainRiskRevalidation,
 		IdempotencyKey: input.IdempotencyKey,
-		ActorID: input.ActorID,
-		Reason: input.Reason,
-		CorrelationID: input.CorrelationID,
-		Now: input.Now,
+		ActorID:        input.ActorID,
+		Reason:         input.Reason,
+		CorrelationID:  input.CorrelationID,
+		Now:            input.Now,
 	})
 }
 

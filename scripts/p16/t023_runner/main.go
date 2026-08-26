@@ -44,9 +44,9 @@ func main() {
 
 func run() (output, error) {
 	out := output{
-		Case:    "P16-T023",
-		Status:  "FAIL",
-		Fixture: "real MySQL 8.x plus inherited P12 workspace notification producer/read-state/deep-link authority proving deduplicated redacted P16 security/domain notifications",
+		Case:         "P16-T023",
+		Status:       "FAIL",
+		Fixture:      "real MySQL 8.x plus inherited P12 workspace notification producer/read-state/deep-link authority proving deduplicated redacted P16 security/domain notifications",
 		RecordCounts: map[string]int{},
 		Checks:       map[string]bool{},
 	}
@@ -220,21 +220,21 @@ WHERE workspace_id=? AND (
 
 	out.RecordCounts = map[string]int{
 		"workspace_notifications": total,
-		"security_notifications": securityCount,
-		"domain_notifications": domainCount,
-		"distinct_dedupe_keys": dedupeRows,
-		"sensitive_rows": sensitiveRows,
+		"security_notifications":  securityCount,
+		"domain_notifications":    domainCount,
+		"distinct_dedupe_keys":    dedupeRows,
+		"sensitive_rows":          sensitiveRows,
 	}
 	out.Checks = map[string]bool{
-		"p16_fans_out_only_through_current_p12_owner_set": len(blocked.Items) == 2 && len(restored.Items) == 2 && len(suspended.Items) == 2 && len(domainRestored.Items) == 2,
-		"duplicate_security_event_is_deduplicated": total == 8 && dedupeRows == 4 && blockPrimaryID == blockReplayPrimaryID,
-		"security_and_domain_categories_are_preserved": securityCount == 4 && domainCount == 4,
-		"resource_deep_links_survive_p12_authorization": validResourceDeepLinks(primaryPage.Items, link.ID, domainID) && validResourceDeepLinks(secondPage.Items, link.ID, domainID),
-		"cross_tenant_resource_cannot_be_notified": errors.Is(crossTenantErr, trust.ErrNotFound) && !foreignDeepLinkAllowed,
-		"sensitive_authority_material_is_rejected": errors.Is(sensitiveAuthorityErr, trust.ErrInvalid) && sensitiveRows == 0,
-		"p12_read_state_survives_duplicate_producer_delivery": primaryPage.UnreadCount == 3 && secondPage.UnreadCount == 4,
-		"p12_notification_state_remains_authority": primaryPage.State.Status == "complete" && secondPage.State.Status == "complete",
-		"producer_returns_persistent_owner_items": allPersistent(blocked.Items) && allPersistent(restored.Items) && allPersistent(suspended.Items) && allPersistent(domainRestored.Items),
+		"p16_fans_out_only_through_current_p12_owner_set":         len(blocked.Items) == 2 && len(restored.Items) == 2 && len(suspended.Items) == 2 && len(domainRestored.Items) == 2,
+		"duplicate_security_event_is_deduplicated":                total == 8 && dedupeRows == 4 && blockPrimaryID == blockReplayPrimaryID,
+		"security_and_domain_categories_are_preserved":            securityCount == 4 && domainCount == 4,
+		"resource_deep_links_survive_p12_authorization":           validResourceDeepLinks(primaryPage.Items, link.ID, domainID) && validResourceDeepLinks(secondPage.Items, link.ID, domainID),
+		"cross_tenant_resource_cannot_be_notified":                errors.Is(crossTenantErr, trust.ErrNotFound) && !foreignDeepLinkAllowed,
+		"sensitive_authority_material_is_rejected":                errors.Is(sensitiveAuthorityErr, trust.ErrInvalid) && sensitiveRows == 0,
+		"p12_read_state_survives_duplicate_producer_delivery":     primaryPage.UnreadCount == 3 && secondPage.UnreadCount == 4,
+		"p12_notification_state_remains_authority":                primaryPage.State.Status == "complete" && secondPage.State.Status == "complete",
+		"producer_returns_persistent_owner_items":                 allPersistent(blocked.Items) && allPersistent(restored.Items) && allPersistent(suspended.Items) && allPersistent(domainRestored.Items),
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"

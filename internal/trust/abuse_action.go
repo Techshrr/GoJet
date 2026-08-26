@@ -26,35 +26,35 @@ const (
 )
 
 type AbuseResourceHold struct {
-	ID                    uint64
-	ReportID              uint64
-	WorkspaceID           string
-	ResourceType          AbuseResourceType
-	ResourceID            string
-	ExactFingerprint      string
-	State                 string
-	ReasonCategory        string
-	ActorID               string
-	CorrelationID         string
-	IdempotencyKeyHash    string
-	RequestFingerprint    string
-	ReleasedAt            *time.Time
-	ReleasedBy            string
-	ReleaseReason         string
-	ReleaseCorrelationID  string
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                   uint64
+	ReportID             uint64
+	WorkspaceID          string
+	ResourceType         AbuseResourceType
+	ResourceID           string
+	ExactFingerprint     string
+	State                string
+	ReasonCategory       string
+	ActorID              string
+	CorrelationID        string
+	IdempotencyKeyHash   string
+	RequestFingerprint   string
+	ReleasedAt           *time.Time
+	ReleasedBy           string
+	ReleaseReason        string
+	ReleaseCorrelationID string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type AbuseResourceActionInput struct {
-	ReportID        uint64
-	Action          AbuseResourceAction
+	ReportID         uint64
+	Action           AbuseResourceAction
 	ExactFingerprint string
-	Reason          string
-	ActorID         string
-	CorrelationID   string
-	IdempotencyKey  string
-	Now             time.Time
+	Reason           string
+	ActorID          string
+	CorrelationID    string
+	IdempotencyKey   string
+	Now              time.Time
 }
 
 type AbuseResourceActionResult struct {
@@ -452,9 +452,9 @@ func (s *AbuseActionService) projectImmediateBlock(ctx context.Context, report A
 
 func abuseActionMetadata(report AbuseReport, hold AbuseResourceHold, input AbuseResourceActionInput) map[string]any {
 	metadata := map[string]any{
-		"resource_type": report.ResourceType,
-		"hold_id":       hold.ID,
-		"hold_state":    hold.State,
+		"resource_type":   report.ResourceType,
+		"hold_id":         hold.ID,
+		"hold_state":      hold.State,
 		"reason_redacted": SanitizeAbuseDetails(input.Reason),
 	}
 	if report.ResourceType == AbuseShortLinkRisk {

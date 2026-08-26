@@ -43,11 +43,11 @@ func main() {
 
 func run() (output, error) {
 	out := output{
-		Case:          "P16-T025",
-		Status:        "FAIL",
-		Fixture:       "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving domains.risk.manage list/detail/revalidate RBAC, idempotency/rate rules, independent P06 axes and provider-evidence non-disclosure",
-		RecordCounts:  map[string]int{},
-		Checks:        map[string]bool{},
+		Case:         "P16-T025",
+		Status:       "FAIL",
+		Fixture:      "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving domains.risk.manage list/detail/revalidate RBAC, idempotency/rate rules, independent P06 axes and provider-evidence non-disclosure",
+		RecordCounts: map[string]int{},
+		Checks:       map[string]bool{},
 	}
 	db, redisClient, err := runtimefixture.Open()
 	if err != nil {
