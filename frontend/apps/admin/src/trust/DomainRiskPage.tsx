@@ -19,10 +19,19 @@ type DomainDetailResponse = { domain_risk: DomainRiskRecord; csrf_token?: string
 function domainState(item?: DomainRiskRecord): string {
   if (!item) return 'empty';
   const reason = item.reason_category.toLowerCase();
+  if (item.state === 'provider_partial' || item.state === 'malformed') return 'provider-partial';
   if (reason.includes('stale')) return 'stale';
   if (reason.includes('provider') && item.state !== 'allow') return 'provider-partial';
-  if (item.request_kind === 'revalidation' && item.state === 'pending') return 'revalidating';
+  if (item.state === 'revalidating' || (item.request_kind === 'revalidation' && item.state === 'pending')) return 'revalidating';
   return item.state;
+}
+
+function domainListState(items: DomainRiskRecord[]): string {
+  const states = items.map((item) => domainState(item));
+  for (const candidate of ['provider-partial', 'stale', 'block', 'revalidating', 'review', 'pending', 'allow']) {
+    if (states.includes(candidate)) return candidate;
+  }
+  return 'empty';
 }
 
 function axisLabel(label: string, value: string) {
@@ -37,7 +46,7 @@ export default function DomainRiskListPage() {
     retry: false,
   });
   const items = query.data?.items ?? [];
-  const state = query.isPending ? 'loading' : query.isError ? 'error' : items.length === 0 ? 'empty' : items.some((item) => domainState(item) === 'provider-partial') ? 'provider-partial' : items.some((item) => domainState(item) === 'stale') ? 'stale' : 'allow';
+  const state = query.isPending ? 'loading' : query.isError ? 'error' : items.length === 0 ? 'empty' : domainListState(items);
 
   return (
     <AdminShell state={trustShellState(query.error)}>
