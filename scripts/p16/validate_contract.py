@@ -257,7 +257,7 @@ def main() -> int:
             need(blob_at_head("artifacts/v10/P16/review.md") == PENDING_REVIEW_BLOB, "pending P16 review blob drift before accountable signing", errors)
         except Exception as exc:
             errors.append(f"cannot bind pending P16 review blob: {exc}")
-        for marker in ("No P16 PASS", "P16-T", "P15", BASE, "fingerprint", "ClamAV", "security.manage", "domains.risk.manage", "P17", "operationsmonitor"):
+        for marker in ("No P16 PASS", "case range", "P15", BASE, "fingerprint", "ClamAV", "security.manage", "domains.risk.manage", "P17", "operationsmonitor"):
             need(marker.lower() in review.lower(), f"pending P16 review missing {marker}", errors)
     if signed:
         need(bool(re.search(r"Pre-sign exact implementation SHA: `?[0-9a-f]{40}`?", review)), "signed P16 review missing pre-sign implementation SHA", errors)
