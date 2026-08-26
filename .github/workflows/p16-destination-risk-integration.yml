@@ -18,6 +18,7 @@ on:
       - 'internal/domains/domain_store_mysql.go'
       - 'internal/domains/store_mysql.go'
       - 'internal/domains/security_suspension_mysql.go'
+      - 'internal/domains/security_restore_mysql.go'
       - 'internal/support/turnstile.go'
       - 'internal/support/turnstile_deterministic.go'
       - 'internal/support/turnstile_http.go'
@@ -48,6 +49,8 @@ on:
       - 'scripts/p16/t018_runner/**'
       - 'scripts/p16/t019_runner/**'
       - 'scripts/p16/t020_runner/**'
+      - 'scripts/p16/t021_runner/**'
+      - 'scripts/p16/t022_runner/**'
       - '.github/workflows/p16-destination-risk-integration.yml'
       - 'artifacts/v10/P16/test-plan.json'
   workflow_dispatch:
@@ -60,10 +63,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001-t020:
-    name: P16-T001/T020 real trust runtime evidence
+  t001-t022:
+    name: P16-T001/T022 real trust runtime evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 110
     services:
       mysql:
         image: mysql:8.4.11
@@ -119,7 +122,7 @@ jobs:
           redis-cli --version
           redis-cli -h 127.0.0.1 -p 6379 ping
 
-      - name: Verify P16 T001-T020 source and frozen-contract boundary
+      - name: Verify P16 T001-T022 source and frozen-contract boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -148,13 +151,22 @@ jobs:
             scripts/p16/t018_runner/main.go \
             scripts/p16/t019_runner/main.go \
             scripts/p16/t020_runner/main.go \
+            scripts/p16/t021_runner/main.go \
+            scripts/p16/t022_runner/main.go \
+            internal/domains/security_restore_mysql.go \
             services/platformapi/cmd/operationsmonitor/main.go \
             services/platformapi/cmd/server/*.go \
             services/redirectengine/cmd/server/main.go \
             internal/trust/*.go | tee /tmp/p16-gofmt.diff
           test ! -s /tmp/p16-gofmt.diff
           go test ./...
-          go vet ./internal/trust ./internal/links ./internal/domains ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./scripts/p16/t019_runner ./scripts/p16/t020_runner ./services/platformapi/cmd/operationsmonitor ./services/platformapi/cmd/server ./services/redirectengine/cmd/server
+          go vet \
+            ./internal/trust ./internal/links ./internal/domains \
+            ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner \
+            ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./scripts/p16/t019_runner \
+            ./scripts/p16/t020_runner ./scripts/p16/t021_runner ./scripts/p16/t022_runner \
+            ./services/platformapi/cmd/operationsmonitor ./services/platformapi/cmd/server \
+            ./services/redirectengine/cmd/server
           mkdir -p /tmp/gojet-p16
           go build -trimpath -o /tmp/gojet-p16/operationsmonitor ./services/platformapi/cmd/operationsmonitor
           go build -trimpath -o /tmp/gojet-p16/redirectengine ./services/redirectengine/cmd/server
@@ -235,41 +247,14 @@ jobs:
           cat "$GOJET_PLATFORMAPI_LOG"
           exit 1
 
-      - name: Run frozen P16-T001 driver
+      - name: Run frozen P16-T001 through P16-T006 drivers
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T001 | tee /tmp/p16-t001-result.json
-
-      - name: Run frozen P16-T002 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
-
-      - name: Run frozen P16-T003 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T003 | tee /tmp/p16-t003-result.json
-
-      - name: Run frozen P16-T004 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T004 | tee /tmp/p16-t004-result.json
-
-      - name: Run frozen P16-T005 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T005 | tee /tmp/p16-t005-result.json
-
-      - name: Run frozen P16-T006 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T006 | tee /tmp/p16-t006-result.json
+          for n in {1..6}; do
+            case_id="$(printf 'P16-T%03d' "$n")"
+            python3 scripts/p16/integration.py --case "$case_id" | tee "/tmp/p16-t$(printf '%03d' "$n")-result.json"
+          done
 
       - name: Isolate durable queue fixture before P16-T007/T008
         shell: bash
@@ -288,90 +273,20 @@ jobs:
           SQL
           redis-cli -h 127.0.0.1 -p 6379 FLUSHDB
 
-      - name: Run frozen P16-T007 driver
+      - name: Run frozen P16-T007 through P16-T022 drivers
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T007 | tee /tmp/p16-t007-result.json
+          for n in {7..22}; do
+            case_id="$(printf 'P16-T%03d' "$n")"
+            python3 scripts/p16/integration.py --case "$case_id" | tee "/tmp/p16-t$(printf '%03d' "$n")-result.json"
+          done
 
-      - name: Run frozen P16-T008 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T008 | tee /tmp/p16-t008-result.json
-
-      - name: Run frozen P16-T009 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T009 | tee /tmp/p16-t009-result.json
-
-      - name: Run frozen P16-T010 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T010 | tee /tmp/p16-t010-result.json
-
-      - name: Run frozen P16-T011 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T011 | tee /tmp/p16-t011-result.json
-
-      - name: Run frozen P16-T012 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T012 | tee /tmp/p16-t012-result.json
-
-      - name: Run frozen P16-T013 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T013 | tee /tmp/p16-t013-result.json
-
-      - name: Run frozen P16-T014 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T014 | tee /tmp/p16-t014-result.json
-
-      - name: Run frozen P16-T015 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T015 | tee /tmp/p16-t015-result.json
-
-      - name: Run frozen P16-T016 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T016 | tee /tmp/p16-t016-result.json
-
-      - name: Run frozen P16-T017 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T017 | tee /tmp/p16-t017-result.json
-
-      - name: Run frozen P16-T018 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T018 | tee /tmp/p16-t018-result.json
-
-      - name: Run frozen P16-T019 driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T019 | tee /tmp/p16-t019-result.json
-
-      - name: Run frozen P16-T020 driver and verify exact-head evidence
+      - name: Verify exact-head P16-T001/T022 evidence
         id: evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T020 | tee /tmp/p16-t020-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json, subprocess
@@ -397,10 +312,13 @@ jobs:
               'P16-T018':'artifacts/v10/P16/security/P16-T018.json',
               'P16-T019':'artifacts/v10/P16/abuse/P16-T019.json',
               'P16-T020':'artifacts/v10/P16/abuse/P16-T020.json',
+              'P16-T021':'artifacts/v10/P16/abuse/P16-T021.json',
+              'P16-T022':'artifacts/v10/P16/audit/P16-T022.json',
           }
           mysql_optional={'P16-T003','P16-T004'}
-          redis_required={'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014','P16-T018','P16-T019','P16-T020'}
+          redis_required={'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014','P16-T018','P16-T019','P16-T020','P16-T022'}
           fixture_required=set(paths)-{'P16-T001','P16-T002'}
+          assert len(paths)==22,paths
           for case,path in paths.items():
               data=json.load(open(path,encoding='utf-8'))
               assert data['node']=='P16',data
@@ -419,10 +337,10 @@ jobs:
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P16 T001-T020 evidence
+      - name: Upload exact-head P16 T001-T022 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p16-t001-t020-real-trust-${{ steps.evidence.outputs.sha }}
+          name: p16-t001-t022-real-trust-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -446,4 +364,6 @@ jobs:
             artifacts/v10/P16/security/P16-T018.json
             artifacts/v10/P16/abuse/P16-T019.json
             artifacts/v10/P16/abuse/P16-T020.json
+            artifacts/v10/P16/abuse/P16-T021.json
+            artifacts/v10/P16/audit/P16-T022.json
             artifacts/v10/P16/test-plan.json
