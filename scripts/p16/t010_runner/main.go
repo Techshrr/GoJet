@@ -89,7 +89,7 @@ func run() (output, error) {
 			name:    "routing",
 			primary: "https://primary.example/t010-routing",
 			routing: []links.RoutingRule{{ID: "us", MatchType: "country", MatchValue: "US", Destination: "https://route.example/t010-us", Enabled: true}},
-			headers:  http.Header{"X-GoJet-Test-Country": []string{"US"}, "User-Agent": []string{"GoJet-P16-T010/1.0"}, "Accept-Language": []string{"en-US,en;q=0.9"}},
+			headers: http.Header{"X-GoJet-Test-Country": []string{"US"}, "User-Agent": []string{"GoJet-P16-T010/1.0"}, "Accept-Language": []string{"en-US,en;q=0.9"}},
 			kind:    "routing",
 		},
 		{
@@ -198,18 +198,18 @@ func run() (output, error) {
 	customAxesUsed = customAxesUsed && domainRows == 1 && entitlementRows >= 1
 
 	out.RecordCounts = map[string]int{
-		"official_custom_pairs": pairCount,
+		"official_custom_pairs":  pairCount,
 		"native_allow_redirects": redirectCount,
-		"ready_custom_domains":  domainRows,
+		"ready_custom_domains":   domainRows,
 	}
 	out.Checks = map[string]bool{
-		"official_custom_exact_fingerprint_parity": fingerprintParity && pairCount == 3,
+		"official_custom_exact_fingerprint_parity":      fingerprintParity && pairCount == 3,
 		"review_fails_closed_identically_on_both_hosts": reviewParity,
-		"allow_redirects_identically_on_both_hosts": allowParity,
-		"primary_routing_ab_selection_is_exercised": selectedKindCorrect,
-		"every_selected_target_is_fingerprint_member": reachableMembership,
-		"custom_host_used_real_independent_p06_axes": customAxesUsed,
-		"all_three_frozen_target_classes_are_covered": pairCount == 3 && redirectCount == 6,
+		"allow_redirects_identically_on_both_hosts":     allowParity,
+		"primary_routing_ab_selection_is_exercised":     selectedKindCorrect,
+		"every_selected_target_is_fingerprint_member":   reachableMembership,
+		"custom_host_used_real_independent_p06_axes":    customAxesUsed,
+		"all_three_frozen_target_classes_are_covered":   pairCount == 3 && redirectCount == 6,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
