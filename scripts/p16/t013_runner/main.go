@@ -228,16 +228,16 @@ func run() (output, error) {
 	}
 
 	out.RecordCounts = map[string]int{
-		"invalidation_classes":        5,
+		"invalidation_classes":         5,
 		"explicit_invalidation_audits": invalidateAuditRows,
 	}
 	out.Checks = map[string]bool{
 		"fingerprint_change_invalidates_override_even_if_old_redis_key_remains": errors.Is(fingerprintAuthorityErr, trust.ErrNotFound) && oldFingerprintKeyExists == 1 && newFingerprint != fingerprintFixture.Link.Fingerprint && closed(fingerprintRedirect),
-		"incompatible_policy_version_does_not_reuse_override": newPolicyDecision.ID > 0 && policyAuthority.Source == "policy" && policyAuthority.Override == nil && policyAuthority.State == trust.DecisionReview && policyProjection.Runtime.Decision == links.RiskReview && closed(policyRedirect),
-		"override_expiry_falls_back_to_current_policy_authority": expiryAuthority.Source == "policy" && expiryAuthority.Override == nil && expiryAuthority.State == trust.DecisionReview && expiryProjection.Runtime.Decision == links.RiskReview && closed(expiryRedirect),
-		"newer_same_policy_decision_invalidates_old_base_binding": newerDecision.ID != newDecisionFixture.Base.ID && newDecisionAuthority.Source == "policy" && newDecisionAuthority.Override == nil && newDecisionAuthority.State == trust.DecisionBlock && newDecisionProjection.Runtime.Decision == links.RiskBlock && closed(newDecisionRedirect),
-		"explicit_invalidation_is_durable_audited_and_non_allow": invalidated.InvalidatedAt != nil && invalidated.InvalidationReason != "" && explicitAuthority.Source == "policy" && explicitAuthority.Override == nil && explicitProjection.Runtime.Decision == links.RiskReview && invalidateAuditRows == 1 && closed(explicitRedirect),
-		"all_five_invalidation_classes_remove_customer_location": closed(fingerprintRedirect) && closed(policyRedirect) && closed(expiryRedirect) && closed(newDecisionRedirect) && closed(explicitRedirect),
+		"incompatible_policy_version_does_not_reuse_override":                   newPolicyDecision.ID > 0 && policyAuthority.Source == "policy" && policyAuthority.Override == nil && policyAuthority.State == trust.DecisionReview && policyProjection.Runtime.Decision == links.RiskReview && closed(policyRedirect),
+		"override_expiry_falls_back_to_current_policy_authority":                expiryAuthority.Source == "policy" && expiryAuthority.Override == nil && expiryAuthority.State == trust.DecisionReview && expiryProjection.Runtime.Decision == links.RiskReview && closed(expiryRedirect),
+		"newer_same_policy_decision_invalidates_old_base_binding":               newerDecision.ID != newDecisionFixture.Base.ID && newDecisionAuthority.Source == "policy" && newDecisionAuthority.Override == nil && newDecisionAuthority.State == trust.DecisionBlock && newDecisionProjection.Runtime.Decision == links.RiskBlock && closed(newDecisionRedirect),
+		"explicit_invalidation_is_durable_audited_and_non_allow":                invalidated.InvalidatedAt != nil && invalidated.InvalidationReason != "" && explicitAuthority.Source == "policy" && explicitAuthority.Override == nil && explicitProjection.Runtime.Decision == links.RiskReview && invalidateAuditRows == 1 && closed(explicitRedirect),
+		"all_five_invalidation_classes_remove_customer_location":                closed(fingerprintRedirect) && closed(policyRedirect) && closed(expiryRedirect) && closed(newDecisionRedirect) && closed(explicitRedirect),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
