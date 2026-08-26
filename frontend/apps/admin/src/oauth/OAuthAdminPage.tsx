@@ -41,7 +41,7 @@ const emptyForm: FormState = {
 function formFor(config: OAuthProviderConfig | undefined): FormState {
   if (!config) return { ...emptyForm };
   return {
-    enabled: config.enabled,
+    enabled: config.configured ? config.enabled : true,
     clientID: config.client_id,
     clientSecret: '',
     authorizationURL: config.authorization_url,
@@ -189,7 +189,7 @@ export default function OAuthAdminPage() {
               <label><span>Scopes</span><input aria-label="Scopes" value={form.scopes} onChange={(event) => setForm({ ...form, scopes: event.currentTarget.value })} /></label>
               <div className="p15-admin-oauth__actions">
                 <Button type="submit">Save provider</Button>
-                <Button type="button" variant="ghost" disabled={!selectedConfig?.configured} onClick={() => void testProvider()}>Test provider</Button>
+                <Button type="button" variant="ghost" disabled={!selectedConfig?.configured || !selectedConfig?.enabled} onClick={() => void testProvider()}>Test provider</Button>
                 <Button type="button" variant="ghost" disabled={!secretMasked} onClick={() => { setState('secret-masked'); setMessage(''); }}>Review secret status</Button>
               </div>
             </form>
