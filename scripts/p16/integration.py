@@ -135,6 +135,11 @@ CASE_CONFIG = {
         "inherited_redis_risk": "internal/links/risk_redis.go", "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
         "domain_fixture": "scripts/p16/domainfixture/domainfixture.go", "runner": "scripts/p16/t022_runner/main.go",
     }, "real MySQL 8.x, real Redis 7.x and native redirectengine proving permission-bound abuse block/suspend, active-hold enforcement, safety-authorized restore and immutable before/after audit", mysql=True, redis=True),
+    "P16-T023": case("./scripts/p16/t023_runner", "artifacts/v10/P16/notifications/P16-T023.json", {
+        "notification_producer": "internal/trust/notifications.go", "inherited_notification_core": "internal/workspace/notifications.go",
+        "inherited_notification_tx": "internal/workspace/notification_tx.go", "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
+        "runner": "scripts/p16/t023_runner/main.go",
+    }, "real MySQL 8.x plus inherited P12 owner-recipient, dedupe, read-state and deep-link notification authority", mysql=True, redis=False),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
