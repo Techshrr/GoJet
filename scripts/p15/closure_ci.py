@@ -93,6 +93,8 @@ P14_SOURCE = "f079c938dbe49d0f55b8b09995e72201cd0aab6e"
 P14_RUN = 32763705854
 P14_ART = 9533837642
 P14_DIG = "sha256:3f334718539e8fdd9cf5896fffdca9c00b8d0fc9a57b03d39795e97e6af853a8"
+PENDING = "Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**"
+SIGNED = "Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**"
 
 HEADERS = {
     "Accept": "application/vnd.github+json",
@@ -121,6 +123,22 @@ def dispatch(workflow_file: str) -> None:
         method="POST",
         body={"ref": HEAD_REF},
     )
+
+
+def primary_review_status(text: str) -> str:
+    lines = re.findall(r"^Status: \*\*[^\n]+\*\*$", text, flags=re.MULTILINE)
+    if len(lines) != 1:
+        raise SystemExit(f"P15 review must contain exactly one primary Status line, got {len(lines)}")
+    status = lines[0]
+    if status not in (PENDING, SIGNED):
+        raise SystemExit(f"unsupported P15 primary review status: {status}")
+    return status
+
+
+def validate_review_phase_parser() -> None:
+    sample = PENDING + "\n\n`" + SIGNED + "`\n"
+    if primary_review_status(sample) != PENDING:
+        raise SystemExit("P15 review phase parser accepted a quoted future signed marker as authority")
 
 
 def wait_matrix() -> None:
@@ -308,9 +326,8 @@ def bind_p14() -> None:
 
 def bind_presign_if_signed() -> None:
     review = (P15 / "review.md").read_text(encoding="utf-8")
-    marker = "Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**"
     path = P15 / "inherited" / "pre-sign-authority.json"
-    if marker not in review:
+    if primary_review_status(review) != SIGNED:
         path.unlink(missing_ok=True)
         return
 
@@ -374,6 +391,7 @@ def main() -> int:
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if actual != HEAD:
         raise SystemExit(f"checkout exact-head mismatch: {actual} != {HEAD}")
+    validate_review_phase_parser()
     download_t028()
     wait_matrix()
     bind_p14()
