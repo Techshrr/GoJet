@@ -125,6 +125,11 @@ func main() {
 		logger.Error("configure Account settings", "error", err)
 		os.Exit(1)
 	}
+	adminOAuthHandler, adminOAuthEnabled, err := buildAdminOAuthHandler(db, redisClient, testAuth)
+	if err != nil {
+		logger.Error("configure Admin OAuth", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
 	// P06 Domains through P15 Authentication routes explicitly. Each inner handler
@@ -144,6 +149,9 @@ func main() {
 	}
 	if accountEnabled {
 		mountAccountRoutes(root, accountHandler)
+	}
+	if adminOAuthEnabled {
+		mountAdminOAuthRoutes(root, adminOAuthHandler)
 	}
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -218,7 +226,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled, "account_enabled", accountEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled, "account_enabled", accountEnabled, "admin_oauth_enabled", adminOAuthEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)

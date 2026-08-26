@@ -76,7 +76,8 @@ export default function OAuthAdminPage() {
         throw new Error('Provider registry mismatch');
       }
       setProviders(response.providers);
-      const current = response.providers.find((item) => item.provider === selected) ?? response.providers[0];
+      const current = response.providers.find((item) => item.provider === selected) ?? response.providers.at(0);
+      if (!current) throw new Error('Provider registry is empty');
       setSelected(current.provider);
       setForm(formFor(current));
       setShellState('normal');

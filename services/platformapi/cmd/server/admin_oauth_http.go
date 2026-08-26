@@ -26,11 +26,11 @@ func (a adminOAuthPermissionAuthorizer) Authorize(_ context.Context, actorID, pe
 }
 
 type adminOAuthHTTPHandler struct {
-	store       *authn.Store
-	oauth       *authn.OAuthService
-	csrf        *authn.CSRFManager
-	origins     *authn.OriginPolicy
-	authorizer  authn.SettingsPermissionAuthorizer
+	store      *authn.Store
+	oauth      *authn.OAuthService
+	csrf       *authn.CSRFManager
+	origins    *authn.OriginPolicy
+	authorizer authn.SettingsPermissionAuthorizer
 }
 
 func buildAdminOAuthHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
@@ -225,10 +225,10 @@ func (h *adminOAuthHTTPHandler) handleTestProvider(w http.ResponseWriter, r *htt
 			return
 		}
 		writeAuthJSON(w, http.StatusOK, map[string]any{
-			"provider": provider,
-			"status": "configuration_ready",
-			"configured": true,
-			"enabled": true,
+			"provider":          provider,
+			"status":            "configuration_ready",
+			"configured":        true,
+			"enabled":           true,
 			"secret_configured": true,
 		})
 		return
