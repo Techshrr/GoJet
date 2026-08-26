@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 
 BASE = "dd70eacf02d4dd79fe82063f3d43610ab11885e8"
+CONTRACT_AUTHORITY = "43c5d4d7e1833c593ceacb48016abac6e3133893"
+FROZEN_TEST_PLAN_BLOB = "1e6fa1572e5d184b1db3cb973bda2a3d3f7c8501"
 P15_SIGNED_SOURCE = "6f39d87f1d94f71590fd79d4551cdd1cea652a76"
 P15_REVIEW_BLOB = "676292cb454b42a0f4a30c1fef8089c901b96c51"
 PENDING_REVIEW_BLOB = "a3a8091cdfa563d135d75d15bb3f3af693ecf20b"
@@ -71,48 +73,64 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], text=True).strip()
 
 
+def ancestor(older: str, newer: str) -> bool:
+    return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], check=False).returncode == 0
+
+
 def need(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)
 
 
-def blob_at_head(path: str) -> str:
-    return git("rev-parse", f"HEAD:{path}")
+def blob(revision: str, path: str) -> str:
+    return git("rev-parse", f"{revision}:{path}")
 
 
 def main() -> int:
     errors: list[str] = []
-    root = Path("artifacts/v10/P16")
-    plan_path = root / "test-plan.json"
-    review_path = root / "review.md"
+    plan_path = Path("artifacts/v10/P16/test-plan.json")
+    review_path = Path("artifacts/v10/P16/review.md")
     need(plan_path.is_file(), "missing P16 test-plan.json", errors)
     need(review_path.is_file(), "missing P16 review.md", errors)
     if errors:
         print(json.dumps({"node":"P16","status":"FAIL","errors":errors}, indent=2))
         return 1
 
+    head = git("rev-parse", "HEAD")
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     review = review_path.read_text(encoding="utf-8")
-    head = git("rev-parse", "HEAD")
 
-    base_ok = subprocess.run(["git", "merge-base", "--is-ancestor", BASE, head], check=False).returncode == 0
+    base_ok = ancestor(BASE, head)
+    authority_ok = ancestor(CONTRACT_AUTHORITY, head)
     need(base_ok, f"P16 HEAD must descend from integration base {BASE}", errors)
-    changed = {line for line in git("diff", "--name-only", f"{BASE}..HEAD").splitlines() if line}
-    contract_only = changed == EXPECTED_CONTRACT_FILES
-    need(contract_only, f"P16 contract-freeze diff must be exactly {sorted(EXPECTED_CONTRACT_FILES)}, got {sorted(changed)}", errors)
+    need(authority_ok, f"P16 HEAD must descend from frozen contract authority {CONTRACT_AUTHORITY}", errors)
+    need(ancestor(BASE, CONTRACT_AUTHORITY), "P16 contract authority must descend from integration base", errors)
+
+    authority_changed = {line for line in git("diff", "--name-only", f"{BASE}..{CONTRACT_AUTHORITY}").splitlines() if line}
+    need(authority_changed == EXPECTED_CONTRACT_FILES,
+         f"frozen P16 authority diff must remain exactly {sorted(EXPECTED_CONTRACT_FILES)}, got {sorted(authority_changed)}", errors)
+
+    current_changed = {line for line in git("diff", "--name-only", f"{BASE}..HEAD").splitlines() if line}
+    contract_only = current_changed == EXPECTED_CONTRACT_FILES
+
+    try:
+        need(blob("HEAD", "artifacts/v10/P16/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "frozen P16 test-plan blob drift", errors)
+        need(blob(CONTRACT_AUTHORITY, "artifacts/v10/P16/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "P16 authority test-plan blob mismatch", errors)
+    except Exception as exc:
+        errors.append(f"cannot bind frozen P16 test-plan: {exc}")
 
     for path, expected in SPEC_BLOBS.items():
         try:
-            need(blob_at_head(path) == expected, f"normative authority blob drift: {path}", errors)
+            need(blob("HEAD", path) == expected, f"normative authority blob drift: {path}", errors)
         except Exception as exc:
             errors.append(f"cannot bind normative authority {path}: {exc}")
     for path, expected in SEAM_BLOBS.items():
         try:
-            need(blob_at_head(path) == expected, f"inherited seam blob drift: {path}", errors)
+            need(blob("HEAD", path) == expected, f"inherited seam blob drift: {path}", errors)
         except Exception as exc:
             errors.append(f"cannot bind inherited seam {path}: {exc}")
     try:
-        need(git("rev-parse", "HEAD:artifacts/v10/P15/review.md") == P15_REVIEW_BLOB, "P15 signed review blob drift", errors)
+        need(blob("HEAD", "artifacts/v10/P15/review.md") == P15_REVIEW_BLOB, "P15 signed review blob drift", errors)
     except Exception as exc:
         errors.append(f"cannot bind P15 signed review: {exc}")
 
@@ -126,15 +144,15 @@ def main() -> int:
     ], "P16 specification IDs/order drift", errors)
 
     cap = plan.get("capability_contract", {})
-    rows = cap.get("capabilities", [])
-    actual_caps = {row.get("id"): (row.get("owner"), tuple(row.get("gates", []))) for row in rows if isinstance(row, dict)}
+    actual_caps = {
+        row.get("id"): (row.get("owner"), tuple(row.get("gates", [])))
+        for row in cap.get("capabilities", []) if isinstance(row, dict)
+    }
     need(actual_caps == EXPECTED_CAPABILITIES, f"P16 capability ownership/gates drift: {actual_caps}", errors)
     need(cap.get("master_predecessors") == ["P05","P06","P09","P15"], "P16 predecessor list drift", errors)
-    required_tests = set(cap.get("master_required_tests", []))
-    need(required_tests == {"official/custom parity","all target variants","SSRF","provider failure","manual override invalidation","abuse suspension"}, "P16 Master Plan required-test set drift", errors)
-    scope = str(cap.get("scope", ""))
-    for marker in ("P05", "P06", "P09", "P12", "P15", "P17", "G10", "G13"):
-        need(marker in scope or marker in "\n".join(cap.get("inherited_authorities", [])), f"P16 ownership boundary missing {marker}", errors)
+    need(set(cap.get("master_required_tests", [])) == {
+        "official/custom parity","all target variants","SSRF","provider failure","manual override invalidation","abuse suspension"
+    }, "P16 Master Plan required-test set drift", errors)
 
     pred = plan.get("predecessor_signed_authority", {})
     need(pred.get("node") == "P15", "P15 predecessor node drift", errors)
@@ -153,9 +171,6 @@ def main() -> int:
         "p06_domain_model_blob": SEAM_BLOBS["internal/domains/domain.go"],
     }.items():
         need(seams.get(key) == expected, f"P16 seam manifest drift: {key}", errors)
-    seam_scope = str(seams.get("scope", ""))
-    for marker in ("fingerprint", "risk-before-routing", "domain-axis"):
-        need(marker.lower() in seam_scope.lower(), f"P16 seam scope missing {marker}", errors)
 
     routes = plan.get("route_contract", {})
     need(set(routes.get("public_routes", [])) == EXPECTED_PUBLIC_ROUTES, "P16 public route set drift", errors)
@@ -176,9 +191,6 @@ def main() -> int:
     ssrf = plan.get("ssrf_contract", {})
     need(ssrf.get("allowed_schemes") == ["http","https"], "P16 SSRF allowed schemes drift", errors)
     need(set(ssrf.get("deny_classes", [])) == {"loopback","private","link-local","unspecified","multicast","reserved","metadata-service","userinfo-authority"}, "P16 SSRF deny-class drift", errors)
-    ssrf_rules = "\n".join(ssrf.get("rules", []))
-    for marker in ("server-side", "Redirect", "DNS rebinding", "reviewed server configuration"):
-        need(marker.lower() in ssrf_rules.lower(), f"P16 SSRF rule missing {marker}", errors)
 
     domain = plan.get("domain_risk_contract", {})
     need(domain.get("states") == ["missing","pending","allow","review","block","malformed","stale","provider-partial","revalidating"], "P16 domain-risk states drift", errors)
@@ -196,22 +208,15 @@ def main() -> int:
     override = plan.get("override_contract", {})
     need(override.get("permission") == "security.manage", "P16 override permission drift", errors)
     need(override.get("required_fields") == ["exact_fingerprint","decision","reason","expires_at","policy_context"], "P16 override fields drift", errors)
-    override_rules = "\n".join(override.get("rules", []))
-    for marker in ("fingerprint", "expiry", "policy", "P17", "domain"):
-        need(marker.lower() in override_rules.lower(), f"P16 override rule missing {marker}", errors)
 
     worker = plan.get("worker_contract", {})
     need(worker.get("service_identity") == "SVC-OPS-MONITOR operationsmonitor risk-task contribution", "P16 worker service identity drift", errors)
     need(worker.get("target_source_path") == "services/platformapi/cmd/operationsmonitor", "P16 worker target path drift", errors)
-    worker_rules = "\n".join(worker.get("rules", []))
-    need("ninth" in worker_rules.lower() and "idempotent" in worker_rules.lower() and "implicit allow" in worker_rules.lower(), "P16 fixed service/worker safety contract incomplete", errors)
 
     browser = plan.get("browser_contract", {})
-    expected_state_keys = {"admin_destination_risk","admin_domain_risk","admin_abuse","public_link_unavailable","public_abuse_report"}
-    need(set(browser.get("states", {}).keys()) == expected_state_keys, "P16 browser state-family set drift", errors)
-    browser_rules = "\n".join(browser.get("rules", []))
-    for marker in ("Design System", "320", "reason", "audit", "target URL", "provider", "permission"):
-        need(marker.lower() in browser_rules.lower(), f"P16 browser rule missing {marker}", errors)
+    need(set(browser.get("states", {}).keys()) == {
+        "admin_destination_risk","admin_domain_risk","admin_abuse","public_link_unavailable","public_abuse_report"
+    }, "P16 browser state-family set drift", errors)
 
     notifications = plan.get("notification_contract", {})
     need(notifications.get("owner") == "P12 CAP-NOTIFICATIONS core", "P12 notification ownership drift", errors)
@@ -227,9 +232,8 @@ def main() -> int:
     need(closure.get("required_case_range") == "P16-T001..P16-T029", "P16 case range drift", errors)
     need(closure.get("review_required") is True, "P16 accountable review must be required", errors)
     need(closure.get("defect_limits") == {"p0":0,"p1":0,"decision_required":0}, "P16 defect limits drift", errors)
-    closure_scope = str(closure.get("scope_rule", ""))
     for marker in ("G6", "P17", "P20", "P22", "G10", "G13"):
-        need(marker in closure_scope, f"P16 closure scope missing {marker}", errors)
+        need(marker in str(closure.get("scope_rule", "")), f"P16 closure scope missing {marker}", errors)
 
     cases = plan.get("cases", [])
     expected_ids = [f"P16-T{i:03d}" for i in range(1, 30)]
@@ -254,7 +258,7 @@ def main() -> int:
     need(pending or signed, f"unrecognized active P16 review status: {active_status}", errors)
     if pending:
         try:
-            need(blob_at_head("artifacts/v10/P16/review.md") == PENDING_REVIEW_BLOB, "pending P16 review blob drift before accountable signing", errors)
+            need(blob("HEAD", "artifacts/v10/P16/review.md") == PENDING_REVIEW_BLOB, "pending P16 review blob drift before accountable signing", errors)
         except Exception as exc:
             errors.append(f"cannot bind pending P16 review blob: {exc}")
         for marker in ("No P16 PASS", "case range", "P15", BASE, "fingerprint", "ClamAV", "security.manage", "domains.risk.manage", "P17", "operationsmonitor"):
@@ -264,19 +268,29 @@ def main() -> int:
         for marker in ("P16-T029", "P0", "P1", "DECISION REQUIRED", "same-revision"):
             need(marker.lower() in review.lower(), f"signed P16 review missing {marker}", errors)
 
+    if head == CONTRACT_AUTHORITY and pending:
+        mode = "contract-freeze"
+    elif authority_ok and pending:
+        mode = "implementation-guard"
+    elif authority_ok and signed:
+        mode = "signed-review-guard"
+    else:
+        mode = "invalid"
+
+    frozen = not errors and base_ok and authority_ok
     result = {
         "node": "P16",
         "status": "PASS" if not errors else "FAIL",
         "errors": errors,
         "implementation_commit": head,
         "base_integration_commit": BASE,
-        "contract_authority": head if contract_only and pending else None,
+        "contract_authority": CONTRACT_AUTHORITY,
         "case_range": "P16-T001..P16-T029",
         "review_phase": "pending" if pending else "signed" if signed else "invalid",
-        "mode": "contract-freeze" if contract_only and pending else "invalid",
+        "mode": mode,
         "contract_only": contract_only,
-        "frozen_contract_preserved": not errors and base_ok and contract_only,
-        "implementation_authorized": False,
+        "frozen_contract_preserved": frozen,
+        "implementation_authorized": frozen and pending and head != CONTRACT_AUTHORITY,
         "merge_authoritative": False,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
