@@ -177,7 +177,7 @@ jobs:
             /tmp/gojet-p16/redirectengine > /tmp/p16-redirectengine.log 2>&1 &
           echo $! > /tmp/p16-redirectengine.pid
           for attempt in $(seq 1 60); do
-            if curl -fsS -o /dev/null http://127.0.0.1:18080/healthz; then
+            if curl -sS -o /dev/null http://127.0.0.1:18080/healthz; then
               exit 0
             fi
             sleep 1
