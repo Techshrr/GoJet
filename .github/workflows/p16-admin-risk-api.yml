@@ -1,0 +1,239 @@
+name: P16 Admin Risk API Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/auth/**'
+      - 'internal/trust/**'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'scripts/p16/integration.py'
+      - 'scripts/p16/adminfixture/**'
+      - 'scripts/p16/domainfixture/**'
+      - 'scripts/p16/runtimefixture/**'
+      - 'scripts/p16/t024_runner/**'
+      - 'scripts/p16/t025_runner/**'
+      - 'artifacts/v10/P16/test-plan.json'
+      - '.github/workflows/p16-admin-risk-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-admin-risk-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t024-t025:
+    name: P16-T024/T025 real admin risk API evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_URL: http://127.0.0.1:18081
+      GOJET_PLATFORMAPI_LOG: /tmp/p16-admin-platformapi.log
+      GOJET_AUTH_CSRF_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_AUTH_ALLOWED_ORIGIN: http://127.0.0.1:18081
+      GOJET_TEST_TRUST_SECURITY_ADMIN_ACTOR: p16-t024-security-admin
+      GOJET_TEST_TRUST_DOMAIN_ADMIN_ACTOR: p16-t025-domain-admin
+      GOJET_DOMAIN_RISK_PROVIDER_NAME: domain-reputation
+      GOJET_DOMAIN_RISK_POLICY_VERSION: p16-admin-domain-v1
+      GOJET_DOMAIN_RISK_ALLOW_TTL: 15m
+      GOJET_DOMAIN_RISK_REVALIDATE_AFTER: 10m
+      GOJET_DOMAIN_RISK_RETRY_AFTER: 2m
+      GOJET_TEST_TRUST_DOMAIN_PROVIDER_OUTCOME: allow
+      GOJET_TEST_TRUST_TURNSTILE_TOKEN: p16-admin-api-turnstile-token
+
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+
+      - name: Verify exact-head source and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
+          gofmt -d \
+            internal/trust/*.go \
+            services/platformapi/cmd/server/*.go \
+            scripts/p16/adminfixture/adminfixture.go \
+            scripts/p16/domainfixture/domainfixture.go \
+            scripts/p16/runtimefixture/runtimefixture.go \
+            scripts/p16/t024_runner/main.go \
+            scripts/p16/t025_runner/main.go | tee /tmp/p16-admin-gofmt.diff
+          test ! -s /tmp/p16-admin-gofmt.diff
+          go test ./...
+          go vet \
+            ./internal/trust ./internal/auth ./internal/domains ./internal/links \
+            ./scripts/p16/adminfixture ./scripts/p16/domainfixture ./scripts/p16/runtimefixture \
+            ./scripts/p16/t024_runner ./scripts/p16/t025_runner \
+            ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/p16-platformapi ./services/platformapi/cmd/server
+          test -x /tmp/p16-platformapi
+          python3 scripts/p16/validate_contract.py > /tmp/p16-admin-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-admin-contract.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['implementation_authorized'] is True,data
+          assert data['review_phase']=='pending',data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          redis-cli -h 127.0.0.1 -p 6379 ping
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Start exact-head native platformapi with P16 Admin authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_PLATFORMAPI_ADDR=127.0.0.1:18081 \
+          GOJET_TRUST_ENABLED=1 \
+          GOJET_TRUST_ADMIN_ENABLED=1 \
+          GOJET_TEST_AUTH_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_TOKEN="$GOJET_TEST_TRUST_TURNSTILE_TOKEN" \
+          GOJET_TRUST_ABUSE_RATE_LIMIT=3 \
+          GOJET_TRUST_ABUSE_RATE_WINDOW=5m \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/p16-platformapi > "$GOJET_PLATFORMAPI_LOG" 2>&1 &
+          echo $! > /tmp/p16-platformapi.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$GOJET_PLATFORMAPI_LOG"
+          exit 1
+
+      - name: Run frozen P16-T024 driver
+        run: python3 scripts/p16/integration.py --case P16-T024 | tee /tmp/p16-t024-result.json
+
+      - name: Run frozen P16-T025 driver
+        run: python3 scripts/p16/integration.py --case P16-T025 | tee /tmp/p16-t025-result.json
+
+      - name: Verify exact-head T024/T025 evidence and redaction
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P16-T024':'artifacts/v10/P16/api/P16-T024.json',
+              'P16-T025':'artifacts/v10/P16/api/P16-T025.json',
+          }
+          forbidden=(
+              'p16-t024-provider-secret',
+              'p16-t025-domain-provider-secret',
+              'unsafe-admin-leak.example',
+              'unsafe-domain-evidence.example',
+              'authorization: bearer',
+              'client_secret',
+              'api_secret',
+          )
+          for case,path in paths.items():
+              raw=pathlib.Path(path).read_text(encoding='utf-8')
+              data=json.loads(raw)
+              assert data['node']=='P16',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+              lowered=raw.lower()
+              assert not any(value in lowered for value in forbidden),(case,'unsafe evidence')
+          PY
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head T024/T025 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t024-t025-admin-risk-api-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/api/P16-T024.json
+            artifacts/v10/P16/api/P16-T025.json
+            artifacts/v10/P16/test-plan.json
+            artifacts/v10/P16/review.md
+
+      - name: Print native platformapi log on failure
+        if: failure()
+        shell: bash
+        run: |
+          test -f "$GOJET_PLATFORMAPI_LOG" && cat "$GOJET_PLATFORMAPI_LOG" || true
