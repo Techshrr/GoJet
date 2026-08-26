@@ -85,11 +85,11 @@ func run() (output, error) {
 		return out, fmt.Errorf("GOJET_TEST_TRUST_TURNSTILE_TOKEN is required")
 	}
 	validBody := map[string]any{
-		"resource_type": "short-link-risk",
-		"hostname":      link.Hostname,
-		"code":          link.Code,
-		"category":      "phishing",
-		"details":       "Suspicious redirect behavior",
+		"resource_type":   "short-link-risk",
+		"hostname":        link.Hostname,
+		"code":            link.Code,
+		"category":        "phishing",
+		"details":         "Suspicious redirect behavior",
 		"turnstile_token": token,
 	}
 	created, err := request(ctx, "p16-t019-idempotency-0001", validBody)
@@ -151,19 +151,19 @@ func run() (output, error) {
 	replayFlag, _ := replayed.Body["created"].(bool)
 
 	out.RecordCounts = map[string]int{
-		"durable_abuse_reports": reports,
+		"durable_abuse_reports":   reports,
 		"immutable_intake_events": events,
-		"abuse_redis_keys": len(keys),
+		"abuse_redis_keys":        len(keys),
 	}
 	out.Checks = map[string]bool{
-		"public_api_persists_safe_receipt": created.Status == http.StatusCreated && createdFlag && strings.HasPrefix(reportID, "abr_") && reports == 1 && events == 1,
-		"idempotent_retry_returns_same_receipt": replayed.Status == http.StatusOK && !replayFlag && replayID == reportID && reports == 1 && events == 1,
-		"idempotency_key_payload_mismatch_conflicts": conflict.Status == http.StatusConflict && errorCode(conflict) == "idempotency_conflict",
-		"unallowlisted_resource_type_is_rejected": invalid.Status == http.StatusBadRequest && errorCode(invalid) == "invalid_request",
-		"turnstile_is_verified_server_side": verification.Status == http.StatusBadRequest && errorCode(verification) == "verification_failed",
-		"rate_budget_fails_closed": rateLimited.Status == http.StatusTooManyRequests && errorCode(rateLimited) == "rate_limited",
-		"public_response_is_no_store_noindex": strings.Contains(created.Headers.Get("Cache-Control"), "no-store") && strings.Contains(created.Headers.Get("X-Robots-Tag"), "noindex"),
-		"public_receipt_discloses_no_internal_resource_state": !strings.Contains(created.Raw, link.WorkspaceID) && !strings.Contains(created.Raw, link.Hostname) && !strings.Contains(created.Raw, link.Code) && !strings.Contains(created.Raw, link.Fingerprint),
+		"public_api_persists_safe_receipt":                        created.Status == http.StatusCreated && createdFlag && strings.HasPrefix(reportID, "abr_") && reports == 1 && events == 1,
+		"idempotent_retry_returns_same_receipt":                   replayed.Status == http.StatusOK && !replayFlag && replayID == reportID && reports == 1 && events == 1,
+		"idempotency_key_payload_mismatch_conflicts":              conflict.Status == http.StatusConflict && errorCode(conflict) == "idempotency_conflict",
+		"unallowlisted_resource_type_is_rejected":                 invalid.Status == http.StatusBadRequest && errorCode(invalid) == "invalid_request",
+		"turnstile_is_verified_server_side":                       verification.Status == http.StatusBadRequest && errorCode(verification) == "verification_failed",
+		"rate_budget_fails_closed":                                rateLimited.Status == http.StatusTooManyRequests && errorCode(rateLimited) == "rate_limited",
+		"public_response_is_no_store_noindex":                     strings.Contains(created.Headers.Get("Cache-Control"), "no-store") && strings.Contains(created.Headers.Get("X-Robots-Tag"), "noindex"),
+		"public_receipt_discloses_no_internal_resource_state":     !strings.Contains(created.Raw, link.WorkspaceID) && !strings.Contains(created.Raw, link.Hostname) && !strings.Contains(created.Raw, link.Code) && !strings.Contains(created.Raw, link.Fingerprint),
 		"redis_keys_contain_only_hashed_rate_and_replay_identity": !strings.Contains(keyMaterial, token) && !strings.Contains(keyMaterial, "127.0.0.1") && len(keys) >= 2,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
