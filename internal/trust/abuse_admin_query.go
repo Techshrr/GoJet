@@ -16,21 +16,21 @@ type AdminAbuseHoldRecord struct {
 }
 
 type AdminAbuseReportRecord struct {
-	ID                     uint64                 `json:"id"`
-	PublicID               string                 `json:"public_id"`
-	WorkspaceID            string                 `json:"workspace_id"`
-	ResourceType           AbuseResourceType      `json:"resource_type"`
-	ResourceID             string                 `json:"resource_id"`
-	HostnameASCII          string                 `json:"hostname"`
-	SafeCode               string                 `json:"safe_code,omitempty"`
-	DestinationFingerprint string                 `json:"destination_fingerprint,omitempty"`
-	Category               AbuseCategory          `json:"category"`
-	DetailsRedacted        string                 `json:"details"`
-	Status                 AbuseStatus            `json:"status"`
-	Version                uint64                 `json:"version"`
-	ActiveHold             *AdminAbuseHoldRecord  `json:"active_hold,omitempty"`
-	CreatedAt              time.Time              `json:"created_at"`
-	UpdatedAt              time.Time              `json:"updated_at"`
+	ID                     uint64                `json:"id"`
+	PublicID               string                `json:"public_id"`
+	WorkspaceID            string                `json:"workspace_id"`
+	ResourceType           AbuseResourceType     `json:"resource_type"`
+	ResourceID             string                `json:"resource_id"`
+	HostnameASCII          string                `json:"hostname"`
+	SafeCode               string                `json:"safe_code,omitempty"`
+	DestinationFingerprint string                `json:"destination_fingerprint,omitempty"`
+	Category               AbuseCategory         `json:"category"`
+	DetailsRedacted        string                `json:"details"`
+	Status                 AbuseStatus           `json:"status"`
+	Version                uint64                `json:"version"`
+	ActiveHold             *AdminAbuseHoldRecord `json:"active_hold,omitempty"`
+	CreatedAt              time.Time             `json:"created_at"`
+	UpdatedAt              time.Time             `json:"updated_at"`
 }
 
 const adminAbuseSelect = `
