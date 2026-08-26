@@ -65,14 +65,14 @@ jobs:
       GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
       GOJET_TEST_SITE_URL: http://127.0.0.1:4180
       GOJET_TEST_SITE_BAD_TURNSTILE_URL: http://127.0.0.1:4181
-      GOJET_TEST_ADMIN_URL: http://127.0.0.1:4182
+      GOJET_TEST_ADMIN_URL: http://localhost:4182
       GOJET_TEST_MYSQL_HOST: 127.0.0.1
       GOJET_TEST_MYSQL_PORT: '3306'
       GOJET_TEST_MYSQL_USER: root
       GOJET_TEST_MYSQL_PASSWORD: root
       GOJET_TEST_MYSQL_DATABASE: gojet_test
       GOJET_AUTH_CSRF_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
-      GOJET_AUTH_ALLOWED_ORIGIN: http://127.0.0.1:4182
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4182
       GOJET_TEST_TRUST_SECURITY_ADMIN_ACTOR: p16-browser-security-admin
       GOJET_TEST_TRUST_DOMAIN_ADMIN_ACTOR: p16-browser-domain-admin
       GOJET_RISK_POLICY_VERSION: p16-browser-destination-v1
@@ -205,12 +205,12 @@ jobs:
             /tmp/gojet-p16-browser-platformapi > artifacts/v10/P16/runtime/browser/platformapi.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/platformapi.pid
           pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4180 --outDir dist-p16-valid > artifacts/v10/P16/runtime/browser/site-valid.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/site-valid.pid
           pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4181 --outDir dist-p16-bad-turnstile > artifacts/v10/P16/runtime/browser/site-bad.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/site-bad.pid
-          pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4182 --outDir dist-p16-admin > artifacts/v10/P16/runtime/browser/admin.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/admin.pid
+          pnpm --filter @gojet/admin exec vite preview --host localhost --port 4182 --outDir dist-p16-admin > artifacts/v10/P16/runtime/browser/admin.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/admin.pid
           for attempt in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
               && curl -fsS 'http://127.0.0.1:4180/linkunavailable?reason=pending&code=probe' >/dev/null \
               && curl -fsS http://127.0.0.1:4181/abuse/report >/dev/null \
-              && curl -fsS http://127.0.0.1:4182/admin/trust/destination-risk >/dev/null; then exit 0; fi
+              && curl -fsS http://localhost:4182/admin/trust/destination-risk >/dev/null; then exit 0; fi
             sleep 1
           done
           cat artifacts/v10/P16/runtime/browser/platformapi.log || true
@@ -293,7 +293,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p16-t026-t027-trust-browser-${{ steps.evidence.outputs.sha || github.sha }}
+          name: p16-t026-t027-trust-browser-${{ steps.evidence.outputs.sha || github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
