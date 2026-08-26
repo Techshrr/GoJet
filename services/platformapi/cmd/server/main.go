@@ -130,10 +130,15 @@ func main() {
 		logger.Error("configure Admin OAuth", "error", err)
 		os.Exit(1)
 	}
+	trustHandler, trustEnabled, err := buildTrustHandler(db, redisClient, testAuth)
+	if err != nil {
+		logger.Error("configure Trust, Destination Risk and Abuse", "error", err)
+		os.Exit(1)
+	}
 
 	// Keep the established P05 Links surface as the fallback while mounting the
-	// P06 Domains through P15 Authentication routes explicitly. Each inner handler
-	// retains its own security headers and staged authentication boundary.
+	// P06 Domains through P16 Trust routes explicitly. Each inner handler retains
+	// its own security headers and staged authentication/permission boundary.
 	root := http.NewServeMux()
 	if workspaceEnabled {
 		mountWorkspaceRoutes(root, workspaceHandler)
@@ -152,6 +157,9 @@ func main() {
 	}
 	if adminOAuthEnabled {
 		mountAdminOAuthRoutes(root, adminOAuthHandler)
+	}
+	if trustEnabled {
+		mountTrustRoutes(root, trustHandler)
 	}
 	root.Handle("GET /api/workspaces/{workspaceId}/domains", domainsHandler)
 	root.Handle("POST /api/workspaces/{workspaceId}/domains", domainsHandler)
@@ -226,7 +234,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled, "account_enabled", accountEnabled, "admin_oauth_enabled", adminOAuthEnabled)
+	logger.Info("platformapi listening", "address", address, "analytics_enabled", analyticsEnabled, "qr_workspace_quota", qrQuota, "files_enabled", filesEnabled, "text_enabled", textEnabled, "bio_enabled", bioEnabled, "workspace_enabled", workspaceEnabled, "billing_enabled", billingEnabled, "support_enabled", supportEnabled, "auth_enabled", authEnabled, "account_enabled", accountEnabled, "admin_oauth_enabled", adminOAuthEnabled, "trust_enabled", trustEnabled)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("platformapi failed", "error", err)
 		os.Exit(1)
