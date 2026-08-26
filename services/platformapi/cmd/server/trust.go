@@ -63,13 +63,34 @@ func buildTrustHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (ht
 	if err != nil {
 		return nil, false, err
 	}
-	api, err := trust.NewPublicAbuseAPI(service)
+	publicAPI, err := trust.NewPublicAbuseAPI(service)
 	if err != nil {
 		return nil, false, err
 	}
-	return api.Handler(), true, nil
+	adminHandler, adminEnabled, err := buildTrustAdminHandler(db, redisClient, testAuth)
+	if err != nil {
+		return nil, false, err
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/public/abuse-reports", publicAPI.Handler())
+	if adminEnabled {
+		mountTrustAdminRoutes(mux, adminHandler)
+	}
+	return mux, true, nil
 }
 
 func mountTrustRoutes(root *http.ServeMux, handler http.Handler) {
-	root.Handle("POST /api/public/abuse-reports", handler)
+	for _, pattern := range []string{
+		"POST /api/public/abuse-reports",
+		"GET /api/admin/destination-risks",
+		"GET /api/admin/destination-risks/{riskId}",
+		"POST /api/admin/destination-risks/{riskId}/rescan",
+		"POST /api/admin/destination-risks/{riskId}/override",
+		"GET /api/admin/domain-risks",
+		"GET /api/admin/domain-risks/{domainId}",
+		"POST /api/admin/domain-risks/{domainId}/revalidate",
+	} {
+		root.Handle(pattern, handler)
+	}
 }
