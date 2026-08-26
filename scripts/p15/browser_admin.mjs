@@ -60,6 +60,7 @@ function derive(prefix, purpose, identifier) {
 }
 function uniqueSuffix() { return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`; }
 async function waitAdminState(page, state) { await page.locator(`[data-admin-oauth-state="${state}"]`).waitFor({ state: 'visible', timeout: 15000 }); }
+async function waitAdminViewport(page, viewport) { await page.locator(`.admin-shell[data-viewport="${viewport}"]`).waitFor({ state: 'visible', timeout: 5000 }); }
 async function noOverflow(page, label) {
   const size = await page.evaluate(() => ({ innerWidth: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));
   assert(size.scrollWidth <= size.innerWidth + 1, `${label} horizontal overflow: ${JSON.stringify(size)}`);
@@ -154,10 +155,11 @@ try {
   const renderedProviders = await providerButtons.locator('strong').allTextContents();
   assert(JSON.stringify(renderedProviders) === JSON.stringify(frozenProviders), `provider registry/order mismatch: ${JSON.stringify(renderedProviders)}`);
 
+  await waitAdminViewport(page, 'desktop');
   await noOverflow(page, 'Admin OAuth desktop'); screenshots.push(await capture(page, 'empty-desktop'));
-  await page.setViewportSize(viewports.mobile); await noOverflow(page, 'Admin OAuth mobile'); screenshots.push(await capture(page, 'empty-mobile'));
-  await page.setViewportSize(viewports.narrow); await noOverflow(page, 'Admin OAuth narrow'); screenshots.push(await capture(page, 'empty-narrow'));
-  await page.setViewportSize(viewports.desktop);
+  await page.setViewportSize(viewports.mobile); await waitAdminViewport(page, 'mobile'); await noOverflow(page, 'Admin OAuth mobile'); screenshots.push(await capture(page, 'empty-mobile'));
+  await page.setViewportSize(viewports.narrow); await waitAdminViewport(page, 'mobile'); await noOverflow(page, 'Admin OAuth narrow'); screenshots.push(await capture(page, 'empty-narrow'));
+  await page.setViewportSize(viewports.desktop); await waitAdminViewport(page, 'desktop');
 
   let focusedClientID = false;
   for (let index = 0; index < 60; index += 1) {

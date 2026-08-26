@@ -59,6 +59,7 @@ function derive(prefix, purpose, identifier) {
 }
 function uniqueSuffix() { return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`; }
 async function waitAccountState(page, state) { await page.locator(`[data-account-state="${state}"]`).waitFor({ state: 'visible', timeout: 15000 }); }
+async function waitWorkspaceViewport(page, viewport) { await page.locator(`.workspace-shell[data-viewport="${viewport}"]`).waitFor({ state: 'visible', timeout: 5000 }); }
 async function noOverflow(page, label) {
   const size = await page.evaluate(() => ({ innerWidth: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));
   assert(size.scrollWidth <= size.innerWidth + 1, `${label} horizontal overflow: ${JSON.stringify(size)}`);
@@ -123,7 +124,7 @@ try {
 
   const unauthContext = await browser.newContext({ viewport: viewports.desktop });
   const unauthPage = await unauthContext.newPage();
-  await unauthPage.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'networkidle' });
+  await unauthPage.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(unauthPage, 'session-revoked');
   states.profile.push('session-revoked');
   screenshots.push(await capture(unauthPage, 'profile-direct-load-denied'));
@@ -150,12 +151,13 @@ try {
   const userID = me.user.id;
   assert(typeof userID === 'string' && userID.startsWith('usr_'), 'current account identity missing');
 
-  await page.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'networkidle' });
+  await page.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(page, 'success'); states.profile.push('success');
+  await waitWorkspaceViewport(page, 'desktop');
   await noOverflow(page, 'profile desktop'); screenshots.push(await capture(page, 'profile-desktop'));
-  await page.setViewportSize(viewports.mobile); await noOverflow(page, 'profile mobile'); screenshots.push(await capture(page, 'profile-mobile'));
-  await page.setViewportSize(viewports.narrow); await noOverflow(page, 'profile narrow'); screenshots.push(await capture(page, 'profile-narrow'));
-  await page.setViewportSize(viewports.desktop);
+  await page.setViewportSize(viewports.mobile); await waitWorkspaceViewport(page, 'mobile'); await noOverflow(page, 'profile mobile'); screenshots.push(await capture(page, 'profile-mobile'));
+  await page.setViewportSize(viewports.narrow); await waitWorkspaceViewport(page, 'mobile'); await noOverflow(page, 'profile narrow'); screenshots.push(await capture(page, 'profile-narrow'));
+  await page.setViewportSize(viewports.desktop); await waitWorkspaceViewport(page, 'desktop');
 
   let focusedName = false;
   for (let index = 0; index < 30; index += 1) {
@@ -177,7 +179,7 @@ try {
   assert(durableDisplayName === 'P15 T025 Updated', 'profile update was not durable in MySQL');
   screenshots.push(await capture(page, 'profile-updated'));
 
-  await page.goto(`${SITE_URL}/app/settings/security`, { waitUntil: 'networkidle' });
+  await page.goto(`${SITE_URL}/app/settings/security`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(page, 'success'); states.security.push('success');
   await page.getByLabel('Current password').fill(password);
   await page.getByLabel('New password').fill(nextPassword);
@@ -190,7 +192,7 @@ try {
   const secondMe = await currentUser(secondContext);
   const secondSessionID = secondMe.session.id;
 
-  await page.goto(`${SITE_URL}/app/settings/sessions`, { waitUntil: 'networkidle' });
+  await page.goto(`${SITE_URL}/app/settings/sessions`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(page, 'success'); states.sessions.push('success');
   assert((await page.locator('.p15-account__row').count()) >= 2, 'session UI must expose multiple server sessions');
   screenshots.push(await capture(page, 'sessions-list'));
@@ -207,17 +209,17 @@ try {
   const revokedResponse = await api(secondContext, '/api/me');
   assert(revokedResponse.status() === 410, `revoked session was not rejected server-side: ${revokedResponse.status()}`);
   const secondPage = await secondContext.newPage();
-  await secondPage.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'networkidle' });
+  await secondPage.goto(`${SITE_URL}/app/settings/profile`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(secondPage, 'session-revoked');
   screenshots.push(await capture(secondPage, 'revoked-session-direct-load'));
   await login(secondContext, email, nextPassword);
-  await secondPage.reload({ waitUntil: 'networkidle' });
+  await secondPage.reload({ waitUntil: 'domcontentloaded' });
   await waitAccountState(secondPage, 'success');
   screenshots.push(await capture(secondPage, 'revoked-session-recovered'));
 
   const identityID = `oid_t025_${suffix}`.slice(0, 63);
   mysql(`INSERT INTO oauth_identities (id,user_id,provider,provider_subject_hash,provider_email_normalized,provider_email_verified,display_name,created_at,updated_at) VALUES (${sqlLiteral(identityID)},${sqlLiteral(userID)},'google',UNHEX(SHA2(${sqlLiteral(`p15-t025-subject-${suffix}`)},256)),NULL,0,'P15 T025 Google',CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6))`);
-  await page.goto(`${SITE_URL}/app/settings/connected-accounts`, { waitUntil: 'networkidle' });
+  await page.goto(`${SITE_URL}/app/settings/connected-accounts`, { waitUntil: 'domcontentloaded' });
   await waitAccountState(page, 'success'); states.connected_accounts.push('success');
   assert((await page.locator('.p15-account__providers button').count()) === 6, 'exact six-provider registry is not rendered');
   await page.getByRole('button', { name: 'Disconnect google' }).click();
