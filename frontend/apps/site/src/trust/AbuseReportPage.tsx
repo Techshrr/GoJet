@@ -42,23 +42,26 @@ function validCode(value: string) {
   return clean.length > 0 && clean.length <= 128 && !/[\\/?#]/.test(clean);
 }
 
+function waitForTurnstile(attempts = 50): Promise<TurnstileAPI> {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (attempts <= 0) return Promise.reject(new Error('Turnstile did not initialize.'));
+  return new Promise((resolve) => window.setTimeout(resolve, 100)).then(() => waitForTurnstile(attempts - 1));
+}
+
 function loadTurnstile(): Promise<TurnstileAPI> {
   if (window.turnstile) return Promise.resolve(window.turnstile);
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-gojet-turnstile="true"]');
-    const script = existing ?? document.createElement('script');
-    const finish = () => window.turnstile ? resolve(window.turnstile) : reject(new Error('Turnstile did not initialize.'));
-    const fail = () => reject(new Error('Turnstile script failed to load.'));
-    script.addEventListener('load', finish, { once: true });
-    script.addEventListener('error', fail, { once: true });
-    if (!existing) {
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-      script.async = true;
-      script.defer = true;
-      script.dataset.gojetTurnstile = 'true';
-      document.head.appendChild(script);
-    }
-  });
+  const existing = document.querySelector<HTMLScriptElement>('script[data-gojet-turnstile="true"]');
+  if (existing) return waitForTurnstile();
+  const script = document.createElement('script');
+  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async = true;
+  script.defer = true;
+  script.dataset.gojetTurnstile = 'true';
+  document.head.appendChild(script);
+  return new Promise<void>((resolve, reject) => {
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener('error', () => reject(new Error('Turnstile script failed to load.')), { once: true });
+  }).then(() => waitForTurnstile());
 }
 
 export default function AbuseReportPage() {
@@ -90,9 +93,18 @@ export default function AbuseReportPage() {
       localWidget = api.render(turnstileHost.current, {
         sitekey: siteKey,
         action: 'abuse-report',
-        callback: (token: string) => { if (!cancelled) { setTurnstileToken(token); if (state === 'Turnstile-error') setState('input'); } },
+        callback: (token: string) => {
+          if (cancelled) return;
+          setTurnstileToken(token);
+          setState((current) => current === 'Turnstile-error' ? 'input' : current);
+        },
         'expired-callback': () => { if (!cancelled) setTurnstileToken(''); },
-        'error-callback': () => { if (!cancelled) { setTurnstileToken(''); setState('Turnstile-error'); setMessage('Verification could not be completed. Refresh the challenge and try again.'); } },
+        'error-callback': () => {
+          if (cancelled) return;
+          setTurnstileToken('');
+          setState('Turnstile-error');
+          setMessage('Verification could not be completed. Refresh the challenge and try again.');
+        },
       });
       widgetId.current = localWidget;
     }).catch(() => {
@@ -116,15 +128,15 @@ export default function AbuseReportPage() {
     details: fields.details.trim(),
   }), [fields]);
 
-  const update = <K extends keyof Fields>(key: K, value: Fields[K]) => {
+  const updateFields = (patch: Partial<Fields>) => {
     setFields((current) => {
-      const next = { ...current, [key]: value };
-      if (key === 'resourceType' && value === 'custom-domain-risk') next.code = '';
+      const next = { ...current, ...patch };
+      if (patch.resourceType === 'custom-domain-risk') next.code = '';
       return next;
     });
     setReceipt(null);
     setMessage('');
-    if (state !== 'submitting') setState('input');
+    setState((current) => current === 'submitting' ? current : 'input');
     setIdempotencyKey(newIdempotencyKey());
   };
 
@@ -176,10 +188,9 @@ export default function AbuseReportPage() {
         }),
       });
       const body = await response.json().catch(() => ({})) as {
-        status?: string;
         report_id?: string;
         correlation_id?: string;
-        error?: { code?: string; message?: string };
+        error?: { code?: string };
       };
       const code = body.error?.code ?? '';
       if (response.status === 429 || code === 'rate_limited') {
@@ -233,25 +244,25 @@ export default function AbuseReportPage() {
         <h2 id="report-form-title">Abuse report</h2>
         <form className="public-abuse-form" onSubmit={submit} aria-busy={state === 'submitting'}>
           <label>Resource type
-            <select value={fields.resourceType} onChange={(event) => update('resourceType', event.currentTarget.value as ResourceType)} disabled={state === 'submitting'}>
+            <select value={fields.resourceType} onChange={(event) => updateFields({ resourceType: event.currentTarget.value as ResourceType })} disabled={state === 'submitting'}>
               <option value="short-link-risk">GoJet short link</option>
               <option value="custom-domain-risk">GoJet custom domain</option>
             </select>
           </label>
           <label>Hostname
-            <input value={fields.hostname} onChange={(event) => update('hostname', event.currentTarget.value)} placeholder="go.example.com" autoComplete="off" disabled={state === 'submitting'} />
+            <input value={fields.hostname} onChange={(event) => updateFields({ hostname: event.currentTarget.value })} placeholder="go.example.com" autoComplete="off" disabled={state === 'submitting'} />
             <span>Enter only the hostname. Do not paste a full destination URL.</span>
           </label>
           {fields.resourceType === 'short-link-risk' ? <label>Short-link code
-            <input value={fields.code} onChange={(event) => update('code', event.currentTarget.value)} placeholder="example-code" autoComplete="off" disabled={state === 'submitting'} />
+            <input value={fields.code} onChange={(event) => updateFields({ code: event.currentTarget.value })} placeholder="example-code" autoComplete="off" disabled={state === 'submitting'} />
           </label> : null}
           <label>Category
-            <select value={fields.category} onChange={(event) => update('category', event.currentTarget.value as Category)} disabled={state === 'submitting'}>
+            <select value={fields.category} onChange={(event) => updateFields({ category: event.currentTarget.value as Category })} disabled={state === 'submitting'}>
               {categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
           <label>Details <span className="public-abuse-optional">Optional</span>
-            <textarea rows={6} maxLength={1000} value={fields.details} onChange={(event) => update('details', event.currentTarget.value)} disabled={state === 'submitting'} aria-describedby="abuse-details-help" />
+            <textarea rows={6} maxLength={1000} value={fields.details} onChange={(event) => updateFields({ details: event.currentTarget.value })} disabled={state === 'submitting'} aria-describedby="abuse-details-help" />
             <span id="abuse-details-help">Do not include passwords, access tokens, private keys, payment details, or unnecessary personal information. Submitted text is sanitized server-side.</span>
           </label>
 
