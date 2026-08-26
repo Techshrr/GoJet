@@ -1,0 +1,104 @@
+name: P16 Trust Destination Risk Abuse Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P16/test-plan.json'
+      - 'artifacts/v10/P16/review.md'
+      - 'scripts/p16/validate_contract.py'
+      - '.github/workflows/p16-trust-destination-risk-abuse.yml'
+      - 'specifications/**'
+      - 'docs/security/SECURITY_INVARIANTS.md'
+      - 'artifacts/v10/P15/review.md'
+      - 'internal/links/fingerprint_test.go'
+      - 'internal/links/risk_redis.go'
+      - 'internal/links/redirect_http.go'
+      - 'internal/domains/domain.go'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-trust-destination-risk-abuse-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P16 contract freeze and predecessor guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P16 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p16/validate_contract.py
+
+      - name: Validate frozen P16 contract and ancestry
+        id: contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/validate_contract.py | tee /tmp/p16-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-contract.json', encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert data['node'] == 'P16', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          assert data['base_integration_commit'] == 'dd70eacf02d4dd79fe82063f3d43610ab11885e8', data
+          assert data['contract_authority'] == head, data
+          assert data['case_range'] == 'P16-T001..P16-T029', data
+          assert data['review_phase'] == 'pending', data
+          assert data['mode'] == 'contract-freeze', data
+          assert data['contract_only'] is True, data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['implementation_authorized'] is False, data
+          assert data['merge_authoritative'] is False, data
+          PY
+          head="$(git rev-parse HEAD)"
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve inherited native compile and unit boundary
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Record exact-head P16 contract evidence
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          mkdir -p artifacts/v10/P16/contract-guard
+          cp /tmp/p16-contract.json artifacts/v10/P16/contract-guard/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P16/contract-guard/implementation_commit.txt
+          printf '%s\n' 'dd70eacf02d4dd79fe82063f3d43610ab11885e8' > artifacts/v10/P16/contract-guard/base_integration_commit.txt
+          printf '%s\n' 'P16-T001..P16-T029' > artifacts/v10/P16/contract-guard/case_range.txt
+          printf '%s\n' '6f39d87f1d94f71590fd79d4551cdd1cea652a76' > artifacts/v10/P16/contract-guard/p15_signed_source.txt
+
+      - name: Upload P16 contract freeze evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-trust-destination-risk-abuse-contract-${{ steps.contract.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/contract-guard/
+            artifacts/v10/P16/test-plan.json
+            artifacts/v10/P16/review.md
+            scripts/p16/validate_contract.py
