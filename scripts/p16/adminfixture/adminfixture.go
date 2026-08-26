@@ -22,7 +22,7 @@ type Response struct {
 	Raw     string
 }
 
-func EnsureSession(ctx context.Context, db *sql.DB, userID string) (string, error) {
+func EnsureIdentity(ctx context.Context, db *sql.DB, userID string) (string, error) {
 	userID = strings.TrimSpace(userID)
 	if db == nil || userID == "" || len(userID) > 128 {
 		return "", fmt.Errorf("invalid admin fixture user")
@@ -37,7 +37,14 @@ ON DUPLICATE KEY UPDATE status='active',email_verified_at=VALUES(email_verified_
 		userID, email, email, now, now, now); err != nil {
 		return "", err
 	}
-	secret, err := authn.NewStore(db).CreateSession(ctx, userID, time.Hour, "p16-admin-session-"+userID)
+	return email, nil
+}
+
+func EnsureSession(ctx context.Context, db *sql.DB, userID string) (string, error) {
+	if _, err := EnsureIdentity(ctx, db, userID); err != nil {
+		return "", err
+	}
+	secret, err := authn.NewStore(db).CreateSession(ctx, strings.TrimSpace(userID), time.Hour, "p16-admin-session-"+strings.TrimSpace(userID))
 	if err != nil {
 		return "", err
 	}

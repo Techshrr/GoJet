@@ -71,7 +71,7 @@ function fixture(mode) {
 }
 
 export function createBrowserSessions() {
-  return fixture('sessions');
+  return fixture('logins');
 }
 
 export function seedAdminFixture() {
@@ -83,16 +83,24 @@ export function seedPublicFixture() {
 }
 
 export async function addSessionCookie(context, sessions, kind) {
-  const value = kind === 'security' ? sessions.security_session : kind === 'domain' ? sessions.domain_session : sessions.denied_session;
-  assert(value, `missing ${kind} browser session`);
-  await context.addCookies([{
-    name: sessions.cookie_name,
-    value,
-    url: ADMIN_URL,
-    httpOnly: true,
-    secure: true,
-    sameSite: 'Lax',
-  }]);
+  const email = kind === 'security' ? sessions.security_email : kind === 'domain' ? sessions.domain_email : sessions.denied_email;
+  assert(email && sessions.password && sessions.cookie_name, `missing ${kind} browser login fixture`);
+  const response = await context.request.post(`${ADMIN_URL}/api/auth/login`, {
+    data: {
+      email,
+      password: sessions.password,
+      correlation_id: `p16-browser-${kind}-login`,
+    },
+  });
+  assert(response.status() === 200, `${kind} browser login failed with status ${response.status()}`);
+  const cookies = await context.cookies(ADMIN_URL);
+  const session = cookies.find((cookie) => cookie.name === sessions.cookie_name);
+  assert(session, `${kind} formal P15 session cookie missing after login`);
+  assert(session.httpOnly === true, `${kind} session cookie is not HttpOnly`);
+  assert(session.secure === true, `${kind} session cookie is not Secure`);
+  assert(session.sameSite === 'Lax', `${kind} session cookie SameSite is not Lax`);
+  assert(session.path === '/', `${kind} session cookie path is not host root`);
+  assert(!String(session.domain ?? '').startsWith('.'), `${kind} session cookie is not host-only`);
 }
 
 export function diagnostics() {

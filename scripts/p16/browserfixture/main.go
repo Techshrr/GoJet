@@ -20,19 +20,21 @@ import (
 )
 
 const (
-	securityActor = "p16-browser-security-admin"
-	domainActor   = "p16-browser-domain-admin"
-	deniedActor   = "p16-browser-denied-admin"
+	securityActor   = "p16-browser-security-admin"
+	domainActor     = "p16-browser-domain-admin"
+	deniedActor     = "p16-browser-denied-admin"
+	browserPassword = "P16-Browser-Admin-Password!42"
 )
 
-type sessionOutput struct {
-	CookieName      string `json:"cookie_name"`
-	SecurityActor   string `json:"security_actor"`
-	SecuritySession string `json:"security_session"`
-	DomainActor     string `json:"domain_actor"`
-	DomainSession   string `json:"domain_session"`
-	DeniedActor     string `json:"denied_actor"`
-	DeniedSession   string `json:"denied_session"`
+type loginOutput struct {
+	CookieName    string `json:"cookie_name"`
+	Password      string `json:"password"`
+	SecurityActor string `json:"security_actor"`
+	SecurityEmail string `json:"security_email"`
+	DomainActor   string `json:"domain_actor"`
+	DomainEmail   string `json:"domain_email"`
+	DeniedActor   string `json:"denied_actor"`
+	DeniedEmail   string `json:"denied_email"`
 }
 
 type seedOutput struct {
@@ -58,7 +60,7 @@ type publicSeedOutput struct {
 }
 
 func main() {
-	mode := flag.String("mode", "sessions", "sessions, seed-admin or seed-public")
+	mode := flag.String("mode", "logins", "logins, seed-admin or seed-public")
 	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
@@ -71,8 +73,8 @@ func main() {
 
 	var value any
 	switch strings.TrimSpace(*mode) {
-	case "sessions":
-		value, err = createSessions(ctx, db)
+	case "logins":
+		value, err = createLogins(ctx, db)
 	case "seed-admin":
 		value, err = seedAdmin(ctx, db)
 	case "seed-public":
@@ -88,27 +90,42 @@ func main() {
 	}
 }
 
-func createSessions(ctx context.Context, db *sql.DB) (sessionOutput, error) {
-	security, err := adminfixture.EnsureSession(ctx, db, securityActor)
+func createLogins(ctx context.Context, db *sql.DB) (loginOutput, error) {
+	passwords, err := authn.NewPasswordService(db)
 	if err != nil {
-		return sessionOutput{}, err
+		return loginOutput{}, err
 	}
-	domain, err := adminfixture.EnsureSession(ctx, db, domainActor)
+	ensure := func(actor string) (string, error) {
+		email, err := adminfixture.EnsureIdentity(ctx, db, actor)
+		if err != nil {
+			return "", err
+		}
+		if err := passwords.SetInitialPassword(ctx, actor, browserPassword, "p16-browser-password-"+actor); err != nil {
+			return "", err
+		}
+		return email, nil
+	}
+	securityEmail, err := ensure(securityActor)
 	if err != nil {
-		return sessionOutput{}, err
+		return loginOutput{}, err
 	}
-	denied, err := adminfixture.EnsureSession(ctx, db, deniedActor)
+	domainEmail, err := ensure(domainActor)
 	if err != nil {
-		return sessionOutput{}, err
+		return loginOutput{}, err
 	}
-	return sessionOutput{
-		CookieName:      authn.SessionCookieName,
-		SecurityActor:   securityActor,
-		SecuritySession: security,
-		DomainActor:     domainActor,
-		DomainSession:   domain,
-		DeniedActor:     deniedActor,
-		DeniedSession:   denied,
+	deniedEmail, err := ensure(deniedActor)
+	if err != nil {
+		return loginOutput{}, err
+	}
+	return loginOutput{
+		CookieName:    authn.SessionCookieName,
+		Password:      browserPassword,
+		SecurityActor: securityActor,
+		SecurityEmail: securityEmail,
+		DomainActor:   domainActor,
+		DomainEmail:   domainEmail,
+		DeniedActor:   deniedActor,
+		DeniedEmail:   deniedEmail,
 	}, nil
 }
 
