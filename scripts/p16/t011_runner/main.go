@@ -162,17 +162,17 @@ func run() (output, error) {
 
 	out.RecordCounts = map[string]int{
 		"old_projection_keys_preserved_for_non_authoritative_history": int(oldKeyAfter),
-		"new_projection_keys_without_rescan":                       int(newKeyExists),
-		"stable_projection_keys":                                   int(stableKeyExists),
+		"new_projection_keys_without_rescan":                          int(newKeyExists),
+		"stable_projection_keys":                                      int(stableKeyExists),
 	}
 	out.Checks = map[string]bool{
-		"pre_mutation_exact_allow_redirects": beforeMutation.Status == 302 && beforeMutation.Location != "" && oldKeyBefore == 1,
-		"reachable_target_mutation_changes_fingerprint": newFingerprint != mutated.Fingerprint,
-		"old_allow_key_cannot_authorize_new_fingerprint": oldKeyAfter == 1 && newKeyExists == 0 && afterMutation.Location == "" && afterMutation.Status != 301 && afterMutation.Status != 302 && afterMutation.Status != 307 && afterMutation.Status != 308,
-		"mutation_safety_response_discloses_no_old_or_new_target": mutationBodySafe,
-		"duplicate_target_dedup_and_reorder_preserve_fingerprint": stableFingerprintAfter == stable.Fingerprint && strings.Join(stableTargetsAfter, "\n") == strings.Join(stable.Targets, "\n"),
+		"pre_mutation_exact_allow_redirects":                         beforeMutation.Status == 302 && beforeMutation.Location != "" && oldKeyBefore == 1,
+		"reachable_target_mutation_changes_fingerprint":              newFingerprint != mutated.Fingerprint,
+		"old_allow_key_cannot_authorize_new_fingerprint":             oldKeyAfter == 1 && newKeyExists == 0 && afterMutation.Location == "" && afterMutation.Status != 301 && afterMutation.Status != 302 && afterMutation.Status != 307 && afterMutation.Status != 308,
+		"mutation_safety_response_discloses_no_old_or_new_target":    mutationBodySafe,
+		"duplicate_target_dedup_and_reorder_preserve_fingerprint":    stableFingerprintAfter == stable.Fingerprint && strings.Join(stableTargetsAfter, "\n") == strings.Join(stable.Targets, "\n"),
 		"semantically_equivalent_change_keeps_exact_allow_authority": stableBefore.Status == 302 && stableAfter.Status == 302 && stableBefore.Location != "" && stableAfter.Location != "" && stableKeyExists == 1,
-		"stable_redirect_remains_within_exact_target_set": locationMatchesTarget(stableAfter.Location, stable.Targets),
+		"stable_redirect_remains_within_exact_target_set":            locationMatchesTarget(stableAfter.Location, stable.Targets),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
