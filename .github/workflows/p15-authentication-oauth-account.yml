@@ -6,9 +6,12 @@ on:
       - main
     paths:
       - 'artifacts/v10/P15/test-plan.json'
+      - 'artifacts/v10/P15/review.md'
       - 'scripts/p15/validate_contract.py'
       - 'scripts/p15/validate_coherence.py'
       - 'scripts/p15/coherence_ci.py'
+      - 'scripts/p15/validate_closure.py'
+      - 'scripts/p15/closure_ci.py'
       - '.github/workflows/p15-authentication-oauth-account.yml'
       - 'specifications/**'
       - 'contracts/traceability/**'
@@ -17,7 +20,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: p15-authentication-oauth-account-${{ github.event.pull_request.number || github.ref }}
@@ -28,6 +30,11 @@ jobs:
     name: P15 contract guard and T028 coherence
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      exact_head: ${{ steps.head.outputs.sha }}
     steps:
       - name: Checkout exact candidate head
         uses: actions/checkout@v4
@@ -42,13 +49,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Compile P15 contract and coherence validators
+      - name: Compile P15 contract, coherence and closure validators
         run: |
           set -euo pipefail
           python3 -m py_compile \
             scripts/p15/validate_contract.py \
             scripts/p15/validate_coherence.py \
-            scripts/p15/coherence_ci.py
+            scripts/p15/coherence_ci.py \
+            scripts/p15/validate_closure.py \
+            scripts/p15/closure_ci.py
 
       - name: Validate frozen P15 contract and ancestry
         run: |
@@ -152,5 +161,86 @@ jobs:
             artifacts/v10/P15/browser/
             artifacts/v10/P15/captures/
             artifacts/v10/P15/runtime/
+            artifacts/v10/P15/test-plan.json
+            artifacts/v10/P15/review.md
+
+  closure:
+    name: P15 T029 accountable closure
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.contract.outputs.exact_head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compile P15 closure authority
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p15/validate_closure.py scripts/p15/closure_ci.py
+
+      - name: Run frozen P15-T029 exact-head closure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EXACT_HEAD: ${{ needs.contract.outputs.exact_head }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          LOCAL_CONTRACT_RESULT: ${{ needs.contract.result }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/closure_ci.py
+
+      - name: Verify frozen P15-T029 result
+        env:
+          EXACT_HEAD: ${{ needs.contract.outputs.exact_head }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P15/results/P15-T029.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data.get('case_id') == 'P15-T029', data
+          assert data.get('status') == 'PASS', data
+          assert data.get('implementation_commit') == os.environ['EXACT_HEAD'], data
+          assert data.get('defects') == {'p0': 0, 'p1': 0, 'decision_required': 0}, data
+          assert data.get('required_regression_workflow_count') == 50, data
+          phase=data.get('phase')
+          assert phase in ('pre-sign','signed'), data
+          if phase == 'pre-sign': assert data.get('merge_authoritative') is False, data
+          if phase == 'signed': assert data.get('merge_authoritative') is True, data
+          PY
+
+      - name: Upload exact-head P15-T029 closure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t029-closure-${{ needs.contract.outputs.exact_head }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/closure.json
+            artifacts/v10/P15/closure-evidence-index.json
+            artifacts/v10/P15/regression-manifest.json
+            artifacts/v10/P15/results/P15-T028.json
+            artifacts/v10/P15/results/P15-T029.json
+            artifacts/v10/P15/evidence-producer-manifest.json
+            artifacts/v10/P15/evidence-index.json
+            artifacts/v10/P15/contract-guard/
+            artifacts/v10/P15/api/
+            artifacts/v10/P15/security/
+            artifacts/v10/P15/oauth/
+            artifacts/v10/P15/mail/
+            artifacts/v10/P15/audit/
+            artifacts/v10/P15/browser/
+            artifacts/v10/P15/captures/
+            artifacts/v10/P15/runtime/
+            artifacts/v10/P15/inherited/
             artifacts/v10/P15/test-plan.json
             artifacts/v10/P15/review.md
