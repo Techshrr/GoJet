@@ -1,0 +1,228 @@
+name: P16 Real Domain Risk Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/trust/**'
+      - 'internal/domains/domain.go'
+      - 'internal/domains/domain_store_mysql.go'
+      - 'internal/domains/store_mysql.go'
+      - 'internal/domains/security_suspension_mysql.go'
+      - 'internal/links/model.go'
+      - 'internal/links/risk_redis.go'
+      - 'internal/links/custom_domain_authority.go'
+      - 'internal/links/custom_domain_redirect.go'
+      - 'services/redirectengine/cmd/server/**'
+      - 'migrations/**'
+      - 'scripts/p16/integration.py'
+      - 'scripts/p16/domainfixture/**'
+      - 'scripts/p16/runtimefixture/**'
+      - 'scripts/p16/t015_runner/**'
+      - 'scripts/p16/t016_runner/**'
+      - 'scripts/p16/t017_runner/**'
+      - 'scripts/p16/t018_runner/**'
+      - '.github/workflows/p16-domain-risk-integration.yml'
+      - 'artifacts/v10/P16/test-plan.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-real-domain-risk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t015-t018:
+    name: P16-T015/T018 real domain-risk evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_REDIRECT_URL: http://127.0.0.1:18080
+
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P16 T015-T018 source and frozen-contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
+          gofmt -d \
+            scripts/p16/domainfixture/domainfixture.go \
+            scripts/p16/runtimefixture/runtimefixture.go \
+            scripts/p16/t015_runner/main.go \
+            scripts/p16/t016_runner/main.go \
+            scripts/p16/t017_runner/main.go \
+            scripts/p16/t018_runner/main.go \
+            services/redirectengine/cmd/server/main.go \
+            internal/trust/*.go | tee /tmp/p16-domain-gofmt.diff
+          test ! -s /tmp/p16-domain-gofmt.diff
+          go test ./...
+          go vet ./internal/trust ./internal/domains ./internal/links ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./services/redirectengine/cmd/server
+          mkdir -p /tmp/gojet-p16-domain
+          go build -trimpath -o /tmp/gojet-p16-domain/redirectengine ./services/redirectengine/cmd/server
+          test -x /tmp/gojet-p16-domain/redirectengine
+          python3 scripts/p16/validate_contract.py > /tmp/p16-domain-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-domain-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['implementation_authorized'] is True,data
+          assert data['review_phase']=='pending',data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Start exact-head native redirectengine
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_REDIRECTENGINE_ADDR=127.0.0.1:18080 \
+          GOJET_TEST_ROUTING_HEADERS=1 \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16-domain/redirectengine > /tmp/p16-domain-redirectengine.log 2>&1 &
+          echo $! > /tmp/p16-domain-redirectengine.pid
+          for attempt in $(seq 1 60); do
+            if curl -sS -o /dev/null http://127.0.0.1:18080/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/p16-domain-redirectengine.log
+          exit 1
+
+      - name: Run frozen P16-T015 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T015 | tee /tmp/p16-t015-result.json
+
+      - name: Run frozen P16-T016 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T016 | tee /tmp/p16-t016-result.json
+
+      - name: Run frozen P16-T017 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T017 | tee /tmp/p16-t017-result.json
+
+      - name: Run frozen P16-T018 driver and verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T018 | tee /tmp/p16-t018-result.json
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P16-T015':'artifacts/v10/P16/domain/P16-T015.json',
+              'P16-T016':'artifacts/v10/P16/domain/P16-T016.json',
+              'P16-T017':'artifacts/v10/P16/security/P16-T017.json',
+              'P16-T018':'artifacts/v10/P16/security/P16-T018.json',
+          }
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P16',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert data['environment']['mysql_version'],data
+              assert data['environment']['fixture'],data
+              assert not any(data['evidence_policy'].values()),data
+              if case == 'P16-T018':
+                  assert data['environment']['redis']=='real Redis 7.x service',data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P16 T015-T018 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t015-t018-real-domain-risk-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/domain/P16-T015.json
+            artifacts/v10/P16/domain/P16-T016.json
+            artifacts/v10/P16/security/P16-T017.json
+            artifacts/v10/P16/security/P16-T018.json
+            artifacts/v10/P16/test-plan.json
