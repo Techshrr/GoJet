@@ -19,6 +19,8 @@ type ProjectionCandidate struct {
 
 type ProjectionResult struct {
 	Decision DestinationDecision
+	Override *DestinationOverride
+	Source   string
 	Runtime  links.RiskDecision
 }
 
@@ -91,7 +93,7 @@ SELECT DISTINCT d.workspace_id,d.link_id
 FROM destination_risk_decisions d
 JOIN links l ON l.id=d.link_id AND l.deleted_at IS NULL
 WHERE d.policy_version=? AND d.risk_fingerprint=l.risk_fingerprint
-  AND d.state IN ('allow','review','block')
+  AND d.state IN ('allow','review','block','unknown')
 ORDER BY d.link_id
 LIMIT ?`, policyVersion, limit)
 	if err != nil {
@@ -117,22 +119,19 @@ func ProjectCurrentDestinationDecision(ctx context.Context, store *Store, runtim
 		return ProjectionResult{}, ErrInvalid
 	}
 	now = now.UTC()
-	decision, err := store.CurrentDestinationDecision(ctx, workspaceID, linkID, policyVersion)
+	authority, err := store.CurrentDestinationAuthority(ctx, workspaceID, linkID, policyVersion, now)
 	if err != nil {
 		return ProjectionResult{}, err
 	}
 	var state links.RiskState
 	var ttl time.Duration
-	switch decision.State {
+	switch authority.State {
 	case DecisionAllow:
 		state = links.RiskAllow
-		if decision.ValidUntil == nil || !decision.ValidUntil.After(now) {
+		if authority.ValidUntil == nil || !authority.ValidUntil.After(now) {
 			return ProjectionResult{}, ErrStaleFingerprint
 		}
-		ttl = decision.ValidUntil.Sub(now)
-		if ttl > maxTTL {
-			ttl = maxTTL
-		}
+		ttl = authority.ValidUntil.Sub(now)
 	case DecisionReview:
 		state = links.RiskReview
 		ttl = maxTTL
@@ -142,14 +141,31 @@ func ProjectCurrentDestinationDecision(ctx context.Context, store *Store, runtim
 	default:
 		return ProjectionResult{}, ErrConflict
 	}
+	if authority.ValidUntil != nil {
+		remaining := authority.ValidUntil.Sub(now)
+		if remaining <= 0 {
+			return ProjectionResult{}, ErrStaleFingerprint
+		}
+		if remaining < ttl {
+			ttl = remaining
+		}
+	}
+	if ttl > maxTTL {
+		ttl = maxTTL
+	}
 	if ttl <= 0 {
 		return ProjectionResult{}, ErrStaleFingerprint
 	}
-	runtimeDecision, err := runtime.PutDecision(ctx, decision.LinkID, decision.RiskFingerprint, state, decision.PolicyVersion, ttl)
+	runtimeDecision, err := runtime.PutDecision(ctx, authority.Decision.LinkID, authority.Fingerprint, state, authority.PolicyVersion, ttl)
 	if err != nil {
 		return ProjectionResult{}, err
 	}
-	return ProjectionResult{Decision: decision, Runtime: runtimeDecision}, nil
+	return ProjectionResult{
+		Decision: authority.Decision,
+		Override: authority.Override,
+		Source:   authority.Source,
+		Runtime:  runtimeDecision,
+	}, nil
 }
 
 type RiskProjector struct {
