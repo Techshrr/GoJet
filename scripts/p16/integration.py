@@ -23,6 +23,7 @@ CASE_CONFIG = {
         },
         "environment": "real MySQL 8.x durable destination-risk schema/correlation fixture",
         "requires_mysql": True,
+        "requires_redis": False,
     },
     "P16-T002": {
         "runner": "./scripts/p16/t002_runner",
@@ -36,6 +37,7 @@ CASE_CONFIG = {
         },
         "environment": "real MySQL 8.x plus native trust.Store exact-fingerprint enqueue/dedupe/rescan fixture",
         "requires_mysql": True,
+        "requires_redis": False,
     },
     "P16-T003": {
         "runner": "./scripts/p16/t003_runner",
@@ -47,6 +49,7 @@ CASE_CONFIG = {
         },
         "environment": "deterministic in-process DNS fixture proving canonical HTTP/HTTPS admission and pre-provider unsafe-form rejection",
         "requires_mysql": False,
+        "requires_redis": False,
     },
     "P16-T004": {
         "runner": "./scripts/p16/t004_runner",
@@ -57,6 +60,7 @@ CASE_CONFIG = {
         },
         "environment": "controlled in-process DNS scripts and local HTTP redirect fixture proving SSRF, rebinding and redirect-to-private rejection",
         "requires_mysql": False,
+        "requires_redis": False,
     },
     "P16-T005": {
         "runner": "./scripts/p16/t005_runner",
@@ -71,6 +75,7 @@ CASE_CONFIG = {
         },
         "environment": "real MySQL 8.x plus local deterministic semantic-provider HTTP fixture and versioned local policy authority",
         "requires_mysql": True,
+        "requires_redis": False,
     },
     "P16-T006": {
         "runner": "./scripts/p16/t006_runner",
@@ -85,6 +90,37 @@ CASE_CONFIG = {
         },
         "environment": "real MySQL 8.x plus deterministic timeout/transport/partial/malformed/unavailable provider protocol fixtures",
         "requires_mysql": True,
+        "requires_redis": False,
+    },
+    "P16-T007": {
+        "runner": "./scripts/p16/t007_runner",
+        "evidence": "artifacts/v10/P16/risk/P16-T007.json",
+        "source_paths": {
+            "migration": "migrations/000020_destination_risk.sql",
+            "worker_store": "internal/trust/worker_store.go",
+            "worker": "internal/trust/worker.go",
+            "policy_store": "internal/trust/policy_store.go",
+            "operationsmonitor": "services/platformapi/cmd/operationsmonitor/main.go",
+            "runner": "scripts/p16/t007_runner/main.go",
+        },
+        "environment": "real MySQL 8.x durable SKIP LOCKED lease/retry/recovery plus native fixed SVC-OPS-MONITOR operationsmonitor execution",
+        "requires_mysql": True,
+        "requires_redis": True,
+    },
+    "P16-T008": {
+        "runner": "./scripts/p16/t008_runner",
+        "evidence": "artifacts/v10/P16/risk/P16-T008.json",
+        "source_paths": {
+            "migration": "migrations/000020_destination_risk.sql",
+            "links_fingerprint": "internal/links/model.go",
+            "inherited_redis_risk": "internal/links/risk_redis.go",
+            "policy_store": "internal/trust/policy_store.go",
+            "projection": "internal/trust/projection.go",
+            "runner": "scripts/p16/t008_runner/main.go",
+        },
+        "environment": "real MySQL 8.x durable-current decision authority projected through inherited P05 exact-fingerprint RedisRiskStore into real Redis 7.x",
+        "requires_mysql": True,
+        "requires_redis": True,
     },
 }
 
@@ -130,6 +166,8 @@ def main() -> int:
         fail(f"P16 integration case is not implemented at this stage: {args.case}")
     if config["requires_mysql"] and not os.environ.get("GOJET_MYSQL_DSN", "").strip():
         fail("GOJET_MYSQL_DSN is required")
+    if config["requires_redis"] and not os.environ.get("GOJET_REDIS_ADDR", "").strip():
+        fail("GOJET_REDIS_ADDR is required")
 
     head = git("rev-parse", "HEAD")
     try:
@@ -172,6 +210,7 @@ def main() -> int:
         "environment": {
             "mysql": "real MySQL 8.x service" if config["requires_mysql"] else "not required by this case",
             "mysql_version": runner.get("mysql_version", ""),
+            "redis": "real Redis 7.x service" if config["requires_redis"] else "not required by this case",
             "fixture": runner.get("fixture", ""),
             "platform_state": config["environment"],
         },
