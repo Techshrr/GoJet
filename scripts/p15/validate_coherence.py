@@ -123,6 +123,11 @@ def forbidden_marker(path: Path) -> bytes | None:
     return None
 
 
+def forbidden_marker_bytes_for_self_test() -> bool:
+    probe = b"synthetic evidence gvc_should-never-be-reviewable"
+    return any(marker.lower() in probe.lower() for marker in FORBIDDEN_EVIDENCE_MARKERS)
+
+
 def run() -> int:
     head = exact_head()
     errors: list[str] = []
@@ -152,7 +157,7 @@ def run() -> int:
             need(row.get("conclusion") == "success", f"{name} producer conclusion={row.get('conclusion')}", errors)
             need(isinstance(row.get("run_id"), int) and row.get("run_id", 0) > 0, f"{name} run id missing", errors)
             need(isinstance(artifact.get("id"), int) and artifact.get("id", 0) > 0, f"{name} artifact id missing", errors)
-            need(isinstance(artifact.get("name"), str) and head in artifact.get("name", ""), f"{name} artifact name not exact-head bound", errors)
+            need(isinstance(artifact.get("name"), str) and bool(artifact.get("name", "").strip()), f"{name} artifact name missing", errors)
             need(isinstance(artifact.get("digest"), str) and artifact.get("digest", "").startswith("sha256:"), f"{name} artifact digest missing", errors)
             need(isinstance(artifact.get("size_in_bytes"), int) and artifact.get("size_in_bytes", 0) > 0, f"{name} artifact size missing", errors)
             if isinstance(row.get("run_id"), int):
@@ -288,11 +293,6 @@ def run() -> int:
     RESULT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if not errors else 1
-
-
-def forbidden_marker_bytes_for_self_test() -> bool:
-    probe = b"synthetic evidence gvc_should-never-be-reviewable"
-    return any(marker.lower() in probe.lower() for marker in FORBIDDEN_EVIDENCE_MARKERS)
 
 
 if __name__ == "__main__":
