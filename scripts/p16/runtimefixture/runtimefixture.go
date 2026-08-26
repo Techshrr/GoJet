@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Techshrr/GoJet/internal/links"
@@ -122,6 +123,10 @@ VALUES (?,?,?,'enabled','verified','valid','active','allow',1,?,?,?,?,?,?,?,?,?,
 }
 
 func RequestRedirect(ctx context.Context, hostname, code string) (HTTPResult, error) {
+	return RequestRedirectWithHeaders(ctx, hostname, code, nil)
+}
+
+func RequestRedirectWithHeaders(ctx context.Context, hostname, code string, headers http.Header) (HTTPResult, error) {
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("GOJET_REDIRECT_URL")), "/")
 	if base == "" {
 		return HTTPResult{}, fmt.Errorf("GOJET_REDIRECT_URL is required")
@@ -131,8 +136,13 @@ func RequestRedirect(ctx context.Context, hostname, code string) (HTTPResult, er
 		return HTTPResult{}, err
 	}
 	req.Host = hostname
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout:       5 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := client.Do(req)
@@ -158,10 +168,10 @@ func PutMalformedRuntime(ctx context.Context, client *redis.Client, link LinkFix
 func PutStaleRuntime(ctx context.Context, client *redis.Client, link LinkFixture, now time.Time) error {
 	decision := links.RiskDecision{
 		SchemaVersion: 1,
-		Decision: links.RiskAllow,
-		Fingerprint: link.Fingerprint,
-		CheckedAt: now.Add(-2 * time.Hour).UTC(),
-		ValidUntil: now.Add(-time.Hour).UTC(),
+		Decision:      links.RiskAllow,
+		Fingerprint:   link.Fingerprint,
+		CheckedAt:     now.Add(-2 * time.Hour).UTC(),
+		ValidUntil:    now.Add(-time.Hour).UTC(),
 		PolicyVersion: "p16-runtime-policy-v1",
 	}
 	raw, err := json.Marshal(decision)
