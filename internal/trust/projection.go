@@ -119,7 +119,7 @@ func ProjectCurrentDestinationDecision(ctx context.Context, store *Store, runtim
 		return ProjectionResult{}, ErrInvalid
 	}
 	now = now.UTC()
-	authority, err := store.CurrentDestinationAuthority(ctx, workspaceID, linkID, policyVersion, now)
+	authority, err := store.EffectiveDestinationAuthority(ctx, workspaceID, linkID, policyVersion, now)
 	if err != nil {
 		return ProjectionResult{}, err
 	}
