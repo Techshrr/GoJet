@@ -1,4 +1,4 @@
-export type DestinationRiskState = 'pending' | 'allow' | 'review' | 'block';
+export type DestinationRiskState = 'pending' | 'allow' | 'review' | 'block' | 'unknown';
 export type DestinationRiskRecord = {
   id: number;
   workspace_id: string;
@@ -19,7 +19,7 @@ export type DestinationRiskRecord = {
   updated_at: string;
 };
 
-export type DomainRiskState = 'pending' | 'allow' | 'review' | 'block' | 'stale';
+export type DomainRiskState = 'pending' | 'revalidating' | 'allow' | 'review' | 'block' | 'malformed' | 'stale' | 'provider_partial';
 export type DomainRiskRecord = {
   evaluation_id: number;
   workspace_id: string;
