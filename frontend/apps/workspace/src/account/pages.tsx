@@ -151,7 +151,7 @@ export function ProfileSettingsPage() {
           <div ref={alertRef} tabIndex={-1}>{state === 'validation-error' && <StateMessage state={state} />}</div>
           <label>
             <span>Email</span>
-            <input aria-label="Email" value={user.email} readOnly autoComplete="email" />
+            <input aria-label="Email" value={user.email} readOnly tabIndex={-1} autoComplete="email" />
           </label>
           <label>
             <span>Display name</span>
