@@ -192,14 +192,14 @@ WHERE s.workspace_id=? AND (
 	out.Checks = map[string]bool{
 		"provider_allow_without_local_safety_is_not_allow": allowWithoutLocal.Observation.Outcome == trust.ProviderAllow && allowWithoutLocal.Decision.State == trust.DecisionReview && allowWithoutLocal.Decision.ReasonCategory == "local-safety-not-approved",
 		"provider_allow_plus_local_policy_can_allow":       allowWithLocal.Observation.Outcome == trust.ProviderAllow && allowWithLocal.Decision.State == trust.DecisionAllow && allowWithLocal.Decision.ValidUntil != nil,
-		"provider_review_maps_to_review":                    review.Observation.Outcome == trust.ProviderReview && review.Decision.State == trust.DecisionReview && review.Decision.ReasonCategory == "provider-review",
-		"provider_block_maps_to_block":                      block.Observation.Outcome == trust.ProviderBlock && block.Decision.State == trust.DecisionBlock && block.Decision.ReasonCategory == "provider-block",
-		"missing_required_provider_remains_pending":         pendingEvaluation.State == trust.DecisionPending && pendingEvaluation.ReasonCategory == "provider-pending",
-		"decisions_are_exact_fingerprint_policy_bound":      allAuthorityBound([]scenarioResult{allowWithoutLocal, allowWithLocal, review, block}, fingerprint, policy.Version),
-		"all_finalized_scans_are_completed":                 completedCount == 4 && allCompleted([]scenarioResult{allowWithoutLocal, allowWithLocal, review, block}),
-		"provider_and_decision_records_are_durable":         observationCount == 4 && decisionCount == 4,
-		"provider_evidence_secrets_are_redacted":            secretCount == 0 && safeEvidence(allowWithLocal.Observation.Evidence),
-		"correlated_audit_covers_enqueue_observe_decide":    auditCount == 12,
+		"provider_review_maps_to_review":                   review.Observation.Outcome == trust.ProviderReview && review.Decision.State == trust.DecisionReview && review.Decision.ReasonCategory == "provider-review",
+		"provider_block_maps_to_block":                     block.Observation.Outcome == trust.ProviderBlock && block.Decision.State == trust.DecisionBlock && block.Decision.ReasonCategory == "provider-block",
+		"missing_required_provider_remains_pending":        pendingEvaluation.State == trust.DecisionPending && pendingEvaluation.ReasonCategory == "provider-pending",
+		"decisions_are_exact_fingerprint_policy_bound":     allAuthorityBound([]scenarioResult{allowWithoutLocal, allowWithLocal, review, block}, fingerprint, policy.Version),
+		"all_finalized_scans_are_completed":                completedCount == 4 && allCompleted([]scenarioResult{allowWithoutLocal, allowWithLocal, review, block}),
+		"provider_and_decision_records_are_durable":        observationCount == 4 && decisionCount == 4,
+		"provider_evidence_secrets_are_redacted":           secretCount == 0 && safeEvidence(allowWithLocal.Observation.Evidence),
+		"correlated_audit_covers_enqueue_observe_decide":   auditCount == 12,
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"
