@@ -161,21 +161,21 @@ func run() (output, error) {
 		allowTTLBounded = false
 	}
 	out.RecordCounts = map[string]int{
-		"durable_decisions":            decisionCount,
-		"redis_keys":                   int(redisKeys),
+		"durable_decisions":             decisionCount,
+		"redis_keys":                    int(redisKeys),
 		"current_projection_candidates": len(candidates),
 	}
 	out.Checks = map[string]bool{
-		"durable_current_allow_projects_exact_key":      allowState == links.RiskAllow && allowRuntime.Fingerprint == fingerprint && allowProjection.Decision.ID == allowDecision.ID,
-		"allow_projection_policy_version_is_exact":      allowRuntime.PolicyVersion == policy.Version && allowProjection.Runtime.PolicyVersion == policy.Version,
-		"allow_projection_ttl_is_bounded":               allowTTLBounded,
-		"durable_review_overwrites_prior_runtime_allow": reviewDecision.ID != allowDecision.ID && reviewState == links.RiskReview && reviewRuntime.Decision == links.RiskReview && reviewProjection.Decision.ID == reviewDecision.ID,
-		"policy_mismatch_cannot_replace_projection":      errors.Is(policyMismatchErr, trust.ErrNotFound) && afterMismatchState == links.RiskReview && afterMismatch.PolicyVersion == policy.Version,
-		"target_mutation_invalidates_old_durable_authority": newFingerprint != fingerprint && errors.Is(staleProjectionErr, trust.ErrNotFound),
-		"current_fingerprint_has_no_stale_projection":    currentState == links.RiskMissing,
-		"old_fingerprint_projection_is_not_current_authority": oldStateAfterMutation == links.RiskReview && oldRuntimeAfterMutation.Fingerprint == fingerprint && newFingerprint != fingerprint,
+		"durable_current_allow_projects_exact_key":              allowState == links.RiskAllow && allowRuntime.Fingerprint == fingerprint && allowProjection.Decision.ID == allowDecision.ID,
+		"allow_projection_policy_version_is_exact":              allowRuntime.PolicyVersion == policy.Version && allowProjection.Runtime.PolicyVersion == policy.Version,
+		"allow_projection_ttl_is_bounded":                       allowTTLBounded,
+		"durable_review_overwrites_prior_runtime_allow":         reviewDecision.ID != allowDecision.ID && reviewState == links.RiskReview && reviewRuntime.Decision == links.RiskReview && reviewProjection.Decision.ID == reviewDecision.ID,
+		"policy_mismatch_cannot_replace_projection":             errors.Is(policyMismatchErr, trust.ErrNotFound) && afterMismatchState == links.RiskReview && afterMismatch.PolicyVersion == policy.Version,
+		"target_mutation_invalidates_old_durable_authority":     newFingerprint != fingerprint && errors.Is(staleProjectionErr, trust.ErrNotFound),
+		"current_fingerprint_has_no_stale_projection":           currentState == links.RiskMissing,
+		"old_fingerprint_projection_is_not_current_authority":   oldStateAfterMutation == links.RiskReview && oldRuntimeAfterMutation.Fingerprint == fingerprint && newFingerprint != fingerprint,
 		"projection_candidate_query_excludes_stale_fingerprint": len(candidates) == 0,
-		"durable_authority_remains_mysql_source":         decisionCount == 2 && redisKeys == 1,
+		"durable_authority_remains_mysql_source":                decisionCount == 2 && redisKeys == 1,
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"
