@@ -11,61 +11,81 @@ from pathlib import Path
 
 CONTRACT_AUTHORITY = "43c5d4d7e1833c593ceacb48016abac6e3133893"
 
+
+def case(
+    runner: str,
+    evidence: str,
+    source_paths: dict[str, str],
+    environment: str,
+    *,
+    mysql: bool,
+    redis: bool,
+) -> dict[str, object]:
+    return {
+        "runner": runner,
+        "evidence": evidence,
+        "source_paths": source_paths,
+        "environment": environment,
+        "requires_mysql": mysql,
+        "requires_redis": redis,
+    }
+
+
 CASE_CONFIG = {
-    "P16-T001": {
-        "runner": "./scripts/p16/t001_runner",
-        "evidence": "artifacts/v10/P16/api/P16-T001.json",
-        "source_paths": {
+    "P16-T001": case(
+        "./scripts/p16/t001_runner",
+        "artifacts/v10/P16/api/P16-T001.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "trust_model": "internal/trust/model.go",
             "trust_store": "internal/trust/store.go",
             "runner": "scripts/p16/t001_runner/main.go",
         },
-        "environment": "real MySQL 8.x durable destination-risk schema/correlation fixture",
-        "requires_mysql": True,
-        "requires_redis": False,
-    },
-    "P16-T002": {
-        "runner": "./scripts/p16/t002_runner",
-        "evidence": "artifacts/v10/P16/api/P16-T002.json",
-        "source_paths": {
+        "real MySQL 8.x durable destination-risk schema/correlation fixture",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T002": case(
+        "./scripts/p16/t002_runner",
+        "artifacts/v10/P16/api/P16-T002.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "links_fingerprint": "internal/links/model.go",
             "trust_model": "internal/trust/model.go",
             "trust_store": "internal/trust/store.go",
             "runner": "scripts/p16/t002_runner/main.go",
         },
-        "environment": "real MySQL 8.x plus native trust.Store exact-fingerprint enqueue/dedupe/rescan fixture",
-        "requires_mysql": True,
-        "requires_redis": False,
-    },
-    "P16-T003": {
-        "runner": "./scripts/p16/t003_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T003.json",
-        "source_paths": {
+        "real MySQL 8.x plus native trust.Store exact-fingerprint enqueue/dedupe/rescan fixture",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T003": case(
+        "./scripts/p16/t003_runner",
+        "artifacts/v10/P16/security/P16-T003.json",
+        {
             "links_normalization": "internal/links/model.go",
             "inspection_guard": "internal/trust/inspection.go",
             "runner": "scripts/p16/t003_runner/main.go",
         },
-        "environment": "deterministic in-process DNS fixture proving canonical HTTP/HTTPS admission and pre-provider unsafe-form rejection",
-        "requires_mysql": False,
-        "requires_redis": False,
-    },
-    "P16-T004": {
-        "runner": "./scripts/p16/t004_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T004.json",
-        "source_paths": {
+        "deterministic in-process DNS fixture proving canonical HTTP/HTTPS admission and pre-provider unsafe-form rejection",
+        mysql=False,
+        redis=False,
+    ),
+    "P16-T004": case(
+        "./scripts/p16/t004_runner",
+        "artifacts/v10/P16/security/P16-T004.json",
+        {
             "inspection_guard": "internal/trust/inspection.go",
             "runner": "scripts/p16/t004_runner/main.go",
         },
-        "environment": "controlled in-process DNS scripts and local HTTP redirect fixture proving SSRF, rebinding and redirect-to-private rejection",
-        "requires_mysql": False,
-        "requires_redis": False,
-    },
-    "P16-T005": {
-        "runner": "./scripts/p16/t005_runner",
-        "evidence": "artifacts/v10/P16/risk/P16-T005.json",
-        "source_paths": {
+        "controlled in-process DNS scripts and local HTTP redirect fixture proving SSRF, rebinding and redirect-to-private rejection",
+        mysql=False,
+        redis=False,
+    ),
+    "P16-T005": case(
+        "./scripts/p16/t005_runner",
+        "artifacts/v10/P16/risk/P16-T005.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "inspection_guard": "internal/trust/inspection.go",
             "provider": "internal/trust/provider.go",
@@ -73,14 +93,14 @@ CASE_CONFIG = {
             "policy_store": "internal/trust/policy_store.go",
             "runner": "scripts/p16/t005_runner/main.go",
         },
-        "environment": "real MySQL 8.x plus local deterministic semantic-provider HTTP fixture and versioned local policy authority",
-        "requires_mysql": True,
-        "requires_redis": False,
-    },
-    "P16-T006": {
-        "runner": "./scripts/p16/t006_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T006.json",
-        "source_paths": {
+        "real MySQL 8.x plus local deterministic semantic-provider HTTP fixture and versioned local policy authority",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T006": case(
+        "./scripts/p16/t006_runner",
+        "artifacts/v10/P16/security/P16-T006.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "inspection_guard": "internal/trust/inspection.go",
             "provider": "internal/trust/provider.go",
@@ -88,14 +108,14 @@ CASE_CONFIG = {
             "policy_store": "internal/trust/policy_store.go",
             "runner": "scripts/p16/t006_runner/main.go",
         },
-        "environment": "real MySQL 8.x plus deterministic timeout/transport/partial/malformed/unavailable provider protocol fixtures",
-        "requires_mysql": True,
-        "requires_redis": False,
-    },
-    "P16-T007": {
-        "runner": "./scripts/p16/t007_runner",
-        "evidence": "artifacts/v10/P16/risk/P16-T007.json",
-        "source_paths": {
+        "real MySQL 8.x plus deterministic timeout/transport/partial/malformed/unavailable provider protocol fixtures",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T007": case(
+        "./scripts/p16/t007_runner",
+        "artifacts/v10/P16/risk/P16-T007.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "worker_store": "internal/trust/worker_store.go",
             "worker": "internal/trust/worker.go",
@@ -103,14 +123,14 @@ CASE_CONFIG = {
             "operationsmonitor": "services/platformapi/cmd/operationsmonitor/main.go",
             "runner": "scripts/p16/t007_runner/main.go",
         },
-        "environment": "real MySQL 8.x durable SKIP LOCKED lease/retry/recovery plus native fixed SVC-OPS-MONITOR operationsmonitor execution",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T008": {
-        "runner": "./scripts/p16/t008_runner",
-        "evidence": "artifacts/v10/P16/risk/P16-T008.json",
-        "source_paths": {
+        "real MySQL 8.x durable SKIP LOCKED lease/retry/recovery plus native fixed SVC-OPS-MONITOR operationsmonitor execution",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T008": case(
+        "./scripts/p16/t008_runner",
+        "artifacts/v10/P16/risk/P16-T008.json",
+        {
             "migration": "migrations/000020_destination_risk.sql",
             "links_fingerprint": "internal/links/model.go",
             "inherited_redis_risk": "internal/links/risk_redis.go",
@@ -118,28 +138,28 @@ CASE_CONFIG = {
             "projection": "internal/trust/projection.go",
             "runner": "scripts/p16/t008_runner/main.go",
         },
-        "environment": "real MySQL 8.x durable-current decision authority projected through inherited P05 exact-fingerprint RedisRiskStore into real Redis 7.x",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T009": {
-        "runner": "./scripts/p16/t009_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T009.json",
-        "source_paths": {
+        "real MySQL 8.x durable-current decision authority projected through inherited P05 exact-fingerprint RedisRiskStore into real Redis 7.x",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T009": case(
+        "./scripts/p16/t009_runner",
+        "artifacts/v10/P16/security/P16-T009.json",
+        {
             "inherited_redirect": "internal/links/redirect_http.go",
             "inherited_redis_risk": "internal/links/risk_redis.go",
             "projection": "internal/trust/projection.go",
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t009_runner/main.go",
         },
-        "environment": "real MySQL 8.x, real Redis 7.x and native redirectengine proving the complete frozen runtime non-allow matrix",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T010": {
-        "runner": "./scripts/p16/t010_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T010.json",
-        "source_paths": {
+        "real MySQL 8.x, real Redis 7.x and native redirectengine proving the complete frozen runtime non-allow matrix",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T010": case(
+        "./scripts/p16/t010_runner",
+        "artifacts/v10/P16/security/P16-T010.json",
+        {
             "links_fingerprint": "internal/links/model.go",
             "inherited_redirect": "internal/links/redirect_http.go",
             "custom_domain_authority": "internal/links/custom_domain_redirect.go",
@@ -147,28 +167,28 @@ CASE_CONFIG = {
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t010_runner/main.go",
         },
-        "environment": "real native redirectengine plus real P06-ready custom-domain axes proving official/custom primary/routing/A-B parity",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T011": {
-        "runner": "./scripts/p16/t011_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T011.json",
-        "source_paths": {
+        "real native redirectengine plus real P06-ready custom-domain axes proving official/custom primary/routing/A-B parity",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T011": case(
+        "./scripts/p16/t011_runner",
+        "artifacts/v10/P16/security/P16-T011.json",
+        {
             "links_fingerprint": "internal/links/model.go",
             "inherited_redirect": "internal/links/redirect_http.go",
             "inherited_redis_risk": "internal/links/risk_redis.go",
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t011_runner/main.go",
         },
-        "environment": "real MySQL/Redis/native redirectengine proving target mutation invalidation and semantically equivalent reorder/dedup stability",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T012": {
-        "runner": "./scripts/p16/t012_runner",
-        "evidence": "artifacts/v10/P16/audit/P16-T012.json",
-        "source_paths": {
+        "real MySQL/Redis/native redirectengine proving target mutation invalidation and semantically equivalent reorder/dedup stability",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T012": case(
+        "./scripts/p16/t012_runner",
+        "artifacts/v10/P16/audit/P16-T012.json",
+        {
             "override_migration": "migrations/000021_destination_risk_overrides.sql",
             "override_authority": "internal/trust/override.go",
             "projection": "internal/trust/projection.go",
@@ -176,14 +196,14 @@ CASE_CONFIG = {
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t012_runner/main.go",
         },
-        "environment": "real MySQL durable exact-authority override, security.manage consumer, immutable audit, Redis projection and native redirectengine",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T013": {
-        "runner": "./scripts/p16/t013_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T013.json",
-        "source_paths": {
+        "real MySQL durable exact-authority override, security.manage consumer, immutable audit, Redis projection and native redirectengine",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T013": case(
+        "./scripts/p16/t013_runner",
+        "artifacts/v10/P16/security/P16-T013.json",
+        {
             "override_migration": "migrations/000021_destination_risk_overrides.sql",
             "override_authority": "internal/trust/override.go",
             "projection": "internal/trust/projection.go",
@@ -191,14 +211,14 @@ CASE_CONFIG = {
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t013_runner/main.go",
         },
-        "environment": "real durable override authority invalidated by fingerprint/policy/expiry/new-decision/explicit-revocation paths with runtime enforcement",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
-    "P16-T014": {
-        "runner": "./scripts/p16/t014_runner",
-        "evidence": "artifacts/v10/P16/security/P16-T014.json",
-        "source_paths": {
+        "real durable override authority invalidated by fingerprint/policy/expiry/new-decision/explicit-revocation paths with runtime enforcement",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T014": case(
+        "./scripts/p16/t014_runner",
+        "artifacts/v10/P16/security/P16-T014.json",
+        {
             "inherited_redirect": "internal/links/redirect_http.go",
             "custom_domain_authority": "internal/links/custom_domain_redirect.go",
             "links_password": "internal/links/password.go",
@@ -206,10 +226,74 @@ CASE_CONFIG = {
             "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
             "runner": "scripts/p16/t014_runner/main.go",
         },
-        "environment": "real native redirectengine observable side effects proving frozen safety order and target/provider/bypass non-disclosure",
-        "requires_mysql": True,
-        "requires_redis": True,
-    },
+        "real native redirectengine observable side effects proving frozen safety order and target/provider/bypass non-disclosure",
+        mysql=True,
+        redis=True,
+    ),
+    "P16-T015": case(
+        "./scripts/p16/t015_runner",
+        "artifacts/v10/P16/domain/P16-T015.json",
+        {
+            "domain_migration": "migrations/000022_domain_reputation.sql",
+            "domain_risk": "internal/trust/domain_risk.go",
+            "domain_risk_store": "internal/trust/domain_risk_store.go",
+            "inherited_domain_model": "internal/domains/domain.go",
+            "inherited_domain_store": "internal/domains/domain_store_mysql.go",
+            "domain_fixture": "scripts/p16/domainfixture/domainfixture.go",
+            "runner": "scripts/p16/t015_runner/main.go",
+        },
+        "real MySQL 8.x durable P16 domain reputation authority projected through inherited P06 independent domain axes",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T016": case(
+        "./scripts/p16/t016_runner",
+        "artifacts/v10/P16/domain/P16-T016.json",
+        {
+            "domain_migration": "migrations/000022_domain_reputation.sql",
+            "domain_risk": "internal/trust/domain_risk.go",
+            "domain_risk_store": "internal/trust/domain_risk_store.go",
+            "inherited_domain_model": "internal/domains/domain.go",
+            "domain_fixture": "scripts/p16/domainfixture/domainfixture.go",
+            "runner": "scripts/p16/t016_runner/main.go",
+        },
+        "real MySQL 8.x domain-risk idempotency/rate/revalidation/stale lifecycle through inherited P06 risk projection",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T017": case(
+        "./scripts/p16/t017_runner",
+        "artifacts/v10/P16/security/P16-T017.json",
+        {
+            "domain_migration": "migrations/000022_domain_reputation.sql",
+            "domain_risk": "internal/trust/domain_risk.go",
+            "domain_risk_store": "internal/trust/domain_risk_store.go",
+            "provider": "internal/trust/provider.go",
+            "domain_fixture": "scripts/p16/domainfixture/domainfixture.go",
+            "runner": "scripts/p16/t017_runner/main.go",
+        },
+        "real MySQL 8.x plus deterministic local semantic-provider HTTP fixtures for outage/partial/malformed/redaction paths",
+        mysql=True,
+        redis=False,
+    ),
+    "P16-T018": case(
+        "./scripts/p16/t018_runner",
+        "artifacts/v10/P16/security/P16-T018.json",
+        {
+            "domain_migration": "migrations/000022_domain_reputation.sql",
+            "domain_risk": "internal/trust/domain_risk.go",
+            "domain_risk_store": "internal/trust/domain_risk_store.go",
+            "inherited_security_suspension": "internal/domains/security_suspension_mysql.go",
+            "inherited_custom_domain_redirect": "internal/links/custom_domain_redirect.go",
+            "inherited_redis_risk": "internal/links/risk_redis.go",
+            "domain_fixture": "scripts/p16/domainfixture/domainfixture.go",
+            "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
+            "runner": "scripts/p16/t018_runner/main.go",
+        },
+        "real MySQL 8.x, real Redis 7.x and native redirectengine proving immediate security/abuse suspension without grace or official-host fallback",
+        mysql=True,
+        redis=True,
+    ),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
@@ -219,6 +303,7 @@ FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p16-partial-secret-fixture",
     "p16-malformed-secret-fixture",
     "p16-unavailable-secret-fixture",
+    "p16-domain-provider-secret-fixture",
     "authorization: bearer",
     "client_secret",
     "api_secret",
@@ -242,7 +327,7 @@ def fail(message: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="GoJet V10 P16 real destination-risk integration evidence driver")
+    parser = argparse.ArgumentParser(description="GoJet V10 P16 real trust integration evidence driver")
     parser.add_argument("--case", required=True)
     return parser.parse_args()
 
