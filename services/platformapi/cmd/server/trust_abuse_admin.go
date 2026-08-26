@@ -206,14 +206,14 @@ func (h *trustAbuseAdminHTTPHandler) handleAction(w http.ResponseWriter, r *http
 			resourceAction = trust.AbuseActionRestore
 		}
 		result, err := h.action.Apply(r.Context(), trust.AbuseResourceActionInput{
-			ReportID:          reportID,
-			Action:            resourceAction,
-			ExactFingerprint:  strings.TrimSpace(body.ExactFingerprint),
-			Reason:            body.Reason,
-			ActorID:           session.UserID,
-			CorrelationID:     correlationID,
-			IdempotencyKey:    idempotencyKey,
-			Now:               time.Now().UTC(),
+			ReportID:         reportID,
+			Action:           resourceAction,
+			ExactFingerprint: strings.TrimSpace(body.ExactFingerprint),
+			Reason:           body.Reason,
+			ActorID:          session.UserID,
+			CorrelationID:    correlationID,
+			IdempotencyKey:   idempotencyKey,
+			Now:              time.Now().UTC(),
 		}, h.base.authorizer)
 		if err != nil {
 			writeTrustAdminError(w, err)
