@@ -4,17 +4,13 @@ import { executablePath, writeResult } from './browser_common.mjs';
 const index = process.argv.indexOf('--case');
 const caseId = index >= 0 ? process.argv[index + 1] : '';
 const modules = {
-  'P16-T026': './browser_026_authority.mjs',
+  'P16-T026': './browser_026.mjs',
   'P16-T027': './browser_027.mjs',
 };
 
 if (!(caseId in modules)) throw new Error('P16 browser authority supports P16-T026 and P16-T027 only');
 const module = await import(modules[caseId]);
-const browser = await chromium.launch({
-  executablePath,
-  headless: true,
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
-});
+const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 
 try {
   const details = await module.run(browser);
