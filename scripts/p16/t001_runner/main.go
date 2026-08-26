@@ -15,10 +15,10 @@ import (
 )
 
 type output struct {
-	Case         string         `json:"case"`
-	Status       string         `json:"status"`
-	MySQLVersion string         `json:"mysql_version"`
-	RecordCounts map[string]int `json:"record_counts"`
+	Case         string          `json:"case"`
+	Status       string          `json:"status"`
+	MySQLVersion string          `json:"mysql_version"`
+	RecordCounts map[string]int  `json:"record_counts"`
 	Checks       map[string]bool `json:"checks"`
 }
 
@@ -159,15 +159,15 @@ WHERE scan_id=? AND LOWER(CAST(evidence_json AS CHAR)) LIKE '%p16-provider-secre
 		"audit_events":          auditCount,
 	}
 	out.Checks = map[string]bool{
-		"five_durable_tables_present":      tableCount == 5,
-		"scan_created_and_correlated":      enqueued.Created && scanCount == 1 && persistedScan.CorrelationID == correlation,
-		"exact_fingerprint_is_durable":     persistedScan.RiskFingerprint == fingerprint && persistedScan.PolicyVersion == policy,
-		"reachable_targets_are_durable":    targetCount == len(expectedTargets) && len(persistedTargets) == len(expectedTargets),
-		"provider_observation_is_durable":  observationCount == 1,
-		"policy_decision_is_durable":       decisionCount == 1,
+		"five_durable_tables_present":        tableCount == 5,
+		"scan_created_and_correlated":        enqueued.Created && scanCount == 1 && persistedScan.CorrelationID == correlation,
+		"exact_fingerprint_is_durable":       persistedScan.RiskFingerprint == fingerprint && persistedScan.PolicyVersion == policy,
+		"reachable_targets_are_durable":      targetCount == len(expectedTargets) && len(persistedTargets) == len(expectedTargets),
+		"provider_observation_is_durable":    observationCount == 1,
+		"policy_decision_is_durable":         decisionCount == 1,
 		"decision_inherits_scan_correlation": correlatedDecisionCount == 1,
-		"enqueue_audit_is_correlated":      auditCount == 1,
-		"raw_provider_secret_not_persisted": secretCount == 0,
+		"enqueue_audit_is_correlated":        auditCount == 1,
+		"raw_provider_secret_not_persisted":  secretCount == 0,
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"
