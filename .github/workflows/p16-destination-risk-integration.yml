@@ -161,8 +161,27 @@ jobs:
       - name: Run frozen P16-T006 driver
         run: python3 scripts/p16/integration.py --case P16-T006 | tee /tmp/p16-t006-result.json
 
+      - name: Isolate durable queue fixture before P16-T007/T008
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          SET FOREIGN_KEY_CHECKS=0;
+          TRUNCATE TABLE destination_risk_audit_events;
+          TRUNCATE TABLE destination_risk_decisions;
+          TRUNCATE TABLE destination_risk_provider_observations;
+          TRUNCATE TABLE destination_risk_scan_targets;
+          TRUNCATE TABLE destination_risk_scans;
+          SET FOREIGN_KEY_CHECKS=1;
+          SQL
+          redis-cli -h 127.0.0.1 -p 6379 FLUSHDB
+
       - name: Run frozen P16-T007 driver
-        run: python3 scripts/p16/integration.py --case P16-T007 | tee /tmp/p16-t007-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T007 | tee /tmp/p16-t007-result.json
 
       - name: Run frozen P16-T008 driver and verify exact-head evidence
         id: evidence
