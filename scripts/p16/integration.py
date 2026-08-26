@@ -58,10 +58,43 @@ CASE_CONFIG = {
         "environment": "controlled in-process DNS scripts and local HTTP redirect fixture proving SSRF, rebinding and redirect-to-private rejection",
         "requires_mysql": False,
     },
+    "P16-T005": {
+        "runner": "./scripts/p16/t005_runner",
+        "evidence": "artifacts/v10/P16/risk/P16-T005.json",
+        "source_paths": {
+            "migration": "migrations/000020_destination_risk.sql",
+            "inspection_guard": "internal/trust/inspection.go",
+            "provider": "internal/trust/provider.go",
+            "policy": "internal/trust/policy.go",
+            "policy_store": "internal/trust/policy_store.go",
+            "runner": "scripts/p16/t005_runner/main.go",
+        },
+        "environment": "real MySQL 8.x plus local deterministic semantic-provider HTTP fixture and versioned local policy authority",
+        "requires_mysql": True,
+    },
+    "P16-T006": {
+        "runner": "./scripts/p16/t006_runner",
+        "evidence": "artifacts/v10/P16/security/P16-T006.json",
+        "source_paths": {
+            "migration": "migrations/000020_destination_risk.sql",
+            "inspection_guard": "internal/trust/inspection.go",
+            "provider": "internal/trust/provider.go",
+            "policy": "internal/trust/policy.go",
+            "policy_store": "internal/trust/policy_store.go",
+            "runner": "scripts/p16/t006_runner/main.go",
+        },
+        "environment": "real MySQL 8.x plus deterministic timeout/transport/partial/malformed/unavailable provider protocol fixtures",
+        "requires_mysql": True,
+    },
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p16-provider-secret-fixture",
+    "p16-provider-token-fixture",
+    "p16-transport-secret-fixture",
+    "p16-partial-secret-fixture",
+    "p16-malformed-secret-fixture",
+    "p16-unavailable-secret-fixture",
     "authorization: bearer",
     "client_secret",
     "api_secret",
@@ -161,7 +194,7 @@ def main() -> int:
         evidence["evidence_policy"]["dsn_present"] = True
     if leaked:
         evidence["status"] = "FAIL"
-        evidence["evidence_policy"]["raw_provider_secret_present"] = any("secret" in x for x in leaked)
+        evidence["evidence_policy"]["raw_provider_secret_present"] = any("secret" in x or "token" in x for x in leaked)
         evidence["evidence_policy"]["raw_authorization_present"] = any("authorization" in x for x in leaked)
         encoded = json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         runner_pass = False
