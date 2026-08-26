@@ -43,7 +43,7 @@ func run() (output, error) {
 	out := output{
 		Case:         "P16-T010",
 		Status:       "FAIL",
-		Fixture:      "real native redirectengine with P06-ready custom-domain axes proving official/custom parity over primary, routing and A/B targets",
+		Fixture:      "real native redirectengine with P06-ready custom-domain axes proving official/custom parity over primary, routing and link-scoped A/B targets",
 		RecordCounts: map[string]int{},
 		Checks:       map[string]bool{},
 	}
@@ -106,7 +106,7 @@ func run() (output, error) {
 
 	fingerprintParity := true
 	reviewParity := true
-	allowParity := true
+	allowEnforcementParity := true
 	selectedKindCorrect := true
 	reachableMembership := true
 	customAxesUsed := true
@@ -159,32 +159,26 @@ func run() (output, error) {
 			return out, err
 		}
 		redirectCount += 2
-		allowParity = allowParity && officialAllow.Status == 302 && customAllow.Status == 302 && officialAllow.Location == customAllow.Location && officialAllow.Location != ""
+		allowEnforcementParity = allowEnforcementParity && officialAllow.Status == 302 && customAllow.Status == 302 && officialAllow.Location != "" && customAllow.Location != ""
 
-		parsed, err := url.Parse(officialAllow.Location)
+		officialParsed, err := url.Parse(officialAllow.Location)
 		if err != nil {
 			return out, err
 		}
-		normalizedSelected, err := links.NormalizeDestination(stripRuntimeUTM(parsed))
+		customParsed, err := url.Parse(customAllow.Location)
 		if err != nil {
 			return out, err
 		}
-		member := false
-		for _, target := range official.Targets {
-			if target == normalizedSelected {
-				member = true
-				break
-			}
+		officialMember, err := locationIsMember(officialParsed, official.Targets)
+		if err != nil {
+			return out, err
 		}
-		reachableMembership = reachableMembership && member
-		switch sc.kind {
-		case "primary":
-			selectedKindCorrect = selectedKindCorrect && parsed.Hostname() == "primary.example"
-		case "routing":
-			selectedKindCorrect = selectedKindCorrect && parsed.Hostname() == "route.example"
-		case "ab":
-			selectedKindCorrect = selectedKindCorrect && (parsed.Hostname() == "a.example" || parsed.Hostname() == "b.example")
+		customMember, err := locationIsMember(customParsed, custom.Targets)
+		if err != nil {
+			return out, err
 		}
+		reachableMembership = reachableMembership && officialMember && customMember
+		selectedKindCorrect = selectedKindCorrect && targetKindMatches(sc.kind, officialParsed) && targetKindMatches(sc.kind, customParsed)
 	}
 
 	domainRows, err := runtimefixture.ScalarInt(ctx, db, `SELECT COUNT(*) FROM custom_domains WHERE workspace_id=? AND hostname_ascii=? AND routing_state='enabled' AND ownership_status='verified' AND ingress_dns_status='valid' AND https_status='active' AND risk_status='allow'`, workspace, customHost)
@@ -203,18 +197,44 @@ func run() (output, error) {
 		"ready_custom_domains":   domainRows,
 	}
 	out.Checks = map[string]bool{
-		"official_custom_exact_fingerprint_parity":      fingerprintParity && pairCount == 3,
-		"review_fails_closed_identically_on_both_hosts": reviewParity,
-		"allow_redirects_identically_on_both_hosts":     allowParity,
-		"primary_routing_ab_selection_is_exercised":     selectedKindCorrect,
-		"every_selected_target_is_fingerprint_member":   reachableMembership,
-		"custom_host_used_real_independent_p06_axes":    customAxesUsed,
-		"all_three_frozen_target_classes_are_covered":   pairCount == 3 && redirectCount == 6,
+		"official_custom_exact_fingerprint_parity":                fingerprintParity && pairCount == 3,
+		"review_fails_closed_identically_on_both_hosts":           reviewParity,
+		"allow_enforcement_releases_both_hosts_only_after_approval": allowEnforcementParity,
+		"primary_routing_ab_selection_is_valid_on_both_hosts":     selectedKindCorrect,
+		"every_selected_target_on_both_hosts_is_fingerprint_member": reachableMembership,
+		"custom_host_used_real_independent_p06_axes":              customAxesUsed,
+		"all_three_frozen_target_classes_are_covered":             pairCount == 3 && redirectCount == 6,
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
 	}
 	return out, nil
+}
+
+func locationIsMember(parsed *url.URL, targets []string) (bool, error) {
+	normalized, err := links.NormalizeDestination(stripRuntimeUTM(parsed))
+	if err != nil {
+		return false, err
+	}
+	for _, target := range targets {
+		if target == normalized {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func targetKindMatches(kind string, parsed *url.URL) bool {
+	switch kind {
+	case "primary":
+		return parsed.Hostname() == "primary.example"
+	case "routing":
+		return parsed.Hostname() == "route.example"
+	case "ab":
+		return parsed.Hostname() == "a.example" || parsed.Hostname() == "b.example"
+	default:
+		return false
+	}
 }
 
 func stripRuntimeUTM(u *url.URL) string {
