@@ -220,16 +220,16 @@ func run() (output, error) {
 		"exhausted_processor_calls": processor.calls[exhausted.Scan.ID],
 	}
 	out.Checks = map[string]bool{
-		"transient_failure_enters_retry":                worked1 && firstErr != nil && afterFirst.Status == trust.ScanStatusRetry && afterFirst.Attempts == 1,
-		"retry_reuses_same_scan_and_completes":           worked2 && secondErr == nil && afterSecond.Status == trust.ScanStatusCompleted && afterSecond.Attempts == 2,
-		"retry_produces_single_final_authority":          transientDecisionCount == 1 && processor.calls[transient.Scan.ID] == 2,
-		"expired_lease_is_recovered_by_new_worker":       worked3 && recoveryErr == nil && afterRecovery.Status == trust.ScanStatusCompleted && afterRecovery.Attempts == 2 && recoveryAudits == 1,
-		"recovery_produces_single_final_authority":       recoveryDecisionCount == 1 && processor.calls[recovery.Scan.ID] == 1,
-		"max_attempt_exhaustion_fails_closed":            worked4 && exhaustedErr != nil && afterExhausted.Status == trust.ScanStatusFailed && afterExhausted.Attempts == 1 && exhaustedDecisionCount == 0,
-		"idle_rerun_cannot_duplicate_final_authority":    !worked5 && decisionCount == 2,
-		"retry_and_failure_lifecycle_is_audited":         retryAudits == 1 && failedAudits == 1,
-		"fixed_operationsmonitor_executable_runs":        serviceExecuted,
-		"service_identity_is_fixed_ops_monitor":          trust.OperationsMonitorServiceID == "SVC-OPS-MONITOR",
+		"transient_failure_enters_retry":              worked1 && firstErr != nil && afterFirst.Status == trust.ScanStatusRetry && afterFirst.Attempts == 1,
+		"retry_reuses_same_scan_and_completes":        worked2 && secondErr == nil && afterSecond.Status == trust.ScanStatusCompleted && afterSecond.Attempts == 2,
+		"retry_produces_single_final_authority":       transientDecisionCount == 1 && processor.calls[transient.Scan.ID] == 2,
+		"expired_lease_is_recovered_by_new_worker":    worked3 && recoveryErr == nil && afterRecovery.Status == trust.ScanStatusCompleted && afterRecovery.Attempts == 2 && recoveryAudits == 1,
+		"recovery_produces_single_final_authority":    recoveryDecisionCount == 1 && processor.calls[recovery.Scan.ID] == 1,
+		"max_attempt_exhaustion_fails_closed":         worked4 && exhaustedErr != nil && afterExhausted.Status == trust.ScanStatusFailed && afterExhausted.Attempts == 1 && exhaustedDecisionCount == 0,
+		"idle_rerun_cannot_duplicate_final_authority": !worked5 && decisionCount == 2,
+		"retry_and_failure_lifecycle_is_audited":      retryAudits == 1 && failedAudits == 1,
+		"fixed_operationsmonitor_executable_runs":     serviceExecuted,
+		"service_identity_is_fixed_ops_monitor":       trust.OperationsMonitorServiceID == "SVC-OPS-MONITOR",
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"
