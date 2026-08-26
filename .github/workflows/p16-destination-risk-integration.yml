@@ -18,7 +18,11 @@ on:
       - 'internal/domains/domain_store_mysql.go'
       - 'internal/domains/store_mysql.go'
       - 'internal/domains/security_suspension_mysql.go'
+      - 'internal/support/turnstile.go'
+      - 'internal/support/turnstile_deterministic.go'
+      - 'internal/support/turnstile_http.go'
       - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'services/platformapi/cmd/server/**'
       - 'services/redirectengine/cmd/server/**'
       - 'migrations/**'
       - 'scripts/p16/integration.py'
@@ -42,6 +46,8 @@ on:
       - 'scripts/p16/t016_runner/**'
       - 'scripts/p16/t017_runner/**'
       - 'scripts/p16/t018_runner/**'
+      - 'scripts/p16/t019_runner/**'
+      - 'scripts/p16/t020_runner/**'
       - '.github/workflows/p16-destination-risk-integration.yml'
       - 'artifacts/v10/P16/test-plan.json'
   workflow_dispatch:
@@ -54,10 +60,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001-t018:
-    name: P16-T001/T018 real trust runtime evidence
+  t001-t020:
+    name: P16-T001/T020 real trust runtime evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 100
     services:
       mysql:
         image: mysql:8.4.11
@@ -85,6 +91,9 @@ jobs:
       GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
       GOJET_REDIS_ADDR: 127.0.0.1:6379
       GOJET_REDIRECT_URL: http://127.0.0.1:18080
+      GOJET_PLATFORMAPI_URL: http://127.0.0.1:18081
+      GOJET_PLATFORMAPI_LOG: /tmp/p16-platformapi.log
+      GOJET_TEST_TRUST_TURNSTILE_TOKEN: p16-trust-turnstile-ci-token
 
     steps:
       - name: Checkout exact P16 candidate head
@@ -110,7 +119,7 @@ jobs:
           redis-cli --version
           redis-cli -h 127.0.0.1 -p 6379 ping
 
-      - name: Verify P16 T001-T018 source and frozen-contract boundary
+      - name: Verify P16 T001-T020 source and frozen-contract boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -137,17 +146,22 @@ jobs:
             scripts/p16/t016_runner/main.go \
             scripts/p16/t017_runner/main.go \
             scripts/p16/t018_runner/main.go \
+            scripts/p16/t019_runner/main.go \
+            scripts/p16/t020_runner/main.go \
             services/platformapi/cmd/operationsmonitor/main.go \
+            services/platformapi/cmd/server/*.go \
             services/redirectengine/cmd/server/main.go \
             internal/trust/*.go | tee /tmp/p16-gofmt.diff
           test ! -s /tmp/p16-gofmt.diff
           go test ./...
-          go vet ./internal/trust ./internal/links ./internal/domains ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/cmd/server
+          go vet ./internal/trust ./internal/links ./internal/domains ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./scripts/p16/t019_runner ./scripts/p16/t020_runner ./services/platformapi/cmd/operationsmonitor ./services/platformapi/cmd/server ./services/redirectengine/cmd/server
           mkdir -p /tmp/gojet-p16
           go build -trimpath -o /tmp/gojet-p16/operationsmonitor ./services/platformapi/cmd/operationsmonitor
           go build -trimpath -o /tmp/gojet-p16/redirectengine ./services/redirectengine/cmd/server
+          go build -trimpath -o /tmp/gojet-p16/platformapi ./services/platformapi/cmd/server
           test -x /tmp/gojet-p16/operationsmonitor
           test -x /tmp/gojet-p16/redirectengine
+          test -x /tmp/gojet-p16/platformapi
           python3 scripts/p16/validate_contract.py > /tmp/p16-contract-guard.json
           python3 - <<'PY'
           import json, subprocess
@@ -196,6 +210,29 @@ jobs:
             sleep 1
           done
           cat /tmp/p16-redirectengine.log
+          exit 1
+
+      - name: Start exact-head native platformapi trust surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_PLATFORMAPI_ADDR=127.0.0.1:18081 \
+          GOJET_TRUST_ENABLED=1 \
+          GOJET_TEST_AUTH_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_TOKEN="$GOJET_TEST_TRUST_TURNSTILE_TOKEN" \
+          GOJET_TRUST_ABUSE_RATE_LIMIT=3 \
+          GOJET_TRUST_ABUSE_RATE_WINDOW=5m \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16/platformapi > "$GOJET_PLATFORMAPI_LOG" 2>&1 &
+          echo $! > /tmp/p16-platformapi.pid
+          for attempt in $(seq 1 60); do
+            if curl -sS -o /dev/null http://127.0.0.1:18081/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$GOJET_PLATFORMAPI_LOG"
           exit 1
 
       - name: Run frozen P16-T001 driver
@@ -317,12 +354,24 @@ jobs:
           set -euo pipefail
           python3 scripts/p16/integration.py --case P16-T017 | tee /tmp/p16-t017-result.json
 
-      - name: Run frozen P16-T018 driver and verify exact-head evidence
-        id: evidence
+      - name: Run frozen P16-T018 driver
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/p16/integration.py --case P16-T018 | tee /tmp/p16-t018-result.json
+
+      - name: Run frozen P16-T019 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T019 | tee /tmp/p16-t019-result.json
+
+      - name: Run frozen P16-T020 driver and verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T020 | tee /tmp/p16-t020-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json, subprocess
@@ -346,9 +395,11 @@ jobs:
               'P16-T016':'artifacts/v10/P16/domain/P16-T016.json',
               'P16-T017':'artifacts/v10/P16/security/P16-T017.json',
               'P16-T018':'artifacts/v10/P16/security/P16-T018.json',
+              'P16-T019':'artifacts/v10/P16/abuse/P16-T019.json',
+              'P16-T020':'artifacts/v10/P16/abuse/P16-T020.json',
           }
           mysql_optional={'P16-T003','P16-T004'}
-          redis_required={'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014','P16-T018'}
+          redis_required={'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014','P16-T018','P16-T019','P16-T020'}
           fixture_required=set(paths)-{'P16-T001','P16-T002'}
           for case,path in paths.items():
               data=json.load(open(path,encoding='utf-8'))
@@ -368,10 +419,10 @@ jobs:
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P16 T001-T018 evidence
+      - name: Upload exact-head P16 T001-T020 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p16-t001-t018-real-trust-${{ steps.evidence.outputs.sha }}
+          name: p16-t001-t020-real-trust-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -393,4 +444,6 @@ jobs:
             artifacts/v10/P16/domain/P16-T016.json
             artifacts/v10/P16/security/P16-T017.json
             artifacts/v10/P16/security/P16-T018.json
+            artifacts/v10/P16/abuse/P16-T019.json
+            artifacts/v10/P16/abuse/P16-T020.json
             artifacts/v10/P16/test-plan.json
