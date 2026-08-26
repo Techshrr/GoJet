@@ -140,6 +140,18 @@ CASE_CONFIG = {
         "inherited_notification_tx": "internal/workspace/notification_tx.go", "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
         "runner": "scripts/p16/t023_runner/main.go",
     }, "real MySQL 8.x plus inherited P12 owner-recipient, dedupe, read-state and deep-link notification authority", mysql=True, redis=False),
+    "P16-T024": case("./scripts/p16/t024_runner", "artifacts/v10/P16/api/P16-T024.json", {
+        "admin_risk": "internal/trust/admin_risk.go", "override_authority": "internal/trust/override.go",
+        "trust_admin_http": "services/platformapi/cmd/server/trust_admin.go", "trust_mount": "services/platformapi/cmd/server/trust.go",
+        "admin_fixture": "scripts/p16/adminfixture/adminfixture.go", "runtime_fixture": "scripts/p16/runtimefixture/runtimefixture.go",
+        "runner": "scripts/p16/t024_runner/main.go",
+    }, "real MySQL 8.x, real Redis 7.x and native platformapi proving security.manage destination-risk list/detail/rescan/override APIs with inherited P15 session/CSRF and redacted control-plane DTOs", mysql=True, redis=True),
+    "P16-T025": case("./scripts/p16/t025_runner", "artifacts/v10/P16/api/P16-T025.json", {
+        "admin_risk": "internal/trust/admin_risk.go", "domain_risk": "internal/trust/domain_risk.go",
+        "domain_risk_store": "internal/trust/domain_risk_store.go", "trust_admin_http": "services/platformapi/cmd/server/trust_admin.go",
+        "trust_mount": "services/platformapi/cmd/server/trust.go", "admin_fixture": "scripts/p16/adminfixture/adminfixture.go",
+        "domain_fixture": "scripts/p16/domainfixture/domainfixture.go", "runner": "scripts/p16/t025_runner/main.go",
+    }, "real MySQL 8.x, real Redis 7.x and native platformapi proving domains.risk.manage list/detail/revalidate APIs with inherited P15 session/CSRF, independent P06 axes, idempotency/rate authority and provider-evidence non-disclosure", mysql=True, redis=True),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
@@ -151,6 +163,10 @@ FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p16-unavailable-secret-fixture",
     "p16-domain-provider-secret-fixture",
     "p16-raw-secret-fixture",
+    "p16-t024-provider-secret",
+    "p16-t025-domain-provider-secret",
+    "unsafe-admin-leak.example",
+    "unsafe-domain-evidence.example",
     "p16bearercredential12345",
     "victim@example.com",
     "authorization: bearer",
