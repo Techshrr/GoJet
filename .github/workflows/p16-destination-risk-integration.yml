@@ -10,9 +10,16 @@ on:
       - 'internal/trust/**'
       - 'internal/links/model.go'
       - 'internal/links/risk_redis.go'
+      - 'internal/links/redirect_http.go'
+      - 'internal/links/custom_domain_authority.go'
+      - 'internal/links/custom_domain_redirect.go'
+      - 'internal/links/password.go'
+      - 'internal/domains/domain.go'
       - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'services/redirectengine/cmd/server/**'
       - 'migrations/**'
       - 'scripts/p16/integration.py'
+      - 'scripts/p16/runtimefixture/**'
       - 'scripts/p16/t001_runner/**'
       - 'scripts/p16/t002_runner/**'
       - 'scripts/p16/t003_runner/**'
@@ -21,6 +28,12 @@ on:
       - 'scripts/p16/t006_runner/**'
       - 'scripts/p16/t007_runner/**'
       - 'scripts/p16/t008_runner/**'
+      - 'scripts/p16/t009_runner/**'
+      - 'scripts/p16/t010_runner/**'
+      - 'scripts/p16/t011_runner/**'
+      - 'scripts/p16/t012_runner/**'
+      - 'scripts/p16/t013_runner/**'
+      - 'scripts/p16/t014_runner/**'
       - '.github/workflows/p16-destination-risk-integration.yml'
       - 'artifacts/v10/P16/test-plan.json'
   workflow_dispatch:
@@ -33,10 +46,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001-t008:
-    name: P16-T001/T008 real destination-risk worker and Redis evidence
+  t001-t014:
+    name: P16-T001/T014 real destination-risk runtime evidence
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     services:
       mysql:
         image: mysql:8.4.11
@@ -63,6 +76,7 @@ jobs:
     env:
       GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
       GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_REDIRECT_URL: http://127.0.0.1:18080
 
     steps:
       - name: Checkout exact P16 candidate head
@@ -88,13 +102,14 @@ jobs:
           redis-cli --version
           redis-cli -h 127.0.0.1 -p 6379 ping
 
-      - name: Verify P16 T001-T008 source and frozen-contract boundary
+      - name: Verify P16 T001-T014 source and frozen-contract boundary
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
           python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
           gofmt -d \
+            scripts/p16/runtimefixture/runtimefixture.go \
             scripts/p16/t001_runner/main.go \
             scripts/p16/t002_runner/main.go \
             scripts/p16/t003_runner/main.go \
@@ -103,14 +118,23 @@ jobs:
             scripts/p16/t006_runner/main.go \
             scripts/p16/t007_runner/main.go \
             scripts/p16/t008_runner/main.go \
+            scripts/p16/t009_runner/main.go \
+            scripts/p16/t010_runner/main.go \
+            scripts/p16/t011_runner/main.go \
+            scripts/p16/t012_runner/main.go \
+            scripts/p16/t013_runner/main.go \
+            scripts/p16/t014_runner/main.go \
             services/platformapi/cmd/operationsmonitor/main.go \
+            services/redirectengine/cmd/server/main.go \
             internal/trust/*.go | tee /tmp/p16-gofmt.diff
           test ! -s /tmp/p16-gofmt.diff
           go test ./...
-          go vet ./internal/trust ./internal/links ./services/platformapi/cmd/operationsmonitor
+          go vet ./internal/trust ./internal/links ./internal/domains ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/cmd/server
           mkdir -p /tmp/gojet-p16
           go build -trimpath -o /tmp/gojet-p16/operationsmonitor ./services/platformapi/cmd/operationsmonitor
+          go build -trimpath -o /tmp/gojet-p16/redirectengine ./services/redirectengine/cmd/server
           test -x /tmp/gojet-p16/operationsmonitor
+          test -x /tmp/gojet-p16/redirectengine
           python3 scripts/p16/validate_contract.py > /tmp/p16-contract-guard.json
           python3 - <<'PY'
           import json, subprocess
@@ -143,23 +167,59 @@ jobs:
             mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
           done
 
+      - name: Start exact-head native redirectengine
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_REDIRECTENGINE_ADDR=127.0.0.1:18080 \
+          GOJET_TEST_ROUTING_HEADERS=1 \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16/redirectengine > /tmp/p16-redirectengine.log 2>&1 &
+          echo $! > /tmp/p16-redirectengine.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:18080/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/p16-redirectengine.log
+          exit 1
+
       - name: Run frozen P16-T001 driver
-        run: python3 scripts/p16/integration.py --case P16-T001 | tee /tmp/p16-t001-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T001 | tee /tmp/p16-t001-result.json
 
       - name: Run frozen P16-T002 driver
-        run: python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
 
       - name: Run frozen P16-T003 driver
-        run: python3 scripts/p16/integration.py --case P16-T003 | tee /tmp/p16-t003-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T003 | tee /tmp/p16-t003-result.json
 
       - name: Run frozen P16-T004 driver
-        run: python3 scripts/p16/integration.py --case P16-T004 | tee /tmp/p16-t004-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T004 | tee /tmp/p16-t004-result.json
 
       - name: Run frozen P16-T005 driver
-        run: python3 scripts/p16/integration.py --case P16-T005 | tee /tmp/p16-t005-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T005 | tee /tmp/p16-t005-result.json
 
       - name: Run frozen P16-T006 driver
-        run: python3 scripts/p16/integration.py --case P16-T006 | tee /tmp/p16-t006-result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T006 | tee /tmp/p16-t006-result.json
 
       - name: Isolate durable queue fixture before P16-T007/T008
         shell: bash
@@ -168,6 +228,7 @@ jobs:
           export MYSQL_PWD=root
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
           SET FOREIGN_KEY_CHECKS=0;
+          TRUNCATE TABLE destination_risk_overrides;
           TRUNCATE TABLE destination_risk_audit_events;
           TRUNCATE TABLE destination_risk_decisions;
           TRUNCATE TABLE destination_risk_provider_observations;
@@ -183,12 +244,48 @@ jobs:
           set -euo pipefail
           python3 scripts/p16/integration.py --case P16-T007 | tee /tmp/p16-t007-result.json
 
-      - name: Run frozen P16-T008 driver and verify exact-head evidence
-        id: evidence
+      - name: Run frozen P16-T008 driver
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/p16/integration.py --case P16-T008 | tee /tmp/p16-t008-result.json
+
+      - name: Run frozen P16-T009 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T009 | tee /tmp/p16-t009-result.json
+
+      - name: Run frozen P16-T010 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T010 | tee /tmp/p16-t010-result.json
+
+      - name: Run frozen P16-T011 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T011 | tee /tmp/p16-t011-result.json
+
+      - name: Run frozen P16-T012 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T012 | tee /tmp/p16-t012-result.json
+
+      - name: Run frozen P16-T013 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T013 | tee /tmp/p16-t013-result.json
+
+      - name: Run frozen P16-T014 driver and verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T014 | tee /tmp/p16-t014-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json, subprocess
@@ -202,6 +299,12 @@ jobs:
               'P16-T006':'artifacts/v10/P16/security/P16-T006.json',
               'P16-T007':'artifacts/v10/P16/risk/P16-T007.json',
               'P16-T008':'artifacts/v10/P16/risk/P16-T008.json',
+              'P16-T009':'artifacts/v10/P16/security/P16-T009.json',
+              'P16-T010':'artifacts/v10/P16/security/P16-T010.json',
+              'P16-T011':'artifacts/v10/P16/security/P16-T011.json',
+              'P16-T012':'artifacts/v10/P16/audit/P16-T012.json',
+              'P16-T013':'artifacts/v10/P16/security/P16-T013.json',
+              'P16-T014':'artifacts/v10/P16/security/P16-T014.json',
           }
           for case,path in paths.items():
               data=json.load(open(path,encoding='utf-8'))
@@ -212,19 +315,19 @@ jobs:
               assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
               assert data['checks'] and all(data['checks'].values()),data
               assert not any(data['evidence_policy'].values()),data
-              if case in {'P16-T001','P16-T002','P16-T005','P16-T006','P16-T007','P16-T008'}:
+              if case not in {'P16-T003','P16-T004'}:
                   assert data['environment']['mysql_version'],data
-              if case in {'P16-T007','P16-T008'}:
+              if case in {'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014'}:
                   assert data['environment']['redis']=='real Redis 7.x service',data
-              if case in {'P16-T003','P16-T004','P16-T005','P16-T006','P16-T007','P16-T008'}:
+              if case not in {'P16-T001','P16-T002'}:
                   assert data['environment']['fixture'],data
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P16 T001-T008 evidence
+      - name: Upload exact-head P16 T001-T014 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p16-t001-t008-real-destination-risk-${{ steps.evidence.outputs.sha }}
+          name: p16-t001-t014-real-destination-risk-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -236,4 +339,10 @@ jobs:
             artifacts/v10/P16/security/P16-T006.json
             artifacts/v10/P16/risk/P16-T007.json
             artifacts/v10/P16/risk/P16-T008.json
+            artifacts/v10/P16/security/P16-T009.json
+            artifacts/v10/P16/security/P16-T010.json
+            artifacts/v10/P16/security/P16-T011.json
+            artifacts/v10/P16/audit/P16-T012.json
+            artifacts/v10/P16/security/P16-T013.json
+            artifacts/v10/P16/security/P16-T014.json
             artifacts/v10/P16/test-plan.json
