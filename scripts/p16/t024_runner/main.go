@@ -42,11 +42,11 @@ func main() {
 
 func run() (output, error) {
 	out := output{
-		Case:   "P16-T024",
-		Status: "FAIL",
-		Fixture: "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving security.manage destination-risk list/detail/rescan/override RBAC and provider/target non-disclosure",
-		RecordCounts: map[string]int{},
-		Checks:       map[string]bool{},
+		Case:          "P16-T024",
+		Status:        "FAIL",
+		Fixture:       "real MySQL/Redis/native platformapi with inherited P15 session/origin/CSRF authority proving security.manage destination-risk list/detail/rescan/override RBAC and provider/target non-disclosure",
+		RecordCounts:  map[string]int{},
+		Checks:        map[string]bool{},
 	}
 	db, redisClient, err := runtimefixture.Open()
 	if err != nil {
@@ -113,7 +113,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 	if err != nil {
 		return out, err
 	}
-	denied, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", deniedSession, "", "", "", nil)
+	denied, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", deniedSession, "", "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -130,11 +130,11 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		return out, fmt.Errorf("T024 list did not issue CSRF token")
 	}
 	detailPath := "/api/admin/destination-risks/" + strconv.FormatUint(decision.ScanID, 10)
-	detail, err := adminfixture.Request(ctx, http.MethodGet, detailPath, securitySession, "", "", "", nil)
+	detail, err := adminfixture.Request(ctx, http.MethodGet, detailPath, securitySession, "", "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
-	crossPermission, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/domain-risks", securitySession, "", "", "", nil)
+	crossPermission, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/domain-risks", securitySession, "", "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -147,7 +147,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 	rescanID := uint64(number(rescan.Body["risk_id"]))
 	rescanCreated, _ := rescan.Body["created"].(bool)
 
-	freshList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", nil)
+	freshList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -163,7 +163,7 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		return out, err
 	}
 
-	overrideList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", nil)
+	overrideList, err := adminfixture.Request(ctx, http.MethodGet, "/api/admin/destination-risks", securitySession, "", "", "", "", nil)
 	if err != nil {
 		return out, err
 	}
@@ -202,19 +202,19 @@ VALUES (?,'semantic-sensitive-fixture','review','admin-sensitive-fixture',?,?,?)
 		"override_audit_events":  auditRows,
 	}
 	out.Checks = map[string]bool{
-		"p15_session_is_required": unauthenticated.Status == http.StatusUnauthorized,
-		"security_manage_rejects_unprivileged_session": denied.Status == http.StatusForbidden,
+		"p15_session_is_required":                                  unauthenticated.Status == http.StatusUnauthorized,
+		"security_manage_rejects_unprivileged_session":             denied.Status == http.StatusForbidden,
 		"domain_risk_permission_does_not_grant_destination_access": domainPermissionDenied.Status == http.StatusForbidden,
-		"security_manage_does_not_grant_domain_risk_access": crossPermission.Status == http.StatusForbidden,
-		"destination_list_is_private_and_noindex": list.Status == http.StatusOK && adminfixture.NoStoreNoIndex(list),
-		"destination_detail_is_private_and_noindex": detail.Status == http.StatusOK && adminfixture.NoStoreNoIndex(detail),
-		"admin_dto_contains_control_state_not_reachable_targets": strings.Contains(list.Raw, strconv.FormatUint(decision.ScanID, 10)) && strings.Contains(detail.Raw, link.Fingerprint) && !strings.Contains(allHTTP, link.Primary),
-		"provider_evidence_and_unsafe_target_never_leave_server": !strings.Contains(allHTTP, secretMarker) && !strings.Contains(allHTTP, unsafeTarget) && !strings.Contains(strings.ToLower(allHTTP), "authorization"),
-		"rescan_requires_exact_security_authority": rescan.Status == http.StatusAccepted && rescanCreated && rescanID > 0 && rescanID != decision.ScanID,
-		"rescan_idempotency_replays_without_duplicate_queue_row": rescanReplay.Status == http.StatusAccepted && !replayCreated && replayID == rescanID && rescanRows == 1,
-		"unsafe_mutation_requires_p15_csrf": missingCSRF.Status == http.StatusForbidden && scans == 2,
-		"manual_override_uses_existing_exact_bound_authority": override.Status == http.StatusOK && overrideID > 0 && overrideRows == 1 && auditRows == 1,
-		"admin_responses_do_not_offer_continue_anyway_bypass": !strings.Contains(strings.ToLower(allHTTP), "continue anyway") && !strings.Contains(strings.ToLower(allHTTP), "bypass"),
+		"security_manage_does_not_grant_domain_risk_access":        crossPermission.Status == http.StatusForbidden,
+		"destination_list_is_private_and_noindex":                  list.Status == http.StatusOK && adminfixture.NoStoreNoIndex(list),
+		"destination_detail_is_private_and_noindex":                detail.Status == http.StatusOK && adminfixture.NoStoreNoIndex(detail),
+		"admin_dto_contains_control_state_not_reachable_targets":    strings.Contains(list.Raw, strconv.FormatUint(decision.ScanID, 10)) && strings.Contains(detail.Raw, link.Fingerprint) && !strings.Contains(allHTTP, link.Primary),
+		"provider_evidence_and_unsafe_target_never_leave_server":   !strings.Contains(allHTTP, secretMarker) && !strings.Contains(allHTTP, unsafeTarget) && !strings.Contains(strings.ToLower(allHTTP), "authorization"),
+		"rescan_requires_exact_security_authority":                 rescan.Status == http.StatusAccepted && rescanCreated && rescanID > 0 && rescanID != decision.ScanID,
+		"rescan_idempotency_replays_without_duplicate_queue_row":   rescanReplay.Status == http.StatusAccepted && !replayCreated && replayID == rescanID && rescanRows == 1,
+		"unsafe_mutation_requires_p15_csrf":                        missingCSRF.Status == http.StatusForbidden && scans == 2,
+		"manual_override_uses_existing_exact_bound_authority":      override.Status == http.StatusOK && overrideID > 0 && overrideRows == 1 && auditRows == 1,
+		"admin_responses_do_not_offer_continue_anyway_bypass":      !strings.Contains(strings.ToLower(allHTTP), "continue anyway") && !strings.Contains(strings.ToLower(allHTTP), "bypass"),
 	}
 	if runtimefixture.AllTrue(out.Checks) {
 		out.Status = "PASS"
