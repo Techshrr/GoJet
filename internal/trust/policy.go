@@ -104,14 +104,14 @@ func EvaluateDestinationPolicy(policy DestinationPolicy, observations []Provider
 	}
 
 	metadata := map[string]any{
-		"policy_version":          strings.TrimSpace(policy.Version),
-		"required_provider_count": len(required),
-		"observed_provider_count": len(required) - len(missing),
-		"missing_provider_count":  len(missing),
-		"provider_allow_count":    counts["allow"],
-		"provider_review_count":   counts["review"],
-		"provider_block_count":    counts["block"],
-		"provider_unknown_count":  counts["unknown"],
+		"policy_version":             strings.TrimSpace(policy.Version),
+		"required_provider_count":    len(required),
+		"observed_provider_count":    len(required) - len(missing),
+		"missing_provider_count":     len(missing),
+		"provider_allow_count":       counts["allow"],
+		"provider_review_count":      counts["review"],
+		"provider_block_count":       counts["block"],
+		"provider_unknown_count":     counts["unknown"],
 		"provider_unavailable_count": counts["unavailable"],
 		"local_safety_passed":        localSafetyPassed,
 	}
