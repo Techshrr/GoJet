@@ -72,7 +72,7 @@ func run() (output, error) {
 	workspace := "p16-t014-workspace"
 
 	customTarget := "https://unsafe-custom-target.example/private?marker=t014-custom-secret"
-	customLink, err := runtimefixture.CreateLink(ctx, db, workspace, "not-ready-t014.example.test", "custom", "t014-domain", customTarget, nil, nil)
+	customLink, err := runtimefixture.CreateLink(ctx, db, workspace, "not-ready-t014.example.com", "custom", "t014-domain", customTarget, nil, nil)
 	if err != nil {
 		return out, err
 	}
