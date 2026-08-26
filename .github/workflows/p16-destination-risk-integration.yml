@@ -13,6 +13,8 @@ on:
       - 'scripts/p16/integration.py'
       - 'scripts/p16/t001_runner/**'
       - 'scripts/p16/t002_runner/**'
+      - 'scripts/p16/t003_runner/**'
+      - 'scripts/p16/t004_runner/**'
       - '.github/workflows/p16-destination-risk-integration.yml'
       - 'artifacts/v10/P16/test-plan.json'
   workflow_dispatch:
@@ -25,8 +27,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t001-t002:
-    name: P16-T001/T002 real destination-risk evidence
+  t001-t004:
+    name: P16-T001/T004 real destination-risk security evidence
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:
@@ -68,7 +70,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
           mysql --version
 
-      - name: Verify P16 T001-T002 source and frozen-contract boundary
+      - name: Verify P16 T001-T004 source and frozen-contract boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -77,6 +79,8 @@ jobs:
           gofmt -d \
             scripts/p16/t001_runner/main.go \
             scripts/p16/t002_runner/main.go \
+            scripts/p16/t003_runner/main.go \
+            scripts/p16/t004_runner/main.go \
             internal/trust/*.go | tee /tmp/p16-gofmt.diff
           test ! -s /tmp/p16-gofmt.diff
           go test ./...
@@ -117,11 +121,17 @@ jobs:
         run: python3 scripts/p16/integration.py --case P16-T001 | tee /tmp/p16-t001-result.json
 
       - name: Run frozen P16-T002 driver
+        run: python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
+
+      - name: Run frozen P16-T003 driver
+        run: python3 scripts/p16/integration.py --case P16-T003 | tee /tmp/p16-t003-result.json
+
+      - name: Run frozen P16-T004 driver
         id: evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
+          python3 scripts/p16/integration.py --case P16-T004 | tee /tmp/p16-t004-result.json
           head="$(git rev-parse HEAD)"
           python3 - <<'PY'
           import json, subprocess
@@ -129,6 +139,8 @@ jobs:
           paths={
               'P16-T001':'artifacts/v10/P16/api/P16-T001.json',
               'P16-T002':'artifacts/v10/P16/api/P16-T002.json',
+              'P16-T003':'artifacts/v10/P16/security/P16-T003.json',
+              'P16-T004':'artifacts/v10/P16/security/P16-T004.json',
           }
           for case,path in paths.items():
               data=json.load(open(path,encoding='utf-8'))
@@ -139,17 +151,22 @@ jobs:
               assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
               assert data['checks'] and all(data['checks'].values()),data
               assert not any(data['evidence_policy'].values()),data
-              assert data['environment']['mysql_version'],data
+              if case in {'P16-T001','P16-T002'}:
+                  assert data['environment']['mysql_version'],data
+              else:
+                  assert data['environment']['fixture'],data
           PY
           printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
-      - name: Upload exact-head P16 T001-T002 evidence
+      - name: Upload exact-head P16 T001-T004 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: p16-t001-t002-real-destination-risk-${{ steps.evidence.outputs.sha }}
+          name: p16-t001-t004-real-destination-risk-${{ steps.evidence.outputs.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
             artifacts/v10/P16/api/P16-T001.json
             artifacts/v10/P16/api/P16-T002.json
+            artifacts/v10/P16/security/P16-T003.json
+            artifacts/v10/P16/security/P16-T004.json
             artifacts/v10/P16/test-plan.json
