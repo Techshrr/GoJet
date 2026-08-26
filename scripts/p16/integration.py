@@ -22,6 +22,7 @@ CASE_CONFIG = {
             "runner": "scripts/p16/t001_runner/main.go",
         },
         "environment": "real MySQL 8.x durable destination-risk schema/correlation fixture",
+        "requires_mysql": True,
     },
     "P16-T002": {
         "runner": "./scripts/p16/t002_runner",
@@ -34,6 +35,28 @@ CASE_CONFIG = {
             "runner": "scripts/p16/t002_runner/main.go",
         },
         "environment": "real MySQL 8.x plus native trust.Store exact-fingerprint enqueue/dedupe/rescan fixture",
+        "requires_mysql": True,
+    },
+    "P16-T003": {
+        "runner": "./scripts/p16/t003_runner",
+        "evidence": "artifacts/v10/P16/security/P16-T003.json",
+        "source_paths": {
+            "links_normalization": "internal/links/model.go",
+            "inspection_guard": "internal/trust/inspection.go",
+            "runner": "scripts/p16/t003_runner/main.go",
+        },
+        "environment": "deterministic in-process DNS fixture proving canonical HTTP/HTTPS admission and pre-provider unsafe-form rejection",
+        "requires_mysql": False,
+    },
+    "P16-T004": {
+        "runner": "./scripts/p16/t004_runner",
+        "evidence": "artifacts/v10/P16/security/P16-T004.json",
+        "source_paths": {
+            "inspection_guard": "internal/trust/inspection.go",
+            "runner": "scripts/p16/t004_runner/main.go",
+        },
+        "environment": "controlled in-process DNS scripts and local HTTP redirect fixture proving SSRF, rebinding and redirect-to-private rejection",
+        "requires_mysql": False,
     },
 }
 
@@ -72,7 +95,7 @@ def main() -> int:
     config = CASE_CONFIG.get(args.case)
     if config is None:
         fail(f"P16 integration case is not implemented at this stage: {args.case}")
-    if not os.environ.get("GOJET_MYSQL_DSN", "").strip():
+    if config["requires_mysql"] and not os.environ.get("GOJET_MYSQL_DSN", "").strip():
         fail("GOJET_MYSQL_DSN is required")
 
     head = git("rev-parse", "HEAD")
@@ -114,8 +137,9 @@ def main() -> int:
         "contract_authority": CONTRACT_AUTHORITY,
         "driver": f"python3 scripts/p16/integration.py --case {args.case}",
         "environment": {
-            "mysql": "real MySQL 8.x service",
+            "mysql": "real MySQL 8.x service" if config["requires_mysql"] else "not required by this case",
             "mysql_version": runner.get("mysql_version", ""),
+            "fixture": runner.get("fixture", ""),
             "platform_state": config["environment"],
         },
         "record_counts": runner.get("record_counts", {}),
@@ -131,7 +155,8 @@ def main() -> int:
     encoded = json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     lowered = encoded.lower()
     leaked = [fragment for fragment in FORBIDDEN_EVIDENCE_FRAGMENTS if fragment in lowered]
-    if os.environ.get("GOJET_MYSQL_DSN", "") and os.environ["GOJET_MYSQL_DSN"] in encoded:
+    dsn = os.environ.get("GOJET_MYSQL_DSN", "")
+    if dsn and dsn in encoded:
         leaked.append("GOJET_MYSQL_DSN")
         evidence["evidence_policy"]["dsn_present"] = True
     if leaked:
