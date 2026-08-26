@@ -167,28 +167,28 @@ func run() (output, error) {
 	}
 
 	out.RecordCounts = map[string]int{
-		"scans":                 scanCount,
+		"scans":                     scanCount,
 		"successful_enqueue_audits": auditCount,
-		"old_fingerprint_scans": oldAuthorityCount,
-		"new_fingerprint_scans": newAuthorityCount,
-		"old_target_count":      len(oldTargets),
-		"new_target_count":      len(newTargets),
+		"old_fingerprint_scans":     oldAuthorityCount,
+		"new_fingerprint_scans":     newAuthorityCount,
+		"old_target_count":          len(oldTargets),
+		"new_target_count":          len(newTargets),
 	}
 	out.Checks = map[string]bool{
-		"initial_enqueue_created":                   initial.Created && initial.Scan.ID > 0,
-		"duplicate_request_reuses_same_scan":        !replay.Created && replay.Scan.ID == initial.Scan.ID,
-		"duplicate_request_reuses_exact_targets":    sameTargets(replay.Targets, initial.Targets),
-		"same_fingerprint_rescan_creates_new_scan":  rescan.Created && rescan.Scan.ID != initial.Scan.ID && rescan.Scan.RiskFingerprint == oldFingerprint,
-		"idempotency_key_rejects_policy_reuse":      errors.Is(policyConflictErr, trust.ErrConflict),
-		"idempotency_key_rejects_request_kind_reuse": errors.Is(kindConflictErr, trust.ErrConflict),
+		"initial_enqueue_created":                       initial.Created && initial.Scan.ID > 0,
+		"duplicate_request_reuses_same_scan":            !replay.Created && replay.Scan.ID == initial.Scan.ID,
+		"duplicate_request_reuses_exact_targets":        sameTargets(replay.Targets, initial.Targets),
+		"same_fingerprint_rescan_creates_new_scan":      rescan.Created && rescan.Scan.ID != initial.Scan.ID && rescan.Scan.RiskFingerprint == oldFingerprint,
+		"idempotency_key_rejects_policy_reuse":          errors.Is(policyConflictErr, trust.ErrConflict),
+		"idempotency_key_rejects_request_kind_reuse":    errors.Is(kindConflictErr, trust.ErrConflict),
 		"reachable_target_mutation_changes_fingerprint": newFingerprint != oldFingerprint && !sameStrings(newTargets, oldTargets),
-		"old_fingerprint_fails_closed_after_mutation": errors.Is(staleErr, trust.ErrStaleFingerprint),
-		"new_current_fingerprint_enqueues":          current.Created && current.Scan.RiskFingerprint == newFingerprint,
-		"old_idempotency_key_cannot_cross_fingerprint": errors.Is(crossAuthorityErr, trust.ErrConflict),
+		"old_fingerprint_fails_closed_after_mutation":   errors.Is(staleErr, trust.ErrStaleFingerprint),
+		"new_current_fingerprint_enqueues":              current.Created && current.Scan.RiskFingerprint == newFingerprint,
+		"old_idempotency_key_cannot_cross_fingerprint":  errors.Is(crossAuthorityErr, trust.ErrConflict),
 		"failed_or_conflicting_requests_create_no_scan": scanCount == 3,
-		"successful_new_scans_are_audited":         auditCount == 3,
-		"old_and_new_authority_remain_distinct":     oldAuthorityCount == 2 && newAuthorityCount == 1,
-		"current_scan_persists_exact_current_targets": currentPersisted.RiskFingerprint == newFingerprint && targetURLs(currentTargets, newTargets),
+		"successful_new_scans_are_audited":              auditCount == 3,
+		"old_and_new_authority_remain_distinct":         oldAuthorityCount == 2 && newAuthorityCount == 1,
+		"current_scan_persists_exact_current_targets":   currentPersisted.RiskFingerprint == newFingerprint && targetURLs(currentTargets, newTargets),
 	}
 	if allTrue(out.Checks) {
 		out.Status = "PASS"
