@@ -148,12 +148,14 @@ func run() (output, error) {
 	if err != nil {
 		return out, err
 	}
-	past := time.Now().UTC().Add(-2 * time.Minute)
-	deadLease, err := store.LeaseDestinationScan(ctx, "operationsmonitor-dead", past, 30*time.Second)
+	leaseStarted := time.Now().UTC()
+	deadLease, err := store.LeaseDestinationScan(ctx, "operationsmonitor-dead", leaseStarted, 30*time.Second)
 	if err != nil || deadLease.Scan.ID != recovery.Scan.ID {
 		return out, fmt.Errorf("establish abandoned lease: %w", err)
 	}
+	worker.Now = func() time.Time { return leaseStarted.Add(31 * time.Second) }
 	worked3, recoveryErr := worker.RunOnce(ctx)
+	worker.Now = time.Now
 	afterRecovery, err := store.GetDestinationScanState(ctx, workspace, recovery.Scan.ID)
 	if err != nil {
 		return out, err
@@ -209,17 +211,17 @@ func run() (output, error) {
 	}
 
 	out.RecordCounts = map[string]int{
-		"durable_decisions":       decisionCount,
-		"retry_audits":            retryAudits,
-		"recovery_audits":         recoveryAudits,
-		"failed_audits":           failedAudits,
+		"durable_decisions":         decisionCount,
+		"retry_audits":              retryAudits,
+		"recovery_audits":           recoveryAudits,
+		"failed_audits":             failedAudits,
 		"transient_processor_calls": processor.calls[transient.Scan.ID],
 		"recovery_processor_calls":  processor.calls[recovery.Scan.ID],
 		"exhausted_processor_calls": processor.calls[exhausted.Scan.ID],
 	}
 	out.Checks = map[string]bool{
-		"transient_failure_enters_retry":               worked1 && firstErr != nil && afterFirst.Status == trust.ScanStatusRetry && afterFirst.Attempts == 1,
-		"retry_reuses_same_scan_and_completes":          worked2 && secondErr == nil && afterSecond.Status == trust.ScanStatusCompleted && afterSecond.Attempts == 2,
+		"transient_failure_enters_retry":                worked1 && firstErr != nil && afterFirst.Status == trust.ScanStatusRetry && afterFirst.Attempts == 1,
+		"retry_reuses_same_scan_and_completes":           worked2 && secondErr == nil && afterSecond.Status == trust.ScanStatusCompleted && afterSecond.Attempts == 2,
 		"retry_produces_single_final_authority":          transientDecisionCount == 1 && processor.calls[transient.Scan.ID] == 2,
 		"expired_lease_is_recovered_by_new_worker":       worked3 && recoveryErr == nil && afterRecovery.Status == trust.ScanStatusCompleted && afterRecovery.Attempts == 2 && recoveryAudits == 1,
 		"recovery_produces_single_final_authority":       recoveryDecisionCount == 1 && processor.calls[recovery.Scan.ID] == 1,
