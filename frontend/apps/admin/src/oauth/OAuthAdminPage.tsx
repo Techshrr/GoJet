@@ -92,6 +92,9 @@ export default function OAuthAdminPage() {
   };
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (state === 'provider-error') alertRef.current?.focus();
+  }, [state, message]);
 
   const chooseProvider = (provider: string) => {
     const config = providers.find((item) => item.provider === provider);
@@ -126,7 +129,6 @@ export default function OAuthAdminPage() {
       setShellState(status === 403 ? 'permission-denied' : 'normal');
       setState('provider-error');
       setMessage(status === 403 ? 'settings.manage permission is required.' : 'Provider configuration was rejected by server validation.');
-      requestAnimationFrame(() => alertRef.current?.focus());
     }
   };
 
@@ -140,7 +142,6 @@ export default function OAuthAdminPage() {
       setShellState(status === 403 ? 'permission-denied' : 'normal');
       setState('provider-error');
       setMessage(status === 409 ? 'Provider configuration is incomplete or disabled.' : 'Provider configuration test failed.');
-      requestAnimationFrame(() => alertRef.current?.focus());
     }
   };
 
