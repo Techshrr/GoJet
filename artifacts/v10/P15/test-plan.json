@@ -1,0 +1,207 @@
+{
+  "node": "P15",
+  "title": "Authentication, OAuth and Account",
+  "base_integration_commit": "9258cb0f3f913b37b03aa8cf3c2938711314d3aa",
+  "case_ids_frozen_by": "P15 contract-freeze revision; Master Plan supplies requirements, not P15-Txxx identifiers",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capabilities": [
+      {"id":"CAP-AUTH","status":"REQUIRED","owner":"P15","gates":["G3","G5","G6","G10"]},
+      {"id":"CAP-OAUTH","status":"REQUIRED","owner":"P15","gates":["G3","G6","G10","G13"]},
+      {"id":"CAP-TURNSTILE","status":"REQUIRED","owner":"P14/P15/P17","gates":["G6","G10","G13"]}
+    ],
+    "master_predecessors": ["P04","P14"],
+    "inherited_authorities": ["P04 Auth shell","P12 Workspace membership/RBAC where account settings intersect Workspace","P14 mail queue/templates/mailworker","P14 Turnstile server-side primitive for shared use"],
+    "master_required_tests": ["CSRF","Origin","rate limit","token expiry/reuse","OAuth state","session revoke"],
+    "scope": "P15 closes customer registration/verification/login/recovery/session/account security and CAP-OAUTH runtime lifecycle. P04 owns the pre-existing Auth shell, P12 retains invitation and Workspace membership authority, P14 retains CAP-MAIL and its contact/ticket Turnstile ownership, P17 retains administrator/role/permission lifecycle, P19 retains final Website/Technical SEO, and release-wide P20-P22 remain later-owned."
+  },
+  "predecessor_signed_authority": {
+    "node": "P14",
+    "integration_commit": "9258cb0f3f913b37b03aa8cf3c2938711314d3aa",
+    "signed_source_commit": "f079c938dbe49d0f55b8b09995e72201cd0aab6e",
+    "closure_run_id": 32763705854,
+    "artifact_id": 9533837642,
+    "artifact_digest": "sha256:3f334718539e8fdd9cf5896fffdca9c00b8d0fc9a57b03d39795e97e6af853a8",
+    "phase": "signed",
+    "merge_authoritative": true
+  },
+  "inherited_p04_authority": {
+    "signed_source_commit": "694cc4d50c13fa76f3d35571287a146f4dc04025",
+    "integration_commit": "16cddfa89279d698f30607f4dec79f3ed2f55b59",
+    "workflow_run_id": 32395638418,
+    "artifact_id": 9416550011,
+    "artifact_digest": "sha256:90a4c29844ced6ae934d769785085723c10840106417bbf0df2899e0f5b8fcdd",
+    "scope": "Six-shell authority including the Auth shell is inherited; P15 implements identity/account behavior inside that shell without redefining P04 shell contracts."
+  },
+  "route_contract": {
+    "p15_auth_routes": [
+      "AUTH-LOGIN /login",
+      "AUTH-REGISTER /register",
+      "AUTH-VERIFY /verify-email",
+      "AUTH-FORGOT /forgot-password",
+      "AUTH-RESET /reset-password?token={opaque}",
+      "AUTH-OAUTH-CALLBACK /oauth/{provider}/callback",
+      "AUTH-SOCIAL-REG /social-registration?code={opaque}"
+    ],
+    "inherited_not_owned": ["AUTH-INVITE /invite/{token} — P12 CAP-WORKSPACE authority"],
+    "account_routes": [
+      "APP-SETTINGS /app/settings/profile",
+      "APP-SETTINGS /app/settings/security",
+      "APP-SETTINGS /app/settings/sessions",
+      "APP-SETTINGS /app/settings/connected-accounts"
+    ],
+    "admin_oauth_surface": "ADMIN-OAUTH /admin/platform/oauth — P15 CAP-OAUTH provider runtime/configuration contribution only; settings.manage authorization is consumed, not lifecycle-owned",
+    "ia_exact_apis": [
+      "POST /api/auth/login",
+      "POST /api/public/login-email-code",
+      "GET /api/public/auth/providers",
+      "POST /api/auth/register",
+      "POST /api/public/email-code",
+      "POST /api/public/register-email-code",
+      "POST /api/auth/verifyemail",
+      "POST /api/mail/verification",
+      "POST /api/auth/forgotpassword",
+      "POST /api/auth/resetpassword",
+      "GET /api/public/auth/{provider}/callback",
+      "POST /api/public/auth/handoff",
+      "GET /api/public/auth/social-registration",
+      "POST /api/public/auth/social-registration/complete"
+    ],
+    "p15_implementation_api_authority": [
+      "POST /api/auth/logout",
+      "GET /api/me",
+      "PATCH /api/me/profile",
+      "PATCH /api/me/password",
+      "GET /api/me/sessions",
+      "DELETE /api/me/sessions/{sessionId}",
+      "GET /api/me/connected-accounts",
+      "POST /api/me/connected-accounts/{provider}/start",
+      "DELETE /api/me/connected-accounts/{provider}",
+      "GET /api/admin/oauth/providers",
+      "PATCH /api/admin/oauth/providers/{provider}",
+      "POST /api/admin/oauth/providers/{provider}/test"
+    ],
+    "rules": [
+      "No legacy auth aliases or silent compatibility routes may be invented.",
+      "AUTH-INVITE remains P12-owned and is not evidence of P15 CAP-AUTH completion.",
+      "All Auth routes are noindex, outside every sitemap and no-store.",
+      "APP-SETTINGS and ADMIN-OAUTH are authenticated private surfaces and no-store/noindex.",
+      "UI guards never replace server authentication, tenant or permission checks.",
+      "P15 consumes settings.manage on ADMIN-OAUTH without implementing the P17 administrator permission lifecycle."
+    ]
+  },
+  "auth_contract": {
+    "rules": [
+      "Formal session authority is server-side; formal auth/session tokens are never persisted in localStorage.",
+      "Successful authentication rotates or establishes a fresh server session and does not accept client-asserted identity authority.",
+      "Cookie-authenticated unsafe mutations enforce CSRF and allowed Origin policy server-side.",
+      "Forgot-password responses are account-enumeration neutral.",
+      "Verification, reset, login-email and social handoff grants are opaque, expiry-bound and one-time; replay/reuse fails closed.",
+      "Passwords, raw verification/reset codes, session tokens and OAuth tokens are never written to ordinary logs/evidence.",
+      "Rate-limit and Turnstile decisions are server-authoritative and occur before protected durable mutation.",
+      "Session revocation is checked server-side on subsequent requests and cannot be defeated by stale UI state."
+    ],
+    "session_states": ["active","revoked","expired"],
+    "account_browser_sections": ["profile","security","sessions","connected-accounts"],
+    "mfa_scope": "P15 implements the Master Plan MFA UI contracts on account security surfaces without claiming P17 administrator MFA/permission lifecycle."
+  },
+  "oauth_contract": {
+    "providers": ["google","facebook","github","qq","wechat","rainbow"],
+    "rules": [
+      "OAuth state is unpredictable, server-bound, expiry-bound and one-time; mismatch/replay fails closed before identity mutation.",
+      "PKCE is enforced where applicable to the provider flow defined by the implementation contract.",
+      "Redirect URI is selected from reviewed server configuration and is never accepted as arbitrary client authority.",
+      "Provider callback errors expose allowlisted categories only; raw callback parameters, codes, access tokens and provider secrets are excluded from logs/evidence.",
+      "The browser callback exchanges provider result for a short-lived opaque handoff; provider credentials are not placed into browser storage.",
+      "Social registration cannot silently bind an existing account from an unverified provider/email claim.",
+      "Connected-account bind/unbind requires current authenticated account authority and must not reassign an external identity already bound elsewhere.",
+      "Provider client secrets are masked in Admin UI and never included in frontend bundles or ordinary evidence."
+    ]
+  },
+  "mail_turnstile_contract": {
+    "mail_owner": "P14 CAP-MAIL",
+    "rules": [
+      "P15 verification/recovery/login-code delivery reuses P14 durable mail queue/template/mailworker authority; no parallel SMTP path is introduced.",
+      "Mail delivery success never proves authentication or token consumption; token state remains server-authoritative.",
+      "P15 may add auth-owned allowlisted template keys/variables but cannot weaken P14 secret redaction, idempotency or retry behavior.",
+      "P15 auth Turnstile scenarios reuse a server-side verifier/anti-replay boundary and production bypass is prohibited.",
+      "P14 contact/ticket Turnstile ownership is not reinterpreted by P15."
+    ]
+  },
+  "browser_contract": {
+    "states": {
+      "auth_login": ["input","submitting","invalid","account-locked","verification-required","Turnstile-required","rate-limited","provider-error","success"],
+      "auth_register": ["input","code-sent","code-expired","conflict","Turnstile-required","rate-limited","success"],
+      "auth_verify": ["verifying","success","invalid-token","expired-token","reused-token","resend-limited"],
+      "auth_forgot": ["input","submitting","submitted-neutral","Turnstile-error","rate-limited"],
+      "auth_reset": ["token-check","input","submitting","invalid-token","expired-token","reused-token","success"],
+      "auth_oauth_callback": ["processing","state-error","provider-error","handoff-expired","registration-required","binding-success","login-success"],
+      "auth_social_registration": ["loading-handoff","form","missing-provider-email","email-code","conflict","expired-handoff","success"],
+      "app_settings_account": ["loading","success","read-only","validation-error","session-revoked","provider-error","destructive-confirm"],
+      "admin_oauth": ["loading","empty","configured","incomplete","provider-error","secret-masked","test-result"]
+    },
+    "rules": [
+      "Use Design System exact tokens/components; Auth control sizing and form/error/focus behavior are not locally redefined.",
+      "Browser evidence covers canonical desktop/tablet/mobile plus 320 CSS px reflow where applicable, keyboard/focus/name-role-value and reduced motion.",
+      "Password/payment/OAuth/API secret fields do not use unsafe browser autosave storage; OTP/code input supports correct autocomplete/password-manager semantics and whole-code paste where applicable.",
+      "Persistent security/recovery errors are in-page and never toast-only or color-only.",
+      "Direct URL loads and API calls repeat server authorization; stale client state cannot present a revoked session as authoritative success."
+    ]
+  },
+  "environment_contract": {
+    "mysql": "Real MySQL 8.x for users, credentials, verification/recovery grants, sessions, OAuth identities/configuration and audit evidence.",
+    "redis": "Real Redis where P15 uses rate/replay/session coordination; durable identity authority remains server-side.",
+    "platformapi": "Real native Go platformapi.",
+    "mailworker": "Reuse real native P14 services/platformapi/cmd/mailworker for P15 email delivery evidence.",
+    "oauth": "CI uses deterministic local provider adapters/protocol fixtures with real state/handoff logic; live production provider secrets are prohibited.",
+    "turnstile": "Deterministic server-side verifier adapter in CI; production bypass prohibited.",
+    "browser": "Built Auth/Workspace/Admin surfaces with real local APIs.",
+    "production_docker_compose_node": "PROHIBITED"
+  },
+  "closure": {
+    "same_exact_head_required": true,
+    "required_case_range": "P15-T001..P15-T029",
+    "review_required": true,
+    "defect_limits": {"p0":0,"p1":0,"decision_required":0},
+    "phases": {
+      "pre-sign": {"review_status":"PENDING","merge_authoritative":false},
+      "signed": {"review_status":"SIGNED","merge_authoritative":true}
+    },
+    "scope_rule": "P15 closes CAP-AUTH, CAP-OAUTH and only its auth-facing CAP-TURNSTILE contribution. P04/P12/P14/P17/P19 and later release-wide authorities remain separately owned."
+  },
+  "cases": [
+    {"id":"P15-T001","name":"Identity/session schema and correlation integrity","driver":"python3 scripts/p15/integration.py --case P15-T001","oracle":"Durable user/credential/session/OAuth identity records use server-authoritative state, safe identifiers and correlation without storing raw secrets in evidence.","evidence":"artifacts/v10/P15/api/P15-T001.json","owner":"Backend Lead"},
+    {"id":"P15-T002","name":"Registration and verification-code issuance","driver":"python3 scripts/p15/integration.py --case P15-T002","oracle":"Registration validates input, issues an expiry-bound one-time verification grant and queues mail through inherited P14 mail authority without duplicate durable accounts.","evidence":"artifacts/v10/P15/api/P15-T002.json","owner":"Backend Lead"},
+    {"id":"P15-T003","name":"Email verification expiry and replay","driver":"python3 scripts/p15/integration.py --case P15-T003","oracle":"Valid verification succeeds once; invalid, expired and reused grants fail closed without revealing raw token material.","evidence":"artifacts/v10/P15/security/P15-T003.json","owner":"Security Reviewer"},
+    {"id":"P15-T004","name":"Password login authority and account states","driver":"python3 scripts/p15/integration.py --case P15-T004","oracle":"Login is server-authoritative and correctly handles invalid, locked and verification-required states without client identity bypass.","evidence":"artifacts/v10/P15/api/P15-T004.json","owner":"Backend Lead"},
+    {"id":"P15-T005","name":"Login email-code lifecycle","driver":"python3 scripts/p15/integration.py --case P15-T005","oracle":"Login email codes are expiry-bound, one-time, rate-limited and delivered through P14 mail authority without raw-code evidence leakage.","evidence":"artifacts/v10/P15/security/P15-T005.json","owner":"Security Reviewer"},
+    {"id":"P15-T006","name":"Forgot-password neutral response","driver":"python3 scripts/p15/integration.py --case P15-T006","oracle":"Existing and non-existing account requests expose response-neutral behavior while only valid internal targets receive a reset grant/mail job.","evidence":"artifacts/v10/P15/security/P15-T006.json","owner":"Security Reviewer"},
+    {"id":"P15-T007","name":"Password reset expiry/reuse and post-reset authority","driver":"python3 scripts/p15/integration.py --case P15-T007","oracle":"Reset grant is opaque/one-time/expiry-bound, reuse fails closed and post-reset session policy is enforced server-side.","evidence":"artifacts/v10/P15/security/P15-T007.json","owner":"Security Reviewer"},
+    {"id":"P15-T008","name":"Session cookie and no-localStorage boundary","driver":"python3 scripts/p15/integration.py --case P15-T008","oracle":"Formal session authority uses reviewed cookie/server state, authenticated responses are no-store and formal auth/session tokens are absent from localStorage/frontend bundles.","evidence":"artifacts/v10/P15/security/P15-T008.json","owner":"Security Reviewer"},
+    {"id":"P15-T009","name":"CSRF fail-closed enforcement","driver":"python3 scripts/p15/integration.py --case P15-T009","oracle":"Cookie-authenticated unsafe mutations reject missing/invalid/replayed CSRF authority before durable state change.","evidence":"artifacts/v10/P15/security/P15-T009.json","owner":"Security Reviewer"},
+    {"id":"P15-T010","name":"Origin policy enforcement","driver":"python3 scripts/p15/integration.py --case P15-T010","oracle":"Disallowed or malformed Origin requests fail closed on applicable unsafe auth/account mutations while allowed same-site requests succeed.","evidence":"artifacts/v10/P15/security/P15-T010.json","owner":"Security Reviewer"},
+    {"id":"P15-T011","name":"Auth Turnstile verification and replay","driver":"python3 scripts/p15/integration.py --case P15-T011","oracle":"Protected auth scenarios verify Turnstile server-side; missing/invalid/expired/replayed/provider-failure cases fail closed before protected durable mutation.","evidence":"artifacts/v10/P15/security/P15-T011.json","owner":"Security Reviewer"},
+    {"id":"P15-T012","name":"Auth rate-limit abuse boundary","driver":"python3 scripts/p15/integration.py --case P15-T012","oracle":"Login/code/register/recovery abuse limits are server-authoritative, safe-keyed and return bounded retry semantics without account enumeration.","evidence":"artifacts/v10/P15/security/P15-T012.json","owner":"Security Reviewer"},
+    {"id":"P15-T013","name":"Session list and revoke","driver":"python3 scripts/p15/integration.py --case P15-T013","oracle":"A user can inspect safe session metadata and revoke an owned session; revoked sessions are rejected server-side on later requests and foreign IDs fail closed.","evidence":"artifacts/v10/P15/api/P15-T013.json","owner":"Backend Lead"},
+    {"id":"P15-T014","name":"Profile and account-security mutation authority","driver":"python3 scripts/p15/integration.py --case P15-T014","oracle":"Profile/security mutations require the current account session, validation/CSRF/Origin checks and auditable correlation; stale client state is not authority.","evidence":"artifacts/v10/P15/api/P15-T014.json","owner":"Backend Lead"},
+    {"id":"P15-T015","name":"Connected-account bind and unbind integrity","driver":"python3 scripts/p15/integration.py --case P15-T015","oracle":"Bind/unbind is current-account authorized, state-bound and cannot steal/reassign an external identity already bound to another account.","evidence":"artifacts/v10/P15/oauth/P15-T015.json","owner":"Security Reviewer"},
+    {"id":"P15-T016","name":"OAuth provider registry and secret masking","driver":"python3 scripts/p15/integration.py --case P15-T016","oracle":"Provider registry is exactly google/facebook/github/qq/wechat/rainbow; enabled/configured state is server-derived and client secrets are masked/absent from bundles/evidence.","evidence":"artifacts/v10/P15/oauth/P15-T016.json","owner":"Product/API Reviewer"},
+    {"id":"P15-T017","name":"OAuth start state and redirect URI","driver":"python3 scripts/p15/integration.py --case P15-T017","oracle":"Provider start uses unpredictable expiry-bound state and reviewed redirect configuration; arbitrary client redirect authority is rejected.","evidence":"artifacts/v10/P15/oauth/P15-T017.json","owner":"Security Reviewer"},
+    {"id":"P15-T018","name":"OAuth callback state/PKCE/redaction","driver":"python3 scripts/p15/integration.py --case P15-T018","oracle":"Callback validates state and PKCE where applicable before identity mutation; mismatch/replay fails closed and callback secrets are redacted.","evidence":"artifacts/v10/P15/oauth/P15-T018.json","owner":"Security Reviewer"},
+    {"id":"P15-T019","name":"OAuth browser handoff lifecycle","driver":"python3 scripts/p15/integration.py --case P15-T019","oracle":"Callback creates only a short-lived opaque one-time browser handoff; expired/reused handoff fails and provider credentials never become browser storage authority.","evidence":"artifacts/v10/P15/oauth/P15-T019.json","owner":"Security Reviewer"},
+    {"id":"P15-T020","name":"Social registration missing-email/conflict lifecycle","driver":"python3 scripts/p15/integration.py --case P15-T020","oracle":"Social registration handles missing provider email, email-code verification, account conflict and expired handoff without silent unsafe account binding.","evidence":"artifacts/v10/P15/oauth/P15-T020.json","owner":"Backend Lead"},
+    {"id":"P15-T021","name":"OAuth cross-account takeover denial","driver":"python3 scripts/p15/integration.py --case P15-T021","oracle":"Forged, replayed or already-bound provider identities cannot authenticate/bind as a different account and denial does not leak provider secrets.","evidence":"artifacts/v10/P15/oauth/P15-T021.json","owner":"Security Reviewer"},
+    {"id":"P15-T022","name":"P14 mailworker verification/recovery integration","driver":"python3 scripts/p15/integration.py --case P15-T022","oracle":"Verification/recovery/login-code mail jobs use inherited P14 queue/template/mailworker idempotency/retry authority and mail delivery never substitutes for token consumption.","evidence":"artifacts/v10/P15/mail/P15-T022.json","owner":"Backend Lead"},
+    {"id":"P15-T023","name":"Auth security headers/no-store/noindex/CSP","driver":"python3 scripts/p15/integration.py --case P15-T023","oracle":"Auth HTML/API responses expose the frozen no-store/noindex and testable security-header policy, including CSP expectations, without sensitive cache leakage.","evidence":"artifacts/v10/P15/security/P15-T023.json","owner":"Security Reviewer"},
+    {"id":"P15-T024","name":"Auth route browser authority","driver":"node scripts/p15/browser.mjs --case P15-T024","oracle":"Login/register/verify/forgot/reset/OAuth/social-registration frozen states pass responsive, accessibility, focus/error and secret-storage browser contracts on real local APIs.","evidence":"artifacts/v10/P15/browser/P15-T024.json","owner":"Frontend Lead"},
+    {"id":"P15-T025","name":"Workspace account settings browser authority","driver":"node scripts/p15/browser.mjs --case P15-T025","oracle":"Profile/security/sessions/connected-account states pass direct-load authorization, revoke/recovery, responsive and accessibility contracts on real local APIs.","evidence":"artifacts/v10/P15/browser/P15-T025.json","owner":"Frontend Lead"},
+    {"id":"P15-T026","name":"Admin OAuth configuration browser authority","driver":"node scripts/p15/browser.mjs --case P15-T026","oracle":"ADMIN-OAUTH configured/incomplete/provider-error/secret-masked/test-result states consume server settings permission without exposing secrets or claiming P17 permission lifecycle.","evidence":"artifacts/v10/P15/browser/P15-T026.json","owner":"Frontend Lead"},
+    {"id":"P15-T027","name":"Audit and secret/PII evidence safety","driver":"python3 scripts/p15/integration.py --case P15-T027","oracle":"Security-sensitive auth/account/OAuth mutations are correlated/auditable while passwords, raw codes/tokens, OAuth secrets and unnecessary PII are absent from ordinary logs/evidence.","evidence":"artifacts/v10/P15/audit/P15-T027.json","owner":"Security Reviewer"},
+    {"id":"P15-T028","name":"Exact-head evidence coherence","driver":"python3 scripts/p15/validate_coherence.py","oracle":"P15-T001..P15-T027 evidence is exact-head bound, producer-coherent, reviewable and mixed-head/unsafe evidence is rejected.","evidence":"artifacts/v10/P15/results/P15-T028.json","owner":"QA Lead"},
+    {"id":"P15-T029","name":"Accountable signed exact-head closure","driver":"python3 scripts/p15/validate_closure.py","oracle":"Signed exact revision proves P15-T001..P15-T028 PASS, required affected exact-head workflow matrix green, phase=signed, merge_authoritative=true and defects P0/P1/DECISION REQUIRED all zero.","evidence":"artifacts/v10/P15/results/P15-T029.json","owner":"Accountable Technical Review"}
+  ]
+}

@@ -73,3 +73,9 @@ export type {
   SupportTicketCreateInput, SupportTicketCreateResponse, SupportTicketDetailResponse,
   SupportTicketListResponse, SupportTicketReplyResponse, SupportTicketStatus,
 } from './support';
+
+export { GoJetAuthClient } from './auth';
+export type {
+  AuthProvider, AuthProvidersResponse, AuthStatusResponse, OAuthCallbackResponse, OAuthHandoffResponse,
+  SocialRegistrationState,
+} from './auth';

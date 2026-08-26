@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
-import { LoginPage, MarketingPage } from './routes/ShellPage';
+import { MarketingPage } from './routes/ShellPage';
+import { AuthRoutePage } from './auth/AuthRoutePage';
 
 const FoundationPage = lazy(() => import('./routes/FoundationPage'));
 const ContactPage = lazy(() => import('./contact/ContactPage'));
@@ -11,9 +12,18 @@ const solutionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/so
 const developersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/developers', component: () => <MarketingPage title="Developers" /> });
 const pricingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pricing', component: () => <MarketingPage title="Pricing" /> });
 const contactRoute = createRoute({ getParentRoute: () => rootRoute, path: '/contact', component: ContactPage });
-const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: '/login', component: () => <LoginPage mode="login" /> });
-const registerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/register', component: () => <LoginPage mode="register" /> });
+const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: '/login', component: () => <AuthRoutePage kind="login" /> });
+const registerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/register', component: () => <AuthRoutePage kind="register" /> });
+const verifyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/verify-email', component: () => <AuthRoutePage kind="verify" /> });
+const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: '/forgot-password', component: () => <AuthRoutePage kind="forgot" /> });
+const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reset-password', component: () => <AuthRoutePage kind="reset" /> });
+const oauthCallbackRoute = createRoute({ getParentRoute: () => rootRoute, path: '/oauth/$provider/callback', component: () => <AuthRoutePage kind="oauth" /> });
+const socialRegistrationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/social-registration', component: () => <AuthRoutePage kind="social" /> });
 const foundationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/foundation', component: FoundationPage });
-const routeTree = rootRoute.addChildren([homeRoute, productsRoute, solutionsRoute, developersRoute, pricingRoute, contactRoute, loginRoute, registerRoute, foundationRoute]);
+const routeTree = rootRoute.addChildren([
+  homeRoute, productsRoute, solutionsRoute, developersRoute, pricingRoute, contactRoute,
+  loginRoute, registerRoute, verifyRoute, forgotRoute, resetRoute, oauthCallbackRoute,
+  socialRegistrationRoute, foundationRoute,
+]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

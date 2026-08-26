@@ -1,0 +1,188 @@
+name: P15 Real Authentication Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/auth/**'
+      - 'internal/securetoken/**'
+      - 'internal/support/mail_enqueue.go'
+      - 'migrations/**'
+      - 'scripts/p15/integration.py'
+      - 'scripts/p15/t001_runner/**'
+      - 'scripts/p15/t002_runner/**'
+      - 'scripts/p15/t003_runner/**'
+      - 'scripts/p15/t004_runner/**'
+      - 'scripts/p15/t005_runner/**'
+      - 'scripts/p15/t006_runner/**'
+      - 'scripts/p15/t007_runner/**'
+      - '.github/workflows/p15-real-auth-integration.yml'
+      - 'artifacts/v10/P15/test-plan.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p15-real-auth-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t001-t007:
+    name: P15-T001/T007 real auth token and recovery evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_AUTH_GRANT_KEY_ID: p15-ci-fixture-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+
+    steps:
+      - name: Checkout exact P15 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify P15 T001-T007 source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p15/integration.py
+          gofmt -d \
+            scripts/p15/t001_runner/main.go \
+            scripts/p15/t002_runner/main.go \
+            scripts/p15/t003_runner/main.go \
+            scripts/p15/t004_runner/main.go \
+            scripts/p15/t005_runner/main.go \
+            scripts/p15/t006_runner/main.go \
+            scripts/p15/t007_runner/main.go \
+            internal/auth/registration.go \
+            internal/auth/verification.go \
+            internal/auth/password.go \
+            internal/auth/login.go \
+            internal/auth/email_code.go \
+            internal/auth/recovery.go \
+            internal/auth/errors.go \
+            internal/securetoken/grant.go \
+            internal/support/mail_enqueue.go | tee /tmp/p15-gofmt.diff
+          test ! -s /tmp/p15-gofmt.diff
+          go test ./...
+          go vet ./internal/auth ./internal/securetoken ./internal/support
+          python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p15-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through current P15 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Run frozen P15-T001 driver
+        run: python3 scripts/p15/integration.py --case P15-T001 | tee /tmp/p15-t001-result.json
+      - name: Run frozen P15-T002 driver
+        run: python3 scripts/p15/integration.py --case P15-T002 | tee /tmp/p15-t002-result.json
+      - name: Run frozen P15-T003 driver
+        run: python3 scripts/p15/integration.py --case P15-T003 | tee /tmp/p15-t003-result.json
+      - name: Run frozen P15-T004 driver
+        run: python3 scripts/p15/integration.py --case P15-T004 | tee /tmp/p15-t004-result.json
+      - name: Run frozen P15-T005 driver
+        run: python3 scripts/p15/integration.py --case P15-T005 | tee /tmp/p15-t005-result.json
+      - name: Run frozen P15-T006 driver
+        run: python3 scripts/p15/integration.py --case P15-T006 | tee /tmp/p15-t006-result.json
+      - name: Run frozen P15-T007 driver
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T007 | tee /tmp/p15-t007-result.json
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P15-T001':'artifacts/v10/P15/api/P15-T001.json',
+              'P15-T002':'artifacts/v10/P15/api/P15-T002.json',
+              'P15-T003':'artifacts/v10/P15/security/P15-T003.json',
+              'P15-T004':'artifacts/v10/P15/api/P15-T004.json',
+              'P15-T005':'artifacts/v10/P15/security/P15-T005.json',
+              'P15-T006':'artifacts/v10/P15/security/P15-T006.json',
+              'P15-T007':'artifacts/v10/P15/security/P15-T007.json',
+          }
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P15',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P15 T001-T007 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t001-t007-real-auth-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/api/P15-T001.json
+            artifacts/v10/P15/api/P15-T002.json
+            artifacts/v10/P15/security/P15-T003.json
+            artifacts/v10/P15/api/P15-T004.json
+            artifacts/v10/P15/security/P15-T005.json
+            artifacts/v10/P15/security/P15-T006.json
+            artifacts/v10/P15/security/P15-T007.json
+            artifacts/v10/P15/test-plan.json

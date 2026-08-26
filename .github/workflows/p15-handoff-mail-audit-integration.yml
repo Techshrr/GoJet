@@ -1,0 +1,221 @@
+name: P15 Handoff Mail Audit Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'internal/auth/**'
+      - 'internal/securetoken/**'
+      - 'internal/support/**'
+      - 'services/platformapi/cmd/mailworker/**'
+      - 'migrations/**'
+      - 'scripts/p15/integration.py'
+      - 'scripts/p15/case_config_*.py'
+      - 'scripts/p15/runnerutil/**'
+      - 'scripts/p15/handoffbatch/**'
+      - 'scripts/p15/t019_runner/**'
+      - 'scripts/p15/t020_runner/**'
+      - 'scripts/p15/t021_runner/**'
+      - 'scripts/p15/t022_runner/**'
+      - 'scripts/p15/t023_runner/**'
+      - 'scripts/p15/t027_runner/**'
+      - 'artifacts/v10/P15/test-plan.json'
+      - '.github/workflows/p15-handoff-mail-audit-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p15-handoff-mail-audit-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t019-t023-t027:
+    name: P15-T019/T023 and T027 evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_AUTH_GRANT_KEY_ID: p15-ci-fixture-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_OAUTH_KEY_ID: p15-oauth-ci-fixture-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+
+    steps:
+      - name: Checkout exact P15 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify service clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P15 T019-T023/T027 source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile \
+            scripts/p15/integration.py \
+            scripts/p15/case_config_core.py \
+            scripts/p15/case_config_security.py \
+            scripts/p15/case_config_account_oauth.py \
+            scripts/p15/case_config_handoff_mail_audit.py
+          gofmt -d \
+            internal/auth/oauth_handoff.go \
+            internal/auth/social_registration.go \
+            internal/auth/auth_mail_queue.go \
+            internal/auth/security_http.go \
+            scripts/p15/runnerutil/util.go \
+            scripts/p15/handoffbatch/*.go \
+            scripts/p15/t019_runner/main.go \
+            scripts/p15/t020_runner/main.go \
+            scripts/p15/t021_runner/main.go \
+            scripts/p15/t022_runner/main.go \
+            scripts/p15/t023_runner/main.go \
+            scripts/p15/t027_runner/main.go | tee /tmp/p15-handoff-mail-audit-gofmt.diff
+          test ! -s /tmp/p15-handoff-mail-audit-gofmt.diff
+          go test ./...
+          go vet ./internal/auth ./internal/securetoken ./internal/support ./scripts/p15/handoffbatch
+          python3 scripts/p15/validate_contract.py > /tmp/p15-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p15-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through current P15 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Run frozen P15-T019 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T019 | tee /tmp/p15-t019-result.json
+
+      - name: Run frozen P15-T020 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T020 | tee /tmp/p15-t020-result.json
+
+      - name: Run frozen P15-T021 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T021 | tee /tmp/p15-t021-result.json
+
+      - name: Run frozen P15-T022 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T022 | tee /tmp/p15-t022-result.json
+
+      - name: Run frozen P15-T023 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T023 | tee /tmp/p15-t023-result.json
+
+      - name: Run frozen P15-T027 driver and verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p15/integration.py --case P15-T027 | tee /tmp/p15-t027-result.json
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P15-T019':'artifacts/v10/P15/oauth/P15-T019.json',
+              'P15-T020':'artifacts/v10/P15/oauth/P15-T020.json',
+              'P15-T021':'artifacts/v10/P15/oauth/P15-T021.json',
+              'P15-T022':'artifacts/v10/P15/mail/P15-T022.json',
+              'P15-T023':'artifacts/v10/P15/security/P15-T023.json',
+              'P15-T027':'artifacts/v10/P15/audit/P15-T027.json',
+          }
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P15',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='9ba89a42281709087b40cdcf0cb2eebd54952a99',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P15 T019-T023/T027 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-t019-t023-t027-handoff-mail-audit-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P15/oauth/P15-T019.json
+            artifacts/v10/P15/oauth/P15-T020.json
+            artifacts/v10/P15/oauth/P15-T021.json
+            artifacts/v10/P15/mail/P15-T022.json
+            artifacts/v10/P15/security/P15-T023.json
+            artifacts/v10/P15/audit/P15-T027.json
+            artifacts/v10/P15/test-plan.json
+            scripts/p15/case_config_handoff_mail_audit.py
