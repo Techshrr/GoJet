@@ -4,7 +4,15 @@ Node: `P15`
 Issue: #37  
 Base integration commit: `9258cb0f3f913b37b03aa8cf3c2938711314d3aa`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT FROZEN / IMPLEMENTATION NOT YET REVIEWABLE**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
+
+Pre-sign exact implementation SHA: `1625c01164cecd1a5060997265f5c1fe004ca0ee`
+
+Reviewed pre-sign implementation SHA: `1625c01164cecd1a5060997265f5c1fe004ca0ee`
+
+Accountable reviewer: `GPT-5.6 Sol — P15 Technical Review`
+
+Review date: `2026-08-26`
 
 ## 1. Review boundary
 
@@ -150,3 +158,47 @@ When all required evidence is complete, this document may transition only to:
 The signed form must record the reviewed pre-sign exact implementation SHA, accountable reviewer identity/date, P15-T001..P15-T029 evidence disposition, P0=0, P1=0, `DECISION REQUIRED`=0, truthful Gate/ownership disposition, and same-revision closure requirement.
 
 If signing this file changes HEAD, the signed revision itself must rerun and pass the complete required affected exact-head matrix before P15 can be marked complete or merged.
+
+## 13. Accountable signed review disposition
+
+The frozen sections above are retained as the P15 contract record. The top-level signed status and this section record the accountable disposition supported by the pre-sign exact-head evidence; they do not bypass the signed-revision rerun rule.
+
+### Exact-head evidence disposition
+
+- P15-T001..P15-T007: PASS — real MySQL-backed registration, verification, password, login, email-code and recovery/token lifecycle authority.
+- P15-T008..P15-T012: PASS — server-side CSRF/Origin, Turnstile, rate/replay and security authority with real MySQL/Redis boundaries.
+- P15-T013..P15-T018: PASS — account/session and OAuth provider/state/PKCE/connected-account authority.
+- P15-T019..P15-T023 and P15-T027: PASS — OAuth handoff/social registration, P14 mail reuse, protected auth mutation and audit authority.
+- P15-T024: PASS — real Auth-route browser authority, six-provider registry, security headers/storage constraints, accessibility and responsive evidence.
+- P15-T025: PASS — real Workspace account-settings browser authority, durable profile/session/connected-account mutations, authorization and recovery evidence.
+- P15-T026: PASS — real Admin OAuth browser authority, `settings.manage` consumption, encrypted/masked provider secrets and P17 lifecycle boundary preservation.
+- P15-T028: PASS — 27 input cases bound to one exact head across 8 coherent producers with mixed-head/unsafe-evidence rejection and hashed reviewable evidence.
+- P15-T029: PASS — pre-sign accountable closure with 28/28 input evidence files and 50/50 affected exact-head workflows.
+
+Pre-sign T029 closure run: `32931064640`
+
+Pre-sign T029 closure artifact: `9593408636`
+
+Pre-sign T029 closure digest: `sha256:74deec3937d0acea30978cc59d7b539f720488cc5338c6403ff1c49fbbef69a0`
+
+The pre-sign closure is `phase=pre-sign`, `merge_authoritative=false`. P14 signed predecessor authority was live-bound and archive-digest verified.
+
+### Defect and decision ledger
+
+Evidence disposition: `P15-T001..P15-T029 PASS`
+
+P0/P1/DECISION REQUIRED: `0/0/0`
+
+Review-only signed child: `true`
+
+Signed revision requires complete same-revision affected matrix before merge: `true`
+
+### Capability and ownership disposition
+
+- `CAP-AUTH`: P15 evidence complete for its frozen Authentication/account lifecycle scope.
+- `CAP-OAUTH`: P15 evidence complete for provider runtime/configuration, OAuth state/PKCE/handoff/social-registration and connected-account scope.
+- `CAP-TURNSTILE`: only the P15 authentication-facing contribution is approved; P14/P17 ownership remains intact.
+- `CAP-MAIL`: remains P14-owned; P15 evidence proves reuse rather than a second mail authority.
+- P04 Auth shell, P12 `AUTH-INVITE`/Workspace membership, P17 administrator/role/permission lifecycle, P19 final Website/Technical SEO and release-wide P20-P22 remain outside P15 ownership.
+
+This signature approves the reviewed pre-sign P15 implementation for a mandatory same-revision CI rerun only. It is not itself merge authority until the signed child independently proves `P15-T001..P15-T029`, the full affected matrix, `phase=signed`, `merge_authoritative=true`, and a zero defect/decision ledger.
