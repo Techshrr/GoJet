@@ -26,6 +26,14 @@ function destinationState(item?: DestinationRiskRecord): string {
   return item.decision_state;
 }
 
+function destinationListState(items: DestinationRiskRecord[]): string {
+  const states = items.map((item) => destinationState(item));
+  for (const candidate of ['provider-partial', 'stale-fingerprint', 'block', 'review', 'pending', 'unknown', 'allow']) {
+    if (states.includes(candidate)) return candidate;
+  }
+  return 'empty';
+}
+
 export default function DestinationRiskListPage() {
   const viewport = useShellViewport();
   const query = useQuery({
@@ -34,7 +42,7 @@ export default function DestinationRiskListPage() {
     retry: false,
   });
   const items = query.data?.items ?? [];
-  const state = query.isPending ? 'loading' : query.isError ? 'error' : items.length === 0 ? 'empty' : items.some((item) => destinationState(item) === 'provider-partial') ? 'provider-partial' : items.some((item) => destinationState(item) === 'stale-fingerprint') ? 'stale-fingerprint' : 'allow';
+  const state = query.isPending ? 'loading' : query.isError ? 'error' : items.length === 0 ? 'empty' : destinationListState(items);
 
   return (
     <AdminShell state={trustShellState(query.error)}>
@@ -172,7 +180,7 @@ export function DestinationRiskDetailPage() {
             </dl>
           </Card>
           <Card as="section" className="trust-actions" aria-labelledby="destination-actions-title">
-            <div><h2 id="destination-actions-title">Security actions</h2><p className="trust-confirm-note">Every action is server-authorized, CSRF protected and correlation/audit bound. There is no “continue anyway” path.</p></div>
+            <div><h2 id="destination-actions-title">Security actions</h2><p className="trust-confirm-note">Every action is server-authorized, CSRF protected and correlation/audit bound. No operator control on this page can skip current safety authority.</p></div>
             <div className="trust-action-row">
               <Button onClick={() => { setValidation(''); setMode(mode === 'rescan' ? null : 'rescan'); }}>Request rescan</Button>
               <Button variant="ghost" onClick={() => { setValidation(''); setMode(mode === 'override' ? null : 'override'); }}>Create bounded override</Button>
