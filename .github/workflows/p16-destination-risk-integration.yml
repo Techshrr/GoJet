@@ -1,0 +1,155 @@
+name: P16 Real Destination Risk Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/trust/**'
+      - 'internal/links/model.go'
+      - 'migrations/**'
+      - 'scripts/p16/integration.py'
+      - 'scripts/p16/t001_runner/**'
+      - 'scripts/p16/t002_runner/**'
+      - '.github/workflows/p16-destination-risk-integration.yml'
+      - 'artifacts/v10/P16/test-plan.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-destination-risk-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t001-t002:
+    name: P16-T001/T002 real destination-risk evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify P16 T001-T002 source and frozen-contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
+          gofmt -d \
+            scripts/p16/t001_runner/main.go \
+            scripts/p16/t002_runner/main.go \
+            internal/trust/*.go | tee /tmp/p16-gofmt.diff
+          test ! -s /tmp/p16-gofmt.diff
+          go test ./...
+          go vet ./internal/trust ./internal/links
+          python3 scripts/p16/validate_contract.py > /tmp/p16-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['implementation_authorized'] is True,data
+          assert data['review_phase']=='pending',data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Run frozen P16-T001 driver
+        run: python3 scripts/p16/integration.py --case P16-T001 | tee /tmp/p16-t001-result.json
+
+      - name: Run frozen P16-T002 driver
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T002 | tee /tmp/p16-t002-result.json
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P16-T001':'artifacts/v10/P16/api/P16-T001.json',
+              'P16-T002':'artifacts/v10/P16/api/P16-T002.json',
+          }
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P16',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+              assert data['environment']['mysql_version'],data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P16 T001-T002 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t001-t002-real-destination-risk-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/api/P16-T001.json
+            artifacts/v10/P16/api/P16-T002.json
+            artifacts/v10/P16/test-plan.json
