@@ -159,7 +159,8 @@ def run() -> int:
     need(contract.get('contract_authority') == CONTRACT_AUTHORITY, 'contract authority mismatch', errors)
     need(contract.get('case_range') == 'P16-T001..P16-T029', 'contract case range mismatch', errors)
     need(contract.get('frozen_contract_preserved') is True, 'frozen contract not preserved', errors)
-    need(contract.get('review_phase') == 'pending', f"review phase must remain pending before T029: {contract.get('review_phase')}", errors)
+    review_phase = contract.get('review_phase')
+    need(review_phase in ('pending', 'signed'), f'review phase invalid for T028 coherence: {review_phase}', errors)
     need(contract.get('merge_authoritative') is False, 'coherence stage must not be merge authoritative', errors)
     implementation_marker = ROOT / 'contract-guard' / 'implementation_commit.txt'
     need(implementation_marker.is_file() and implementation_marker.read_text(encoding='utf-8').strip() == head, 'contract implementation marker mismatch', errors)
@@ -225,6 +226,7 @@ def run() -> int:
         'implementation_commit': head,
         'contract_authority': CONTRACT_AUTHORITY,
         'same_exact_head': same_exact_head,
+        'review_phase': review_phase,
         'producer_manifest': manifest,
         'case_evidence': evidence_entries,
         'browser_captures': capture_entries,
@@ -247,7 +249,8 @@ def run() -> int:
             'producer_artifacts': producer_artifacts,
             'producer_count': len(producer_run_ids),
             'mixed_head_rejected': True,
-            'review_phase_pending': contract.get('review_phase') == 'pending',
+            'review_phase': review_phase,
+            'review_phase_pending': review_phase == 'pending',
             'merge_authoritative': False,
         },
         'errors': errors,

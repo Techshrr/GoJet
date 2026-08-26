@@ -249,7 +249,9 @@ jobs:
           assert obs['input_evidence_count'] == 27 and obs['same_exact_head'] is True, obs
           assert obs['t026_capture_count'] >= 12 and obs['t027_capture_count'] >= 12, obs
           assert obs['secret_safe'] is True and obs['producer_count'] == 5, obs
-          assert obs['mixed_head_rejected'] is True and obs['review_phase_pending'] is True, obs
+          assert obs['mixed_head_rejected'] is True, obs
+          assert obs['review_phase'] in ('pending','signed'), obs
+          assert obs['review_phase_pending'] is (obs['review_phase'] == 'pending'), obs
           assert obs['merge_authoritative'] is False, obs
           assert set(obs['producer_run_ids']) == {
               'P16 Trust Destination Risk Abuse Contract',
@@ -260,7 +262,7 @@ jobs:
           }, obs
           for value in obs['producer_artifacts'].values():
               assert value['id'] > 0 and value['digest'].startswith('sha256:') and value['size_in_bytes'] > 0, value
-          print(f'P16-T028 exact-head coherence PASS on {head}')
+          print(f'P16-T028 exact-head coherence PASS on {head} phase={obs["review_phase"]}')
           PY
 
       - name: Upload P16 coherence evidence

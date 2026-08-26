@@ -1,0 +1,107 @@
+name: P16 Closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P16/**'
+      - 'scripts/p16/**'
+      - '.github/workflows/p16-*.yml'
+      - 'internal/**'
+      - 'migrations/**'
+      - 'services/**'
+      - 'frontend/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p16-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P16-T029 accountable exact-head closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.head_ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P16 closure candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compile P16 closure authority
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p16/validate_closure.py scripts/p16/closure_ci.py
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+
+      - name: Run frozen P16-T029 exact-head closure
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/closure_ci.py
+
+      - name: Verify frozen P16-T029 result
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P16/results/P16-T029.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data.get('case_id') == 'P16-T029', data
+          assert data.get('status') == 'PASS', data
+          assert data.get('implementation_commit') == os.environ['EXACT_HEAD'], data
+          assert data.get('defects') == {'p0':0,'p1':0,'decision_required':0}, data
+          assert data.get('input_evidence_count') == 28, data
+          assert data.get('required_regression_workflow_count') == 55, data
+          phase=data.get('phase')
+          assert phase in ('pre-sign','signed'), data
+          if phase == 'pre-sign': assert data.get('merge_authoritative') is False, data
+          if phase == 'signed': assert data.get('merge_authoritative') is True, data
+          PY
+
+      - name: Upload exact-head P16-T029 closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t029-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/closure.json
+            artifacts/v10/P16/closure-evidence-index.json
+            artifacts/v10/P16/regression-manifest.json
+            artifacts/v10/P16/results/P16-T028.json
+            artifacts/v10/P16/results/P16-T029.json
+            artifacts/v10/P16/evidence-producer-manifest.json
+            artifacts/v10/P16/evidence-index.json
+            artifacts/v10/P16/contract-guard/
+            artifacts/v10/P16/api/
+            artifacts/v10/P16/security/
+            artifacts/v10/P16/risk/
+            artifacts/v10/P16/audit/
+            artifacts/v10/P16/domain/
+            artifacts/v10/P16/abuse/
+            artifacts/v10/P16/notifications/
+            artifacts/v10/P16/browser/
+            artifacts/v10/P16/captures/
+            artifacts/v10/P16/runtime/
+            artifacts/v10/P16/inherited/
+            artifacts/v10/P16/test-plan.json
+            artifacts/v10/P16/review.md
