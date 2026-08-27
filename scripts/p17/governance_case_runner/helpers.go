@@ -8,6 +8,7 @@ import (
 	"time"
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
+	"github.com/Techshrr/GoJet/scripts/p17/adminfixture"
 )
 
 func seedUser(ctx context.Context, db *sql.DB, id, email, displayName string, verified bool, now time.Time) error {
@@ -94,4 +95,64 @@ func mustStatus(label string, got, want int) error {
 		return fmt.Errorf("%s status=%d want=%d", label, got, want)
 	}
 	return nil
+}
+
+func bootstrapCaseRoot(ctx context.Context, runtime *adminfixture.Runtime, caseTag string, permissions []string, now time.Time) (*adminaccess.Service, adminaccess.Principal, adminaccess.SessionSecret, error) {
+	service, err := adminfixture.NewService(runtime, strings.ToLower(caseTag), 100)
+	if err != nil {
+		return nil, adminaccess.Principal{}, adminaccess.SessionSecret{}, err
+	}
+	all := append([]string{adminaccess.PermissionAdminsManage}, permissions...)
+	email := strings.ToLower(caseTag) + "-root@p17.test"
+	password := "P17-" + strings.ToLower(caseTag) + "-root-password-fixture"
+	if _, err := adminfixture.Bootstrap(ctx, service, email, password, all, "p17-"+strings.ToLower(caseTag)+"-bootstrap", now); err != nil {
+		return nil, adminaccess.Principal{}, adminaccess.SessionSecret{}, err
+	}
+	principal, login, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, email, password, now.Add(time.Second))
+	if err != nil {
+		return nil, adminaccess.Principal{}, adminaccess.SessionSecret{}, err
+	}
+	return service, principal, login, nil
+}
+
+func createScopedMFAAdmin(ctx context.Context, service *adminaccess.Service, root adminaccess.Principal, caseTag, label, permission string, now time.Time) (adminaccess.Principal, adminaccess.SessionSecret, error) {
+	email := strings.ToLower(caseTag) + "-" + label + "@p17.test"
+	password := "P17-" + strings.ToLower(caseTag) + "-" + label + "-password-fixture"
+	prefix := "p17-" + strings.ToLower(caseTag) + "-" + label
+	role, _, err := service.CreateRole(ctx, root, adminaccess.CreateRoleInput{Name: "P17 " + caseTag + " " + label, Permissions: []string{permission}}, adminaccess.MutationAuthority{Reason: "create exact scoped administrator role fixture", CorrelationID: prefix + "-role", IdempotencyKey: prefix + "-role-key"}, now)
+	if err != nil {
+		return adminaccess.Principal{}, adminaccess.SessionSecret{}, err
+	}
+	if _, _, err := service.CreateAdministrator(ctx, root, adminaccess.CreateAdministratorInput{Email: email, DisplayName: label, Password: password, RoleIDs: []string{role.ID}}, adminaccess.MutationAuthority{Reason: "create exact scoped administrator fixture", CorrelationID: prefix + "-admin", IdempotencyKey: prefix + "-admin-key"}, now.Add(time.Second)); err != nil {
+		return adminaccess.Principal{}, adminaccess.SessionSecret{}, err
+	}
+	principal, login, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, email, password, now.Add(2*time.Second))
+	return principal, login, err
+}
+
+type deterministicOpsProbe struct {
+	states map[string]map[string]bool
+}
+
+func (p deterministicOpsProbe) Probe(_ context.Context, serviceID string) map[string]bool {
+	if p.states != nil {
+		if state, ok := p.states[serviceID]; ok {
+			out := make(map[string]bool, len(state))
+			for k, v := range state {
+				out[k] = v
+			}
+			return out
+		}
+	}
+	return map[string]bool{"unit": true}
+}
+
+type recordingRestarter struct {
+	calls []string
+	err   error
+}
+
+func (r *recordingRestarter) Restart(_ context.Context, serviceID string) error {
+	r.calls = append(r.calls, serviceID)
+	return r.err
 }
