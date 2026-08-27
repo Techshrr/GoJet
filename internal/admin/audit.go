@@ -12,6 +12,8 @@ var safeAuditKeys = map[string]struct{}{
 	"status": {}, "mfa_enabled": {}, "role_ids": {}, "permissions": {}, "version": {},
 	"session_id": {}, "target_session_id": {}, "attempts": {}, "locked": {},
 	"replayed": {}, "role_id": {}, "administrator_id": {},
+	"user_id": {}, "workspace_id": {}, "email_verified": {}, "revoked_sessions": {},
+	"member_count": {}, "owner_count": {},
 }
 
 func safeAuditJSON(value map[string]any) ([]byte, error) {

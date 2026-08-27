@@ -71,12 +71,21 @@ CASE_CONFIG = {
         "real MySQL 8.x inherited P06/P13 source precedence/domain_limit/grace plus P16 conjunctive safety authority",
         "domain_case_runner",
     ),
+    "P17-T010": case(
+        "artifacts/v10/P17/api/P17-T010.json",
+        "scripts/p17/governance_case_runner/t010.go",
+        "real MySQL 8.x P15 user and P12 workspace lifecycle authority with independent administrator permissions, safe enumeration, reason/idempotency/MFA and immutable P17 audit",
+        "governance_case_runner",
+    ),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p17-root-password-fixture-2026",
     "p17-t005-child-raw-password-marker",
     "p17-tickets-only-password-fixture",
+    "p17-governance-root-password-fixture",
+    "p17-users-only-password-fixture",
+    "p17-workspaces-only-password-fixture",
     "definitely-wrong-password",
     "authorization: bearer",
     "client_secret",
@@ -157,7 +166,7 @@ def main() -> int:
         "admin_http_governance": "internal/admin/http_governance.go",
         "platform_admin_mount": "services/platformapi/cmd/server/admin_access.go",
         "fixture": "scripts/p17/adminfixture/fixture.go",
-        "runner_main": "scripts/p17/case_runner/main.go" if runner_dir == "case_runner" else "scripts/p17/domain_case_runner/main.go",
+        "runner_main": f"scripts/p17/{runner_dir}/main.go",
         "case_runner": str(config["case_source"]),
     }
     if args.case in {"P17-T006", "P17-T007", "P17-T008", "P17-T009"}:
@@ -173,6 +182,17 @@ def main() -> int:
             "p17_entitlement_control_overlay": "internal/domains/entitlement_admin_control.go",
             "p06_domain_mutation_authority": "internal/domains/mutation_authority.go",
             "domain_runner_helpers": "scripts/p17/domain_case_runner/helpers.go",
+        })
+    if args.case == "P17-T010":
+        source_paths.update({
+            "p12_workspace_migration": "migrations/000008_workspace_organization.sql",
+            "p15_auth_migration": "migrations/000015_authentication_oauth_account.sql",
+            "admin_user_workspace_governance": "internal/admin/users_workspaces.go",
+            "admin_user_workspace_http": "internal/admin/http_users_workspaces.go",
+            "admin_http_core": "internal/admin/http_core.go",
+            "p12_workspace_store": "internal/workspace/store.go",
+            "p15_password_login": "internal/auth/login.go",
+            "governance_runner_helpers": "scripts/p17/governance_case_runner/helpers.go",
         })
     source_blobs = {name: blob(path) for name, path in source_paths.items()}
     source_blobs["integration_driver"] = blob("scripts/p17/integration.py")
