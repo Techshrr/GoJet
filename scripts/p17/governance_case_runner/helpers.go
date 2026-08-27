@@ -105,7 +105,7 @@ func bootstrapCaseRoot(ctx context.Context, runtime *adminfixture.Runtime, caseT
 	all := append([]string{adminaccess.PermissionAdminsManage}, permissions...)
 	email := strings.ToLower(caseTag) + "-root@p17.test"
 	password := "P17-" + strings.ToLower(caseTag) + "-root-password-fixture"
-	if _, err := adminfixture.Bootstrap(ctx, service, email, password, all, "p17-"+strings.ToLower(caseTag)+"-bootstrap", now); err != nil {
+	if _, err := adminfixture.Bootstrap(ctx, service, email, password, all, now); err != nil {
 		return nil, adminaccess.Principal{}, adminaccess.SessionSecret{}, err
 	}
 	principal, login, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, email, password, now.Add(time.Second))
