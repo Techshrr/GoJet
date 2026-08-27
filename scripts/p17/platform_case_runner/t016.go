@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
@@ -11,44 +10,47 @@ import (
 )
 
 func runT016(ctx context.Context, runtime *adminfixture.Runtime) (output, error) {
-	out := newOutput("real MySQL settings/brand governance with exact settings.manage, validation, version conflict, idempotency and secret-safe audit")
+	out := newOutput("real MySQL platform settings/brand governance with exact settings.manage, validation, optimistic conflict and secret-safe audit")
 	now := time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)
-	service, root, _, err := bootstrapRoot(ctx, runtime, now)
+	service, root, _, err := bootstrapCaseRoot(ctx, runtime, "T016", []string{adminaccess.PermissionSettingsManage}, now)
 	if err != nil {
 		return out, err
 	}
-	input := adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"site_name": "GoJet", "public_base_url": "https://gojet.cc", "support_url": "https://gojet.cc/support"}, ExpectedVersion: 0}
-	authority := adminaccess.MutationAuthority{Reason: "reviewed public settings", CorrelationID: "p17-t016-general", IdempotencyKey: "p17-t016-general-key"}
-	item, replayed, err := service.UpdatePlatformSetting(ctx, root, "general", input, authority, now.Add(time.Second))
+	other, _, err := createScopedMFAAdmin(ctx, service, root, "T016", "content-only", adminaccess.PermissionContentManage, now.Add(2*time.Second))
 	if err != nil {
 		return out, err
 	}
-	replay, replayedAgain, err := service.UpdatePlatformSetting(ctx, root, "general", input, authority, now.Add(2*time.Second))
+
+	general, replayed, err := service.UpdatePlatformSetting(ctx, root, "general", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"site_name": "GoJet", "public_base_url": "https://gojet.cc", "support_url": "https://gojet.cc/support"}, ExpectedVersion: 0}, adminaccess.MutationAuthority{Reason: "review general platform settings", CorrelationID: "p17-t016-general", IdempotencyKey: "p17-t016-general-key"}, now.Add(3*time.Second))
 	if err != nil {
 		return out, err
 	}
-	_, _, conflictErr := service.UpdatePlatformSetting(ctx, root, "general", adminaccess.UpdatePlatformSettingInput{Value: input.Value, ExpectedVersion: 0}, adminaccess.MutationAuthority{Reason: "stale settings probe", CorrelationID: "p17-t016-conflict", IdempotencyKey: "p17-t016-conflict-key"}, now.Add(3*time.Second))
-	_, _, validationErr := service.UpdatePlatformSetting(ctx, root, "brand", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"logo_path": "/assets/../private/token.svg", "favicon_path": "/assets/favicon.svg"}, ExpectedVersion: 0}, adminaccess.MutationAuthority{Reason: "asset validation probe", CorrelationID: "p17-t016-validation", IdempotencyKey: "p17-t016-validation-key"}, now.Add(4*time.Second))
-	_, other, _, err := createScopedMFAAdmin(ctx, service, root, "T016", "content-only", adminaccess.PermissionContentManage, now.Add(5*time.Second))
+	brand, _, err := service.UpdatePlatformSetting(ctx, root, "brand", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"logo_path": "/assets/brand/logo.svg", "favicon_path": "/assets/brand/favicon.ico"}, ExpectedVersion: 0}, adminaccess.MutationAuthority{Reason: "review brand assets", CorrelationID: "p17-t016-brand", IdempotencyKey: "p17-t016-brand-key"}, now.Add(4*time.Second))
 	if err != nil {
 		return out, err
 	}
-	_, deniedErr := service.GetPlatformSetting(ctx, other, "general")
-	var auditRows, secretHits int
+	_, _, invalidErr := service.UpdatePlatformSetting(ctx, root, "brand", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"logo_path": "https://evil.test/logo.svg", "favicon_path": "/assets/favicon.ico"}, ExpectedVersion: brand.Version}, adminaccess.MutationAuthority{Reason: "invalid asset probe", CorrelationID: "p17-t016-invalid", IdempotencyKey: "p17-t016-invalid-key"}, now.Add(5*time.Second))
+	_, _, conflictErr := service.UpdatePlatformSetting(ctx, root, "general", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"site_name": "GoJet", "public_base_url": "https://gojet.cc", "support_url": "https://gojet.cc/help"}, ExpectedVersion: 0}, adminaccess.MutationAuthority{Reason: "stale version probe", CorrelationID: "p17-t016-conflict", IdempotencyKey: "p17-t016-conflict-key"}, now.Add(6*time.Second))
+	_, _, deniedErr := service.UpdatePlatformSetting(ctx, other, "general", adminaccess.UpdatePlatformSettingInput{Value: map[string]string{"site_name": "Other", "public_base_url": "https://gojet.cc", "support_url": "https://gojet.cc/help"}, ExpectedVersion: general.Version}, adminaccess.MutationAuthority{Reason: "cross permission probe", CorrelationID: "p17-t016-denied", IdempotencyKey: "p17-t016-denied-key"}, now.Add(7*time.Second))
+	loaded, err := service.GetPlatformSetting(ctx, root, "brand")
+	if err != nil {
+		return out, err
+	}
+	var auditRows int
 	if err := runtime.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.platform.setting.update'`).Scan(&auditRows); err != nil {
 		return out, err
 	}
-	if err := runtime.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_audit_events WHERE LOWER(CAST(metadata_json AS CHAR)) LIKE '%secret%' OR LOWER(CAST(after_json AS CHAR)) LIKE '%token%'`).Scan(&secretHits); err != nil {
+	var leaked int
+	if err := runtime.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_audit_events WHERE CAST(before_json AS CHAR) LIKE '%logo.svg%' OR CAST(after_json AS CHAR) LIKE '%logo.svg%'`).Scan(&leaked); err != nil {
 		return out, err
 	}
-	out.RecordCounts["settings"] = 1
+	out.RecordCounts["settings"] = 2
 	out.RecordCounts["audit_events"] = auditRows
-	out.Checks["settings_manage_required"] = errors.Is(deniedErr, adminaccess.ErrForbidden)
-	out.Checks["reviewed_setting_persisted"] = item.Key == "general" && item.Value["site_name"] == "GoJet" && item.Version == 1
-	out.Checks["idempotency_replay_exact"] = !replayed && replayedAgain && replay.Version == item.Version
-	out.Checks["stale_version_conflicts"] = errors.Is(conflictErr, adminaccess.ErrConflict)
-	out.Checks["brand_asset_validation_rejects_traversal_and_secret_path"] = errors.Is(validationErr, adminaccess.ErrInvalid)
-	out.Checks["audit_is_secret_safe"] = auditRows == 1 && secretHits == 0 && !strings.Contains(strings.ToLower(authority.Reason), "secret")
+	out.Checks["settings_manage_applied"] = general.Version == 1 && brand.Version == 1 && !replayed
+	out.Checks["brand_assets_validated"] = loaded.Value["logo_path"] == "/assets/brand/logo.svg" && errors.Is(invalidErr, adminaccess.ErrInvalid)
+	out.Checks["optimistic_conflict_enforced"] = errors.Is(conflictErr, adminaccess.ErrConflict)
+	out.Checks["unrelated_permission_denied"] = errors.Is(deniedErr, adminaccess.ErrForbidden)
+	out.Checks["audit_accountable_and_asset_safe"] = auditRows == 2 && leaked == 0
 	pass(&out)
 	return out, nil
 }

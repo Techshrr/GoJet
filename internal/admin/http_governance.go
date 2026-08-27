@@ -11,52 +11,49 @@ func (a *HTTPAPI) permissions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.service.Require(p, PermissionPlatformRead); err != nil {
+	if err := a.service.Require(p, PermissionAdminsManage); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"permissions": append([]string(nil), PermissionCatalog...)})
+	writeJSON(w, http.StatusOK, map[string]any{"items": append([]string(nil), PermissionCatalog...)})
 }
-
 func (a *HTTPAPI) roles(w http.ResponseWriter, r *http.Request) {
 	p, ok := a.principal(w, r)
 	if !ok {
 		return
 	}
-	roles, err := a.service.ListRoles(r.Context(), p)
+	items, err := a.service.ListRoles(r.Context(), p)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
-
 func (a *HTTPAPI) createRole(w http.ResponseWriter, r *http.Request) {
-	p, ok := a.principal(w, r)
-	if !ok || !a.mutationGuard(w, r, p) {
+	p, ok := a.mutationPrincipal(w, r)
+	if !ok {
 		return
 	}
-	var input CreateRoleInput
-	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+	var body struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Permissions []string `json:"permissions"`
+		Reason      string   `json:"reason"`
+	}
+	if !decodeJSON(w, r, &body) {
 		return
 	}
-	reason := strings.TrimSpace(r.Header.Get("X-Admin-Reason"))
-	if input.Reason != "" && reason != "" && strings.TrimSpace(input.Reason) != reason {
-		writeError(w, ErrInvalid)
-		return
-	}
-	if reason == "" {
-		reason = strings.TrimSpace(input.Reason)
-	}
-	role, replayed, err := a.service.CreateRole(r.Context(), p, input, MutationAuthority{Reason: reason, CorrelationID: r.Header.Get("X-Correlation-ID"), IdempotencyKey: r.Header.Get("Idempotency-Key")}, a.now())
+	role, replayed, err := a.service.CreateRole(r.Context(), p, CreateRoleInput{Name: body.Name, Description: body.Description, Permissions: body.Permissions}, authority(r, body.Reason), a.now())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"role": role, "replayed": replayed})
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, map[string]any{"role": role, "replayed": replayed})
 }
-
 func (a *HTTPAPI) administrators(w http.ResponseWriter, r *http.Request) {
 	p, ok := a.principal(w, r)
 	if !ok {
@@ -67,36 +64,34 @@ func (a *HTTPAPI) administrators(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"administrators": items})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
-
 func (a *HTTPAPI) createAdministrator(w http.ResponseWriter, r *http.Request) {
-	p, ok := a.principal(w, r)
-	if !ok || !a.mutationGuard(w, r, p) {
+	p, ok := a.mutationPrincipal(w, r)
+	if !ok {
 		return
 	}
-	var input CreateAdministratorInput
-	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+	var body struct {
+		Email       string   `json:"email"`
+		DisplayName string   `json:"display_name"`
+		Password    string   `json:"password"`
+		RoleIDs     []string `json:"role_ids"`
+		Reason      string   `json:"reason"`
+	}
+	if !decodeJSON(w, r, &body) {
 		return
 	}
-	reason := strings.TrimSpace(r.Header.Get("X-Admin-Reason"))
-	if input.Reason != "" && reason != "" && strings.TrimSpace(input.Reason) != reason {
-		writeError(w, ErrInvalid)
-		return
-	}
-	if reason == "" {
-		reason = strings.TrimSpace(input.Reason)
-	}
-	administrator, replayed, err := a.service.CreateAdministrator(r.Context(), p, input, MutationAuthority{Reason: reason, CorrelationID: r.Header.Get("X-Correlation-ID"), IdempotencyKey: r.Header.Get("Idempotency-Key")}, a.now())
-	input.Password = ""
+	item, replayed, err := a.service.CreateAdministrator(r.Context(), p, CreateAdministratorInput{Email: body.Email, DisplayName: body.DisplayName, Password: body.Password, RoleIDs: body.RoleIDs}, authority(r, body.Reason), a.now())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"administrator": administrator, "replayed": replayed})
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, map[string]any{"administrator": item, "replayed": replayed})
 }
-
 func (a *HTTPAPI) audit(w http.ResponseWriter, r *http.Request) {
 	p, ok := a.principal(w, r)
 	if !ok {
@@ -105,7 +100,7 @@ func (a *HTTPAPI) audit(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 500 {
+		if err != nil || parsed < 1 {
 			writeError(w, ErrInvalid)
 			return
 		}
@@ -116,9 +111,8 @@ func (a *HTTPAPI) audit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": redactAuditEventsForResponse(items)})
+	writeJSON(w, http.StatusOK, map[string]any{"items": redactAuditEventsForResponse(items)})
 }
-
 func sortStrings(values []string) {
 	for i := 1; i < len(values); i++ {
 		for j := i; j > 0 && values[j] < values[j-1]; j-- {

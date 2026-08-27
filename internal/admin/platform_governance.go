@@ -266,9 +266,6 @@ func (s *Service) UpdateTurnstileConfig(ctx context.Context, p Principal, input 
 	if !validProviderState(input.ProviderState) || len(input.SiteKey) > 255 || len(input.Secret) > 1024 {
 		return TurnstileConfig{}, false, ErrInvalid
 	}
-	if input.Enabled && (input.SiteKey == "" || input.Secret == "") {
-		return TurnstileConfig{}, false, ErrInvalid
-	}
 	fingerprint, err := requestFingerprint(struct {
 		SiteKey         string
 		SecretPresent   bool
@@ -312,13 +309,14 @@ func (s *Service) UpdateTurnstileConfig(ctx context.Context, p Principal, input 
 		keyID = oldKey.String
 	}
 	if input.Secret != "" {
-		ciphertext, err = s.cipher.Encrypt([]byte(input.Secret))
+		ciphertext, err = s.cipher.Encrypt(input.Secret, "admin-turnstile:singleton")
 		if err != nil {
 			return TurnstileConfig{}, false, err
 		}
 		keyID = s.cipher.KeyID()
 	}
-	if input.Enabled && (len(ciphertext) == 0 || keyID == "") {
+	secretConfigured := len(ciphertext) > 0 && keyID != ""
+	if input.Enabled && input.ProviderState == "healthy" && (input.SiteKey == "" || !secretConfigured) {
 		return TurnstileConfig{}, false, ErrInvalid
 	}
 	version := current + 1
@@ -330,7 +328,7 @@ func (s *Service) UpdateTurnstileConfig(ctx context.Context, p Principal, input 
 	if err != nil {
 		return TurnstileConfig{}, false, mapDuplicate(err)
 	}
-	item := turnstileProjection(input.SiteKey, input.Enabled, input.ProviderState, len(ciphertext) > 0 && keyID != "", version, now)
+	item := turnstileProjection(input.SiteKey, input.Enabled, input.ProviderState, secretConfigured, version, now)
 	auditID, err := recordAuditTx(ctx, tx, auditInput{ActorKind: "administrator", ActorID: p.Administrator.ID, Action: action, ResourceType: "turnstile_config", ResourceID: "singleton", Result: "success", CorrelationID: authority.CorrelationID, Reason: authority.Reason, Before: map[string]any{"version": current}, After: map[string]any{"version": version, "status": input.ProviderState}, Metadata: map[string]any{"configured": item.SecretConfigured}, CreatedAt: now})
 	if err != nil {
 		return TurnstileConfig{}, false, err

@@ -10,23 +10,23 @@ import (
 )
 
 func runT019(ctx context.Context, runtime *adminfixture.Runtime) (output, error) {
-	out := newOutput("real MySQL announcement draft/scheduled/published/archived lifecycle with content.manage, scope validation, cache generation and body-free audit")
+	out := newOutput("real MySQL announcement draft/scheduled/published/archived lifecycle with content.manage, scope, cache generation and secret-safe audit")
 	now := time.Date(2026, 8, 28, 1, 30, 0, 0, time.UTC)
-	service, root, _, err := bootstrapRoot(ctx, runtime, now)
+	service, root, _, err := bootstrapCaseRoot(ctx, runtime, "T019", []string{adminaccess.PermissionContentManage}, now)
 	if err != nil {
 		return out, err
 	}
-	_, other, _, err := createScopedMFAAdmin(ctx, service, root, "T019", "settings-only", adminaccess.PermissionSettingsManage, now.Add(time.Second))
+	other, _, err := createScopedMFAAdmin(ctx, service, root, "T019", "settings-only", adminaccess.PermissionSettingsManage, now.Add(2*time.Second))
 	if err != nil {
 		return out, err
 	}
-	item, _, err := service.CreateAnnouncement(ctx, root, adminaccess.CreateAnnouncementInput{Title: "Service maintenance", Summary: "Reviewed maintenance notice", Body: "Detailed announcement body must remain outside audit payload.", Scope: "global"}, adminaccess.MutationAuthority{Reason: "create reviewed announcement", CorrelationID: "p17-t019-create", IdempotencyKey: "p17-t019-create-key"}, now.Add(2*time.Second))
+	item, _, err := service.CreateAnnouncement(ctx, root, adminaccess.CreateAnnouncementInput{Title: "Platform maintenance", Summary: "Reviewed lifecycle fixture", Body: "Detailed announcement body not admitted to audit.", Scope: "global"}, adminaccess.MutationAuthority{Reason: "create reviewed announcement draft", CorrelationID: "p17-t019-create", IdempotencyKey: "p17-t019-create-key"}, now.Add(3*time.Second))
 	if err != nil {
 		return out, err
 	}
 	initialGeneration := item.CacheGeneration
 	scheduledFor := now.Add(2 * time.Hour)
-	item, _, err = service.MutateAnnouncement(ctx, root, item.ID, adminaccess.AnnouncementActionInput{Action: "schedule", ExpectedVersion: item.Version, ScheduledFor: &scheduledFor}, adminaccess.MutationAuthority{Reason: "schedule reviewed announcement", CorrelationID: "p17-t019-schedule", IdempotencyKey: "p17-t019-schedule-key"}, now.Add(3*time.Second))
+	item, _, err = service.MutateAnnouncement(ctx, root, item.ID, adminaccess.AnnouncementActionInput{Action: "schedule", ExpectedVersion: item.Version, ScheduledFor: &scheduledFor}, adminaccess.MutationAuthority{Reason: "schedule reviewed announcement", CorrelationID: "p17-t019-schedule", IdempotencyKey: "p17-t019-schedule-key"}, now.Add(4*time.Second))
 	if err != nil {
 		return out, err
 	}

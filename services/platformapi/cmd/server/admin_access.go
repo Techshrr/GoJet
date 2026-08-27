@@ -139,8 +139,8 @@ func platformAdminRoutePatterns() []string {
 	return []string{
 		"GET /api/admin/settings/{settingKey}",
 		"PUT /api/admin/settings/{settingKey}",
-		"GET /api/admin/security/bot-protection",
-		"PUT /api/admin/security/bot-protection",
+		"GET /api/admin/bot-protection",
+		"PUT /api/admin/bot-protection",
 		"GET /api/admin/official-domains",
 		"POST /api/admin/official-domains",
 		"POST /api/admin/official-domains/{domainId}/actions",
