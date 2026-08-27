@@ -74,6 +74,16 @@ func run(caseID string) (output, error) {
 	switch caseID {
 	case "P17-T010":
 		out, err = runT010(ctx, runtime)
+	case "P17-T011":
+		out, err = runT011(ctx, runtime)
+	case "P17-T012":
+		out, err = runT012(ctx, runtime)
+	case "P17-T013":
+		out, err = runT013(ctx, runtime)
+	case "P17-T014":
+		out, err = runT014(ctx, runtime)
+	case "P17-T015":
+		out, err = runT015(ctx, runtime)
 	default:
 		return output{Case: caseID, Status: "FAIL"}, fmt.Errorf("unsupported P17 governance case %q", caseID)
 	}

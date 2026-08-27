@@ -84,6 +84,10 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if err != nil {
 		return nil, false, err
 	}
+	operations, err := buildAdminOperationsGovernance(service, db, redisClient)
+	if err != nil {
+		return nil, false, err
+	}
 
 	combined := http.NewServeMux()
 	combined.Handle("/", api.Handler())
@@ -95,11 +99,37 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	} {
 		combined.Handle(pattern, domainEntitlementHandler)
 	}
+	extended := api.ExtendedGovernanceHandler(operations)
+	for _, pattern := range extendedAdminRoutePatterns() {
+		combined.Handle(pattern, extended)
+	}
 	return combined, true, nil
 }
 
+func extendedAdminRoutePatterns() []string {
+	return []string{
+		"GET /api/admin/links",
+		"GET /api/admin/links/{linkId}",
+		"GET /api/admin/domains",
+		"GET /api/admin/domains/{domainId}",
+		"GET /api/admin/resources/{resourceKind}",
+		"GET /api/admin/resources/{resourceKind}/{resourceId}",
+		"GET /api/admin/files",
+		"GET /api/admin/files/{fileId}",
+		"POST /api/admin/files/{fileId}/quarantine",
+		"POST /api/admin/files/{fileId}/rescan",
+		"POST /api/admin/files/{fileId}/restore",
+		"POST /api/admin/files/{fileId}/delete",
+		"POST /api/admin/files/{fileId}/expiry",
+		"GET /api/admin/operations/jobs",
+		"POST /api/admin/operations/jobs/{jobId}/requeue",
+		"GET /api/admin/operations/services",
+		"POST /api/admin/operations/services/{serviceId}/restart",
+	}
+}
+
 func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
-	for _, pattern := range []string{
+	patterns := []string{
 		"POST /api/admin/auth/login",
 		"POST /api/admin/auth/logout",
 		"GET /api/admin/auth/session",
@@ -124,7 +154,9 @@ func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/admin/domain-entitlements",
 		"GET /api/admin/domain-entitlements/{workspaceId}",
 		"POST /api/admin/domain-entitlements/{workspaceId}/decisions",
-	} {
+	}
+	patterns = append(patterns, extendedAdminRoutePatterns()...)
+	for _, pattern := range patterns {
 		root.Handle(pattern, handler)
 	}
 }

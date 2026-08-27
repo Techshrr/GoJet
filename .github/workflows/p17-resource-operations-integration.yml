@@ -1,0 +1,203 @@
+name: P17 Resource and Operations Governance Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/admin/**'
+      - 'internal/files/**'
+      - 'internal/trust/**'
+      - 'services/platformapi/cmd/server/admin_access.go'
+      - 'services/platformapi/cmd/server/admin_runtime.go'
+      - 'migrations/**'
+      - 'scripts/p17/integration.py'
+      - 'scripts/p17/adminfixture/**'
+      - 'scripts/p17/governance_case_runner/**'
+      - 'scripts/p17/validate_contract.py'
+      - 'artifacts/v10/P17/test-plan.json'
+      - '.github/workflows/p17-resource-operations-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p17-resource-operations-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resource-operations:
+    name: ${{ matrix.case }} real resource/operations authority evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - P17-T011
+          - P17-T012
+          - P17-T013
+          - P17-T014
+          - P17-T015
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+
+    steps:
+      - name: Checkout exact P17 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify resource, predecessor and operations governance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p17/integration.py scripts/p17/validate_contract.py
+          gofmt -d \
+            internal/admin/audit.go \
+            internal/admin/file_governance.go \
+            internal/admin/http_extended_governance.go \
+            internal/admin/operations_governance.go \
+            internal/admin/resource_governance.go \
+            internal/admin/trust_bridge.go \
+            scripts/p17/adminfixture/extended.go \
+            scripts/p17/governance_case_runner/*.go \
+            services/platformapi/cmd/server/admin_access.go \
+            services/platformapi/cmd/server/admin_runtime.go | tee /tmp/p17-t011-t015-gofmt.diff
+          test ! -s /tmp/p17-t011-t015-gofmt.diff
+          grep -F 'PermissionLinksManage' internal/admin/resource_governance.go
+          grep -F 'PermissionDomainsManage' internal/admin/resource_governance.go
+          grep -F 'PermissionContentManage' internal/admin/resource_governance.go
+          grep -F 'before.ScanState != "safe"' internal/admin/file_governance.go
+          grep -F 'GetAdminDestinationRisk' internal/admin/trust_bridge.go
+          grep -F 'GetAdminDomainRisk' internal/admin/trust_bridge.go
+          grep -F "WHERE status IN ('retry','failed')" internal/admin/operations_governance.go
+          grep -F 'PermissionOperationsManage' internal/admin/operations_governance.go
+          grep -F 'exec.CommandContext(ctx, "systemctl", "restart", unit)' services/platformapi/cmd/server/admin_runtime.go
+          ! grep -RE 'exec\.CommandContext\([^\n]*"(sh|bash)"' services/platformapi/cmd/server/admin_runtime.go
+          python3 - <<'PY'
+          import re
+          a=open('internal/admin/operations_governance.go',encoding='utf-8').read()
+          r=open('services/platformapi/cmd/server/admin_runtime.go',encoding='utf-8').read()
+          expected=['redirectengine','analyticsworker','analyticsreconciler','platformapi','mailworker','fileworker','operationsmonitor','logreceiver']
+          block=re.search(r'var adminRuntimeServiceIDs = \[\.\.\.\]string\{(.*?)\n\}',a,re.S)
+          assert block, 'service list missing'
+          ids=re.findall(r'"([a-z]+)"',block.group(1))
+          assert ids==expected,(ids,expected)
+          for service in expected:
+              assert f'"{service}":' in r, service
+          assert len(re.findall(r'"gojet-[a-z]+\.service"',r))==8
+          PY
+          go test ./...
+          go vet ./internal/admin ./internal/trust ./scripts/p17/adminfixture ./scripts/p17/governance_case_runner ./services/platformapi/cmd/server
+          python3 scripts/p17/validate_contract.py > /tmp/p17-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p17-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P17',data
+          assert data['status']=='PASS',data
+          assert data['errors']==[],data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase']=='pending',data
+          assert data['implementation_authorized'] is True,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Run frozen case on pristine durable authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e \
+            "DROP DATABASE IF EXISTS gojet_test; CREATE DATABASE gojet_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration} for ${{ matrix.case }}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          redis-cli -h 127.0.0.1 -p 6379 FLUSHDB >/dev/null
+          python3 scripts/p17/integration.py --case "${{ matrix.case }}" | tee "/tmp/${{ matrix.case }}-result.json"
+
+      - name: Verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, subprocess, os
+          case=os.environ['CASE_ID']
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          matches=list(pathlib.Path('artifacts/v10/P17').rglob(case+'.json'))
+          assert len(matches)==1,matches
+          data=json.load(open(matches[0],encoding='utf-8'))
+          assert data['node']=='P17',data
+          assert data['case']==case,data
+          assert data['status']=='PASS',data
+          assert data['exact_head']==head,(data['exact_head'],head)
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['checks'] and all(data['checks'].values()),data
+          assert data['environment']['mysql_version'],data
+          assert data['environment']['redis_version'],data
+          assert not any(data['evidence_policy'].values()),data
+          PY
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          CASE_ID: ${{ matrix.case }}
+
+      - name: Upload exact-head evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p17-${{ matrix.case }}-resource-operations-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/**/${{ matrix.case }}.json
+            artifacts/v10/P17/test-plan.json

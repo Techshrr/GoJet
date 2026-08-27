@@ -77,6 +77,36 @@ CASE_CONFIG = {
         "real MySQL 8.x P15 user and P12 workspace lifecycle authority with independent administrator permissions, safe enumeration, reason/idempotency/MFA and immutable P17 audit",
         "governance_case_runner",
     ),
+    "P17-T011": case(
+        "artifacts/v10/P17/api/P17-T011.json",
+        "scripts/p17/governance_case_runner/t011.go",
+        "real MySQL 8.x cross-resource administrator governance with exact links/domains/content permission separation and redacted QR/Text/Bio projections",
+        "governance_case_runner",
+    ),
+    "P17-T012": case(
+        "artifacts/v10/P17/files/P17-T012.json",
+        "scripts/p17/governance_case_runner/t012.go",
+        "real MySQL 8.x P09 file quarantine/scan state plus P17 files.manage mutations proving safe-only restore and mandatory ClamAV fail-closed authority",
+        "governance_case_runner",
+    ),
+    "P17-T013": case(
+        "artifacts/v10/P17/trust/P17-T013.json",
+        "scripts/p17/governance_case_runner/t013.go",
+        "real MySQL 8.x P16 destination/domain-risk and abuse authority consumed by P17 exact permissions without verdict mutation or evidence leakage",
+        "governance_case_runner",
+    ),
+    "P17-T014": case(
+        "artifacts/v10/P17/operations/P17-T014.json",
+        "scripts/p17/governance_case_runner/t014.go",
+        "real MySQL 8.x P16 durable destination-risk retry/failed queue with P17 operations.manage bounded requeue, idempotency/correlation and immutable audit",
+        "governance_case_runner",
+    ),
+    "P17-T015": case(
+        "artifacts/v10/P17/operations/P17-T015.json",
+        "scripts/p17/governance_case_runner/t015.go",
+        "real MySQL 8.x and Redis 7.x exact eight-service health/restart governance with fixed allowlist, operations.manage, impact/reason and immutable audit",
+        "governance_case_runner",
+    ),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
@@ -194,6 +224,41 @@ def main() -> int:
             "p15_password_login": "internal/auth/login.go",
             "governance_runner_helpers": "scripts/p17/governance_case_runner/helpers.go",
         })
+    if args.case in {"P17-T011", "P17-T012", "P17-T013", "P17-T014", "P17-T015"}:
+        source_paths.update({
+            "admin_http_core": "internal/admin/http_core.go",
+            "admin_extended_governance_http": "internal/admin/http_extended_governance.go",
+            "admin_resource_governance": "internal/admin/resource_governance.go",
+            "admin_file_governance": "internal/admin/file_governance.go",
+            "admin_trust_bridge": "internal/admin/trust_bridge.go",
+            "admin_operations_governance": "internal/admin/operations_governance.go",
+            "platform_admin_runtime": "services/platformapi/cmd/server/admin_runtime.go",
+            "extended_fixture": "scripts/p17/adminfixture/extended.go",
+            "governance_runner_helpers": "scripts/p17/governance_case_runner/helpers.go",
+        })
+        if args.case == "P17-T011":
+            source_paths.update({
+                "p05_links_migration": "migrations/000001_links_vertical_slice.sql",
+                "p06_domains_migration": "migrations/000002_custom_domains.sql",
+                "p08_qr_migration": "migrations/000004_qr.sql",
+                "p10_text_migration": "migrations/000006_text.sql",
+                "p11_bio_migration": "migrations/000007_bio.sql",
+            })
+        elif args.case == "P17-T012":
+            source_paths["p09_files_migration"] = "migrations/000005_files.sql"
+        elif args.case == "P17-T013":
+            source_paths.update({
+                "p16_destination_risk": "internal/trust/admin_risk.go",
+                "p16_abuse_admin": "internal/trust/abuse_admin.go",
+                "p16_destination_migration": "migrations/000020_destination_risk.sql",
+                "p16_domain_risk_migration": "migrations/000022_domain_reputation.sql",
+                "p16_abuse_migration": "migrations/000023_abuse_trust.sql",
+            })
+        elif args.case == "P17-T014":
+            source_paths.update({
+                "p16_destination_worker": "internal/trust/worker_store.go",
+                "p16_destination_migration": "migrations/000020_destination_risk.sql",
+            })
     source_blobs = {name: blob(path) for name, path in source_paths.items()}
     source_blobs["integration_driver"] = blob("scripts/p17/integration.py")
     source_blobs["frozen_test_plan"] = blob("artifacts/v10/P17/test-plan.json")
