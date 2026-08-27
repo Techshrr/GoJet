@@ -80,6 +80,9 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if err := adminaccess.VerifyDomainEntitlementSchema(context.Background(), db); err != nil {
 		return nil, false, err
 	}
+	if err := adminaccess.VerifyPlatformGovernanceSchema(context.Background(), db); err != nil {
+		return nil, false, err
+	}
 	api, err := adminaccess.NewHTTPAPI(service)
 	if err != nil {
 		return nil, false, err
@@ -103,6 +106,10 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	for _, pattern := range extendedAdminRoutePatterns() {
 		combined.Handle(pattern, extended)
 	}
+	platform := api.PlatformGovernanceHandler()
+	for _, pattern := range platformAdminRoutePatterns() {
+		combined.Handle(pattern, platform)
+	}
 	return combined, true, nil
 }
 
@@ -125,6 +132,21 @@ func extendedAdminRoutePatterns() []string {
 		"POST /api/admin/operations/jobs/{jobId}/requeue",
 		"GET /api/admin/operations/services",
 		"POST /api/admin/operations/services/{serviceId}/restart",
+	}
+}
+
+func platformAdminRoutePatterns() []string {
+	return []string{
+		"GET /api/admin/settings/{settingKey}",
+		"PUT /api/admin/settings/{settingKey}",
+		"GET /api/admin/security/bot-protection",
+		"PUT /api/admin/security/bot-protection",
+		"GET /api/admin/official-domains",
+		"POST /api/admin/official-domains",
+		"POST /api/admin/official-domains/{domainId}/actions",
+		"GET /api/admin/announcements",
+		"POST /api/admin/announcements",
+		"POST /api/admin/announcements/{announcementId}/actions",
 	}
 }
 
@@ -156,6 +178,7 @@ func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/admin/domain-entitlements/{workspaceId}/decisions",
 	}
 	patterns = append(patterns, extendedAdminRoutePatterns()...)
+	patterns = append(patterns, platformAdminRoutePatterns()...)
 	for _, pattern := range patterns {
 		root.Handle(pattern, handler)
 	}

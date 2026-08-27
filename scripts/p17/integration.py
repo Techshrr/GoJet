@@ -107,6 +107,42 @@ CASE_CONFIG = {
         "real MySQL 8.x and Redis 7.x exact eight-service health/restart governance with fixed allowlist, operations.manage, impact/reason and immutable audit",
         "governance_case_runner",
     ),
+    "P17-T016": case(
+        "artifacts/v10/P17/platform/P17-T016.json",
+        "scripts/p17/platform_case_runner/t016.go",
+        "real MySQL 8.x settings and brand governance with exact settings.manage, validation/version conflict, idempotency and secret-safe audit",
+        "platform_case_runner",
+    ),
+    "P17-T017": case(
+        "artifacts/v10/P17/platform/P17-T017.json",
+        "scripts/p17/platform_case_runner/t017.go",
+        "real MySQL 8.x official-host lifecycle with exact domains.manage and inherited P16 risk state kept independent",
+        "platform_case_runner",
+    ),
+    "P17-T018": case(
+        "artifacts/v10/P17/platform/P17-T018.json",
+        "scripts/p17/platform_case_runner/t018.go",
+        "real MySQL 8.x encrypted Turnstile configuration with settings.manage and fail-closed provider-error state",
+        "platform_case_runner",
+    ),
+    "P17-T019": case(
+        "artifacts/v10/P17/platform/P17-T019.json",
+        "scripts/p17/platform_case_runner/t019.go",
+        "real MySQL 8.x announcement lifecycle, content.manage, scope validation, cache generation and body-free audit",
+        "platform_case_runner",
+    ),
+    "P17-T020": case(
+        "artifacts/v10/P17/audit/P17-T020.json",
+        "scripts/p17/platform_case_runner/t020.go",
+        "real MySQL 8.x append-only audit queried through production HTTP redaction with raw token/provider evidence suppression",
+        "platform_case_runner",
+    ),
+    "P17-T021": case(
+        "artifacts/v10/P17/notifications/P17-T021.json",
+        "scripts/p17/platform_case_runner/t021.go",
+        "real MySQL 8.x P17 announcement producer reusing P12 owner notification/dedupe/safe deep-link core without becoming authorization/audit authority",
+        "platform_case_runner",
+    ),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
@@ -116,6 +152,8 @@ FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p17-governance-root-password-fixture",
     "p17-users-only-password-fixture",
     "p17-workspaces-only-password-fixture",
+    "p17-platform-governance-root-password-fixture",
+    "p17-turnstile-secret-value-must-not-expose",
     "definitely-wrong-password",
     "authorization: bearer",
     "client_secret",
@@ -259,6 +297,25 @@ def main() -> int:
                 "p16_destination_worker": "internal/trust/worker_store.go",
                 "p16_destination_migration": "migrations/000020_destination_risk.sql",
             })
+    if args.case in {"P17-T016", "P17-T017", "P17-T018", "P17-T019", "P17-T020", "P17-T021"}:
+        source_paths.update({
+            "platform_governance_migration": "migrations/000027_admin_platform_governance.sql",
+            "platform_governance": "internal/admin/platform_governance.go",
+            "announcement_governance": "internal/admin/announcement_governance.go",
+            "audit_response_redaction": "internal/admin/audit_redaction.go",
+            "platform_governance_http": "internal/admin/http_platform_governance.go",
+            "p12_notifications": "internal/workspace/notifications.go",
+            "platform_runner_main": "scripts/p17/platform_case_runner/main.go",
+        })
+        if args.case == "P17-T017":
+            source_paths.update({
+                "p06_domains_migration": "migrations/000002_custom_domains.sql",
+                "p16_domain_risk_migration": "migrations/000022_domain_reputation.sql",
+            })
+        elif args.case == "P17-T020":
+            source_paths["append_only_admin_audit"] = "migrations/000025_admin_access_audit.sql"
+        elif args.case == "P17-T021":
+            source_paths["p12_workspace_migration"] = "migrations/000008_workspace_organization.sql"
     source_blobs = {name: blob(path) for name, path in source_paths.items()}
     source_blobs["integration_driver"] = blob("scripts/p17/integration.py")
     source_blobs["frozen_test_plan"] = blob("artifacts/v10/P17/test-plan.json")
