@@ -1,0 +1,372 @@
+name: P16 Real Destination Risk Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/trust/**'
+      - 'internal/links/model.go'
+      - 'internal/links/risk_redis.go'
+      - 'internal/links/redirect_http.go'
+      - 'internal/links/custom_domain_authority.go'
+      - 'internal/links/custom_domain_redirect.go'
+      - 'internal/links/password.go'
+      - 'internal/domains/domain.go'
+      - 'internal/domains/domain_store_mysql.go'
+      - 'internal/domains/store_mysql.go'
+      - 'internal/domains/security_suspension_mysql.go'
+      - 'internal/domains/security_restore_mysql.go'
+      - 'internal/support/turnstile.go'
+      - 'internal/support/turnstile_deterministic.go'
+      - 'internal/support/turnstile_http.go'
+      - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'services/redirectengine/cmd/server/**'
+      - 'migrations/**'
+      - 'scripts/p16/integration.py'
+      - 'scripts/p16/runtimefixture/**'
+      - 'scripts/p16/domainfixture/**'
+      - 'scripts/p16/t001_runner/**'
+      - 'scripts/p16/t002_runner/**'
+      - 'scripts/p16/t003_runner/**'
+      - 'scripts/p16/t004_runner/**'
+      - 'scripts/p16/t005_runner/**'
+      - 'scripts/p16/t006_runner/**'
+      - 'scripts/p16/t007_runner/**'
+      - 'scripts/p16/t008_runner/**'
+      - 'scripts/p16/t009_runner/**'
+      - 'scripts/p16/t010_runner/**'
+      - 'scripts/p16/t011_runner/**'
+      - 'scripts/p16/t012_runner/**'
+      - 'scripts/p16/t013_runner/**'
+      - 'scripts/p16/t014_runner/**'
+      - 'scripts/p16/t015_runner/**'
+      - 'scripts/p16/t016_runner/**'
+      - 'scripts/p16/t017_runner/**'
+      - 'scripts/p16/t018_runner/**'
+      - 'scripts/p16/t019_runner/**'
+      - 'scripts/p16/t020_runner/**'
+      - 'scripts/p16/t021_runner/**'
+      - 'scripts/p16/t022_runner/**'
+      - '.github/workflows/p16-destination-risk-integration.yml'
+      - 'artifacts/v10/P16/test-plan.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-real-destination-risk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t001-t022:
+    name: P16-T001/T022 real trust runtime evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_REDIRECT_URL: http://127.0.0.1:18080
+      GOJET_PLATFORMAPI_URL: http://127.0.0.1:18081
+      GOJET_PLATFORMAPI_LOG: /tmp/p16-platformapi.log
+      GOJET_TEST_TRUST_TURNSTILE_TOKEN: p16-trust-turnstile-ci-token
+
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P16 T001-T022 source and frozen-contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
+          gofmt -d \
+            scripts/p16/runtimefixture/runtimefixture.go \
+            scripts/p16/domainfixture/domainfixture.go \
+            scripts/p16/t001_runner/main.go \
+            scripts/p16/t002_runner/main.go \
+            scripts/p16/t003_runner/main.go \
+            scripts/p16/t004_runner/main.go \
+            scripts/p16/t005_runner/main.go \
+            scripts/p16/t006_runner/main.go \
+            scripts/p16/t007_runner/main.go \
+            scripts/p16/t008_runner/main.go \
+            scripts/p16/t009_runner/main.go \
+            scripts/p16/t010_runner/main.go \
+            scripts/p16/t011_runner/main.go \
+            scripts/p16/t012_runner/main.go \
+            scripts/p16/t013_runner/main.go \
+            scripts/p16/t014_runner/main.go \
+            scripts/p16/t015_runner/main.go \
+            scripts/p16/t016_runner/main.go \
+            scripts/p16/t017_runner/main.go \
+            scripts/p16/t018_runner/main.go \
+            scripts/p16/t019_runner/main.go \
+            scripts/p16/t020_runner/main.go \
+            scripts/p16/t021_runner/main.go \
+            scripts/p16/t022_runner/main.go \
+            internal/domains/security_restore_mysql.go \
+            services/platformapi/cmd/operationsmonitor/main.go \
+            services/platformapi/cmd/server/*.go \
+            services/redirectengine/cmd/server/main.go \
+            internal/trust/*.go | tee /tmp/p16-gofmt.diff
+          test ! -s /tmp/p16-gofmt.diff
+          go test ./...
+          go vet \
+            ./internal/trust ./internal/links ./internal/domains \
+            ./scripts/p16/domainfixture ./scripts/p16/t015_runner ./scripts/p16/t016_runner \
+            ./scripts/p16/t017_runner ./scripts/p16/t018_runner ./scripts/p16/t019_runner \
+            ./scripts/p16/t020_runner ./scripts/p16/t021_runner ./scripts/p16/t022_runner \
+            ./services/platformapi/cmd/operationsmonitor ./services/platformapi/cmd/server \
+            ./services/redirectengine/cmd/server
+          mkdir -p /tmp/gojet-p16
+          go build -trimpath -o /tmp/gojet-p16/operationsmonitor ./services/platformapi/cmd/operationsmonitor
+          go build -trimpath -o /tmp/gojet-p16/redirectengine ./services/redirectengine/cmd/server
+          go build -trimpath -o /tmp/gojet-p16/platformapi ./services/platformapi/cmd/server
+          test -x /tmp/gojet-p16/operationsmonitor
+          test -x /tmp/gojet-p16/redirectengine
+          test -x /tmp/gojet-p16/platformapi
+          python3 scripts/p16/validate_contract.py > /tmp/p16-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Start exact-head native redirectengine
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_REDIRECTENGINE_ADDR=127.0.0.1:18080 \
+          GOJET_TEST_ROUTING_HEADERS=1 \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16/redirectengine > /tmp/p16-redirectengine.log 2>&1 &
+          echo $! > /tmp/p16-redirectengine.pid
+          for attempt in $(seq 1 60); do
+            if curl -sS -o /dev/null http://127.0.0.1:18080/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/p16-redirectengine.log
+          exit 1
+
+      - name: Start exact-head native platformapi trust surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_PLATFORMAPI_ADDR=127.0.0.1:18081 \
+          GOJET_TRUST_ENABLED=1 \
+          GOJET_TEST_AUTH_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_TOKEN="$GOJET_TEST_TRUST_TURNSTILE_TOKEN" \
+          GOJET_TRUST_ABUSE_RATE_LIMIT=3 \
+          GOJET_TRUST_ABUSE_RATE_WINDOW=5m \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16/platformapi > "$GOJET_PLATFORMAPI_LOG" 2>&1 &
+          echo $! > /tmp/p16-platformapi.pid
+          for attempt in $(seq 1 60); do
+            if curl -sS -o /dev/null http://127.0.0.1:18081/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$GOJET_PLATFORMAPI_LOG"
+          exit 1
+
+      - name: Run frozen P16-T001 through P16-T006 drivers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in {1..6}; do
+            case_id="$(printf 'P16-T%03d' "$n")"
+            python3 scripts/p16/integration.py --case "$case_id" | tee "/tmp/p16-t$(printf '%03d' "$n")-result.json"
+          done
+
+      - name: Isolate durable queue fixture before P16-T007/T008
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          SET FOREIGN_KEY_CHECKS=0;
+          TRUNCATE TABLE destination_risk_overrides;
+          TRUNCATE TABLE destination_risk_audit_events;
+          TRUNCATE TABLE destination_risk_decisions;
+          TRUNCATE TABLE destination_risk_provider_observations;
+          TRUNCATE TABLE destination_risk_scan_targets;
+          TRUNCATE TABLE destination_risk_scans;
+          SET FOREIGN_KEY_CHECKS=1;
+          SQL
+          redis-cli -h 127.0.0.1 -p 6379 FLUSHDB
+
+      - name: Run frozen P16-T007 through P16-T022 drivers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in {7..22}; do
+            case_id="$(printf 'P16-T%03d' "$n")"
+            python3 scripts/p16/integration.py --case "$case_id" | tee "/tmp/p16-t$(printf '%03d' "$n")-result.json"
+          done
+
+      - name: Verify exact-head P16-T001/T022 evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          paths={
+              'P16-T001':'artifacts/v10/P16/api/P16-T001.json',
+              'P16-T002':'artifacts/v10/P16/api/P16-T002.json',
+              'P16-T003':'artifacts/v10/P16/security/P16-T003.json',
+              'P16-T004':'artifacts/v10/P16/security/P16-T004.json',
+              'P16-T005':'artifacts/v10/P16/risk/P16-T005.json',
+              'P16-T006':'artifacts/v10/P16/security/P16-T006.json',
+              'P16-T007':'artifacts/v10/P16/risk/P16-T007.json',
+              'P16-T008':'artifacts/v10/P16/risk/P16-T008.json',
+              'P16-T009':'artifacts/v10/P16/security/P16-T009.json',
+              'P16-T010':'artifacts/v10/P16/security/P16-T010.json',
+              'P16-T011':'artifacts/v10/P16/security/P16-T011.json',
+              'P16-T012':'artifacts/v10/P16/audit/P16-T012.json',
+              'P16-T013':'artifacts/v10/P16/security/P16-T013.json',
+              'P16-T014':'artifacts/v10/P16/security/P16-T014.json',
+              'P16-T015':'artifacts/v10/P16/domain/P16-T015.json',
+              'P16-T016':'artifacts/v10/P16/domain/P16-T016.json',
+              'P16-T017':'artifacts/v10/P16/security/P16-T017.json',
+              'P16-T018':'artifacts/v10/P16/security/P16-T018.json',
+              'P16-T019':'artifacts/v10/P16/abuse/P16-T019.json',
+              'P16-T020':'artifacts/v10/P16/abuse/P16-T020.json',
+              'P16-T021':'artifacts/v10/P16/abuse/P16-T021.json',
+              'P16-T022':'artifacts/v10/P16/audit/P16-T022.json',
+          }
+          mysql_optional={'P16-T003','P16-T004'}
+          redis_required={'P16-T007','P16-T008','P16-T009','P16-T010','P16-T011','P16-T012','P16-T013','P16-T014','P16-T018','P16-T019','P16-T020','P16-T022'}
+          fixture_required=set(paths)-{'P16-T001','P16-T002'}
+          assert len(paths)==22,paths
+          for case,path in paths.items():
+              data=json.load(open(path,encoding='utf-8'))
+              assert data['node']=='P16',data
+              assert data['case']==case,data
+              assert data['status']=='PASS',data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert not any(data['evidence_policy'].values()),data
+              if case not in mysql_optional:
+                  assert data['environment']['mysql_version'],data
+              if case in redis_required:
+                  assert data['environment']['redis']=='real Redis 7.x service',data
+              if case in fixture_required:
+                  assert data['environment']['fixture'],data
+          PY
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P16 T001-T022 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t001-t022-real-trust-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/api/P16-T001.json
+            artifacts/v10/P16/api/P16-T002.json
+            artifacts/v10/P16/security/P16-T003.json
+            artifacts/v10/P16/security/P16-T004.json
+            artifacts/v10/P16/risk/P16-T005.json
+            artifacts/v10/P16/security/P16-T006.json
+            artifacts/v10/P16/risk/P16-T007.json
+            artifacts/v10/P16/risk/P16-T008.json
+            artifacts/v10/P16/security/P16-T009.json
+            artifacts/v10/P16/security/P16-T010.json
+            artifacts/v10/P16/security/P16-T011.json
+            artifacts/v10/P16/audit/P16-T012.json
+            artifacts/v10/P16/security/P16-T013.json
+            artifacts/v10/P16/security/P16-T014.json
+            artifacts/v10/P16/domain/P16-T015.json
+            artifacts/v10/P16/domain/P16-T016.json
+            artifacts/v10/P16/security/P16-T017.json
+            artifacts/v10/P16/security/P16-T018.json
+            artifacts/v10/P16/abuse/P16-T019.json
+            artifacts/v10/P16/abuse/P16-T020.json
+            artifacts/v10/P16/abuse/P16-T021.json
+            artifacts/v10/P16/audit/P16-T022.json
+            artifacts/v10/P16/test-plan.json

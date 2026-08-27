@@ -5,6 +5,8 @@ import { AuthRoutePage } from './auth/AuthRoutePage';
 
 const FoundationPage = lazy(() => import('./routes/FoundationPage'));
 const ContactPage = lazy(() => import('./contact/ContactPage'));
+const LinkUnavailablePage = lazy(() => import('./trust/LinkUnavailablePage'));
+const AbuseReportPage = lazy(() => import('./trust/AbuseReportPage'));
 const rootRoute = createRootRoute({ component: () => <Suspense fallback={<main aria-busy="true">Loading route…</main>}><Outlet /></Suspense> });
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <MarketingPage title="Product shell foundation" /> });
 const productsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products', component: () => <MarketingPage title="Products" /> });
@@ -19,11 +21,13 @@ const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: '/forgo
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reset-password', component: () => <AuthRoutePage kind="reset" /> });
 const oauthCallbackRoute = createRoute({ getParentRoute: () => rootRoute, path: '/oauth/$provider/callback', component: () => <AuthRoutePage kind="oauth" /> });
 const socialRegistrationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/social-registration', component: () => <AuthRoutePage kind="social" /> });
+const linkUnavailableRoute = createRoute({ getParentRoute: () => rootRoute, path: '/linkunavailable', component: LinkUnavailablePage });
+const abuseReportRoute = createRoute({ getParentRoute: () => rootRoute, path: '/abuse/report', component: AbuseReportPage });
 const foundationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/foundation', component: FoundationPage });
 const routeTree = rootRoute.addChildren([
   homeRoute, productsRoute, solutionsRoute, developersRoute, pricingRoute, contactRoute,
   loginRoute, registerRoute, verifyRoute, forgotRoute, resetRoute, oauthCallbackRoute,
-  socialRegistrationRoute, foundationRoute,
+  socialRegistrationRoute, linkUnavailableRoute, abuseReportRoute, foundationRoute,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

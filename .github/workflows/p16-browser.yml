@@ -1,0 +1,320 @@
+name: P16 Trust Browser Authority
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/admin/src/trust/**'
+      - 'frontend/apps/admin/src/router.tsx'
+      - 'frontend/apps/admin/src/main.tsx'
+      - 'frontend/apps/admin/vite.config.ts'
+      - 'frontend/apps/site/src/trust/**'
+      - 'frontend/apps/site/src/router.tsx'
+      - 'frontend/apps/site/src/main.tsx'
+      - 'frontend/apps/site/vite.config.ts'
+      - 'frontend/packages/**'
+      - 'internal/auth/**'
+      - 'internal/trust/**'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'migrations/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'scripts/p16/browser*.mjs'
+      - 'scripts/p16/browserfixture/**'
+      - 'scripts/p16/adminfixture/**'
+      - 'scripts/p16/domainfixture/**'
+      - 'scripts/p16/runtimefixture/**'
+      - 'scripts/p16/validate_contract.py'
+      - 'artifacts/v10/P16/test-plan.json'
+      - '.github/workflows/p16-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t026-t027:
+    name: P16-T026/T027 real Trust browser evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_SITE_URL: http://127.0.0.1:4180
+      GOJET_TEST_SITE_BAD_TURNSTILE_URL: http://127.0.0.1:4181
+      GOJET_TEST_ADMIN_URL: http://localhost:4182
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_CSRF_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4182
+      GOJET_AUTH_GRANT_KEY_ID: p16-browser-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p16-browser-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+      GOJET_TEST_TRUST_SECURITY_ADMIN_ACTOR: p16-browser-security-admin
+      GOJET_TEST_TRUST_DOMAIN_ADMIN_ACTOR: p16-browser-domain-admin
+      GOJET_RISK_POLICY_VERSION: p16-browser-destination-v1
+      GOJET_DOMAIN_RISK_PROVIDER_NAME: domain-reputation
+      GOJET_DOMAIN_RISK_POLICY_VERSION: p16-browser-domain-v1
+      GOJET_DOMAIN_RISK_ALLOW_TTL: 15m
+      GOJET_DOMAIN_RISK_REVALIDATE_AFTER: 1m
+      GOJET_DOMAIN_RISK_RETRY_AFTER: 30s
+      GOJET_TEST_TRUST_DOMAIN_PROVIDER_OUTCOME: allow
+      GOJET_TEST_TRUST_TURNSTILE_TOKEN: p16-browser-valid-turnstile-token
+      GOJET_TRUST_ABUSE_RATE_LIMIT: '3'
+      GOJET_TRUST_ABUSE_RATE_WINDOW: 5m
+      GOJET_TRUST_TURNSTILE_REPLAY_TTL: 10m
+
+    steps:
+      - name: Checkout exact P16 browser candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P16 browser source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P16/browser artifacts/v10/P16/captures artifacts/v10/P16/runtime/browser
+          go mod verify
+          pnpm install --frozen-lockfile
+          node --check scripts/p16/browser_common.mjs
+          node --check scripts/p16/browser_026.mjs
+          node --check scripts/p16/browser_027.mjs
+          node --check scripts/p16/browser.mjs
+          python3 -m py_compile scripts/p16/validate_contract.py
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/admin typecheck
+          gofmt -d scripts/p16/browserfixture/main.go internal/trust/*.go services/platformapi/cmd/server/*.go | tee /tmp/p16-browser-gofmt.diff
+          test ! -s /tmp/p16-browser-gofmt.diff
+          go test ./...
+          go vet ./internal/auth ./internal/trust ./internal/domains ./internal/links ./services/platformapi/cmd/server ./scripts/p16/browserfixture
+          python3 scripts/p16/validate_contract.py > /tmp/p16-browser-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-browser-contract.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          redis-cli -h 127.0.0.1 -p 6379 ping
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build native API and exact browser surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p16-browser-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p16-browser-platformapi > artifacts/v10/P16/runtime/browser/native-platformapi.sha256
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_TRUST_TURNSTILE_ENABLED=1
+            export VITE_GOJET_TEST_TRUST_TURNSTILE_TOKEN=p16-browser-valid-turnstile-token
+            pnpm --filter @gojet/site exec vite build --outDir dist-p16-valid
+          )
+          (
+            export VITE_GOJET_TEST_AUTH_ENABLED=1
+            export VITE_GOJET_TEST_TRUST_TURNSTILE_ENABLED=1
+            export VITE_GOJET_TEST_TRUST_TURNSTILE_TOKEN=p16-browser-invalid-turnstile-token
+            pnpm --filter @gojet/site exec vite build --outDir dist-p16-bad-turnstile
+          )
+          pnpm --filter @gojet/admin exec vite build --outDir dist-p16-admin
+
+      - name: Start native API and built Trust surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_PLATFORMAPI_ADDR=127.0.0.1:18081 \
+          GOJET_TRUST_ENABLED=1 \
+          GOJET_TRUST_ADMIN_ENABLED=1 \
+          GOJET_TEST_AUTH_ENABLED=1 \
+          GOJET_TEST_TRUST_TURNSTILE_ENABLED=1 \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p16-browser-platformapi > artifacts/v10/P16/runtime/browser/platformapi.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/platformapi.pid
+          pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4180 --outDir dist-p16-valid > artifacts/v10/P16/runtime/browser/site-valid.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/site-valid.pid
+          pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4181 --outDir dist-p16-bad-turnstile > artifacts/v10/P16/runtime/browser/site-bad.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/site-bad.pid
+          pnpm --filter @gojet/admin exec vite preview --host localhost --port 4182 --outDir dist-p16-admin > artifacts/v10/P16/runtime/browser/admin.log 2>&1 & echo $! > artifacts/v10/P16/runtime/browser/admin.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
+              && curl -fsS 'http://127.0.0.1:4180/linkunavailable?reason=pending&code=probe' >/dev/null \
+              && curl -fsS http://127.0.0.1:4181/abuse/report >/dev/null \
+              && curl -fsS http://localhost:4182/admin/trust/destination-risk >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P16/runtime/browser/platformapi.log || true
+          cat artifacts/v10/P16/runtime/browser/site-valid.log || true
+          cat artifacts/v10/P16/runtime/browser/admin.log || true
+          exit 1
+
+      - name: Run P16-T026 Admin Trust browser authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p16/browser.mjs --case P16-T026
+
+      - name: Run P16-T027 public safety browser authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p16/browser.mjs --case P16-T027
+
+      - name: Verify exact-head P16 browser evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head=os.environ['EXACT_HEAD']
+          authority='43c5d4d7e1833c593ceacb48016abac6e3133893'
+          required={
+            'P16-T026': {
+              'destination': {'loading','empty','pending','allow','review','block','stale-fingerprint','provider-partial','destructive-confirm'},
+              'domain': {'loading','empty','pending','allow','review','block','revalidating','stale','provider-partial'},
+              'abuse': {'loading','empty','open','investigating','resolved','dismissed','destructive-confirm'},
+            },
+            'P16-T027': {
+              'linkunavailable': {'pending','review','blocked','domain-suspended','domain-revoked','domain-expired','operational-unavailable'},
+              'abuse_report': {'input','submitting','success-persistent','validation-error','Turnstile-error','rate-limited'},
+            },
+          }
+          failures=[]
+          for case, expected in required.items():
+            path=Path(f'artifacts/v10/P16/browser/{case}.json')
+            if not path.is_file():
+              failures.append(f'{case}: missing evidence')
+              continue
+            raw=path.read_text(encoding='utf-8')
+            data=json.loads(raw)
+            if data.get('case_id') != case: failures.append(f'{case}: case mismatch')
+            if data.get('status') != 'PASS': failures.append(f"{case}: status={data.get('status')}")
+            if data.get('implementation_commit') != head: failures.append(f'{case}: exact-head mismatch')
+            if data.get('contract_authority') != authority: failures.append(f'{case}: authority mismatch')
+            if data.get('errors') != []: failures.append(f"{case}: errors={data.get('errors')}")
+            details=data.get('details') or {}
+            if details.get('frozen_contract_completion') is not True: failures.append(f'{case}: frozen completion missing')
+            if details.get('closure_claim') is not False: failures.append(f'{case}: premature closure claim')
+            states=details.get('states') or {}
+            for surface, wanted in expected.items():
+              actual=set(states.get(surface) or [])
+              missing=wanted-actual
+              if missing: failures.append(f'{case}/{surface}: missing states {sorted(missing)} actual={sorted(actual)}')
+            checks=details.get('security_checks') or {}
+            if not checks or not all(checks.values()): failures.append(f'{case}: security checks not all true {checks}')
+            if int(details.get('screenshot_count') or 0) < 12: failures.append(f'{case}: insufficient screenshots')
+            responsive=details.get('responsive') or {}
+            if not responsive: failures.append(f'{case}: responsive matrix missing')
+            lowered=raw.lower()
+            for forbidden in ('p16-browser-valid-turnstile-token','p16-browser-invalid-turnstile-token','p16-browser-provider-secret-marker','customer.example/p16-browser-sensitive-target','authorization: bearer'):
+              if forbidden in lowered: failures.append(f'{case}: unsafe evidence contains {forbidden}')
+          if failures:
+            raise SystemExit('\n'.join(failures))
+          PY
+          printf 'sha=%s\n' "$exact_head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P16 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t026-t027-trust-browser-${{ steps.evidence.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/browser/P16-T026.json
+            artifacts/v10/P16/browser/P16-T027.json
+            artifacts/v10/P16/captures/P16-T026-*.png
+            artifacts/v10/P16/captures/P16-T027-*.png
+            artifacts/v10/P16/runtime/browser/native-platformapi.sha256
+            artifacts/v10/P16/test-plan.json
+
+      - name: Print runtime logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          for log in artifacts/v10/P16/runtime/browser/*.log; do test -f "$log" && { echo "===== $log ====="; cat "$log"; } || true; done

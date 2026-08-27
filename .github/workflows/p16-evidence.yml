@@ -1,0 +1,291 @@
+name: P16 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P16/**'
+      - 'scripts/p16/**'
+      - '.github/workflows/p16-*.yml'
+      - 'internal/auth/**'
+      - 'internal/trust/**'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'internal/workspace/**'
+      - 'internal/support/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p16-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P16-T028 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact P16 implementation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P16 coherence validators
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p16/validate_contract.py scripts/p16/validate_coherence.py
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Wait for exact-head P16 evidence producers and bind artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P16
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          required = {
+              'P16 Trust Destination Risk Abuse Contract': lambda sha: f'p16-trust-destination-risk-abuse-contract-guard-{sha}',
+              'P16 Real Destination Risk Integration': lambda sha: f'p16-t001-t022-real-trust-{sha}',
+              'P16 Security Notification Producer': lambda sha: f'p16-t023-{sha}',
+              'P16 Admin Risk API Integration': lambda sha: f'p16-t024-t025-admin-risk-api-{sha}',
+              'P16 Trust Browser Authority': lambda sha: f'p16-t026-t027-trust-browser-{sha}',
+          }
+          sha = os.environ['EXACT_HEAD']
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          path = Path('artifacts/v10/P16/evidence-producer-manifest.json')
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
+          def get(url):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          deadline = time.time() + 135 * 60
+          while time.time() < deadline:
+              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+              latest = {}
+              for run in runs:
+                  name = run.get('name')
+                  if name in required and (name not in latest or int(run.get('id', 0)) > int(latest[name].get('id', 0))):
+                      latest[name] = run
+              missing = [name for name in required if name not in latest]
+              pending = [name for name in required if name in latest and latest[name].get('status') != 'completed']
+              failed = [name for name in required if name in latest and latest[name].get('status') == 'completed' and latest[name].get('conclusion') != 'success']
+              entries = {}
+              if not missing and not pending and not failed:
+                  for name, run in latest.items():
+                      artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
+                      expected = required[name](sha)
+                      matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
+                      if len(matches) != 1:
+                          failed.append(f'{name}:artifact:{expected}')
+                          continue
+                      artifact = matches[0]
+                      entries[name] = {
+                          'run_id': int(run['id']),
+                          'run_number': int(run.get('run_number', 0)),
+                          'head_sha': run.get('head_sha'),
+                          'status': run.get('status'),
+                          'conclusion': run.get('conclusion'),
+                          'html_url': run.get('html_url'),
+                          'artifact': {
+                              'id': int(artifact['id']),
+                              'name': artifact['name'],
+                              'digest': artifact.get('digest'),
+                              'size_in_bytes': int(artifact.get('size_in_bytes', 0)),
+                          },
+                      }
+              manifest = {
+                  'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'implementation_commit': sha,
+                  'required_workflows': entries,
+                  'missing': missing,
+                  'pending': pending,
+                  'failed': failed,
+              }
+              path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+              if failed:
+                  raise SystemExit('required P16 producer/artifact failed: ' + ', '.join(failed))
+              if not missing and not pending and len(entries) == len(required):
+                  print(f'P16 producers/artifacts green for {sha}')
+                  break
+              print(f'Waiting P16 producers missing={missing} pending={pending}')
+              time.sleep(10)
+          else:
+              raise SystemExit(f'timed out waiting for P16 producers on {sha}')
+          PY
+
+      - name: Download exact-head P16 evidence artifacts
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          read_run() { python3 - "$1" <<'PY'
+          import json, sys
+          data = json.load(open('artifacts/v10/P16/evidence-producer-manifest.json', encoding='utf-8'))
+          print(data['required_workflows'][sys.argv[1]]['run_id'])
+          PY
+          }
+
+          contract_run="$(read_run 'P16 Trust Destination Risk Abuse Contract')"
+          integration_run="$(read_run 'P16 Real Destination Risk Integration')"
+          notification_run="$(read_run 'P16 Security Notification Producer')"
+          admin_run="$(read_run 'P16 Admin Risk API Integration')"
+          browser_run="$(read_run 'P16 Trust Browser Authority')"
+
+          rm -rf /tmp/p16-contract /tmp/p16-integration /tmp/p16-notification /tmp/p16-admin /tmp/p16-browser
+          mkdir -p /tmp/p16-contract /tmp/p16-integration /tmp/p16-notification /tmp/p16-admin /tmp/p16-browser \
+            artifacts/v10/P16/contract-guard artifacts/v10/P16/api artifacts/v10/P16/security \
+            artifacts/v10/P16/risk artifacts/v10/P16/audit artifacts/v10/P16/domain \
+            artifacts/v10/P16/abuse artifacts/v10/P16/notifications artifacts/v10/P16/browser \
+            artifacts/v10/P16/captures artifacts/v10/P16/runtime/browser artifacts/v10/P16/results
+
+          gh run download "$contract_run" --repo "$REPOSITORY" --name "p16-trust-destination-risk-abuse-contract-guard-$EXACT_HEAD" --dir /tmp/p16-contract
+          gh run download "$integration_run" --repo "$REPOSITORY" --name "p16-t001-t022-real-trust-$EXACT_HEAD" --dir /tmp/p16-integration
+          gh run download "$notification_run" --repo "$REPOSITORY" --name "p16-t023-$EXACT_HEAD" --dir /tmp/p16-notification
+          gh run download "$admin_run" --repo "$REPOSITORY" --name "p16-t024-t025-admin-risk-api-$EXACT_HEAD" --dir /tmp/p16-admin
+          gh run download "$browser_run" --repo "$REPOSITORY" --name "p16-t026-t027-trust-browser-$EXACT_HEAD" --dir /tmp/p16-browser
+
+          for name in contract.json implementation_commit.txt base_integration_commit.txt contract_authority.txt case_range.txt p15_signed_source.txt; do
+            source="$(find /tmp/p16-contract -type f -name "$name" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P16/contract-guard/$name"
+          done
+          test "$(cat artifacts/v10/P16/contract-guard/implementation_commit.txt)" = "$EXACT_HEAD"
+          test "$(cat artifacts/v10/P16/contract-guard/contract_authority.txt)" = '43c5d4d7e1833c593ceacb48016abac6e3133893'
+
+          case_dir() {
+            case "$1" in
+              001|002|024|025) echo api ;;
+              003|004|006|009|010|011|013|014|017|018) echo security ;;
+              005|007|008) echo risk ;;
+              012|022) echo audit ;;
+              015|016) echo domain ;;
+              019|020|021) echo abuse ;;
+              023) echo notifications ;;
+              026|027) echo browser ;;
+              *) return 1 ;;
+            esac
+          }
+
+          for number in $(seq -w 1 22); do
+            padded="0${number}"
+            directory="$(case_dir "$padded")"
+            source="$(find /tmp/p16-integration -type f -name "P16-T${padded}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P16/$directory/P16-T${padded}.json"
+          done
+
+          source="$(find /tmp/p16-notification -type f -name 'P16-T023.json' -print -quit)"
+          test -n "$source"
+          cp "$source" artifacts/v10/P16/notifications/P16-T023.json
+
+          for number in 024 025; do
+            source="$(find /tmp/p16-admin -type f -name "P16-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P16/api/P16-T${number}.json"
+          done
+
+          for number in 026 027; do
+            source="$(find /tmp/p16-browser -type f -name "P16-T${number}.json" -print -quit)"
+            test -n "$source"
+            cp "$source" "artifacts/v10/P16/browser/P16-T${number}.json"
+          done
+          find /tmp/p16-browser -type f \( -name 'P16-T026-*.png' -o -name 'P16-T027-*.png' \) -print -exec cp '{}' artifacts/v10/P16/captures/ ';'
+          native_sha="$(find /tmp/p16-browser -type f -name 'native-platformapi.sha256' -print -quit)"
+          test -n "$native_sha"
+          cp "$native_sha" artifacts/v10/P16/runtime/browser/native-platformapi.sha256
+
+          test "$(find artifacts/v10/P16 -type f -name 'P16-T*.json' ! -path '*/results/*' | wc -l)" -eq 27
+          test "$(find artifacts/v10/P16/captures -maxdepth 1 -type f -name 'P16-T026-*.png' | wc -l)" -ge 12
+          test "$(find artifacts/v10/P16/captures -maxdepth 1 -type f -name 'P16-T027-*.png' | wc -l)" -ge 12
+
+      - name: Run P16-T028 exact-head evidence coherence
+        env:
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/validate_coherence.py
+          python3 - <<'PY'
+          import json, subprocess
+          data = json.load(open('artifacts/v10/P16/results/P16-T028.json', encoding='utf-8'))
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert data['case_id'] == 'P16-T028', data
+          assert data['status'] == 'PASS' and data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          assert data['contract_authority'] == '43c5d4d7e1833c593ceacb48016abac6e3133893', data
+          obs = data['observations']
+          assert obs['input_evidence_count'] == 27 and obs['same_exact_head'] is True, obs
+          assert obs['t026_capture_count'] >= 12 and obs['t027_capture_count'] >= 12, obs
+          assert obs['secret_safe'] is True and obs['producer_count'] == 5, obs
+          assert obs['mixed_head_rejected'] is True, obs
+          assert obs['review_phase'] in ('pending','signed'), obs
+          assert obs['review_phase_pending'] is (obs['review_phase'] == 'pending'), obs
+          assert obs['merge_authoritative'] is False, obs
+          assert set(obs['producer_run_ids']) == {
+              'P16 Trust Destination Risk Abuse Contract',
+              'P16 Real Destination Risk Integration',
+              'P16 Security Notification Producer',
+              'P16 Admin Risk API Integration',
+              'P16 Trust Browser Authority',
+          }, obs
+          for value in obs['producer_artifacts'].values():
+              assert value['id'] > 0 and value['digest'].startswith('sha256:') and value['size_in_bytes'] > 0, value
+          print(f'P16-T028 exact-head coherence PASS on {head} phase={obs["review_phase"]}')
+          PY
+
+      - name: Upload P16 coherence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p16-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/evidence-producer-manifest.json
+            artifacts/v10/P16/evidence-index.json
+            artifacts/v10/P16/contract-guard/
+            artifacts/v10/P16/api/P16-T*.json
+            artifacts/v10/P16/security/P16-T*.json
+            artifacts/v10/P16/risk/P16-T*.json
+            artifacts/v10/P16/audit/P16-T*.json
+            artifacts/v10/P16/domain/P16-T*.json
+            artifacts/v10/P16/abuse/P16-T*.json
+            artifacts/v10/P16/notifications/P16-T*.json
+            artifacts/v10/P16/browser/P16-T*.json
+            artifacts/v10/P16/captures/
+            artifacts/v10/P16/runtime/browser/native-platformapi.sha256
+            artifacts/v10/P16/results/P16-T028.json
+            artifacts/v10/P16/test-plan.json
+            artifacts/v10/P16/review.md

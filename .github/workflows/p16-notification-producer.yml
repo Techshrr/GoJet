@@ -1,0 +1,164 @@
+name: P16 Security Notification Producer
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/trust/notifications.go'
+      - 'internal/workspace/notifications.go'
+      - 'internal/workspace/notification_tx.go'
+      - 'internal/workspace/store.go'
+      - 'scripts/p16/integration.py'
+      - 'scripts/p16/runtimefixture/**'
+      - 'scripts/p16/domainfixture/**'
+      - 'scripts/p16/t023_runner/**'
+      - 'migrations/**'
+      - 'artifacts/v10/P16/test-plan.json'
+      - 'scripts/p16/validate_contract.py'
+      - '.github/workflows/p16-notification-producer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p16-notification-producer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t023:
+    name: P16-T023 real notification producer evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+
+    steps:
+      - name: Checkout exact P16 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Verify T023 source and frozen contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p16/integration.py scripts/p16/validate_contract.py
+          gofmt -d \
+            internal/trust/notifications.go \
+            scripts/p16/t023_runner/main.go | tee /tmp/p16-t023-gofmt.diff
+          test ! -s /tmp/p16-t023-gofmt.diff
+          go test ./internal/trust ./internal/workspace ./scripts/p16/t023_runner
+          go vet ./internal/trust ./internal/workspace ./scripts/p16/t023_runner
+          python3 scripts/p16/validate_contract.py > /tmp/p16-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p16-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P16',data
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P16 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Run frozen P16-T023 driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p16/integration.py --case P16-T023 | tee /tmp/p16-t023-result.json
+
+      - name: Verify exact-head P16-T023 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          path='artifacts/v10/P16/notifications/P16-T023.json'
+          data=json.load(open(path,encoding='utf-8'))
+          assert data['node']=='P16',data
+          assert data['case']=='P16-T023',data
+          assert data['status']=='PASS',data
+          assert data['exact_head']==head,(data['exact_head'],head)
+          assert data['contract_authority']=='43c5d4d7e1833c593ceacb48016abac6e3133893',data
+          assert data['environment']['mysql']=='real MySQL 8.x service',data
+          assert data['evidence_policy']['raw_provider_secret_present'] is False,data
+          assert data['evidence_policy']['raw_authorization_present'] is False,data
+          assert data['evidence_policy']['dsn_present'] is False,data
+          checks=data.get('checks') or {}
+          assert checks and all(v is True for v in checks.values()),checks
+          sources=data.get('source_blobs') or {}
+          for key in ('notification_producer','inherited_notification_core','inherited_notification_tx','runner','integration_driver','frozen_test_plan'):
+              assert len(sources.get(key,''))==40,(key,sources.get(key))
+          PY
+          sha256sum artifacts/v10/P16/notifications/P16-T023.json | tee /tmp/p16-t023.sha256
+
+      - name: Upload exact-head P16-T023 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p16-t023-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P16/notifications/P16-T023.json
+            /tmp/p16-t023-result.json
+            /tmp/p16-t023.sha256
+            /tmp/p16-contract-guard.json

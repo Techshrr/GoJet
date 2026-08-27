@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -24,8 +25,45 @@ const previewProviderFallback: Plugin = {
   },
 };
 
+function isPublicTrustPage(pathname: string | undefined) {
+  return pathname === '/linkunavailable' || pathname === '/abuse/report';
+}
+
+const publicTrustHeaderValues: Readonly<Record<string, string>> = {
+  'cache-control': 'no-store, max-age=0',
+  pragma: 'no-cache',
+  'x-robots-tag': 'noindex, nofollow, noarchive',
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+};
+
+function preservePublicTrustHeaders(response: ServerResponse) {
+  const setHeader = response.setHeader.bind(response);
+  response.setHeader = ((name: string, value: string | number | readonly string[]) =>
+    setHeader(name, publicTrustHeaderValues[name.toLowerCase()] ?? value)) as typeof response.setHeader;
+  for (const [name, value] of Object.entries(publicTrustHeaderValues)) setHeader(name, value);
+}
+
+const publicTrustHeaders: Plugin = {
+  name: 'gojet-public-trust-headers',
+  configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const pathname = request.url?.split('?', 1)[0];
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) preservePublicTrustHeaders(response);
+      next();
+    });
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const pathname = request.url?.split('?', 1)[0];
+      if (request.method === 'GET' && isPublicTrustPage(pathname)) preservePublicTrustHeaders(response);
+      next();
+    });
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), previewProviderFallback],
+  plugins: [react(), previewProviderFallback, publicTrustHeaders],
   build: { outDir: 'dist', emptyOutDir: true, manifest: true, sourcemap: false },
   server: { proxy: devProxy },
   preview: { proxy: previewProxy },
