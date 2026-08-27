@@ -1,0 +1,147 @@
+{
+  "node": "P17",
+  "title": "Admin, Permissions and Audit",
+  "issue": 46,
+  "base_integration_commit": "62d682a25532eef3cc207a5e9964a62f6072ede7",
+  "case_ids_frozen_by": "P17 contract-freeze revision; Master Plan supplies requirements, not P17-Txxx identifiers",
+  "specification_ids": ["GJ-V10-MP-GREENFIELD-2026-08-20", "GJ-V10-DS-GREENFIELD-2026-08-20", "GJ-V10-IA-GREENFIELD-2026-08-20"],
+  "capability_contract": {
+    "capabilities": [
+      {"id":"CAP-ADMIN-ACCESS","status":"REQUIRED","owner":"P17","gates":["G3","G6","G10"]},
+      {"id":"CAP-OPS-AUDIT","status":"REQUIRED","owner":"P17","gates":["G3","G6","G13"]},
+      {"id":"CAP-API-KEYS","status":"REQUIRED","owner":"P17","gates":["G3","G6"]},
+      {"id":"CAP-USER-WEBHOOKS","status":"REQUIRED","owner":"P17","gates":["G3","G6"]},
+      {"id":"CAP-OFFICIAL-DOMAINS","status":"REQUIRED","owner":"P05/P17","gates":["G3","G6"]},
+      {"id":"CAP-FILES","status":"REQUIRED","owner":"P09/P17","gates":["G3","G6","G10"]},
+      {"id":"CAP-NOTIFICATIONS","status":"REQUIRED","owner":"P12/P13-P17","gates":["G3","G5","G6","G10"]},
+      {"id":"CAP-TURNSTILE","status":"REQUIRED","owner":"P14/P15/P17","gates":["G6","G10","G13"]},
+      {"id":"CAP-DOMAIN-ENTITLEMENT","status":"REQUIRED","owner":"P06/P13/P14/P17","gates":["G6","G10"]},
+      {"id":"CAP-DOMAIN-RISK","status":"REQUIRED","owner":"P06/P16/P17","gates":["G6","G13"]},
+      {"id":"CAP-ABUSE","status":"REQUIRED","owner":"P16/P17","gates":["G6","G10"]},
+      {"id":"CAP-ANNOUNCEMENTS-SETTINGS","status":"REQUIRED","owner":"P17/P19","gates":["G3","G6","G7"]}
+    ],
+    "master_predecessors": ["P06","P12","P13","P14","P16"],
+    "inherited_authorities": [
+      "P06 entitlement resolver plus ownership/DNS/HTTPS/risk axes and seven-day normal downgrade grace",
+      "P09 mandatory ClamAV quarantine/scan/publish fail-closed authority",
+      "P12 Workspace membership/RBAC and notification core/read-state/dedupe/deep-link authority",
+      "P13 billing/payment/structured entitlement source authority",
+      "P14 support ticket/mail authority; ticket mutation is request/evidence only and never entitlement",
+      "P15 customer authentication/session/CSRF/Origin/rate/OAuth authority and shared security primitives",
+      "P16 destination/domain risk and abuse authority including exact-current fail-closed actions and redaction"
+    ],
+    "master_required_tests": ["permission denial","ticket-manager cannot approve","reason required","approve/deny/suspend/revoke/restore audit","API-key secret-once/rotation/revocation/scope/expiry","webhook signature/rotation/retry/idempotency/disable/SSRF/DNS-rebinding","session/MFA","secret redaction"],
+    "scope": "P17 closes administrator access/permissions/operations/audit, domain-entitlement Admin governance, API-key and generic outbound-webhook contributions without re-owning predecessor business/security authorities or P18/P19/P20-P22 release work."
+  },
+  "predecessor_signed_authority": {
+    "node":"P16","integration_commit":"62d682a25532eef3cc207a5e9964a62f6072ede7","signed_source_commit":"c22d87102a8a691b5d1d1a31506def21112700e7","closure_run_id":33010844881,"artifact_id":9630819391,"artifact_digest":"sha256:00dbba2180f88ecdb6b369cb97abfdcafd211789088837d39e02a2d331a75722","phase":"signed","merge_authoritative":true,"case_range":"P16-T001..P16-T029","affected_matrix":"55/55"
+  },
+  "permission_contract": {
+    "admin_permissions": ["platform.read","admins.manage","users.manage","workspaces.manage","links.manage","domains.manage","domains.risk.manage","domains.entitlements.manage","security.manage","files.manage","tickets.manage","operations.manage","billing.manage","mail.manage","settings.manage","content.manage"],
+    "rules": [
+      "No authenticated-admin or superuser boolean substitutes for a dedicated server permission decision.",
+      "tickets.manage never implies domains.entitlements.manage.",
+      "domains.manage never implies domains.risk.manage or domains.entitlements.manage.",
+      "security.manage never implies admins.manage, operations.manage or domains.entitlements.manage.",
+      "Frontend navigation visibility never substitutes for server authorization.",
+      "Workspace API-key and webhook mutation require dedicated server-side Workspace role/capability checks and cannot weaken P12 tenant/RBAC."
+    ]
+  },
+  "route_contract": {
+    "workspace_routes": ["APP-API-KEYS /app/api-keys","APP-WEBHOOKS /app/webhooks"],
+    "admin_routes": [
+      "ADMIN-LOGIN /admin/login","ADMIN-OVERVIEW /admin","ADMIN-USERS /admin/users[/{userId}]","ADMIN-WORKSPACES /admin/workspaces[/{workspaceId}]","ADMIN-LINKS /admin/resources/links[/{linkId}]","ADMIN-DOMAINS /admin/resources/domains[/{domainId}]","ADMIN-QR-TEXT-BIO /admin/resources/{qr|text|bio}[/{resourceId}]","ADMIN-FILES /admin/files[/{fileId}]","ADMIN-DEST-RISK /admin/trust/destination-risk[/{riskId}]","ADMIN-DOMAIN-RISK /admin/trust/domain-risk[/{domainId}]","ADMIN-ABUSE /admin/trust/abuse[/{reportId}]","ADMIN-DOMAIN-ENTITLEMENTS /admin/domain-entitlements","ADMIN-DOMAIN-ENTITLEMENT /admin/domain-entitlements/{workspaceId}","ADMIN-TICKETS /admin/tickets[/{ticketId}]","ADMIN-ANNOUNCEMENTS /admin/announcements","ADMIN-MAIL /admin/mail","ADMIN-JOBS /admin/operations/jobs","ADMIN-SERVICES /admin/operations/services","ADMIN-PLANS /admin/commerce/plans","ADMIN-PAYMENTS /admin/commerce/payments[/{paymentId}]","ADMIN-FX /admin/commerce/fx","ADMIN-ADMINS /admin/access/administrators[/{adminId}]","ADMIN-ROLES /admin/access/roles","ADMIN-AUDIT /admin/audit","ADMIN-GENERAL /admin/platform/general","ADMIN-OFFICIAL-DOMAINS /admin/platform/official-domains","ADMIN-OAUTH /admin/platform/oauth","ADMIN-TURNSTILE /admin/platform/turnstile","ADMIN-MAIL-TEMPLATES /admin/platform/mail-templates[/{key}]","ADMIN-STORAGE /admin/platform/storage"
+    ],
+    "ia_exact_apis": ["POST /api/admin/auth/login","GET /api/admin/overview","GET /api/admin/domain-entitlements","GET /api/admin/domain-entitlements/{workspaceId}","POST /api/admin/domain-entitlements/{workspaceId}/decisions","GET /api/admin/audit","/api/workspaces/{id}/api-keys*","/api/workspaces/{id}/webhooks*","/api/admin/bot-protection"],
+    "p17_implementation_api_authority": [
+      "GET/POST /api/workspaces/{id}/api-keys","POST /api/workspaces/{id}/api-keys/{keyId}/rotate","POST /api/workspaces/{id}/api-keys/{keyId}/revoke","GET/POST /api/workspaces/{id}/webhooks","GET /api/workspaces/{id}/webhooks/{webhookId}","POST /api/workspaces/{id}/webhooks/{webhookId}/rotate-secret","POST /api/workspaces/{id}/webhooks/{webhookId}/enable","POST /api/workspaces/{id}/webhooks/{webhookId}/disable","GET /api/workspaces/{id}/webhooks/{webhookId}/deliveries","POST /api/workspaces/{id}/webhooks/{webhookId}/deliveries/{deliveryId}/retry","/api/admin/administrators*","/api/admin/roles*","/api/admin/users*","/api/admin/workspaces*","/api/admin/resources*","/api/admin/operations*","/api/admin/settings*","/api/admin/official-domains*","/api/admin/announcements*"
+    ],
+    "rules": ["All Workspace/Admin routes are no-store/noindex and absent from sitemaps.","Page-Level IA is the route/path authority; no legacy alias or unregistered Admin/Workspace page may be invented.","IA family dependencies are not misrepresented as IA-exact methods; P17 implementation methods are separately labeled.","Inherited P09/P13/P14/P15/P16 surfaces remain predecessor-owned except for the explicit P17 governance contribution."]
+  },
+  "domain_entitlement_contract": {
+    "permission":"domains.entitlements.manage",
+    "approve_required":["domain_limit","starts_at","expires_at","reason","support_ticket_id"],
+    "deny_required":["reason","user_visible_category"],
+    "suspend_required":["reason","effective_at","scope"],
+    "revoke_required":["reason","confirmation","existing_link_impact"],
+    "restore_required":["reason","current_security_ownership_evidence"],
+    "rules":["Manual approval expires_at is required and later than starts_at.","Ticket creation/reply/close never grants entitlement.","P06/P13 source precedence/domain_limit/grace remain authoritative.","P16 domain-risk/abuse safety suspension remains independent and can block otherwise valid entitlement."]
+  },
+  "admin_access_contract": {
+    "states":["active","suspended","totp-required","locked","session-revoked"],
+    "rules":["Administrator identity and permission lifecycle is separate from customer account and Workspace membership authority.","TOTP material is never exposed after enrollment proof.","Session rotation/revocation, CSRF, Origin and rate controls are server-side.","High-risk actions require explicit permission and accountable reason/impact confirmation where applicable."]
+  },
+  "api_key_contract": {
+    "states":["active","expired","revoked"],
+    "rules":["Raw API-key secret is returned exactly once and is not recoverable from storage.","Each key is Workspace-bound, scope-bound, expiry-aware and server-rate-limited.","Rotation atomically invalidates old secret authority; revoke/expiry take effect immediately.","Logs/audit/evidence contain key ID/prefix metadata only, never raw secret."]
+  },
+  "webhook_contract": {
+    "service_identity":"SVC-OPS-MONITOR operationsmonitor outbound-webhook delivery contribution",
+    "states":["active","retrying","disabled","failed","delivered"],
+    "rules":["Generic outbound webhooks are distinct from P13 payment callbacks.","Endpoint ownership and Workspace authorization are server-authoritative.","Signing uses reviewed canonical delivery ID/timestamp/body semantics; secrets are stored safely and rotation invalidates old signing authority.","Delivery validates scheme, hostname and every resolved/connected address before connect and after every redirect; loopback/private/link-local/metadata/reserved/mixed/rebound destinations fail closed.","Retry/backoff is bounded, durable and idempotent; disable stops delivery authority and restart recovery cannot duplicate authoritative state.","No ninth production daemon: delivery uses fixed SVC-OPS-MONITOR."]
+  },
+  "operations_audit_contract": {
+    "service_ids":["redirectengine","analyticsworker","analyticsreconciler","platformapi","mailworker","fileworker","operationsmonitor","logreceiver"],
+    "audit_fields":["time","actor","action","resource","workspace","result","ip_metadata","request_id","before_after","reason"],
+    "rules":["Service restart/requeue requires operations.manage, reason/impact confirmation and immutable audit.","Audit query is append-only authority; ordinary API cannot mutate/delete history.","Passwords, sessions/tokens, OAuth/payment/webhook/API-key secrets, DB credentials, ClamAV private paths and user content are prohibited from audit/log evidence."]
+  },
+  "browser_contract": {
+    "states": {
+      "admin_login":["input","submitting","invalid","TOTP-required","locked","rate-limited","success"],
+      "admin_access":["loading","empty","detail","active","suspended","TOTP","session-revoke-confirm","role-list","permission-conflict","in-use","error"],
+      "admin_entitlements":["loading","empty","queued","filtered-empty","stale","requested","active-plan","active-manual","expired","suspended","revoked","conflict","destructive-confirm","error"],
+      "workspace_api_keys":["loading","empty","create","secret-once","expired","revoked","forbidden","error"],
+      "workspace_webhooks":["loading","empty","create","delivery","retrying","disabled","secret-rotate","forbidden","error"],
+      "admin_operations":["loading","normal","partial-service-degradation","running","failed","retrying","stale","healthy","unavailable","restart-confirm","error"],
+      "admin_audit":["loading","empty","filtered-empty","detail","partial-diff","stale","error"]
+    },
+    "rules":["Use inherited Admin/Workspace shells and Design System only.","Canonical desktop/tablet/mobile plus 320 CSS px reflow, keyboard/focus/name-role-value and reduced-motion evidence are required where applicable.","High-risk actions have visible triggers and reason/impact confirmation; persistent failure/result is not toast-only.","Direct URL/API authorization is re-evaluated server-side."]
+  },
+  "environment_contract": {
+    "mysql":"Real MySQL 8.x for administrator/role/permission/session, entitlement decisions, API-key/webhook state, operations/audit and settings evidence.",
+    "redis":"Real Redis for rate/idempotency/lease/short-lived coordination where implemented; durable authority remains MySQL.",
+    "platformapi":"Real native Go platformapi for Workspace/Admin APIs and server authorization.",
+    "operationsmonitor":"Fixed SVC-OPS-MONITOR handles webhook delivery and P17 operational job contributions; no ninth daemon.",
+    "webhook_fixture":"Deterministic local DNS/HTTP fixtures exercise signing, retry, redirect, SSRF and DNS-rebinding paths without probing external private networks.",
+    "browser":"Built Workspace/Admin surfaces with real local APIs and server session/RBAC authority.",
+    "production_docker_compose_node":"PROHIBITED"
+  },
+  "closure": {"same_exact_head_required":true,"required_case_range":"P17-T001..P17-T035","review_required":true,"defect_limits":{"p0":0,"p1":0,"decision_required":0},"phases":{"pre-sign":{"review_status":"PENDING","merge_authoritative":false},"signed":{"review_status":"SIGNED","merge_authoritative":true}},"scope_rule":"P17 closes only its administrator/access/operations/audit/domain-entitlement-governance/API-key/webhook and frozen shared contributions. P18/P19 and release-wide P20-P22 remain later-owned."},
+  "cases": [
+    {"id":"P17-T001","name":"Durable administrator, role and permission authority","driver":"python3 scripts/p17/integration.py --case P17-T001","oracle":"Administrator identities, role assignments and explicit permission grants are durable, server-authoritative, auditable and separate from customer Workspace RBAC.","evidence":"artifacts/v10/P17/api/P17-T001.json","owner":"Backend Lead"},
+    {"id":"P17-T002","name":"Administrator login, session, TOTP, lock and rate authority","driver":"python3 scripts/p17/integration.py --case P17-T002","oracle":"Admin login enforces server session lifecycle, TOTP, lock/rate, CSRF/Origin and secret-safe behavior.","evidence":"artifacts/v10/P17/security/P17-T002.json","owner":"Security Reviewer"},
+    {"id":"P17-T003","name":"Permission catalog and independent authorization","driver":"python3 scripts/p17/integration.py --case P17-T003","oracle":"Dedicated permissions are server-evaluated and unrelated authority never implies another.","evidence":"artifacts/v10/P17/security/P17-T003.json","owner":"Security Reviewer"},
+    {"id":"P17-T004","name":"Administrator MFA and session governance","driver":"python3 scripts/p17/integration.py --case P17-T004","oracle":"MFA/session list/revoke is actor-bound, replay-safe and auditable; revoked sessions lose authority immediately.","evidence":"artifacts/v10/P17/security/P17-T004.json","owner":"Security Reviewer"},
+    {"id":"P17-T005","name":"High-risk reason, idempotency, correlation and immutable audit","driver":"python3 scripts/p17/integration.py --case P17-T005","oracle":"High-risk mutation records required reason, idempotency/correlation and immutable secret-safe before/after audit.","evidence":"artifacts/v10/P17/audit/P17-T005.json","owner":"Backend Lead"},
+    {"id":"P17-T006","name":"Domain-entitlement queue/detail and dedicated permission","driver":"python3 scripts/p17/integration.py --case P17-T006","oracle":"Queue/detail consume P06/P13/P14 authority and require domains.entitlements.manage independently.","evidence":"artifacts/v10/P17/domain/P17-T006.json","owner":"Backend Lead"},
+    {"id":"P17-T007","name":"Manual entitlement approve and deny authority","driver":"python3 scripts/p17/integration.py --case P17-T007","oracle":"Approve creates only structured manual_approval through inherited resolver; deny grants nothing; both are fully auditable.","evidence":"artifacts/v10/P17/domain/P17-T007.json","owner":"Backend Lead"},
+    {"id":"P17-T008","name":"Entitlement suspend, revoke, restore and ticket-manager denial","driver":"python3 scripts/p17/integration.py --case P17-T008","oracle":"Suspend/revoke immediate; restore needs current evidence; tickets.manage alone never decides entitlement.","evidence":"artifacts/v10/P17/domain/P17-T008.json","owner":"Security Reviewer"},
+    {"id":"P17-T009","name":"Preserve entitlement, grace and domain safety semantics","driver":"python3 scripts/p17/integration.py --case P17-T009","oracle":"P06/P13 source precedence/domain_limit/grace and P16 safety suspension remain authoritative and conjunctive.","evidence":"artifacts/v10/P17/domain/P17-T009.json","owner":"QA Lead"},
+    {"id":"P17-T010","name":"Administrator users and workspaces governance","driver":"python3 scripts/p17/integration.py --case P17-T010","oracle":"User/workspace governance requires dedicated permission, safe enumeration, accountable reason and audit.","evidence":"artifacts/v10/P17/api/P17-T010.json","owner":"Backend Lead"},
+    {"id":"P17-T011","name":"Cross-resource governance permission separation","driver":"python3 scripts/p17/integration.py --case P17-T011","oracle":"Links/domains/QR/Text/Bio actions enforce dedicated resource permissions without cross-authority escalation.","evidence":"artifacts/v10/P17/api/P17-T011.json","owner":"Security Reviewer"},
+    {"id":"P17-T012","name":"Files administrator actions preserve mandatory ClamAV","driver":"python3 scripts/p17/integration.py --case P17-T012","oracle":"File quarantine/rescan/restore/delete reuses P09 state and cannot bypass ClamAV fail-closed authority.","evidence":"artifacts/v10/P17/files/P17-T012.json","owner":"Security Reviewer"},
+    {"id":"P17-T013","name":"Trust, domain-risk and abuse governance inherits P16","driver":"python3 scripts/p17/integration.py --case P17-T013","oracle":"P17 consumes P16 permissions/actions without weakening exact-current risk, fail-closed or provider-redaction rules.","evidence":"artifacts/v10/P17/trust/P17-T013.json","owner":"Security Reviewer"},
+    {"id":"P17-T014","name":"Operations jobs inspect and requeue authority","driver":"python3 scripts/p17/integration.py --case P17-T014","oracle":"Job inspect/requeue requires operations.manage, bounded idempotency/correlation and audit.","evidence":"artifacts/v10/P17/operations/P17-T014.json","owner":"Platform Lead"},
+    {"id":"P17-T015","name":"Eight-service health and restart governance","driver":"python3 scripts/p17/integration.py --case P17-T015","oracle":"Exactly eight service identities; restart requires operations.manage, reason/impact confirmation and audit; no ninth daemon.","evidence":"artifacts/v10/P17/operations/P17-T015.json","owner":"Platform Lead"},
+    {"id":"P17-T016","name":"General settings and brand assets governance","driver":"python3 scripts/p17/integration.py --case P17-T016","oracle":"settings.manage governs reviewed settings/assets with validation/conflict and secret masking.","evidence":"artifacts/v10/P17/platform/P17-T016.json","owner":"Backend Lead"},
+    {"id":"P17-T017","name":"Official-domain lifecycle and destination-risk parity","driver":"python3 scripts/p17/integration.py --case P17-T017","oracle":"Official hosts require domains.manage and preserve P05/P16 risk parity across disable/default/HTTPS transitions.","evidence":"artifacts/v10/P17/platform/P17-T017.json","owner":"Security Reviewer"},
+    {"id":"P17-T018","name":"Turnstile administrator configuration","driver":"python3 scripts/p17/integration.py --case P17-T018","oracle":"settings.manage governs bot protection; secrets masked and incomplete/provider-error states preserve fail-closed protection.","evidence":"artifacts/v10/P17/platform/P17-T018.json","owner":"Security Reviewer"},
+    {"id":"P17-T019","name":"Announcement lifecycle governance","driver":"python3 scripts/p17/integration.py --case P17-T019","oracle":"content.manage governs draft/scheduled/published/archived states, validation, scope, cache and audit.","evidence":"artifacts/v10/P17/platform/P17-T019.json","owner":"Backend Lead"},
+    {"id":"P17-T020","name":"Immutable audit query and redaction","driver":"python3 scripts/p17/integration.py --case P17-T020","oracle":"Authorized audit query exposes accountable fields while secrets/raw tokens/provider evidence remain redacted and history immutable.","evidence":"artifacts/v10/P17/audit/P17-T020.json","owner":"Security Reviewer"},
+    {"id":"P17-T021","name":"P17 notification producer contribution","driver":"python3 scripts/p17/integration.py --case P17-T021","oracle":"P17 events reuse P12 notification core/dedupe/safe deep links and never become authorization/audit authority.","evidence":"artifacts/v10/P17/notifications/P17-T021.json","owner":"Backend Lead"},
+    {"id":"P17-T022","name":"API-key create, scope and secret-once","driver":"python3 scripts/p17/integration.py --case P17-T022","oracle":"Workspace-authorized key creation constrains scope, stores no recoverable raw secret and discloses it once.","evidence":"artifacts/v10/P17/api-keys/P17-T022.json","owner":"Security Reviewer"},
+    {"id":"P17-T023","name":"API-key rotation, revocation, expiry and rate","driver":"python3 scripts/p17/integration.py --case P17-T023","oracle":"Rotation invalidates old secret; revoke/expiry immediate; scope/rate server-enforced and lifecycle audited.","evidence":"artifacts/v10/P17/api-keys/P17-T023.json","owner":"Security Reviewer"},
+    {"id":"P17-T024","name":"API-key tenant and RBAC isolation","driver":"python3 scripts/p17/integration.py --case P17-T024","oracle":"Cross-Workspace/insufficient-role API-key calls fail without existence leakage; frontend is not authority.","evidence":"artifacts/v10/P17/api-keys/P17-T024.json","owner":"Security Reviewer"},
+    {"id":"P17-T025","name":"Outbound-webhook ownership and configuration","driver":"python3 scripts/p17/integration.py --case P17-T025","oracle":"Generic webhook endpoints are Workspace-owned, validated, payment-callback-independent and tenant-authorized.","evidence":"artifacts/v10/P17/webhooks/P17-T025.json","owner":"Backend Lead"},
+    {"id":"P17-T026","name":"Outbound-webhook signing and secret rotation","driver":"python3 scripts/p17/integration.py --case P17-T026","oracle":"Deliveries use reviewed signatures; secret storage/one-time display/rotation are atomic and old authority invalidates.","evidence":"artifacts/v10/P17/webhooks/P17-T026.json","owner":"Security Reviewer"},
+    {"id":"P17-T027","name":"Outbound-webhook SSRF and DNS-rebinding defense","driver":"python3 scripts/p17/integration.py --case P17-T027","oracle":"Every DNS/connect/redirect hop rejects private/link-local/metadata/reserved/mixed/rebound destinations fail closed.","evidence":"artifacts/v10/P17/webhooks/P17-T027.json","owner":"Security Reviewer"},
+    {"id":"P17-T028","name":"Outbound-webhook retry, idempotency and disable","driver":"python3 scripts/p17/integration.py --case P17-T028","oracle":"Durable bounded retry/backoff/idempotency and disable/restart recovery cannot duplicate authoritative state.","evidence":"artifacts/v10/P17/webhooks/P17-T028.json","owner":"Backend Lead"},
+    {"id":"P17-T029","name":"Outbound-webhook tenant/RBAC, audit and redaction","driver":"python3 scripts/p17/integration.py --case P17-T029","oracle":"Delivery inspection/retry/disable remains tenant-authorized and evidence excludes raw webhook secrets and unnecessary PII.","evidence":"artifacts/v10/P17/webhooks/P17-T029.json","owner":"Security Reviewer"},
+    {"id":"P17-T030","name":"Admin Access real browser authority","driver":"node scripts/p17/browser.mjs --case P17-T030","oracle":"Admin login/TOTP/administrators/roles/sessions are route-backed, authorized, responsive/accessibility compliant and accountable.","evidence":"artifacts/v10/P17/browser/P17-T030.json","owner":"QA Lead"},
+    {"id":"P17-T031","name":"Admin governance and domain-entitlement browser authority","driver":"node scripts/p17/browser.mjs --case P17-T031","oracle":"Governance/domain-entitlement routes cover frozen states, permission denials and high-risk confirmations without unsafe evidence.","evidence":"artifacts/v10/P17/browser/P17-T031.json","owner":"QA Lead"},
+    {"id":"P17-T032","name":"Workspace API-key and webhook browser authority","driver":"node scripts/p17/browser.mjs --case P17-T032","oracle":"/app/api-keys and /app/webhooks cover frozen lifecycle/forbidden/error states with direct-route RBAC and safe secrets.","evidence":"artifacts/v10/P17/browser/P17-T032.json","owner":"QA Lead"},
+    {"id":"P17-T033","name":"Operations, Audit and Platform browser authority","driver":"node scripts/p17/browser.mjs --case P17-T033","oracle":"Overview/jobs/services/audit/general/official-domains/Turnstile/announcements cover applicable degradation/stale/error/destructive states and permission boundaries.","evidence":"artifacts/v10/P17/browser/P17-T033.json","owner":"QA Lead"},
+    {"id":"P17-T034","name":"Exact-head evidence coherence","driver":"python3 scripts/p17/evidence.py","oracle":"P17-T001..T033 evidence is complete, redacted, hashed, producer-coherent and one-head bound; mixed-head/unsafe evidence fails.","evidence":"artifacts/v10/P17/results/P17-T034.json","owner":"QA Lead"},
+    {"id":"P17-T035","name":"Accountable signed exact-head closure","driver":"python3 scripts/p17/closure_ci.py","oracle":"Review-only signed child reruns all cases and affected matrix; P0/P1/DECISION REQUIRED zero and merge_authoritative=true.","evidence":"artifacts/v10/P17/results/P17-T035.json","owner":"Technical Reviewer"}
+  ]
+}

@@ -1,0 +1,113 @@
+name: P17 Admin Permissions Audit Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P17/test-plan.json'
+      - 'artifacts/v10/P17/review.md'
+      - 'scripts/p17/validate_contract.py'
+      - '.github/workflows/p17-admin-permissions-audit.yml'
+      - 'specifications/**'
+      - 'docs/security/SECURITY_INVARIANTS.md'
+      - 'artifacts/v10/P16/review.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p17-admin-permissions-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P17 frozen contract and predecessor guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact P17 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile P17 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p17/validate_contract.py
+
+      - name: Validate frozen P17 contract and ancestry
+        id: contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p17/validate_contract.py | tee /tmp/p17-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p17-contract.json', encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert data['node'] == 'P17', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          assert data['base_integration_commit'] == '62d682a25532eef3cc207a5e9964a62f6072ede7', data
+          assert data['contract_authority'] != '__PIN_AFTER_FREEZE__', data
+          assert data['case_range'] == 'P17-T001..P17-T035', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          if head == data['contract_authority']:
+              assert data['review_phase'] == 'pending', data
+              assert data['mode'] == 'contract-freeze', data
+              assert data['implementation_authorized'] is False, data
+          elif data['review_phase'] == 'pending':
+              assert data['mode'] == 'implementation-guard', data
+              assert data['implementation_authorized'] is True, data
+          else:
+              assert data['mode'] == 'signed-review-guard', data
+              assert data['implementation_authorized'] is False, data
+          PY
+          head="$(git rev-parse HEAD)"
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve inherited native compile and unit boundary
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Record exact-head P17 contract evidence
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          authority="$(python3 - <<'PY'
+          import json
+          print(json.load(open('/tmp/p17-contract.json'))['contract_authority'])
+          PY
+          )"
+          mkdir -p artifacts/v10/P17/contract-guard
+          cp /tmp/p17-contract.json artifacts/v10/P17/contract-guard/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P17/contract-guard/implementation_commit.txt
+          printf '%s\n' '62d682a25532eef3cc207a5e9964a62f6072ede7' > artifacts/v10/P17/contract-guard/base_integration_commit.txt
+          printf '%s\n' "$authority" > artifacts/v10/P17/contract-guard/contract_authority.txt
+          printf '%s\n' 'P17-T001..P17-T035' > artifacts/v10/P17/contract-guard/case_range.txt
+          printf '%s\n' 'c22d87102a8a691b5d1d1a31506def21112700e7' > artifacts/v10/P17/contract-guard/p16_signed_source.txt
+
+      - name: Upload P17 exact-head contract guard evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p17-admin-permissions-audit-contract-guard-${{ steps.contract.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/contract-guard/
+            artifacts/v10/P17/test-plan.json
+            artifacts/v10/P17/review.md
+            scripts/p17/validate_contract.py
