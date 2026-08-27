@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/hex"
 	"net/http"
@@ -13,37 +12,6 @@ import (
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	"github.com/redis/go-redis/v9"
 )
-
-type adminLoginLimiter struct {
-	client *redis.Client
-	limit  int64
-	window time.Duration
-}
-
-func (l adminLoginLimiter) Allow(ctx context.Context, key string) (bool, error) {
-	if l.client == nil || strings.TrimSpace(key) == "" || l.limit < 1 || l.window <= 0 {
-		return false, adminaccess.ErrInvalid
-	}
-	redisKey := "p17:" + key
-	count, err := l.client.Incr(ctx, redisKey).Result()
-	if err != nil {
-		return false, err
-	}
-	if count == 1 {
-		if err := l.client.Expire(ctx, redisKey, l.window).Err(); err != nil {
-			_ = l.client.Del(ctx, redisKey).Err()
-			return false, err
-		}
-	}
-	return count <= l.limit, nil
-}
-
-func (l adminLoginLimiter) Reset(ctx context.Context, key string) error {
-	if l.client == nil || strings.TrimSpace(key) == "" {
-		return adminaccess.ErrInvalid
-	}
-	return l.client.Del(ctx, "p17:"+key).Err()
-}
 
 func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") != "1" {
@@ -100,7 +68,11 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 		loginWindow = parsed
 	}
 
-	service, err := adminaccess.NewService(db, adminLoginLimiter{client: redisClient, limit: loginLimit, window: loginWindow}, cipher, sessionTTL, origins)
+	limiter, err := adminaccess.NewRedisLoginLimiter(redisClient, "admin:login:", loginLimit, loginWindow)
+	if err != nil {
+		return nil, false, err
+	}
+	service, err := adminaccess.NewService(db, limiter, cipher, sessionTTL, origins)
 	if err != nil {
 		return nil, false, err
 	}
