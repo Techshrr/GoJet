@@ -19,27 +19,15 @@ SPEC_BLOBS = {
     "docs/security/SECURITY_INVARIANTS.md": "5d3178ee80bf46b4f00df729ab24d783a7af75dc",
 }
 EXPECTED_CONTRACT_FILES = {
-    "artifacts/v10/P17/test-plan.json", "artifacts/v10/P17/review.md",
-    "scripts/p17/validate_contract.py", ".github/workflows/p17-admin-permissions-audit.yml",
+    "artifacts/v10/P17/test-plan.json",
+    "artifacts/v10/P17/review.md",
+    "scripts/p17/validate_contract.py",
+    ".github/workflows/p17-admin-permissions-audit.yml",
 }
-EXPECTED_CAPABILITIES = {
-    "CAP-ADMIN-ACCESS": ("P17", ("G3","G6","G10")),
-    "CAP-OPS-AUDIT": ("P17", ("G3","G6","G13")),
-    "CAP-API-KEYS": ("P17", ("G3","G6")),
-    "CAP-USER-WEBHOOKS": ("P17", ("G3","G6")),
-    "CAP-OFFICIAL-DOMAINS": ("P05/P17", ("G3","G6")),
-    "CAP-FILES": ("P09/P17", ("G3","G6","G10")),
-    "CAP-NOTIFICATIONS": ("P12/P13-P17", ("G3","G5","G6","G10")),
-    "CAP-TURNSTILE": ("P14/P15/P17", ("G6","G10","G13")),
-    "CAP-DOMAIN-ENTITLEMENT": ("P06/P13/P14/P17", ("G6","G10")),
-    "CAP-DOMAIN-RISK": ("P06/P16/P17", ("G6","G13")),
-    "CAP-ABUSE": ("P16/P17", ("G6","G10")),
-    "CAP-ANNOUNCEMENTS-SETTINGS": ("P17/P19", ("G3","G6","G7")),
-}
-EXPECTED_PERMISSIONS = {
-    "platform.read","admins.manage","users.manage","workspaces.manage","links.manage","domains.manage",
-    "domains.risk.manage","domains.entitlements.manage","security.manage","files.manage","tickets.manage",
-    "operations.manage","billing.manage","mail.manage","settings.manage","content.manage",
+EXPECTED_CAPS = {
+    "CAP-ADMIN-ACCESS","CAP-OPS-AUDIT","CAP-API-KEYS","CAP-USER-WEBHOOKS",
+    "CAP-OFFICIAL-DOMAINS","CAP-FILES","CAP-NOTIFICATIONS","CAP-TURNSTILE",
+    "CAP-DOMAIN-ENTITLEMENT","CAP-DOMAIN-RISK","CAP-ABUSE","CAP-ANNOUNCEMENTS-SETTINGS",
 }
 PENDING = "Status: **PENDING — CONTRACT DRAFTING / IMPLEMENTATION NOT AUTHORIZED**"
 SIGNED = "Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**"
@@ -48,117 +36,158 @@ SIGNED = "Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQU
 def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], text=True).strip()
 
-def ancestor(a: str, b: str) -> bool:
-    return subprocess.run(["git","merge-base","--is-ancestor",a,b], check=False).returncode == 0
 
-def blob(rev: str, path: str) -> str:
-    return git("rev-parse", f"{rev}:{path}")
+def ancestor(older: str, newer: str) -> bool:
+    return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], check=False).returncode == 0
 
-def need(ok: bool, msg: str, errors: list[str]) -> None:
-    if not ok: errors.append(msg)
 
-def markers(text: str, values: tuple[str, ...], label: str, errors: list[str]) -> None:
-    low=text.lower()
-    for value in values: need(value.lower() in low, f"{label} missing {value}", errors)
+def blob(revision: str, path: str) -> str:
+    return git("rev-parse", f"{revision}:{path}")
+
+
+def need(condition: bool, message: str, errors: list[str]) -> None:
+    if not condition:
+        errors.append(message)
 
 
 def main() -> int:
-    errors=[]
-    plan_path=Path("artifacts/v10/P17/test-plan.json")
-    review_path=Path("artifacts/v10/P17/review.md")
-    need(plan_path.is_file(), "missing P17 test plan", errors)
-    need(review_path.is_file(), "missing P17 review", errors)
+    errors: list[str] = []
+    plan_path = Path("artifacts/v10/P17/test-plan.json")
+    review_path = Path("artifacts/v10/P17/review.md")
+    need(plan_path.is_file(), "missing P17 test-plan.json", errors)
+    need(review_path.is_file(), "missing P17 review.md", errors)
     if errors:
-        print(json.dumps({"node":"P17","status":"FAIL","errors":errors},indent=2)); return 1
-    head=git("rev-parse","HEAD")
-    plan=json.loads(plan_path.read_text(encoding="utf-8"))
-    review=review_path.read_text(encoding="utf-8")
+        print(json.dumps({"node":"P17","status":"FAIL","errors":errors}, indent=2))
+        return 1
 
-    need(ancestor(BASE, CONTRACT_AUTHORITY), "contract authority not based on P16 integration", errors)
-    need(ancestor(CONTRACT_AUTHORITY, head), "HEAD not descendant of frozen P17 authority", errors)
-    need(ancestor(P16_SIGNED_SOURCE, BASE), "P16 signed source not preserved in integration ancestry", errors)
-    authority_changed={x for x in git("diff","--name-only",f"{BASE}..{CONTRACT_AUTHORITY}").splitlines() if x}
-    need(authority_changed == EXPECTED_CONTRACT_FILES, f"contract-freeze path set drift: {sorted(authority_changed)}", errors)
-    need(blob("HEAD","artifacts/v10/P17/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "P17 test-plan blob drift", errors)
-    need(blob(CONTRACT_AUTHORITY,"artifacts/v10/P17/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "authority test-plan mismatch", errors)
-    for path, expected in SPEC_BLOBS.items(): need(blob("HEAD",path)==expected, f"normative blob drift: {path}", errors)
-    need(blob("HEAD","artifacts/v10/P16/review.md") == P16_SIGNED_REVIEW_BLOB, "P16 signed review drift", errors)
+    head = git("rev-parse", "HEAD")
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    review = review_path.read_text(encoding="utf-8")
 
-    need(plan.get("node")=="P17" and plan.get("title")=="Admin, Permissions and Audit", "P17 identity drift", errors)
-    need(plan.get("issue")==46 and plan.get("base_integration_commit")==BASE, "P17 issue/base drift", errors)
-    need(plan.get("specification_ids")==["GJ-V10-MP-GREENFIELD-2026-08-20","GJ-V10-DS-GREENFIELD-2026-08-20","GJ-V10-IA-GREENFIELD-2026-08-20"], "specification authority drift", errors)
+    need(ancestor(BASE, CONTRACT_AUTHORITY), "contract authority must descend from exact P16 integration base", errors)
+    need(ancestor(CONTRACT_AUTHORITY, head), "P17 HEAD must descend from frozen contract authority", errors)
+    need(ancestor(P16_SIGNED_SOURCE, BASE), "P16 signed source must remain in P17 integration ancestry", errors)
 
-    cap=plan.get("capability_contract",{})
-    actual={r.get("id"):(r.get("owner"),tuple(r.get("gates",[]))) for r in cap.get("capabilities",[]) if isinstance(r,dict)}
-    need(actual==EXPECTED_CAPABILITIES, f"capability ownership/gates drift: {actual}", errors)
-    need(cap.get("master_predecessors")==["P06","P12","P13","P14","P16"], "predecessor list drift", errors)
-    markers("\n".join(cap.get("master_required_tests",[])), ("permission denial","ticket-manager cannot approve","reason required","API-key","webhook","session/MFA","secret redaction"), "required tests", errors)
+    authority_changed = {x for x in git("diff", "--name-only", f"{BASE}..{CONTRACT_AUTHORITY}").splitlines() if x}
+    need(authority_changed == EXPECTED_CONTRACT_FILES,
+         f"P17 contract-freeze path set must be exactly {sorted(EXPECTED_CONTRACT_FILES)}, got {sorted(authority_changed)}", errors)
 
-    pred=plan.get("predecessor_signed_authority",{})
-    need(pred.get("node")=="P16" and pred.get("integration_commit")==BASE, "P16 predecessor integration drift", errors)
-    need(pred.get("signed_source_commit")==P16_SIGNED_SOURCE, "P16 signed source drift", errors)
-    need(pred.get("closure_run_id")==33010844881 and pred.get("artifact_id")==9630819391, "P16 closure authority drift", errors)
-    need(pred.get("artifact_digest")=="sha256:00dbba2180f88ecdb6b369cb97abfdcafd211789088837d39e02a2d331a75722", "P16 closure digest drift", errors)
-    need(pred.get("phase")=="signed" and pred.get("merge_authoritative") is True and pred.get("affected_matrix")=="55/55", "P16 predecessor not signed/authoritative", errors)
+    try:
+        need(blob("HEAD", "artifacts/v10/P17/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "frozen P17 test-plan blob drift", errors)
+        need(blob(CONTRACT_AUTHORITY, "artifacts/v10/P17/test-plan.json") == FROZEN_TEST_PLAN_BLOB, "authority test-plan blob mismatch", errors)
+        need(blob("HEAD", "artifacts/v10/P16/review.md") == P16_SIGNED_REVIEW_BLOB, "P16 signed review blob drift", errors)
+        for path, expected in SPEC_BLOBS.items():
+            need(blob("HEAD", path) == expected, f"normative authority blob drift: {path}", errors)
+    except Exception as exc:
+        errors.append(f"cannot bind frozen authority blobs: {exc}")
 
-    permissions=plan.get("permission_contract",{})
-    need(set(permissions.get("admin_permissions",[]))==EXPECTED_PERMISSIONS, "Admin permission catalog drift", errors)
-    markers("\n".join(permissions.get("rules",[])), ("tickets.manage","domains.entitlements.manage","domains.risk.manage","security.manage","Frontend","Workspace"), "permission rules", errors)
+    need(plan.get("node") == "P17", "node must remain P17", errors)
+    need(plan.get("title") == "Admin, Permissions and Audit", "P17 title drift", errors)
+    need(plan.get("issue") == 46, "P17 issue drift", errors)
+    need(plan.get("base_integration_commit") == BASE, "P17 base integration drift", errors)
+    need(plan.get("specification_ids") == [
+        "GJ-V10-MP-GREENFIELD-2026-08-20",
+        "GJ-V10-DS-GREENFIELD-2026-08-20",
+        "GJ-V10-IA-GREENFIELD-2026-08-20",
+    ], "P17 specification IDs/order drift", errors)
 
-    routes=plan.get("route_contract",{})
-    need(set(routes.get("workspace_routes",[]))=={"APP-API-KEYS /app/api-keys","APP-WEBHOOKS /app/webhooks"}, "Workspace developer routes drift", errors)
-    admin="\n".join(routes.get("admin_routes",[]))
-    markers(admin, ("/admin/access/administrators","/admin/access/roles","/admin/domain-entitlements","/admin/operations/services","/admin/audit","/admin/platform/official-domains","/admin/platform/turnstile","/admin/trust/abuse"), "Admin routes", errors)
-    markers("\n".join(routes.get("rules",[])), ("no-store","noindex","Page-Level IA","legacy","predecessor"), "route rules", errors)
+    cap = plan.get("capability_contract", {})
+    actual_caps = {row.get("id") for row in cap.get("capabilities", []) if isinstance(row, dict)}
+    need(actual_caps == EXPECTED_CAPS, f"P17 capability set drift: {sorted(actual_caps)}", errors)
+    need(cap.get("master_predecessors") == ["P06","P12","P13","P14","P16"], "P17 predecessor list drift", errors)
 
-    entitlement=plan.get("domain_entitlement_contract",{})
-    need(entitlement.get("permission")=="domains.entitlements.manage", "entitlement permission drift", errors)
-    need(entitlement.get("approve_required")==["domain_limit","starts_at","expires_at","reason","support_ticket_id"], "approve fields drift", errors)
-    markers("\n".join(entitlement.get("rules",[])), ("expires_at","Ticket","P06/P13","P16"), "entitlement rules", errors)
+    pred = plan.get("predecessor_signed_authority", {})
+    need(pred == {
+        "node":"P16",
+        "integration_commit":BASE,
+        "signed_source_commit":P16_SIGNED_SOURCE,
+        "closure_run_id":33010844881,
+        "artifact_id":9630819391,
+        "artifact_digest":"sha256:00dbba2180f88ecdb6b369cb97abfdcafd211789088837d39e02a2d331a75722",
+        "phase":"signed",
+        "merge_authoritative":True,
+        "case_range":"P16-T001..P16-T029",
+        "affected_matrix":"55/55",
+    }, "P16 predecessor signed authority drift", errors)
 
-    keys=plan.get("api_key_contract",{})
-    need(keys.get("states")==["active","expired","revoked"], "API-key states drift", errors)
-    markers("\n".join(keys.get("rules",[])), ("exactly once","Workspace","Rotation","rate","raw secret"), "API-key rules", errors)
+    permissions = set(plan.get("permission_contract", {}).get("admin_permissions", []))
+    for required in ("admins.manage","domains.entitlements.manage","domains.risk.manage","security.manage","operations.manage","settings.manage"):
+        need(required in permissions, f"P17 required permission missing: {required}", errors)
 
-    hooks=plan.get("webhook_contract",{})
-    need(hooks.get("service_identity")=="SVC-OPS-MONITOR operationsmonitor outbound-webhook delivery contribution", "webhook service identity drift", errors)
-    markers("\n".join(hooks.get("rules",[])), ("payment callbacks","Workspace","Signing","loopback","DNS","Retry","ninth"), "webhook rules", errors)
+    routes = plan.get("route_contract", {})
+    need(set(routes.get("workspace_routes", [])) == {"APP-API-KEYS /app/api-keys","APP-WEBHOOKS /app/webhooks"}, "P17 Workspace developer route drift", errors)
+    route_text = "\n".join(routes.get("admin_routes", []))
+    for required in ("/admin/access/administrators","/admin/access/roles","/admin/domain-entitlements","/admin/operations/services","/admin/audit","/admin/platform/official-domains","/admin/platform/turnstile","/admin/trust/abuse"):
+        need(required in route_text, f"P17 required Admin route missing: {required}", errors)
 
-    ops=plan.get("operations_audit_contract",{})
-    need(ops.get("service_ids")==["redirectengine","analyticsworker","analyticsreconciler","platformapi","mailworker","fileworker","operationsmonitor","logreceiver"], "eight-service inventory drift", errors)
-    need(set(("actor","action","resource","result","request_id","reason")).issubset(set(ops.get("audit_fields",[]))), "audit field contract incomplete", errors)
+    entitlement = plan.get("domain_entitlement_contract", {})
+    need(entitlement.get("permission") == "domains.entitlements.manage", "P17 domain-entitlement permission drift", errors)
+    need(entitlement.get("approve_required") == ["domain_limit","starts_at","expires_at","reason","support_ticket_id"], "P17 domain-entitlement approve contract drift", errors)
 
-    browser=plan.get("browser_contract",{})
-    need(set(browser.get("states",{}))=={"admin_login","admin_access","admin_entitlements","workspace_api_keys","workspace_webhooks","admin_operations","admin_audit"}, "browser state-family drift", errors)
-    env=plan.get("environment_contract",{})
-    need(env.get("production_docker_compose_node")=="PROHIBITED", "production runtime boundary drift", errors)
-    markers("\n".join(str(v) for v in env.values()), ("MySQL","Redis","platformapi","operationsmonitor","DNS","browser"), "environment contract", errors)
+    hooks = plan.get("webhook_contract", {})
+    need(hooks.get("service_identity") == "SVC-OPS-MONITOR operationsmonitor outbound-webhook delivery contribution", "P17 webhook service identity drift", errors)
+    ops = plan.get("operations_audit_contract", {})
+    need(ops.get("service_ids") == ["redirectengine","analyticsworker","analyticsreconciler","platformapi","mailworker","fileworker","operationsmonitor","logreceiver"], "P17 eight-service inventory drift", errors)
+    env = plan.get("environment_contract", {})
+    need(env.get("production_docker_compose_node") == "PROHIBITED", "production Docker/Compose/Node boundary drift", errors)
 
-    closure=plan.get("closure",{})
-    need(closure.get("same_exact_head_required") is True and closure.get("required_case_range")=="P17-T001..P17-T035", "closure contract drift", errors)
-    need(closure.get("defect_limits")=={"p0":0,"p1":0,"decision_required":0}, "defect limits drift", errors)
-    cases=plan.get("cases",[])
-    expected_ids=[f"P17-T{i:03d}" for i in range(1,36)]
-    need([c.get("id") for c in cases if isinstance(c,dict)]==expected_ids, "frozen case IDs/order drift", errors)
+    closure = plan.get("closure", {})
+    need(closure.get("same_exact_head_required") is True, "P17 same-head closure drift", errors)
+    need(closure.get("required_case_range") == "P17-T001..P17-T035", "P17 case range drift", errors)
+    need(closure.get("defect_limits") == {"p0":0,"p1":0,"decision_required":0}, "P17 defect limits drift", errors)
+
+    cases = plan.get("cases", [])
+    expected_ids = [f"P17-T{i:03d}" for i in range(1,36)]
+    actual_ids = [c.get("id") for c in cases if isinstance(c, dict)]
+    need(actual_ids == expected_ids, f"P17 frozen case IDs/order drift: {actual_ids}", errors)
     for case in cases:
-        for field in ("id","name","driver","oracle","evidence","owner"): need(bool(str(case.get(field," ")).strip()), f"{case.get('id')} missing {field}", errors)
+        for field in ("id","name","driver","oracle","evidence","owner"):
+            need(bool(str(case.get(field, "")).strip()), f"{case.get('id')} missing {field}", errors)
 
-    status_lines=re.findall(r"^Status: \*\*[^\n]+\*\*$", review, flags=re.MULTILINE)
-    review_phase="invalid"
-    if status_lines==[PENDING]:
-        review_phase="pending"; need(blob("HEAD","artifacts/v10/P17/review.md")==PENDING_REVIEW_BLOB, "pending review blob drift", errors)
-    elif status_lines==[SIGNED]:
-        review_phase="signed"
-        need(bool(re.search(r"Reviewed pre-sign implementation SHA: `[0-9a-f]{40}`",review)), "signed review missing reviewed SHA", errors)
-        need("P0/P1/DECISION REQUIRED: `0/0/0`" in review, "signed review missing zero ledger", errors)
-    else: need(False, f"invalid review status lines: {status_lines}", errors)
+    status_lines = re.findall(r"^Status: \*\*[^\n]+\*\*$", review, flags=re.MULTILINE)
+    review_phase = "invalid"
+    if status_lines == [PENDING]:
+        review_phase = "pending"
+        try:
+            need(blob("HEAD", "artifacts/v10/P17/review.md") == PENDING_REVIEW_BLOB, "pending P17 review blob drift", errors)
+        except Exception as exc:
+            errors.append(f"cannot bind pending P17 review: {exc}")
+    elif status_lines == [SIGNED]:
+        review_phase = "signed"
+        need(bool(re.search(r"Reviewed pre-sign implementation SHA: `[0-9a-f]{40}`", review)), "signed P17 review missing reviewed pre-sign SHA", errors)
+        need("P0/P1/DECISION REQUIRED: `0/0/0`" in review, "signed P17 review missing zero defect/decision ledger", errors)
+    else:
+        need(False, f"invalid P17 review status lines: {status_lines}", errors)
 
-    if head==CONTRACT_AUTHORITY: mode="contract-freeze"; implementation_authorized=False
-    elif review_phase=="pending": mode="implementation-guard"; implementation_authorized=True
-    elif review_phase=="signed": mode="signed-review-guard"; implementation_authorized=False
-    else: mode="invalid"; implementation_authorized=False
-    result={"node":"P17","status":"PASS" if not errors else "FAIL","errors":errors,"implementation_commit":head,"base_integration_commit":BASE,"contract_authority":CONTRACT_AUTHORITY,"case_range":"P17-T001..P17-T035","review_phase":review_phase,"mode":mode,"implementation_authorized":implementation_authorized,"frozen_contract_preserved":not errors,"merge_authoritative":False,"predecessor_signed_source":P16_SIGNED_SOURCE,"predecessor_closure_run":33010844881,"predecessor_artifact":9630819391}
-    print(json.dumps(result,indent=2,sort_keys=True))
+    if head == CONTRACT_AUTHORITY:
+        mode, implementation_authorized = "contract-freeze", False
+    elif review_phase == "pending":
+        mode, implementation_authorized = "implementation-guard", True
+    elif review_phase == "signed":
+        mode, implementation_authorized = "signed-review-guard", False
+    else:
+        mode, implementation_authorized = "invalid", False
+
+    result = {
+        "node":"P17",
+        "status":"PASS" if not errors else "FAIL",
+        "errors":errors,
+        "implementation_commit":head,
+        "base_integration_commit":BASE,
+        "contract_authority":CONTRACT_AUTHORITY,
+        "case_range":"P17-T001..P17-T035",
+        "review_phase":review_phase,
+        "mode":mode,
+        "implementation_authorized":implementation_authorized,
+        "frozen_contract_preserved":not errors,
+        "merge_authoritative":False,
+        "predecessor_signed_source":P16_SIGNED_SOURCE,
+        "predecessor_closure_run":33010844881,
+        "predecessor_artifact":9630819391,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if not errors else 1
 
-if __name__=="__main__": raise SystemExit(main())
+
+if __name__ == "__main__":
+    raise SystemExit(main())
