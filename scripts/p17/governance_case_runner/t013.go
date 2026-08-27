@@ -55,7 +55,7 @@ func runT013(ctx context.Context, runtime *adminfixture.Runtime) (output, error)
 		return out, err
 	}
 	domainID, _ := res.LastInsertId()
-	res, err = runtime.DB.ExecContext(ctx, `INSERT INTO domain_risk_evaluations(workspace_id,domain_id,hostname_ascii,policy_version,request_kind,idempotency_key,state,reason_category,correlation_id,actor_id,valid_until,checked_at,next_due_at,entitlement_snapshot,ownership_snapshot,ingress_dns_snapshot,https_snapshot,routing_snapshot,created_at,updated_at) VALUES (?,?,'domain-t013.example','p16-domain-policy','initial','t013-domain-initial','block','provider-block','p16-t013-domain','p16-worker',?,?,?,?, 'active','verified','valid','active','suspended',?,?)`, ws, domainID, now.Add(time.Hour), now, now.Add(30*time.Minute), now, now)
+	res, err = runtime.DB.ExecContext(ctx, `INSERT INTO domain_risk_evaluations(workspace_id,domain_id,hostname_ascii,policy_version,request_kind,idempotency_key,state,reason_category,correlation_id,actor_id,valid_until,checked_at,next_due_at,entitlement_snapshot,ownership_snapshot,ingress_dns_snapshot,https_snapshot,routing_snapshot,created_at,updated_at) VALUES (?,?,'domain-t013.example','p16-domain-policy','initial','t013-domain-initial','block','provider-block','p16-t013-domain','p16-worker',?,?,?,'active','verified','valid','active','suspended',?,?)`, ws, domainID, now.Add(time.Hour), now, now.Add(30*time.Minute), now, now)
 	if err != nil {
 		return out, err
 	}
