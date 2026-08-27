@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"net/http"
@@ -76,11 +77,25 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if err != nil {
 		return nil, false, err
 	}
+	if err := adminaccess.VerifyDomainEntitlementSchema(context.Background(), db); err != nil {
+		return nil, false, err
+	}
 	api, err := adminaccess.NewHTTPAPI(service)
 	if err != nil {
 		return nil, false, err
 	}
-	return api.Handler(), true, nil
+
+	combined := http.NewServeMux()
+	combined.Handle("/", api.Handler())
+	domainEntitlementHandler := api.DomainEntitlementHandler()
+	for _, pattern := range []string{
+		"GET /api/admin/domain-entitlements",
+		"GET /api/admin/domain-entitlements/{workspaceId}",
+		"POST /api/admin/domain-entitlements/{workspaceId}/decisions",
+	} {
+		combined.Handle(pattern, domainEntitlementHandler)
+	}
+	return combined, true, nil
 }
 
 func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
@@ -98,6 +113,9 @@ func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/admin/administrators",
 		"POST /api/admin/administrators",
 		"GET /api/admin/audit",
+		"GET /api/admin/domain-entitlements",
+		"GET /api/admin/domain-entitlements/{workspaceId}",
+		"POST /api/admin/domain-entitlements/{workspaceId}/decisions",
 	} {
 		root.Handle(pattern, handler)
 	}

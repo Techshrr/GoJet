@@ -190,7 +190,11 @@ func (s *MySQLStore) resolveEntitlementTx(ctx context.Context, tx *sql.Tx, works
 	if err != nil {
 		return ResolvedEntitlement{}, err
 	}
-	return ResolveEntitlement(now, sources, request)
+	base, err := ResolveEntitlement(now, sources, request)
+	if err != nil {
+		return ResolvedEntitlement{}, err
+	}
+	return ApplyAdminEntitlementControl(ctx, tx, workspaceID, now, base)
 }
 
 func loadDomainByID(ctx context.Context, q queryer, workspaceID string, domainID uint64) (Domain, error) {

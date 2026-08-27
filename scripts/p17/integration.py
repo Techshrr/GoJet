@@ -12,11 +12,12 @@ from pathlib import Path
 CONTRACT_AUTHORITY = "30174f40df28678360f644b8fed79736906b0ea0"
 
 
-def case(evidence: str, case_source: str, environment: str) -> dict[str, object]:
+def case(evidence: str, case_source: str, environment: str, runner: str = "case_runner") -> dict[str, object]:
     return {
         "evidence": evidence,
         "case_source": case_source,
         "environment": environment,
+        "runner": runner,
     }
 
 
@@ -46,11 +47,36 @@ CASE_CONFIG = {
         "scripts/p17/case_runner/t005.go",
         "real MySQL 8.x high-risk mutation/idempotency/correlation authority plus database-enforced append-only secret-safe audit",
     ),
+    "P17-T006": case(
+        "artifacts/v10/P17/domain/P17-T006.json",
+        "scripts/p17/domain_case_runner/t006.go",
+        "real MySQL 8.x P06/P13/P14 entitlement queue/detail authority with production administrator permission checks",
+        "domain_case_runner",
+    ),
+    "P17-T007": case(
+        "artifacts/v10/P17/domain/P17-T007.json",
+        "scripts/p17/domain_case_runner/t007.go",
+        "real MySQL 8.x structured manual_approval and deny decisions resolved by inherited P06 entitlement authority",
+        "domain_case_runner",
+    ),
+    "P17-T008": case(
+        "artifacts/v10/P17/domain/P17-T008.json",
+        "scripts/p17/domain_case_runner/t008.go",
+        "real MySQL 8.x entitlement control/source materialization, routing impact, P16 safety check and immutable decision ledger",
+        "domain_case_runner",
+    ),
+    "P17-T009": case(
+        "artifacts/v10/P17/domain/P17-T009.json",
+        "scripts/p17/domain_case_runner/t009.go",
+        "real MySQL 8.x inherited P06/P13 source precedence/domain_limit/grace plus P16 conjunctive safety authority",
+        "domain_case_runner",
+    ),
 }
 
 FORBIDDEN_EVIDENCE_FRAGMENTS = (
     "p17-root-password-fixture-2026",
     "p17-t005-child-raw-password-marker",
+    "p17-tickets-only-password-fixture",
     "definitely-wrong-password",
     "authorization: bearer",
     "client_secret",
@@ -97,7 +123,8 @@ def main() -> int:
     except subprocess.CalledProcessError as exc:
         fail(f"cannot verify P17 contract ancestry: {exc.stderr.strip()}")
 
-    proc = run("go", "run", "./scripts/p17/case_runner", "--case", args.case, check=False)
+    runner_dir = str(config["runner"])
+    proc = run("go", "run", f"./scripts/p17/{runner_dir}", "--case", args.case, check=False)
     if not proc.stdout.strip():
         sys.stderr.write(proc.stderr)
         fail(f"{args.case} runner produced no JSON output")
@@ -130,9 +157,23 @@ def main() -> int:
         "admin_http_governance": "internal/admin/http_governance.go",
         "platform_admin_mount": "services/platformapi/cmd/server/admin_access.go",
         "fixture": "scripts/p17/adminfixture/fixture.go",
-        "runner_main": "scripts/p17/case_runner/main.go",
+        "runner_main": "scripts/p17/case_runner/main.go" if runner_dir == "case_runner" else "scripts/p17/domain_case_runner/main.go",
         "case_runner": str(config["case_source"]),
     }
+    if args.case in {"P17-T006", "P17-T007", "P17-T008", "P17-T009"}:
+        source_paths.update({
+            "domain_entitlement_migration": "migrations/000026_admin_domain_entitlements.sql",
+            "admin_domain_entitlements_read": "internal/admin/domain_entitlements_read.go",
+            "admin_domain_entitlements_decision": "internal/admin/domain_entitlements_decision.go",
+            "admin_domain_entitlements_mutation": "internal/admin/domain_entitlements_mutation.go",
+            "admin_domain_entitlement_http": "internal/admin/http_domain_entitlements.go",
+            "p06_entitlement_resolver": "internal/domains/entitlement.go",
+            "p06_entitlement_store": "internal/domains/store_mysql.go",
+            "p06_domain_store": "internal/domains/domain_store_mysql.go",
+            "p17_entitlement_control_overlay": "internal/domains/entitlement_admin_control.go",
+            "p06_domain_mutation_authority": "internal/domains/mutation_authority.go",
+            "domain_runner_helpers": "scripts/p17/domain_case_runner/helpers.go",
+        })
     source_blobs = {name: blob(path) for name, path in source_paths.items()}
     source_blobs["integration_driver"] = blob("scripts/p17/integration.py")
     source_blobs["frozen_test_plan"] = blob("artifacts/v10/P17/test-plan.json")
