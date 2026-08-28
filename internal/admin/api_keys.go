@@ -298,9 +298,9 @@ func (a *WorkspaceAPIKeyAuthority) get(ctx context.Context, workspaceID, keyID s
 	return key, err
 }
 
-type rowScanner interface{ Scan(dest ...any) error }
+type apiKeyRowScanner interface{ Scan(dest ...any) error }
 
-func scanWorkspaceAPIKey(row rowScanner) (WorkspaceAPIKey, error) {
+func scanWorkspaceAPIKey(row apiKeyRowScanner) (WorkspaceAPIKey, error) {
 	var key WorkspaceAPIKey
 	var scopes []byte
 	var expires, rotated, revoked sql.NullTime
