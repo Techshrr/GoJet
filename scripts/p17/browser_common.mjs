@@ -79,10 +79,16 @@ export async function assertNoOverflow(page, label) {
 export async function waitState(page, pageName, state) {
   const locator = page.locator(`[data-page="${pageName}"]`);
   await locator.waitFor({ state: 'visible' });
-  await page.waitForFunction(
-    ({ pageName, state }) => document.querySelector(`[data-page="${pageName}"]`)?.getAttribute('data-state') === state,
-    { pageName, state },
-  );
+  try {
+    await page.waitForFunction(
+      ({ pageName, state }) => document.querySelector(`[data-page="${pageName}"]`)?.getAttribute('data-state') === state,
+      { pageName, state },
+    );
+  } catch (error) {
+    const actual = await locator.getAttribute('data-state').catch(() => null);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`waitState ${pageName} expected=${state} actual=${actual}; ${message}`);
+  }
 }
 
 export async function adminLogin(page, email = fixture.root_email, password = fixture.root_password, totpCode = '') {
