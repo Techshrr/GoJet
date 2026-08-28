@@ -114,6 +114,22 @@ HEADERS = {
 }
 
 
+class CrossHostSafeRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, response_headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, response_headers, newurl)
+        if redirected is not None:
+            old_host = urllib.parse.urlsplit(req.full_url).netloc
+            new_host = urllib.parse.urlsplit(newurl).netloc
+            if old_host != new_host:
+                redirected.remove_header("Authorization")
+                redirected.remove_header("Accept")
+                redirected.remove_header("X-GitHub-Api-Version")
+        return redirected
+
+
+ARTIFACT_OPENER = urllib.request.build_opener(CrossHostSafeRedirect())
+
+
 def api(url: str, *, method: str = "GET", body=None):
     data = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(url, data=data, method=method, headers=HEADERS)
@@ -190,7 +206,7 @@ def archive_artifact(artifact_id: int, expected_digest: str, destination: Path) 
         f"https://api.github.com/repos/{REPO}/actions/artifacts/{artifact_id}/zip",
         headers=HEADERS,
     )
-    with urllib.request.urlopen(request, timeout=60) as response, destination.open("wb") as handle:
+    with ARTIFACT_OPENER.open(request, timeout=60) as response, destination.open("wb") as handle:
         shutil.copyfileobj(response, handle)
     digest = "sha256:" + hashlib.sha256(destination.read_bytes()).hexdigest()
     if digest != expected_digest:
