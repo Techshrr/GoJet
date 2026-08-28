@@ -78,6 +78,10 @@ export async function run(browser) {
 
   await page.goto(`${ADMIN_URL}/admin/operations/services`);
   await page.locator('[data-page="admin-operations-services"]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const state = document.querySelector('[data-page="admin-operations-services"]')?.getAttribute('data-state');
+    return Boolean(state && state !== 'loading');
+  });
   const serviceState = await page.locator('[data-page="admin-operations-services"]').getAttribute('data-state');
   assert(['partial-service-degradation', 'unavailable', 'healthy'].includes(serviceState || ''), `unexpected service state ${serviceState}`);
   details.operations_states.push(serviceState);

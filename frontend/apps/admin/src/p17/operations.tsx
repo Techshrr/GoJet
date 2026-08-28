@@ -32,10 +32,16 @@ function OperationsPage({ mode }: { mode: 'jobs' | 'services' }) {
 export function OperationsJobsPage() { return <OperationsPage mode="jobs" />; }
 export function OperationsServicesPage() { return <OperationsPage mode="services" />; }
 
+function hasMeaningfulAuditSide(value: unknown) {
+  if (value === null || value === undefined || value === '') return false;
+  if (typeof value === 'object' && !Array.isArray(value)) return Object.keys(value as Record<string, unknown>).length > 0;
+  return true;
+}
+
 export function AuditPage() {
   const auth = useAdminSession(); const [items, setItems] = useState<JsonObject[]>([]); const [busy, setBusy] = useState(true); const [error, setError] = useState(''); const [filter, setFilter] = useState(''); const [selected, setSelected] = useState<JsonObject | null>(null);
   useEffect(() => { if (!auth.session) return; setBusy(true); void adminRequest<{ items: JsonObject[] }>('/api/admin/audit').then((result) => { setItems(result.items || []); setError(''); }).catch((err) => setError(err instanceof Error ? err.message : 'internal_error')).finally(() => setBusy(false)); }, [auth.session]);
-  const filtered = useMemo(() => items.filter((item) => JSON.stringify(item).toLowerCase().includes(filter.toLowerCase())), [items, filter]); const stale = items.some((item) => item.created_at && Date.now() - new Date(String(item.created_at)).getTime() > 24 * 60 * 60 * 1000); const partial = selected && (!!selected.before !== !!selected.after);
+  const filtered = useMemo(() => items.filter((item) => JSON.stringify(item).toLowerCase().includes(filter.toLowerCase())), [items, filter]); const stale = items.some((item) => item.created_at && Date.now() - new Date(String(item.created_at)).getTime() > 24 * 60 * 60 * 1000); const partial = selected && (hasMeaningfulAuditSide(selected.before) !== hasMeaningfulAuditSide(selected.after));
   const state = auth.error || error ? 'error' : auth.busy || busy ? 'loading' : filter && filtered.length === 0 ? 'filtered-empty' : items.length === 0 ? 'empty' : selected ? (partial ? 'partial-diff' : 'detail') : stale ? 'stale' : 'ready';
   return <ProtectedLayout><section className="p17-admin-page" data-page="admin-audit" data-state={state}><header><p className="p17-kicker">Audit</p><h1>Immutable audit</h1><p>Before/after metadata is redacted by the server before display.</p></header><ErrorNotice error={auth.error || error} /><label>Filter audit<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label><ul className="p17-list">{filtered.map((item) => <li key={String(item.id)}><button type="button" onClick={() => setSelected(item)}>{String(item.action)}</button><span>{String(item.result)}</span><time>{String(item.created_at || '')}</time></li>)}</ul>{selected && <JsonPreview value={selected} />}</section></ProtectedLayout>;
 }
