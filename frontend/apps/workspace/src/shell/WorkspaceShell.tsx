@@ -16,7 +16,7 @@ type OverlayName = 'create' | 'command' | 'notifications';
 export type WorkspaceSwitcherOption = { id: string; name: string };
 type WorkspaceShellProps = {
   children: ReactNode;
-  state?: ShellState<'workspace'>;
+  state?: ShellState<'workspace'> | 'normal';
   sectionLabel?: string;
   workspaceLabel?: string;
   workspaceId?: string;
