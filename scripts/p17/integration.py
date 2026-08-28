@@ -26,6 +26,8 @@ def main() -> int:
         target = "integration_t001_t021.py"
     elif 22 <= number <= 24:
         target = "api_key_integration.py"
+    elif 25 <= number <= 29:
+        target = "webhook_integration.py"
     else:
         raise SystemExit(f"P17 integration case is not implemented at this stage: {args.case}")
     script = Path(__file__).resolve().with_name(target)
