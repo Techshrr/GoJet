@@ -94,13 +94,33 @@ export async function run(browser) {
   captures.push(await screenshot(page, caseId, 'service-restart-confirm'));
   await page.getByRole('button', { name: 'Cancel' }).click();
 
+  const auditNetwork = [];
+  const observeAuditRequest = (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/admin/')) auditNetwork.push(`request:${url.pathname}`);
+  };
+  const observeAuditResponse = (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.startsWith('/api/admin/')) auditNetwork.push(`response:${response.status()}:${url.pathname}`);
+  };
+  page.on('request', observeAuditRequest);
+  page.on('response', observeAuditResponse);
   await page.goto(`${ADMIN_URL}/admin/audit`);
   const auditPage = page.locator('[data-page="admin-audit"]');
   await auditPage.waitFor({ state: 'visible' });
-  await page.waitForFunction(() => {
-    const state = document.querySelector('[data-page="admin-audit"]')?.getAttribute('data-state');
-    return Boolean(state && state !== 'loading');
-  });
+  try {
+    await page.waitForFunction(() => {
+      const state = document.querySelector('[data-page="admin-audit"]')?.getAttribute('data-state');
+      return Boolean(state && state !== 'loading');
+    }, undefined, { timeout: 5000 });
+  } catch {
+    const state = await auditPage.getAttribute('data-state');
+    const processlist = mysql("SELECT ID,COMMAND,TIME,COALESCE(STATE,''),CASE WHEN INFO LIKE '%admin_audit_events%' THEN 'audit' WHEN INFO LIKE '%admin_sessions%' THEN 'session' WHEN INFO LIKE '%admin_role_%' THEN 'rbac' ELSE 'other' END FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID() AND USER='root' ORDER BY ID");
+    throw new Error(`admin-audit loading hang state=${state}; network=${JSON.stringify(auditNetwork)}; mysql_processlist=${JSON.stringify(processlist.split('\n').filter(Boolean))}`);
+  } finally {
+    page.off('request', observeAuditRequest);
+    page.off('response', observeAuditResponse);
+  }
   const initialAuditState = await auditPage.getAttribute('data-state');
   const initialAuditActions = await auditPage.locator('.p17-list button').allTextContents();
   assert(initialAuditState === 'stale', `admin-audit initial state expected stale, got ${initialAuditState}; actions=${JSON.stringify(initialAuditActions)}`);
