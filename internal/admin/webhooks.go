@@ -22,11 +22,11 @@ import (
 )
 
 const (
-	workspaceWebhookSecretPrefix = "gwhsec_"
-	workspaceWebhookLeasePrefix  = "workspace-webhook:lease:"
-	workspaceWebhookMaxAttempts  = 5
-	workspaceWebhookMaxBodyBytes = 256 * 1024
-	WorkspaceWebhookServiceID    = trust.OperationsMonitorServiceID
+	workspaceWebhookSecretTokenPrefix = "gwhsec_"
+	workspaceWebhookLeasePrefix       = "workspace-webhook:lease:"
+	workspaceWebhookMaxAttempts       = 5
+	workspaceWebhookMaxBodyBytes      = 256 * 1024
+	WorkspaceWebhookServiceID         = trust.OperationsMonitorServiceID
 )
 
 type WorkspaceWebhookAuthority struct {
@@ -34,7 +34,6 @@ type WorkspaceWebhookAuthority struct {
 	redis    *redis.Client
 	cipher   *SecretCipher
 	resolver trust.IPResolver
-	dialer   trust.ContextDialer
 	client   *http.Client
 }
 
@@ -66,30 +65,30 @@ type WorkspaceWebhookSecret struct {
 }
 
 type WorkspaceWebhookDelivery struct {
-	ID               string     `json:"id"`
-	WorkspaceID      string     `json:"workspace_id"`
-	WebhookID        string     `json:"webhook_id"`
-	EventID          string     `json:"event_id"`
-	EventType        string     `json:"event_type"`
-	BodySHA256       string     `json:"body_sha256"`
-	Status           string     `json:"status"`
-	Attempts         int        `json:"attempts"`
-	NextAttemptAt    time.Time  `json:"next_attempt_at"`
-	LastAttemptAt    *time.Time `json:"last_attempt_at,omitempty"`
-	LastStatusCode   *int       `json:"last_status_code,omitempty"`
-	LastErrorCode    string     `json:"last_error_code,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	DeliveredAt      *time.Time `json:"delivered_at,omitempty"`
+	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"workspace_id"`
+	WebhookID      string     `json:"webhook_id"`
+	EventID        string     `json:"event_id"`
+	EventType      string     `json:"event_type"`
+	BodySHA256     string     `json:"body_sha256"`
+	Status         string     `json:"status"`
+	Attempts       int        `json:"attempts"`
+	NextAttemptAt  time.Time  `json:"next_attempt_at"`
+	LastAttemptAt  *time.Time `json:"last_attempt_at,omitempty"`
+	LastStatusCode *int       `json:"last_status_code,omitempty"`
+	LastErrorCode  string     `json:"last_error_code,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 }
 
 type webhookWorkerDelivery struct {
-	Delivery        WorkspaceWebhookDelivery
-	Body            []byte
-	EndpointURL     string
-	SecretCipher    []byte
-	SecretKeyID     string
-	WebhookStatus   string
+	Delivery      WorkspaceWebhookDelivery
+	Body          []byte
+	EndpointURL   string
+	SecretCipher  []byte
+	SecretKeyID   string
+	WebhookStatus string
 }
 
 func NewWorkspaceWebhookAuthority(db *sql.DB, redisClient *redis.Client, cipher *SecretCipher, resolver trust.IPResolver, dialer trust.ContextDialer) (*WorkspaceWebhookAuthority, error) {
@@ -97,12 +96,8 @@ func NewWorkspaceWebhookAuthority(db *sql.DB, redisClient *redis.Client, cipher 
 		return nil, ErrInvalid
 	}
 	return &WorkspaceWebhookAuthority{
-		db:       db,
-		redis:    redisClient,
-		cipher:   cipher,
-		resolver: resolver,
-		dialer:   dialer,
-		client:   trust.NewInspectionHTTPClient(resolver, dialer),
+		db: db, redis: redisClient, cipher: cipher, resolver: resolver,
+		client: trust.NewInspectionHTTPClient(resolver, dialer),
 	}, nil
 }
 
@@ -136,7 +131,7 @@ func normalizeWorkspaceWebhookEvents(events []string) ([]string, error) {
 		if !validWorkspaceWebhookEvent(event) {
 			return nil, ErrInvalid
 		}
-		if _, exists := seen[event]; exists {
+		if _, ok := seen[event]; ok {
 			continue
 		}
 		seen[event] = struct{}{}
@@ -177,12 +172,11 @@ func (a *WorkspaceWebhookAuthority) validateInput(ctx context.Context, input Wor
 	if err != nil {
 		return WorkspaceWebhookInput{}, ErrInvalid
 	}
-	input.EndpointURL = target.CanonicalURL
-	input.Events = events
+	input.EndpointURL, input.Events = target.CanonicalURL, events
 	return input, nil
 }
 
-func workspaceWebhookSecretPrefix(secret string) string {
+func workspaceWebhookVisiblePrefix(secret string) string {
 	if len(secret) <= 14 {
 		return secret
 	}
@@ -206,7 +200,7 @@ func (a *WorkspaceWebhookAuthority) Create(ctx context.Context, workspaceID, act
 	if err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
-	secret, err := newOpaque(workspaceWebhookSecretPrefix, 32)
+	secret, err := newOpaque(workspaceWebhookSecretTokenPrefix, 32)
 	if err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
@@ -215,7 +209,7 @@ func (a *WorkspaceWebhookAuthority) Create(ctx context.Context, workspaceID, act
 		return WorkspaceWebhookSecret{}, err
 	}
 	eventsJSON, _ := json.Marshal(normalized.Events)
-	_, err = a.db.ExecContext(ctx, `INSERT INTO workspace_webhooks(id,workspace_id,name,endpoint_url,events_json,secret_ciphertext,secret_key_id,secret_prefix,status,created_by,updated_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?, 'active',?,?,?,?)`, id, workspaceID, normalized.Name, normalized.EndpointURL, eventsJSON, ciphertext, a.cipher.KeyID(), workspaceWebhookSecretPrefix(secret), actorID, actorID, now.UTC(), now.UTC())
+	_, err = a.db.ExecContext(ctx, `INSERT INTO workspace_webhooks(id,workspace_id,name,endpoint_url,events_json,secret_ciphertext,secret_key_id,secret_prefix,status,created_by,updated_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?, 'active',?,?,?,?)`, id, workspaceID, normalized.Name, normalized.EndpointURL, eventsJSON, ciphertext, a.cipher.KeyID(), workspaceWebhookVisiblePrefix(secret), actorID, actorID, now.UTC(), now.UTC())
 	if err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
@@ -279,7 +273,7 @@ func (a *WorkspaceWebhookAuthority) RotateSecret(ctx context.Context, workspaceI
 		}
 		return WorkspaceWebhookSecret{}, err
 	}
-	secret, err := newOpaque(workspaceWebhookSecretPrefix, 32)
+	secret, err := newOpaque(workspaceWebhookSecretTokenPrefix, 32)
 	if err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
@@ -287,7 +281,7 @@ func (a *WorkspaceWebhookAuthority) RotateSecret(ctx context.Context, workspaceI
 	if err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE workspace_webhooks SET secret_ciphertext=?,secret_key_id=?,secret_prefix=?,updated_by=?,rotated_at=?,updated_at=? WHERE workspace_id=? AND id=?`, ciphertext, a.cipher.KeyID(), workspaceWebhookSecretPrefix(secret), actorID, now.UTC(), now.UTC(), workspaceID, webhookID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE workspace_webhooks SET secret_ciphertext=?,secret_key_id=?,secret_prefix=?,updated_by=?,rotated_at=?,updated_at=? WHERE workspace_id=? AND id=?`, ciphertext, a.cipher.KeyID(), workspaceWebhookVisiblePrefix(secret), actorID, now.UTC(), now.UTC(), workspaceID, webhookID); err != nil {
 		return WorkspaceWebhookSecret{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -310,13 +304,10 @@ func (a *WorkspaceWebhookAuthority) Disable(ctx context.Context, workspaceID, ac
 }
 
 func (a *WorkspaceWebhookAuthority) setEnabled(ctx context.Context, workspaceID, actorID, webhookID, correlationID string, enabled bool, now time.Time) (WorkspaceWebhook, error) {
-	action := "webhook.disable"
-	status := "disabled"
+	action, status := "webhook.disable", "disabled"
 	var disabledAt any = now.UTC()
 	if enabled {
-		action = "webhook.enable"
-		status = "active"
-		disabledAt = nil
+		action, status, disabledAt = "webhook.enable", "active", nil
 	}
 	if err := a.requireWorkspaceManager(ctx, workspaceID, actorID); err != nil {
 		a.auditBestEffort(ctx, workspaceID, actorID, action, webhookID, correlationID, "denied", map[string]any{"reason": "workspace_role"}, now)
@@ -345,10 +336,8 @@ func (a *WorkspaceWebhookAuthority) setEnabled(ctx context.Context, workspaceID,
 }
 
 func (a *WorkspaceWebhookAuthority) QueueDelivery(ctx context.Context, workspaceID, webhookID, eventID, eventType string, payload json.RawMessage, correlationID string, now time.Time) (WorkspaceWebhookDelivery, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	webhookID = strings.TrimSpace(webhookID)
-	eventID = strings.TrimSpace(eventID)
-	eventType = strings.TrimSpace(eventType)
+	workspaceID, webhookID = strings.TrimSpace(workspaceID), strings.TrimSpace(webhookID)
+	eventID, eventType = strings.TrimSpace(eventID), strings.TrimSpace(eventType)
 	if workspaceID == "" || webhookID == "" || eventID == "" || len(eventID) > 128 || !validWorkspaceWebhookEvent(eventType) || len(payload) == 0 || len(payload) > workspaceWebhookMaxBodyBytes || !json.Valid(payload) {
 		return WorkspaceWebhookDelivery{}, ErrInvalid
 	}
@@ -430,7 +419,7 @@ func (a *WorkspaceWebhookAuthority) RetryDelivery(ctx context.Context, workspace
 	if webhook.Status != "active" {
 		return WorkspaceWebhookDelivery{}, ErrConflict
 	}
-	result, err := a.db.ExecContext(ctx, `UPDATE workspace_webhook_deliveries SET status='retrying',next_attempt_at=?,last_error_code='',updated_at=? WHERE workspace_id=? AND webhook_id=? AND id=? AND status='failed'`, now.UTC(), now.UTC(), workspaceID, webhookID, deliveryID)
+	result, err := a.db.ExecContext(ctx, `UPDATE workspace_webhook_deliveries SET status='retrying',attempts=0,next_attempt_at=?,last_attempt_at=NULL,last_status_code=NULL,last_error_code='',delivered_at=NULL,updated_at=? WHERE workspace_id=? AND webhook_id=? AND id=? AND status='failed'`, now.UTC(), now.UTC(), workspaceID, webhookID, deliveryID)
 	if err != nil {
 		return WorkspaceWebhookDelivery{}, err
 	}
@@ -448,7 +437,7 @@ func (a *WorkspaceWebhookAuthority) RetryDelivery(ctx context.Context, workspace
 	if err != nil {
 		return WorkspaceWebhookDelivery{}, err
 	}
-	a.auditBestEffort(ctx, workspaceID, actorID, "webhook.delivery.retry", deliveryID, correlationID, "success", map[string]any{"webhook_id": webhookID, "attempts": item.Attempts}, now)
+	a.auditBestEffort(ctx, workspaceID, actorID, "webhook.delivery.retry", deliveryID, correlationID, "success", map[string]any{"webhook_id": webhookID}, now)
 	return item, nil
 }
 
@@ -485,8 +474,7 @@ func (a *WorkspaceWebhookAuthority) RunDeliveryOnce(ctx context.Context, now tim
 	}
 	secret, err := a.cipher.Decrypt(row.SecretCipher, row.SecretKeyID, workspaceWebhookSecretPurpose(row.Delivery.WorkspaceID, row.Delivery.WebhookID))
 	if err != nil {
-		markErr := a.markDeliveryFailure(ctx, row, "secret_unavailable", 0, true, now)
-		if markErr != nil {
+		if markErr := a.markDeliveryFailure(ctx, row, "secret_unavailable", 0, true, now); markErr != nil {
 			return true, markErr
 		}
 		return true, err
@@ -515,18 +503,15 @@ func (a *WorkspaceWebhookAuthority) RunDeliveryOnce(ctx context.Context, now tim
 		} else if errors.Is(deliveryErr, trust.ErrInspectionResolution) {
 			code = "dns_unavailable"
 		}
-		if err := a.markDeliveryFailure(ctx, row, code, 0, permanent, now); err != nil {
-			return true, err
+		if markErr := a.markDeliveryFailure(ctx, row, code, 0, permanent, now); markErr != nil {
+			return true, markErr
 		}
 		return true, deliveryErr
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if err := a.markDeliverySuccess(ctx, row, resp.StatusCode, now); err != nil {
-			return true, err
-		}
-		return true, nil
+		return true, a.markDeliverySuccess(ctx, row, resp.StatusCode, now)
 	}
 	if err := a.markDeliveryFailure(ctx, row, fmt.Sprintf("http_%d", resp.StatusCode), resp.StatusCode, false, now); err != nil {
 		return true, err
@@ -542,8 +527,7 @@ func SignWorkspaceWebhookDelivery(secret, deliveryID string, timestamp time.Time
 }
 
 func VerifyWorkspaceWebhookDeliverySignature(secret, deliveryID string, timestamp time.Time, body []byte, signature string) bool {
-	expected := SignWorkspaceWebhookDelivery(secret, deliveryID, timestamp, body)
-	return hmac.Equal([]byte(expected), []byte(strings.TrimSpace(signature)))
+	return hmac.Equal([]byte(SignWorkspaceWebhookDelivery(secret, deliveryID, timestamp, body)), []byte(strings.TrimSpace(signature)))
 }
 
 func (a *WorkspaceWebhookAuthority) nextDueDelivery(ctx context.Context, now time.Time) (webhookWorkerDelivery, error) {
@@ -571,18 +555,7 @@ func (a *WorkspaceWebhookAuthority) loadWorkerDelivery(ctx context.Context, deli
 		return webhookWorkerDelivery{}, err
 	}
 	row.Delivery.BodySHA256 = hex.EncodeToString(bodyHash)
-	if lastAttempt.Valid {
-		value := lastAttempt.Time.UTC()
-		row.Delivery.LastAttemptAt = &value
-	}
-	if lastStatus.Valid {
-		value := int(lastStatus.Int64)
-		row.Delivery.LastStatusCode = &value
-	}
-	if delivered.Valid {
-		value := delivered.Time.UTC()
-		row.Delivery.DeliveredAt = &value
-	}
+	assignDeliveryNullable(&row.Delivery, lastAttempt, lastStatus, delivered)
 	return row, nil
 }
 
@@ -605,8 +578,7 @@ func (a *WorkspaceWebhookAuthority) markDeliveryFailure(ctx context.Context, row
 	status := "retrying"
 	nextAttempt := now.UTC().Add(workspaceWebhookRetryDelay(attempts))
 	if permanent || attempts >= workspaceWebhookMaxAttempts {
-		status = "failed"
-		nextAttempt = now.UTC()
+		status, nextAttempt = "failed", now.UTC()
 	}
 	var statusValue any
 	if statusCode > 0 {
@@ -620,11 +592,11 @@ func (a *WorkspaceWebhookAuthority) markDeliveryFailure(ctx context.Context, row
 	if n != 1 {
 		return ErrConflict
 	}
-	resultName := "failed"
+	auditResult := "failed"
 	if status == "retrying" {
-		resultName = "conflict"
+		auditResult = "conflict"
 	}
-	a.auditBestEffort(ctx, row.Delivery.WorkspaceID, "operationsmonitor", "webhook.delivery."+status, row.Delivery.ID, "operationsmonitor-"+row.Delivery.ID, resultName, map[string]any{"webhook_id": row.Delivery.WebhookID, "event_type": row.Delivery.EventType, "attempts": attempts, "error_code": errorCode}, now)
+	a.auditBestEffort(ctx, row.Delivery.WorkspaceID, "operationsmonitor", "webhook.delivery."+status, row.Delivery.ID, "operationsmonitor-"+row.Delivery.ID, auditResult, map[string]any{"webhook_id": row.Delivery.WebhookID, "event_type": row.Delivery.EventType, "attempts": attempts, "error_code": errorCode}, now)
 	return nil
 }
 
@@ -642,7 +614,11 @@ func workspaceWebhookRetryDelay(attempt int) time.Duration {
 }
 
 func (a *WorkspaceWebhookAuthority) getDeliveryByEvent(ctx context.Context, workspaceID, webhookID, eventID string) (WorkspaceWebhookDelivery, error) {
-	return scanWorkspaceWebhookDelivery(a.db.QueryRowContext(ctx, `SELECT id,workspace_id,webhook_id,event_id,event_type,body_sha256,status,attempts,next_attempt_at,last_attempt_at,last_status_code,last_error_code,created_at,updated_at,delivered_at FROM workspace_webhook_deliveries WHERE workspace_id=? AND webhook_id=? AND event_id=?`, workspaceID, webhookID, eventID))
+	item, err := scanWorkspaceWebhookDelivery(a.db.QueryRowContext(ctx, `SELECT id,workspace_id,webhook_id,event_id,event_type,body_sha256,status,attempts,next_attempt_at,last_attempt_at,last_status_code,last_error_code,created_at,updated_at,delivered_at FROM workspace_webhook_deliveries WHERE workspace_id=? AND webhook_id=? AND event_id=?`, workspaceID, webhookID, eventID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return WorkspaceWebhookDelivery{}, ErrNotFound
+	}
+	return item, err
 }
 
 func (a *WorkspaceWebhookAuthority) getDelivery(ctx context.Context, workspaceID, webhookID, deliveryID string) (WorkspaceWebhookDelivery, error) {
@@ -685,6 +661,11 @@ func scanWorkspaceWebhookDelivery(row workspaceWebhookRowScanner) (WorkspaceWebh
 		return WorkspaceWebhookDelivery{}, err
 	}
 	item.BodySHA256 = hex.EncodeToString(hash)
+	assignDeliveryNullable(&item, lastAttempt, lastStatus, delivered)
+	return item, nil
+}
+
+func assignDeliveryNullable(item *WorkspaceWebhookDelivery, lastAttempt sql.NullTime, lastStatus sql.NullInt64, delivered sql.NullTime) {
 	if lastAttempt.Valid {
 		value := lastAttempt.Time.UTC()
 		item.LastAttemptAt = &value
@@ -697,7 +678,6 @@ func scanWorkspaceWebhookDelivery(row workspaceWebhookRowScanner) (WorkspaceWebh
 		value := delivered.Time.UTC()
 		item.DeliveredAt = &value
 	}
-	return item, nil
 }
 
 func webhookEndpointFingerprint(raw string) string {
@@ -705,8 +685,7 @@ func webhookEndpointFingerprint(raw string) string {
 	if err != nil || u == nil {
 		return "invalid"
 	}
-	host := strings.ToLower(strings.TrimSpace(u.Hostname()))
-	digest := sha256.Sum256([]byte(host))
+	digest := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(u.Hostname()))))
 	return hex.EncodeToString(digest[:8])
 }
 
