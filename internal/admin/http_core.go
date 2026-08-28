@@ -160,7 +160,7 @@ func (a *HTTPAPI) mutationPrincipal(w http.ResponseWriter, r *http.Request) (Pri
 func authority(r *http.Request, reason string) MutationAuthority {
 	return MutationAuthority{
 		Reason:         strings.TrimSpace(reason),
-		CorrelationID: strings.TrimSpace(r.Header.Get("X-Correlation-ID")),
+		CorrelationID:  strings.TrimSpace(r.Header.Get("X-Correlation-ID")),
 		IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key")),
 	}
 }

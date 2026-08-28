@@ -3,11 +3,11 @@ package admin
 import "net/http"
 
 type AdminOverview struct {
-	Administrators      int64 `json:"administrators"`
-	Users               int64 `json:"users"`
-	Workspaces          int64 `json:"workspaces"`
-	AuditEvents         int64 `json:"audit_events"`
-	RetryOrFailedJobs   int64 `json:"retry_or_failed_jobs"`
+	Administrators    int64 `json:"administrators"`
+	Users             int64 `json:"users"`
+	Workspaces        int64 `json:"workspaces"`
+	AuditEvents       int64 `json:"audit_events"`
+	RetryOrFailedJobs int64 `json:"retry_or_failed_jobs"`
 }
 
 func (a *HTTPAPI) overview(w http.ResponseWriter, r *http.Request) {
