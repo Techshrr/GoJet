@@ -95,7 +95,15 @@ export async function run(browser) {
   await page.getByRole('button', { name: 'Cancel' }).click();
 
   await page.goto(`${ADMIN_URL}/admin/audit`);
-  await waitState(page, 'admin-audit', 'stale');
+  const auditPage = page.locator('[data-page="admin-audit"]');
+  await auditPage.waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const state = document.querySelector('[data-page="admin-audit"]')?.getAttribute('data-state');
+    return Boolean(state && state !== 'loading');
+  });
+  const initialAuditState = await auditPage.getAttribute('data-state');
+  const initialAuditActions = await auditPage.locator('.p17-list button').allTextContents();
+  assert(initialAuditState === 'stale', `admin-audit initial state expected stale, got ${initialAuditState}; actions=${JSON.stringify(initialAuditActions)}`);
   details.audit_states.push('stale');
   await page.getByRole('button', { name: 'browser.stale.fixture' }).click();
   await waitState(page, 'admin-audit', 'detail');
