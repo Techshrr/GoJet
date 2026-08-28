@@ -83,15 +83,15 @@ func runT026(ctx context.Context, r *adminfixture.Runtime) (map[string]bool, map
 		return nil, nil, err
 	}
 	checks := map[string]bool{
-		"canonical_signature_verified": firstVerified,
-		"delivery_identity_signed": firstRequests[0].DeliveryID == first.ID && firstRequests[0].IdempotencyID == first.ID,
-		"secret_rotation_atomic": rotated.Secret != "" && rotated.Secret != created.Secret && rotated.Webhook.SecretPrefix == storedPrefix,
-		"new_secret_signs_new_delivery": secondNewVerified,
+		"canonical_signature_verified":     firstVerified,
+		"delivery_identity_signed":         firstRequests[0].DeliveryID == first.ID && firstRequests[0].IdempotencyID == first.ID,
+		"secret_rotation_atomic":           rotated.Secret != "" && rotated.Secret != created.Secret && rotated.Webhook.SecretPrefix == storedPrefix,
+		"new_secret_signs_new_delivery":    secondNewVerified,
 		"old_secret_authority_invalidated": !secondOldVerified,
-		"secret_encrypted_at_rest": len(storedCipher) > 0 && !bytes.Contains(storedCipher, []byte(created.Secret)) && !bytes.Contains(storedCipher, []byte(rotated.Secret)),
-		"secret_key_bound": keyID == "p17-webhook-fixture-v1",
-		"both_deliveries_durable": deliveredRows == 2,
-		"rotation_audited_without_secret": rotationAudit == 1,
+		"secret_encrypted_at_rest":         len(storedCipher) > 0 && !bytes.Contains(storedCipher, []byte(created.Secret)) && !bytes.Contains(storedCipher, []byte(rotated.Secret)),
+		"secret_key_bound":                 keyID == "p17-webhook-fixture-v1",
+		"both_deliveries_durable":          deliveredRows == 2,
+		"rotation_audited_without_secret":  rotationAudit == 1,
 	}
 	counts := map[string]int{"delivered": deliveredRows, "rotation_audit": rotationAudit, "receiver_requests": len(requests)}
 	return checks, counts, nil

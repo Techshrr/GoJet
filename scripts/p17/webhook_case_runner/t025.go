@@ -67,17 +67,17 @@ func runT025(ctx context.Context, r *adminfixture.Runtime) (map[string]bool, map
 		return nil, nil, err
 	}
 	checks := map[string]bool{
-		"workspace_owned": created.Webhook.WorkspaceID == "ws-t025-a" && webhookRows == 1,
-		"configuration_validated": created.Webhook.EndpointURL == "https://hooks.example.com/v1/events" && len(created.Webhook.Events) == 2,
-		"unsafe_endpoint_rejected": errors.Is(unsafeErr, adminaccess.ErrInvalid),
-		"manager_authorized": ownerCode == 200,
-		"member_denied": memberCode == 403,
+		"workspace_owned":                        created.Webhook.WorkspaceID == "ws-t025-a" && webhookRows == 1,
+		"configuration_validated":                created.Webhook.EndpointURL == "https://hooks.example.com/v1/events" && len(created.Webhook.Events) == 2,
+		"unsafe_endpoint_rejected":               errors.Is(unsafeErr, adminaccess.ErrInvalid),
+		"manager_authorized":                     ownerCode == 200,
+		"member_denied":                          memberCode == 403,
 		"cross_workspace_denied_without_leakage": crossCode == 403,
-		"secret_once_not_listed": created.Secret != "" && !strings.Contains(ownerRaw, created.Secret),
-		"secret_encrypted_at_rest": len(ciphertext) > 0 && !bytes.Contains(ciphertext, []byte(created.Secret)),
-		"no_store_noindex": webhookNoStoreNoIndex(ownerHeaders),
-		"payment_callback_independent_schema": paymentFKs == 0,
-		"creation_audited": auditRows >= 1,
+		"secret_once_not_listed":                 created.Secret != "" && !strings.Contains(ownerRaw, created.Secret),
+		"secret_encrypted_at_rest":               len(ciphertext) > 0 && !bytes.Contains(ciphertext, []byte(created.Secret)),
+		"no_store_noindex":                       webhookNoStoreNoIndex(ownerHeaders),
+		"payment_callback_independent_schema":    paymentFKs == 0,
+		"creation_audited":                       auditRows >= 1,
 	}
 	counts := map[string]int{"workspace_webhooks": webhookRows, "webhook_audit_events": auditRows, "payment_foreign_keys": paymentFKs}
 	return checks, counts, nil

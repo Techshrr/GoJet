@@ -97,11 +97,11 @@ func runT027(ctx context.Context, r *adminfixture.Runtime) (map[string]bool, map
 	}
 	checks := map[string]bool{
 		"private_linklocal_metadata_reserved_mixed_rejected": unsafeRejected,
-		"dns_rebind_failed_closed": rebindWorked && rebindErr != nil && rebindStatus == "failed" && rebindCode == "unsafe_destination",
-		"dns_rebind_blocked_before_socket": rebindDialer.count() == 0 && len(rebindReceiver.snapshot()) == 0 && rebindResolver.count("rebind.example.com") >= 3,
-		"redirect_hop_revalidated": redirectWorked && redirectErr != nil && redirectStatus == "failed" && redirectCode == "unsafe_destination",
-		"redirect_private_target_never_connected": redirectDialer.count() == 1 && len(redirectReceiver.snapshot()) == 1,
-		"unsafe_failures_durable": failedRows == 2,
+		"dns_rebind_failed_closed":                           rebindWorked && rebindErr != nil && rebindStatus == "failed" && rebindCode == "unsafe_destination",
+		"dns_rebind_blocked_before_socket":                   rebindDialer.count() == 0 && len(rebindReceiver.snapshot()) == 0 && rebindResolver.count("rebind.example.com") >= 3,
+		"redirect_hop_revalidated":                           redirectWorked && redirectErr != nil && redirectStatus == "failed" && redirectCode == "unsafe_destination",
+		"redirect_private_target_never_connected":            redirectDialer.count() == 1 && len(redirectReceiver.snapshot()) == 1,
+		"unsafe_failures_durable":                            failedRows == 2,
 	}
 	counts := map[string]int{
 		"unsafe_literals_and_mixed": len(unsafeURLs), "unsafe_delivery_failures": failedRows,

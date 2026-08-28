@@ -68,7 +68,7 @@ func main() {
 	result := caseResult{
 		Case: *caseID, Status: status, MySQLVersion: mysqlVersion, RedisVersion: redisVersion,
 		Fixture: "real MySQL/Redis + production Workspace outbound-webhook authority + deterministic DNS/socket fixture",
-		Checks: checks, RecordCounts: counts,
+		Checks:  checks, RecordCounts: counts,
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(result)
 	if err != nil {

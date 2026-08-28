@@ -50,10 +50,10 @@ func scalarWebhook(ctx context.Context, db *sql.DB, query string, args ...any) (
 }
 
 type fixtureResolver struct {
-	mu        sync.Mutex
-	answers   map[string][][]net.IPAddr
-	calls     map[string]int
-	fallback  []net.IPAddr
+	mu       sync.Mutex
+	answers  map[string][][]net.IPAddr
+	calls    map[string]int
+	fallback []net.IPAddr
 }
 
 func newFixtureResolver() *fixtureResolver {

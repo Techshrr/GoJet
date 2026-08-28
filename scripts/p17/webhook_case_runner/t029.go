@@ -91,18 +91,18 @@ func runT029(ctx context.Context, r *adminfixture.Runtime) (map[string]bool, map
 	}
 	responsesRedacted := !strings.Contains(retryRaw, hook.Secret) && !strings.Contains(listRaw, hook.Secret) && !strings.Contains(disableRaw, hook.Secret) && !strings.Contains(listRaw, "T029-PAYLOAD-MUST-NOT-LEAK")
 	checks := map[string]bool{
-		"member_inspection_denied": memberInspect == 403,
-		"cross_workspace_inspection_denied": crossInspect == 403,
-		"member_retry_denied": memberRetry == 403,
-		"member_disable_denied": memberDisable == 403,
-		"owner_retry_authorized": ownerRetry == 200 && retryStatus == "retrying" && retryAttempts == 0,
-		"owner_disable_authorized": ownerDisable == 200,
+		"member_inspection_denied":             memberInspect == 403,
+		"cross_workspace_inspection_denied":    crossInspect == 403,
+		"member_retry_denied":                  memberRetry == 403,
+		"member_disable_denied":                memberDisable == 403,
+		"owner_retry_authorized":               ownerRetry == 200 && retryStatus == "retrying" && retryAttempts == 0,
+		"owner_disable_authorized":             ownerDisable == 200,
 		"owner_delivery_inspection_authorized": ownerList == 200,
-		"workspace_surfaces_no_store_noindex": webhookNoStoreNoIndex(retryHeaders) && webhookNoStoreNoIndex(listHeaders),
-		"lifecycle_and_denials_audited": lifecycleAudit >= 3 && deniedAudit >= 2,
-		"audit_secret_redacted": secretLeak == 0,
-		"audit_payload_redacted": payloadLeak == 0,
-		"api_evidence_redacted": responsesRedacted,
+		"workspace_surfaces_no_store_noindex":  webhookNoStoreNoIndex(retryHeaders) && webhookNoStoreNoIndex(listHeaders),
+		"lifecycle_and_denials_audited":        lifecycleAudit >= 3 && deniedAudit >= 2,
+		"audit_secret_redacted":                secretLeak == 0,
+		"audit_payload_redacted":               payloadLeak == 0,
+		"api_evidence_redacted":                responsesRedacted,
 	}
 	counts := map[string]int{"webhook_audit": lifecycleAudit, "denied_audit": deniedAudit, "secret_leaks": secretLeak, "payload_leaks": payloadLeak}
 	return checks, counts, nil

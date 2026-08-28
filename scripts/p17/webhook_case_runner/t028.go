@@ -92,16 +92,16 @@ func runT028(ctx context.Context, r *adminfixture.Runtime) (map[string]bool, map
 		return nil, nil, err
 	}
 	checks := map[string]bool{
-		"event_idempotency_deduped": first.ID == duplicate.ID && rowCount == 1,
-		"bounded_retry_first_backoff": worked1 && err1 != nil && attempts1 == 1 && status1 == "retrying" && next1.Equal(queueAt.Add(time.Minute)),
-		"not_due_not_retried": !tooEarlyWorked && tooEarlyErr == nil && len(receiver.snapshot()) == 3,
-		"bounded_retry_second_backoff": worked2 && err2 != nil && attempts2 == 2 && status2 == "retrying" && next2.Equal(next1.Add(time.Millisecond).Add(5*time.Minute)),
-		"disable_stops_delivery": !disabledWorked && disabledErr == nil,
-		"restart_preserves_disabled_state": !restartDisabledWorked && restartDisabledErr == nil,
+		"event_idempotency_deduped":                first.ID == duplicate.ID && rowCount == 1,
+		"bounded_retry_first_backoff":              worked1 && err1 != nil && attempts1 == 1 && status1 == "retrying" && next1.Equal(queueAt.Add(time.Minute)),
+		"not_due_not_retried":                      !tooEarlyWorked && tooEarlyErr == nil && len(receiver.snapshot()) == 3,
+		"bounded_retry_second_backoff":             worked2 && err2 != nil && attempts2 == 2 && status2 == "retrying" && next2.Equal(next1.Add(time.Millisecond).Add(5*time.Minute)),
+		"disable_stops_delivery":                   !disabledWorked && disabledErr == nil,
+		"restart_preserves_disabled_state":         !restartDisabledWorked && restartDisabledErr == nil,
 		"restart_recovery_delivers_same_authority": worked3 && err3 == nil && attempts3 == 3 && status3 == "delivered",
-		"stable_delivery_idempotency_key": stableIdentity,
-		"lease_released": leaseRows == 0,
-		"enable_disable_audited": disableAudit == 2,
+		"stable_delivery_idempotency_key":          stableIdentity,
+		"lease_released":                           leaseRows == 0,
+		"enable_disable_audited":                   disableAudit == 2,
 	}
 	counts := map[string]int{"delivery_rows": rowCount, "receiver_requests": len(requests), "final_attempts": attempts3, "enable_disable_audit": disableAudit}
 	return checks, counts, nil
