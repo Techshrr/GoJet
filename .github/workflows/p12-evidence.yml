@@ -81,7 +81,7 @@ jobs:
               return json.load(response)
           deadline = time.time() + 35 * 60
           while time.time() < deadline:
-            query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+            query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
             runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}')['workflow_runs']
             latest = {}
             for run in runs:
@@ -97,14 +97,19 @@ jobs:
                 artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
                 expected = required[name](sha)
                 matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
-                if len(matches) != 1:
+                if not matches:
                   failed.append(f'{name}:artifact:{expected}')
                   continue
-                item = matches[0]
+                item = max(matches, key=lambda candidate: int(candidate.get('id', 0)))
+                if not str(item.get('digest', '')).startswith('sha256:') or int(item.get('size_in_bytes', 0)) <= 0:
+                  failed.append(f'{name}:artifact-metadata:{expected}')
+                  continue
                 entries[name] = {
                   'run_id': int(run['id']),
                   'run_number': int(run.get('run_number', 0)),
+                  'run_attempt': int(run.get('run_attempt', 0)),
                   'head_sha': run.get('head_sha'),
+                  'event': run.get('event'),
                   'status': run.get('status'),
                   'conclusion': run.get('conclusion'),
                   'html_url': run.get('html_url'),
@@ -141,24 +146,47 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          read_run() { python3 - "$1" <<'PY'
-          import json, sys
-          data = json.load(open('artifacts/v10/P12/evidence-producer-manifest.json', encoding='utf-8'))
-          print(data['required_workflows'][sys.argv[1]]['run_id'])
-          PY
-          }
-          contract_run="$(read_run 'P12 Workspace Organization Contract')"
-          integration_run="$(read_run 'P12 Real Workspace Organization Integration')"
-          browser_run="$(read_run 'P12 Workspace Organization Browser')"
-          rm -rf /tmp/p12-contract /tmp/p12-integration /tmp/p12-browser
+          rm -rf /tmp/p12-contract /tmp/p12-integration /tmp/p12-browser /tmp/p12-*.zip
           mkdir -p /tmp/p12-contract /tmp/p12-integration /tmp/p12-browser \
             artifacts/v10/P12/contract artifacts/v10/P12/api artifacts/v10/P12/rbac \
             artifacts/v10/P12/audit artifacts/v10/P12/security artifacts/v10/P12/browser \
             artifacts/v10/P12/captures artifacts/v10/P12/runtime artifacts/v10/P12/results
 
-          gh run download "$contract_run" --repo "$REPOSITORY" --name "p12-workspace-organization-contract-$EXACT_HEAD" --dir /tmp/p12-contract
-          gh run download "$integration_run" --repo "$REPOSITORY" --name "gojet-v10-p12-integration-$EXACT_HEAD" --dir /tmp/p12-integration
-          gh run download "$browser_run" --repo "$REPOSITORY" --name "gojet-v10-p12-browser-$EXACT_HEAD" --dir /tmp/p12-browser
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, urllib.request, zipfile
+          from pathlib import Path
+
+          repo = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          manifest = json.load(open('artifacts/v10/P12/evidence-producer-manifest.json', encoding='utf-8'))
+          targets = {
+            'P12 Workspace Organization Contract': Path('/tmp/p12-contract'),
+            'P12 Real Workspace Organization Integration': Path('/tmp/p12-integration'),
+            'P12 Workspace Organization Browser': Path('/tmp/p12-browser'),
+          }
+          headers = {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': f'Bearer {token}',
+            'X-GitHub-Api-Version': '2022-11-28',
+          }
+          for index, (name, destination) in enumerate(targets.items(), start=1):
+            artifact = manifest['required_workflows'][name]['artifact']
+            artifact_id = int(artifact['id'])
+            expected_digest = artifact['digest']
+            archive = Path(f'/tmp/p12-{index}.zip')
+            request = urllib.request.Request(
+              f'https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip',
+              headers=headers,
+            )
+            with urllib.request.urlopen(request, timeout=60) as response, archive.open('wb') as handle:
+              shutil.copyfileobj(response, handle)
+            actual_digest = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
+            if actual_digest != expected_digest:
+              raise SystemExit(f'P12 artifact digest mismatch {artifact_id}: {actual_digest} != {expected_digest}')
+            with zipfile.ZipFile(archive) as bundle:
+              bundle.extractall(destination)
+            print(f'P12 artifact {artifact_id} bound to {name} digest={actual_digest}')
+          PY
 
           for name in contract.json implementation_commit.txt base_integration_commit.txt predecessor_signed_source.txt case_range.txt capabilities.txt rbac-authority.txt route-ownership.txt; do
             source="$(find /tmp/p12-contract -type f -name "$name" -print -quit)"
