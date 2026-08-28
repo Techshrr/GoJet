@@ -15,7 +15,7 @@ import (
 
 func runT020(ctx context.Context, runtime *adminfixture.Runtime) (output, error) {
 	out := newOutput("real MySQL append-only audit plus authorized HTTP query response redaction for raw tokens and provider evidence")
-	now := time.Date(2026, 8, 28, 1, 40, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
 	service, root, login, err := bootstrapCaseRoot(ctx, runtime, "T020", []string{adminaccess.PermissionPlatformRead}, now)
 	if err != nil {
 		return out, err
