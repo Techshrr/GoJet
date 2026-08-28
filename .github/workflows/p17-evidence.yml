@@ -1,0 +1,262 @@
+name: P17 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P17/**'
+      - 'scripts/p17/**'
+      - '.github/workflows/p17-*.yml'
+      - 'internal/admin/**'
+      - 'internal/auth/**'
+      - 'internal/trust/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p17-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P17-T034 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P17 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify P17 coherence source and frozen boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p17/validate_contract.py scripts/p17/evidence.py
+          python3 scripts/p17/validate_contract.py > /tmp/p17-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p17-contract.json',encoding='utf-8'))
+          assert data['node']=='P17',data
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'],data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['review_phase'] in ('pending','signed'),data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Wait for exact-head P17 producers and bind artifact metadata
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P17
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          required={
+            'P17 Admin Permissions Audit Contract': {
+              'workflow':'p17-admin-permissions-audit.yml',
+              'artifacts':[f'p17-admin-permissions-audit-contract-guard-{sha}'],
+            },
+            'P17 Real Admin Access Integration': {
+              'workflow':'p17-admin-access-integration.yml',
+              'artifacts':[f'p17-t001-t005-real-admin-{sha}'],
+            },
+            'P17 Domain Entitlement Governance Integration': {
+              'workflow':'p17-domain-entitlement-integration.yml',
+              'artifacts':[f'p17-t006-t009-domain-entitlement-{sha}'],
+            },
+            'P17 User Workspace Governance Integration': {
+              'workflow':'p17-user-workspace-governance-integration.yml',
+              'artifacts':[f'p17-t010-user-workspace-governance-{sha}'],
+            },
+            'P17 Resource and Operations Governance Integration': {
+              'workflow':'p17-resource-operations-integration.yml',
+              'artifacts':[f'p17-P17-T{n:03d}-resource-operations-{sha}' for n in range(11,16)],
+            },
+            'P17 Platform Governance Integration': {
+              'workflow':'p17-platform-governance-integration.yml',
+              'artifacts':[f'p17-P17-T{n:03d}-platform-governance-{sha}' for n in range(16,22)],
+            },
+            'P17 API-key Governance Integration': {
+              'workflow':'p17-api-key-governance-integration.yml',
+              'artifacts':[f'p17-P17-T{n:03d}-api-key-governance-{sha}' for n in range(22,25)],
+            },
+            'P17 Webhook Governance Integration': {
+              'workflow':'p17-webhook-governance-integration.yml',
+              'artifacts':[f'p17-P17-T{n:03d}-webhook-governance-{sha}' for n in range(25,30)],
+            },
+            'P17 Browser Governance Authority': {
+              'workflow':'p17-browser.yml',
+              'artifacts':[f'p17-P17-T{n:03d}-browser-{sha}' for n in range(30,34)],
+            },
+          }
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          manifest_path=Path('artifacts/v10/P17/evidence-producer-manifest.json')
+          dispatched=set(); deadline=time.time()+170*60
+
+          def api(url, *, method='GET', body=None):
+            data=None if body is None else json.dumps(body).encode()
+            request=urllib.request.Request(url,data=data,method=method,headers=headers)
+            with urllib.request.urlopen(request,timeout=30) as response:
+              raw=response.read(); return json.loads(raw) if raw else None
+
+          def dispatch(workflow):
+            quoted=urllib.parse.quote(workflow,safe='')
+            api(f'https://api.github.com/repos/{repo}/actions/workflows/{quoted}/dispatches',method='POST',body={'ref':ref})
+
+          while time.time()<deadline:
+            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
+            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            latest={}
+            for run in runs:
+              name=run.get('name')
+              if name in required and (name not in latest or int(run.get('id',0))>int(latest[name].get('id',0))): latest[name]=run
+            missing=[name for name in required if name not in latest]
+            pending=[name for name in required if name in latest and latest[name].get('status')!='completed']
+            failed=[name for name in required if name in latest and latest[name].get('status')=='completed' and latest[name].get('conclusion')!='success']
+            entries={}
+            if not missing and not pending and not failed:
+              for name, spec in required.items():
+                run=latest[name]
+                artifacts=api(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts',[])
+                by_name={item.get('name'):item for item in artifacts if not item.get('expired')}
+                rows=[]
+                for expected in spec['artifacts']:
+                  item=by_name.get(expected)
+                  if not item:
+                    failed.append(f'{name}:artifact:{expected}')
+                    continue
+                  rows.append({'id':int(item['id']),'name':item['name'],'digest':item.get('digest'),'size_in_bytes':int(item.get('size_in_bytes',0))})
+                entries[name]={
+                  'workflow_file':spec['workflow'],'run_id':int(run['id']),'run_number':int(run.get('run_number',0)),
+                  'head_sha':run.get('head_sha'),'event':run.get('event'),'status':run.get('status'),'conclusion':run.get('conclusion'),
+                  'html_url':run.get('html_url'),'artifacts':rows,
+                }
+            manifest={
+              'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+              'implementation_commit':sha,'required_workflows':entries,'missing':missing,'pending':pending,'failed':failed,
+              'dispatched_workflows':sorted(dispatched),
+            }
+            manifest_path.write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+            if failed: raise SystemExit('required P17 producer/artifact failed: '+', '.join(failed))
+            if not missing and not pending and len(entries)==len(required):
+              print(f'P17 producers/artifacts green for {sha}'); break
+            for name in missing:
+              if name not in dispatched:
+                print(f'Dispatching missing P17 producer {name} via {required[name]["workflow"]} on {ref}',flush=True)
+                dispatch(required[name]['workflow']); dispatched.add(name)
+            print(f'Waiting P17 producers missing={missing} pending={pending}',flush=True)
+            time.sleep(10)
+          else:
+            raise SystemExit(f'timed out waiting for P17 producers on {sha}')
+          PY
+
+      - name: Download and verify exact-head producer artifacts
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p17-producers
+          mkdir -p /tmp/p17-producers artifacts/v10/P17/cases artifacts/v10/P17/captures artifacts/v10/P17/contract-guard artifacts/v10/P17/results
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, subprocess, zipfile
+          from pathlib import Path
+
+          root=Path('artifacts/v10/P17'); temp=Path('/tmp/p17-producers'); repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          manifest=json.loads((root/'evidence-producer-manifest.json').read_text(encoding='utf-8'))
+          seen_cases=set()
+          for workflow,row in manifest['required_workflows'].items():
+            for artifact in row['artifacts']:
+              aid=int(artifact['id']); name=artifact['name']; dest=temp/str(aid); dest.mkdir(parents=True,exist_ok=True)
+              archive=temp/f'{aid}.zip'
+              env={**os.environ,'GH_TOKEN':token}
+              with archive.open('wb') as handle:
+                subprocess.run(['gh','api','-H','Accept: application/vnd.github+json','-H','X-GitHub-Api-Version: 2022-11-28',f'/repos/{repo}/actions/artifacts/{aid}/zip'],env=env,check=True,stdout=handle)
+              digest='sha256:'+hashlib.sha256(archive.read_bytes()).hexdigest()
+              if digest!=artifact['digest']: raise SystemExit(f'artifact archive digest mismatch {name}: {digest} != {artifact["digest"]}')
+              with zipfile.ZipFile(archive) as z: z.extractall(dest)
+              for source in dest.rglob('P17-T*.json'):
+                if '/results/' in source.as_posix(): continue
+                case=source.stem
+                if case not in {f'P17-T{n:03d}' for n in range(1,34)}: continue
+                if case in seen_cases: raise SystemExit(f'duplicate producer evidence {case}')
+                shutil.copy2(source,root/'cases'/f'{case}.json'); seen_cases.add(case)
+              for source in dest.rglob('P17-T0*.png'):
+                target=root/'captures'/source.name
+                if target.exists(): raise SystemExit(f'duplicate browser capture {source.name}')
+                shutil.copy2(source,target)
+              if workflow=='P17 Admin Permissions Audit Contract':
+                guard=next((p for p in dest.rglob('contract.json')),None)
+                if guard is None: raise SystemExit('contract producer missing contract.json')
+                guard_dir=guard.parent
+                for source in guard_dir.iterdir():
+                  if source.is_file(): shutil.copy2(source,root/'contract-guard'/source.name)
+          expected={f'P17-T{n:03d}' for n in range(1,34)}
+          if seen_cases!=expected: raise SystemExit(f'case evidence mismatch missing={sorted(expected-seen_cases)} extra={sorted(seen_cases-expected)}')
+          print(f'downloaded {len(seen_cases)} exact-head case evidence files')
+          PY
+
+      - name: Run frozen P17-T034 evidence coherence
+        run: |
+          set -euo pipefail
+          EXACT_HEAD="$EXACT_HEAD" python3 scripts/p17/evidence.py
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P17/results/P17-T034.json',encoding='utf-8'))
+          assert data['node']=='P17' and data['case']=='P17-T034',data
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'],data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          obs=data['observations']
+          assert obs['input_evidence_count']==33 and obs['same_exact_head'] is True,obs
+          assert obs['secret_safe'] is True and obs['producer_count']==9 and obs['producer_artifact_count']==27,obs
+          assert obs['mixed_head_rejected'] is True and obs['unsafe_evidence_rejected'] is True,obs
+          assert obs['merge_authoritative'] is False,obs
+          assert obs['browser_capture_counts']['P17-T030']>=5,obs
+          assert obs['browser_capture_counts']['P17-T031']>=5,obs
+          assert obs['browser_capture_counts']['P17-T032']>=8,obs
+          assert obs['browser_capture_counts']['P17-T033']>=12,obs
+          PY
+
+      - name: Upload P17 T034 exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p17-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/evidence-producer-manifest.json
+            artifacts/v10/P17/evidence-index.json
+            artifacts/v10/P17/contract-guard/
+            artifacts/v10/P17/cases/P17-T*.json
+            artifacts/v10/P17/captures/P17-T*.png
+            artifacts/v10/P17/results/P17-T034.json
+            artifacts/v10/P17/test-plan.json
+            artifacts/v10/P17/review.md

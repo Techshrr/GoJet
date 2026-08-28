@@ -1,0 +1,127 @@
+name: P17 Closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'artifacts/v10/P17/**'
+      - 'scripts/p17/**'
+      - '.github/workflows/p17-*.yml'
+      - 'internal/admin/**'
+      - 'internal/auth/**'
+      - 'internal/trust/**'
+      - 'internal/domains/**'
+      - 'internal/files/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'services/platformapi/**'
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p17-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P17-T035 accountable exact-head closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P17 closure candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify P17 closure source and frozen contract
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p17/validate_contract.py scripts/p17/evidence.py scripts/p17/closure_ci.py
+          python3 scripts/p17/validate_contract.py > /tmp/p17-closure-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p17-closure-contract.json',encoding='utf-8'))
+          assert data['node']=='P17',data
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'],data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['review_phase'] in ('pending','signed'),data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['merge_authoritative'] is False,data
+          PY
+          go test ./...
+
+      - name: Run frozen P17-T035 accountable closure
+        run: |
+          set -euo pipefail
+          python3 scripts/p17/closure_ci.py
+
+      - name: Verify exact-head P17 closure result
+        id: closure
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P17/results/P17-T035.json',encoding='utf-8'))
+          assert data['node']=='P17' and data['case']=='P17-T035',data
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'],data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['defects']=={'p0':0,'p1':0,'decision_required':0},data
+          assert data['evidence']['input_case_count']==34 and data['evidence']['final_case_count']==35,data
+          assert data['affected_matrix']=={'passed':66,'required':66,'complete':True},data
+          if data['review_phase']=='pending':
+            assert data['phase']=='pre-sign' and data['merge_authoritative'] is False,data
+            assert data['review_only_signed_child'] is False and data['signing_required'] is True,data
+          else:
+            assert data['review_phase']=='signed',data
+            assert data['phase']=='signed' and data['merge_authoritative'] is True,data
+            assert data['review_only_signed_child'] is True and data['signing_required'] is False,data
+            assert data['pre_sign_authority'],data
+          PY
+          printf 'sha=%s\n' "$EXACT_HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P17 exact-head closure authority
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p17-closure-${{ steps.closure.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/closure.json
+            artifacts/v10/P17/results/P17-T034.json
+            artifacts/v10/P17/results/P17-T035.json
+            artifacts/v10/P17/regression-manifest.json
+            artifacts/v10/P17/evidence-producer-manifest.json
+            artifacts/v10/P17/evidence-index.json
+            artifacts/v10/P17/inherited/
+            artifacts/v10/P17/test-plan.json
+            artifacts/v10/P17/review.md

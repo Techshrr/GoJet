@@ -9,6 +9,7 @@ on:
       - 'services/platformapi/cmd/server/admin_access.go'
       - 'services/platformapi/cmd/server/main.go'
       - 'migrations/000025_admin_access_audit.sql'
+      - 'artifacts/v10/P17/review.md'
       - '.github/workflows/p17-admin-access-foundation.yml'
   workflow_dispatch:
 
@@ -71,8 +72,13 @@ jobs:
           import json
           data=json.load(open('/tmp/p17-contract.json', encoding='utf-8'))
           assert data['status'] == 'PASS', data
-          assert data['implementation_authorized'] is True, data
+          assert data['review_phase'] in ('pending','signed'), data
+          if data['review_phase'] == 'pending':
+              assert data['implementation_authorized'] is True, data
+          else:
+              assert data['implementation_authorized'] is False, data
           assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
           PY
 
       - name: Apply P17 administrator authority migration

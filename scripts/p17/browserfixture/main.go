@@ -207,7 +207,7 @@ VALUES (?,?,'browser fixture control',?,CONCAT('decision-',?),?)`, state.ws, sta
 
 	_, err = runtime.DB.ExecContext(ctx, `
 INSERT INTO admin_platform_settings(setting_key,value_json,version,updated_by,updated_at)
-VALUES ('general',CAST('{"site_name":"GoJet","maintenance":false}' AS JSON),1,?,?)`, root.ID, now)
+VALUES ('general',CAST('{"site_name":"GoJet","public_base_url":"https://gojet.cc","support_url":"https://gojet.cc/contact"}' AS JSON),1,?,?)`, root.ID, now)
 	if err != nil {
 		fatal(err)
 	}

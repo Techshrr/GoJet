@@ -16,6 +16,7 @@ on:
       - 'scripts/p17/adminfixture/**'
       - 'scripts/p17/validate_contract.py'
       - 'artifacts/v10/P17/test-plan.json'
+      - 'artifacts/v10/P17/review.md'
       - '.github/workflows/p17-api-key-governance-integration.yml'
   workflow_dispatch:
 
@@ -124,8 +125,11 @@ jobs:
           assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
           assert data['case_range']=='P17-T001..P17-T035',data
           assert data['frozen_contract_preserved'] is True,data
-          assert data['review_phase']=='pending',data
-          assert data['implementation_authorized'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
           assert data['merge_authoritative'] is False,data
           PY
 
