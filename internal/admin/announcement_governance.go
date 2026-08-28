@@ -73,7 +73,7 @@ func (s *Service) ListAnnouncements(ctx context.Context, p Principal, limit int)
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT a.id,a.title,a.summary,a.body,a.scope,COALESCE(a.workspace_id,''),a.state,a.scheduled_for,a.published_at,a.archived_at,a.version,c.generation,a.created_at,a.updated_at FROM admin_announcements a JOIN admin_content_cache_state c ON c.cache_key='announcements' ORDER BY a.updated_at DESC,a.id DESC LIMIT ?`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id,a.title,a.summary,a.body,a.scope,COALESCE(a.workspace_id,''),a.lifecycle_state,a.scheduled_for,a.published_at,a.archived_at,a.version,c.generation,a.created_at,a.updated_at FROM admin_announcements a JOIN admin_content_cache_state c ON c.cache_key='announcements' ORDER BY a.updated_at DESC,a.id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (s *Service) CreateAnnouncement(ctx context.Context, p Principal, input Cre
 	if clean.WorkspaceID != "" {
 		workspaceID = clean.WorkspaceID
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO admin_announcements(id,title,summary,body,scope,workspace_id,state,version,created_by,updated_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'draft',1,?,?,?,?)`, id, clean.Title, clean.Summary, clean.Body, clean.Scope, workspaceID, p.Administrator.ID, p.Administrator.ID, now, now)
+	_, err = tx.ExecContext(ctx, `INSERT INTO admin_announcements(id,title,summary,body,scope,workspace_id,lifecycle_state,version,created_by,updated_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'draft',1,?,?,?,?)`, id, clean.Title, clean.Summary, clean.Body, clean.Scope, workspaceID, p.Administrator.ID, p.Administrator.ID, now, now)
 	if err != nil {
 		return Announcement{}, false, err
 	}
@@ -217,7 +217,7 @@ func (s *Service) MutateAnnouncement(ctx context.Context, p Principal, announcem
 		return replay, true, nil
 	}
 	item, err := scanAnnouncement(func(dest ...any) error {
-		return tx.QueryRowContext(ctx, `SELECT a.id,a.title,a.summary,a.body,a.scope,COALESCE(a.workspace_id,''),a.state,a.scheduled_for,a.published_at,a.archived_at,a.version,c.generation,a.created_at,a.updated_at FROM admin_announcements a JOIN admin_content_cache_state c ON c.cache_key='announcements' WHERE a.id=? FOR UPDATE`, announcementID).Scan(dest...)
+		return tx.QueryRowContext(ctx, `SELECT a.id,a.title,a.summary,a.body,a.scope,COALESCE(a.workspace_id,''),a.lifecycle_state,a.scheduled_for,a.published_at,a.archived_at,a.version,c.generation,a.created_at,a.updated_at FROM admin_announcements a JOIN admin_content_cache_state c ON c.cache_key='announcements' WHERE a.id=? FOR UPDATE`, announcementID).Scan(dest...)
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Announcement{}, false, ErrNotFound
@@ -262,7 +262,7 @@ func (s *Service) MutateAnnouncement(ctx context.Context, p Principal, announcem
 	if err := tx.QueryRowContext(ctx, `SELECT generation FROM admin_content_cache_state WHERE cache_key='announcements'`).Scan(&item.CacheGeneration); err != nil {
 		return Announcement{}, false, err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE admin_announcements SET state=?,scheduled_for=?,published_at=?,archived_at=?,version=?,updated_by=?,updated_at=? WHERE id=?`, item.State, item.ScheduledFor, item.PublishedAt, item.ArchivedAt, item.Version, p.Administrator.ID, now, item.ID)
+	_, err = tx.ExecContext(ctx, `UPDATE admin_announcements SET lifecycle_state=?,scheduled_for=?,published_at=?,archived_at=?,version=?,updated_by=?,updated_at=? WHERE id=?`, item.State, item.ScheduledFor, item.PublishedAt, item.ArchivedAt, item.Version, p.Administrator.ID, now, item.ID)
 	if err != nil {
 		return Announcement{}, false, err
 	}
