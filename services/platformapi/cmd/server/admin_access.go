@@ -87,11 +87,20 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if err != nil {
 		return nil, false, err
 	}
+	testAuthEnabled := os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1"
 	apiKeyAuthority, err := adminaccess.NewWorkspaceAPIKeyAuthority(db, redisClient)
 	if err != nil {
 		return nil, false, err
 	}
-	apiKeyAPI, err := adminaccess.NewWorkspaceAPIKeyHTTPAPI(apiKeyAuthority, os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1")
+	apiKeyAPI, err := adminaccess.NewWorkspaceAPIKeyHTTPAPI(apiKeyAuthority, testAuthEnabled)
+	if err != nil {
+		return nil, false, err
+	}
+	webhookAuthority, err := adminaccess.NewWorkspaceWebhookAuthority(db, redisClient, cipher, nil, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	webhookAPI, err := adminaccess.NewWorkspaceWebhookHTTPAPI(webhookAuthority, testAuthEnabled)
 	if err != nil {
 		return nil, false, err
 	}
@@ -114,6 +123,10 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	for _, pattern := range workspaceAPIKeyRoutePatterns() {
 		combined.Handle(pattern, apiKeys)
 	}
+	webhooks := webhookAPI.Handler()
+	for _, pattern := range workspaceWebhookRoutePatterns() {
+		combined.Handle(pattern, webhooks)
+	}
 	return combined, true, nil
 }
 
@@ -122,14 +135,29 @@ func extendedAdminRoutePatterns() []string {
 		"GET /api/admin/links", "GET /api/admin/links/{linkId}", "GET /api/admin/domains", "GET /api/admin/domains/{domainId}", "GET /api/admin/resources/{resourceKind}", "GET /api/admin/resources/{resourceKind}/{resourceId}", "GET /api/admin/files", "GET /api/admin/files/{fileId}", "POST /api/admin/files/{fileId}/quarantine", "POST /api/admin/files/{fileId}/rescan", "POST /api/admin/files/{fileId}/restore", "POST /api/admin/files/{fileId}/delete", "POST /api/admin/files/{fileId}/expiry", "GET /api/admin/operations/jobs", "POST /api/admin/operations/jobs/{jobId}/requeue", "GET /api/admin/operations/services", "POST /api/admin/operations/services/{serviceId}/restart",
 	}
 }
+
 func platformAdminRoutePatterns() []string {
 	return []string{
 		"GET /api/admin/settings/{settingKey}", "PUT /api/admin/settings/{settingKey}", "GET /api/admin/bot-protection", "PUT /api/admin/bot-protection", "GET /api/admin/official-domains", "POST /api/admin/official-domains", "POST /api/admin/official-domains/{domainId}/actions", "GET /api/admin/announcements", "POST /api/admin/announcements", "POST /api/admin/announcements/{announcementId}/actions",
 	}
 }
+
 func workspaceAPIKeyRoutePatterns() []string {
 	return []string{
 		"GET /api/workspaces/{workspaceId}/api-keys", "POST /api/workspaces/{workspaceId}/api-keys", "POST /api/workspaces/{workspaceId}/api-keys/{keyId}/rotate", "POST /api/workspaces/{workspaceId}/api-keys/{keyId}/revoke",
+	}
+}
+
+func workspaceWebhookRoutePatterns() []string {
+	return []string{
+		"GET /api/workspaces/{workspaceId}/webhooks",
+		"POST /api/workspaces/{workspaceId}/webhooks",
+		"GET /api/workspaces/{workspaceId}/webhooks/{webhookId}",
+		"POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/rotate-secret",
+		"POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/enable",
+		"POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/disable",
+		"GET /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries",
+		"POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries/{deliveryId}/retry",
 	}
 }
 
@@ -140,6 +168,7 @@ func mountAdminAccessRoutes(root *http.ServeMux, handler http.Handler) {
 	patterns = append(patterns, extendedAdminRoutePatterns()...)
 	patterns = append(patterns, platformAdminRoutePatterns()...)
 	patterns = append(patterns, workspaceAPIKeyRoutePatterns()...)
+	patterns = append(patterns, workspaceWebhookRoutePatterns()...)
 	for _, pattern := range patterns {
 		root.Handle(pattern, handler)
 	}
