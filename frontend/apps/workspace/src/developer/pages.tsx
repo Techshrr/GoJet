@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, InlineMessage } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
 
@@ -65,6 +66,11 @@ function ErrorMessage({ error }: { error: string }) {
   return <InlineMessage variant="danger">{forbidden ? 'You do not have permission to manage this developer surface.' : `Request failed: ${error}`}</InlineMessage>;
 }
 
+function effectiveKeyStatus(key: APIKey) {
+  if (key.status === 'active' && key.expires_at && new Date(key.expires_at).getTime() <= Date.now()) return 'expired';
+  return key.status;
+}
+
 export function APIKeysPage() {
   const [keys, setKeys] = useState<APIKey[]>([]);
   const [error, setError] = useState('');
@@ -105,9 +111,19 @@ export function APIKeysPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'server_error'); }
   }
 
+  const pageState = useMemo(() => {
+    if (error) return error === 'forbidden' || error === 'authentication_required' ? 'forbidden' : 'error';
+    if (busy) return 'loading';
+    if (secret) return 'secret-once';
+    if (keys.length === 0) return 'empty';
+    if (keys.some((key) => effectiveKeyStatus(key) === 'expired')) return 'expired';
+    if (keys.some((key) => effectiveKeyStatus(key) === 'revoked')) return 'revoked';
+    return 'create';
+  }, [busy, error, keys, secret]);
+
   return (
     <WorkspaceShell state="normal" sectionLabel="API keys" workspaceLabel="Developer workspace">
-      <section className="developer-page" data-page="api-keys" data-state={error ? 'error' : busy ? 'loading' : 'ready'}>
+      <section className="developer-page" data-page="api-keys" data-state={pageState}>
         <header><p className="developer-kicker">Developer</p><h1>API keys</h1><p>Create scoped credentials with explicit rate authority. Full secrets are never listed again.</p></header>
         <ErrorMessage error={error} />
         {secret && <SecretOnce label="New API key secret" value={secret} onDismiss={() => setSecret('')} />}
@@ -120,7 +136,7 @@ export function APIKeysPage() {
         </form>
         <div className="developer-table-wrap">
           <table><caption>Workspace API keys</caption><thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Status</th><th>Rate</th><th>Actions</th></tr></thead>
-            <tbody>{keys.map((key) => <tr key={key.id} data-key-id={key.id}><td>{key.name}</td><td><code>{key.prefix}</code></td><td>{key.scopes.join(', ')}</td><td>{key.status}</td><td>{key.rate_limit_per_minute}/min</td><td><Button type="button" variant="ghost" onClick={() => void lifecycle(key.id, 'rotate')}>Rotate</Button> <Button type="button" variant="ghost" disabled={key.status === 'revoked'} onClick={() => void lifecycle(key.id, 'revoke')}>Revoke</Button></td></tr>)}</tbody>
+            <tbody>{keys.map((key) => <tr key={key.id} data-key-id={key.id}><td>{key.name}</td><td><code>{key.prefix}</code></td><td>{key.scopes.join(', ')}</td><td>{effectiveKeyStatus(key)}</td><td>{key.rate_limit_per_minute}/min</td><td><Button type="button" variant="ghost" disabled={key.status === 'revoked'} onClick={() => void lifecycle(key.id, 'rotate')}>Rotate</Button> <Button type="button" variant="ghost" disabled={key.status === 'revoked'} onClick={() => void lifecycle(key.id, 'revoke')}>Revoke</Button></td></tr>)}</tbody>
           </table>
           {!busy && !error && keys.length === 0 && <p data-empty="true">No API keys yet.</p>}
         </div>
@@ -187,9 +203,21 @@ export function WebhooksPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'server_error'); }
   }
 
+  const selectedHook = hooks.find((hook) => hook.id === selected);
+  const pageState = useMemo(() => {
+    if (error) return error === 'forbidden' || error === 'authentication_required' ? 'forbidden' : 'error';
+    if (busy) return 'loading';
+    if (secret) return 'secret-rotate';
+    if (hooks.length === 0) return 'empty';
+    if (selectedHook?.status === 'disabled') return 'disabled';
+    if (deliveries.some((delivery) => delivery.status === 'retrying')) return 'retrying';
+    if (deliveries.length > 0) return 'delivery';
+    return 'create';
+  }, [busy, deliveries, error, hooks.length, secret, selectedHook?.status]);
+
   return (
     <WorkspaceShell state="normal" sectionLabel="Webhooks" workspaceLabel="Developer workspace">
-      <section className="developer-page" data-page="webhooks" data-state={error ? 'error' : busy ? 'loading' : 'ready'}>
+      <section className="developer-page" data-page="webhooks" data-state={pageState}>
         <header><p className="developer-kicker">Developer</p><h1>Webhooks</h1><p>Configure signed Workspace-owned outbound deliveries. Payment callbacks remain a separate authority.</p></header>
         <ErrorMessage error={error} />
         {secret && <SecretOnce label="Webhook signing secret" value={secret} onDismiss={() => setSecret('')} />}

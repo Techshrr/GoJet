@@ -17,6 +17,7 @@ import {
   SecuritySettingsPage,
   SessionsSettingsPage,
 } from './account/pages';
+import { APIKeysPage, WebhooksPage } from './developer/pages';
 
 const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));
@@ -69,6 +70,8 @@ const organizationRoute = createRoute({ getParentRoute: () => rootRoute, path: '
 const campaignsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/campaigns', component: CampaignsPage });
 const tagsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/tags', component: TagsPage });
 const membersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/members', component: MembersPage });
+const apiKeysRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/api-keys', component: APIKeysPage });
+const webhooksRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/webhooks', component: WebhooksPage });
 const workspaceSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/workspace', component: WorkspaceSettingsPage });
 const profileSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/profile', component: ProfileSettingsPage });
 const securitySettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/security', component: SecuritySettingsPage });
@@ -82,6 +85,7 @@ const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
   analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, bioRoute, bioDetailRoute,
   billingRoute, supportRoute, supportNewRoute, supportThreadRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute,
+  apiKeysRoute, webhooksRoute,
   workspaceSettingsRoute, profileSettingsRoute, securitySettingsRoute, sessionsSettingsRoute, connectedAccountsRoute, inviteRoute,
   ...sectionRoutes,
 ]);

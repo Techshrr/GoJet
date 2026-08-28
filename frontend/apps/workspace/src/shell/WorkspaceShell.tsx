@@ -8,7 +8,7 @@ const groups = [
   ['CREATE', [['Links', '/app/links'], ['QR Codes', '/app/qr'], ['Files', '/app/files'], ['Text', '/app/text'], ['Bio', '/app/bio']]],
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains'], ['Organization', '/app/organization'], ['Campaigns', '/app/campaigns'], ['Tags', '/app/tags']]],
-  ['DEVELOPER', [['Developer', '/app/developer']]],
+  ['DEVELOPER', [['API keys', '/app/api-keys'], ['Webhooks', '/app/webhooks']]],
   ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings']]],
 ] as const;
 

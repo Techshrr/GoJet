@@ -10,9 +10,10 @@ import './commerce/commerce.css';
 import './support/support.css';
 import './oauth/oauth.css';
 import './trust/trust.css';
+import './p17/p17.css';
 
 const container = document.getElementById('root');
-if (!container) throw new Error('GoJet application root is missing');
+if (!container) throw new Error('GoJet Admin root is missing');
 const queryClient = createGoJetQueryClient();
 createRoot(container).render(
   <StrictMode>

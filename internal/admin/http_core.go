@@ -22,6 +22,7 @@ func NewHTTPAPI(service *Service) (*HTTPAPI, error) {
 	}
 	return &HTTPAPI{service: service, now: func() time.Time { return time.Now().UTC() }}, nil
 }
+
 func (a *HTTPAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/admin/auth/login", a.login)
@@ -31,6 +32,7 @@ func (a *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/auth/sessions/{sessionId}/revoke", a.revokeSession)
 	mux.HandleFunc("POST /api/admin/auth/totp/enroll", a.enrollTOTP)
 	mux.HandleFunc("POST /api/admin/auth/totp/confirm", a.confirmTOTP)
+	mux.HandleFunc("GET /api/admin/overview", a.overview)
 	mux.HandleFunc("GET /api/admin/permissions", a.permissions)
 	mux.HandleFunc("GET /api/admin/roles", a.roles)
 	mux.HandleFunc("POST /api/admin/roles", a.createRole)
@@ -45,8 +47,12 @@ func (a *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/workspaces/{workspaceId}/suspend", a.suspendManagedWorkspace)
 	mux.HandleFunc("POST /api/admin/workspaces/{workspaceId}/restore", a.restoreManagedWorkspace)
 	mux.HandleFunc("GET /api/admin/audit", a.audit)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { adminHeaders(w.Header()); mux.ServeHTTP(w, r) })
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		adminHeaders(w.Header())
+		mux.ServeHTTP(w, r)
+	})
 }
+
 func adminHeaders(h http.Header) {
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Pragma", "no-cache")
@@ -54,11 +60,13 @@ func adminHeaders(h http.Header) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 }
+
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	dec := json.NewDecoder(r.Body)
@@ -73,6 +81,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	}
 	return true
 }
+
 func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	code := "internal_error"
@@ -110,6 +119,7 @@ func writeError(w http.ResponseWriter, err error) {
 	}
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code}})
 }
+
 func (a *HTTPAPI) requireOrigin(w http.ResponseWriter, r *http.Request) bool {
 	if !a.service.ValidateOrigin(r.Header.Get("Origin")) {
 		writeError(w, ErrForbidden)
@@ -117,6 +127,7 @@ func (a *HTTPAPI) requireOrigin(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
+
 func (a *HTTPAPI) principal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
 	cookie, err := r.Cookie(AdminSessionCookie)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
@@ -130,6 +141,7 @@ func (a *HTTPAPI) principal(w http.ResponseWriter, r *http.Request) (Principal, 
 	}
 	return p, true
 }
+
 func (a *HTTPAPI) mutationPrincipal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
 	if !a.requireOrigin(w, r) {
 		return Principal{}, false
@@ -144,6 +156,11 @@ func (a *HTTPAPI) mutationPrincipal(w http.ResponseWriter, r *http.Request) (Pri
 	}
 	return p, true
 }
+
 func authority(r *http.Request, reason string) MutationAuthority {
-	return MutationAuthority{Reason: strings.TrimSpace(reason), CorrelationID: strings.TrimSpace(r.Header.Get("X-Correlation-ID")), IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key"))}
+	return MutationAuthority{
+		Reason:         strings.TrimSpace(reason),
+		CorrelationID: strings.TrimSpace(r.Header.Get("X-Correlation-ID")),
+		IdempotencyKey: strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+	}
 }
