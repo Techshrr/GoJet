@@ -1,0 +1,134 @@
+name: P18 Docs Multilingual Discovery Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/v10/P18/test-plan.json'
+      - 'artifacts/v10/P18/review.md'
+      - 'scripts/p18/validate_contract.py'
+      - '.github/workflows/p18-docs-multilingual-discovery.yml'
+      - 'specifications/**'
+      - 'contracts/traceability/capability-matrix.snapshot.md'
+      - 'contracts/traceability/route-registry.snapshot.md'
+      - 'artifacts/v10/P17/review.md'
+      - 'artifacts/v10/P04/review.md'
+      - 'frontend/apps/docs/**'
+      - 'frontend/packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p18-docs-multilingual-discovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P18 frozen contract and predecessor guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact P18 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Compile P18 contract validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p18/validate_contract.py
+
+      - name: Validate frozen P18 contract and ancestry
+        id: contract
+        run: |
+          set -euo pipefail
+          python3 scripts/p18/validate_contract.py | tee /tmp/p18-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p18-contract.json', encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          assert data['node'] == 'P18', data
+          assert data['status'] == 'PASS', data
+          assert data['errors'] == [], data
+          assert data['implementation_commit'] == head, data
+          assert data['base_integration_commit'] == '08cb39bbe54717b711e2d09840ecde04b66bb50f', data
+          assert data['contract_authority'] != '__PIN_AFTER_FREEZE__', data
+          assert data['case_range'] == 'P18-T001..P18-T026', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          if head == data['contract_authority']:
+              assert data['review_phase'] == 'pending', data
+              assert data['mode'] == 'contract-freeze', data
+              assert data['implementation_authorized'] is False, data
+          elif data['review_phase'] == 'pending':
+              assert data['mode'] == 'implementation-guard', data
+              assert data['implementation_authorized'] is True, data
+          else:
+              assert data['mode'] == 'signed-review-guard', data
+              assert data['implementation_authorized'] is False, data
+          PY
+          head="$(git rev-parse HEAD)"
+          printf 'sha=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve inherited P04 static Docs build boundary
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/docs typecheck
+          pnpm --filter @gojet/docs build
+          test -d frontend/apps/docs/dist
+          test -f frontend/apps/docs/dist/en/index.html || test -f frontend/apps/docs/dist/docs/en/index.html
+          test -f frontend/apps/docs/dist/zh-CN/index.html || test -f frontend/apps/docs/dist/docs/zh-CN/index.html
+
+      - name: Record exact-head P18 contract evidence
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          authority="$(python3 - <<'PY'
+          import json
+          print(json.load(open('/tmp/p18-contract.json'))['contract_authority'])
+          PY
+          )"
+          mkdir -p artifacts/v10/P18/contract-guard
+          cp /tmp/p18-contract.json artifacts/v10/P18/contract-guard/contract.json
+          printf '%s\n' "$head" > artifacts/v10/P18/contract-guard/implementation_commit.txt
+          printf '%s\n' '08cb39bbe54717b711e2d09840ecde04b66bb50f' > artifacts/v10/P18/contract-guard/base_integration_commit.txt
+          printf '%s\n' "$authority" > artifacts/v10/P18/contract-guard/contract_authority.txt
+          printf '%s\n' 'P18-T001..P18-T026' > artifacts/v10/P18/contract-guard/case_range.txt
+          printf '%s\n' '5818406072a131db1c7d8aa7bc5ef8a7adc8d51f' > artifacts/v10/P18/contract-guard/p17_signed_source.txt
+          printf '%s\n' '4d1a69d1889fd78297247a013936c5aad86a97ed' > artifacts/v10/P18/contract-guard/p04_signed_review_blob.txt
+
+      - name: Upload P18 exact-head contract guard evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p18-docs-multilingual-discovery-contract-guard-${{ steps.contract.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P18/contract-guard/
+            artifacts/v10/P18/test-plan.json
+            artifacts/v10/P18/review.md
+            scripts/p18/validate_contract.py

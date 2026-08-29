@@ -1,0 +1,479 @@
+{
+  "node": "P18",
+  "title": "Docs and Multilingual Discovery",
+  "issue": 48,
+  "base_integration_commit": "08cb39bbe54717b711e2d09840ecde04b66bb50f",
+  "case_ids_frozen_by": "P18 contract-freeze revision; Master Plan supplies requirements, not P18-Txxx identifiers",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capabilities": [
+      {
+        "id": "CAP-TECHNICAL-SEO",
+        "status": "REQUIRED",
+        "owner": "P18/P19",
+        "gates": [
+          "G7",
+          "G9",
+          "G13"
+        ],
+        "p18_boundary": "Docs static rendering/discovery/indexation contribution; P19 owns Website and later G9 contribution, P22 production G13 remains later."
+      }
+    ],
+    "master_predecessors": [
+      "P04",
+      "P17"
+    ],
+    "inherited_authorities": [
+      "P04 signed six-shell authority, specifically the Astro/Starlight static Docs shell and its article/search-open/nav-drawer/not-found/offline-static state boundary",
+      "P05-P17 released capability/API evidence as the only source for whether a Docs/API page may claim a capability is released",
+      "P17 signed API-key/webhook/Admin completion and zero unresolved DECISION REQUIRED at P18 handoff",
+      "P00 capability/route traceability snapshots remain subordinate to the Master Plan and Page-Level IA"
+    ],
+    "master_required_tests": [
+      "raw HTML",
+      "search",
+      "broken links",
+      "code blocks",
+      "canonical/hreflang",
+      "mobile"
+    ],
+    "scope": "P18 closes only the Docs and multilingual discovery contribution to CAP-TECHNICAL-SEO. P19 Website/technical SEO, P20 release-wide gates and P21/P22 native package/install/production validation remain later-owned."
+  },
+  "predecessor_signed_authority": {
+    "node": "P17",
+    "integration_commit": "08cb39bbe54717b711e2d09840ecde04b66bb50f",
+    "signed_source_commit": "5818406072a131db1c7d8aa7bc5ef8a7adc8d51f",
+    "closure_run_id": 33232541982,
+    "artifact_id": 9709093486,
+    "artifact_digest": "sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1",
+    "phase": "signed",
+    "merge_authoritative": true,
+    "case_range": "P17-T001..P17-T035",
+    "affected_matrix": "66/66"
+  },
+  "p04_docs_shell_authority": {
+    "node": "P04",
+    "signed_review_blob": "4d1a69d1889fd78297247a013936c5aad86a97ed",
+    "reviewed_pre_sign_commit": "659e25e3c5e263ffb3dd74cde953e812b75a7439",
+    "workflow_run_id": 32392744860,
+    "artifact_id": 9415518410,
+    "artifact_digest": "sha256:5f6b4ec5be87d866b07599e8bd32d75171a81523d29dd86441a524bf33cbc7bb",
+    "required_tests": "10/10",
+    "boundary": "P18 may extend Docs content/discovery but must not reinterpret the signed P04 shell or claim full G4/G5/G9 closure."
+  },
+  "route_contract": {
+    "docs_routes": [
+      {
+        "id": "DOCS-EN-HOME",
+        "path": "/docs/en/",
+        "index": "index",
+        "states": [
+          "published",
+          "build-error",
+          "maintenance"
+        ]
+      },
+      {
+        "id": "DOCS-ZH-HOME",
+        "path": "/docs/zh-CN/",
+        "index": "index",
+        "states": [
+          "published",
+          "build-error",
+          "maintenance"
+        ]
+      },
+      {
+        "id": "DOCS-ARTICLE",
+        "path": [
+          "/docs/en/{slug...}",
+          "/docs/zh-CN/{slug...}"
+        ],
+        "index": "conditional",
+        "states": [
+          "published",
+          "untranslated",
+          "withdrawn-410",
+          "not-found-404"
+        ]
+      },
+      {
+        "id": "DOCS-API",
+        "path": [
+          "/docs/en/api/{resource}",
+          "/docs/zh-CN/api/{resource}"
+        ],
+        "index": "conditional",
+        "states": [
+          "published-api",
+          "capability-not-released",
+          "withdrawn-410",
+          "not-found-404"
+        ]
+      },
+      {
+        "id": "DOCS-SEARCH",
+        "path": [
+          "/docs/en/search?q={query}",
+          "/docs/zh-CN/search?q={query}"
+        ],
+        "index": "noindex",
+        "states": [
+          "loading-index",
+          "results",
+          "empty",
+          "query-error",
+          "offline-static"
+        ]
+      }
+    ],
+    "canonical_id": "CAN-DOCS",
+    "alternate_id": "ALT-DOCS",
+    "metadata_id": "META-DOCS",
+    "rules": [
+      "Page-Level IA remains the sole route/path/status/index/canonical/alternate authority.",
+      "Only canonical indexable 200 Docs URLs enter a sitemap; DOCS-SEARCH never does.",
+      "ALT-DOCS is reciprocal only for published 200 translations; English Docs home supplies x-default.",
+      "API docs are indexable/published as released only when current-repository owning capability evidence authorizes that claim.",
+      "Indexable Docs primary content is present in initial HTML and cannot be a loading-only client shell."
+    ]
+  },
+  "docs_content_contract": {
+    "locales": [
+      "en",
+      "zh-CN"
+    ],
+    "frontmatter_required": [
+      "title",
+      "description",
+      "locale",
+      "lastUpdated",
+      "canonicalPath",
+      "translation",
+      "contentOwner"
+    ],
+    "navigation_required": [
+      "sidebar",
+      "breadcrumbs",
+      "toc",
+      "previous_next"
+    ],
+    "search_engine": "Pagefind static index",
+    "production_runtime": "STATIC_NGINX_ONLY",
+    "rules": [
+      "Content owner and lastUpdated are explicit reviewed content facts.",
+      "No fabricated translation route or hreflang target is permitted.",
+      "No Docker production guide is permitted.",
+      "Native self-hosting documentation may describe approved architecture but cannot misstate P21/P22 release status.",
+      "A REQUIRED capability may be described before release only with visible not-released labelling and exclusion from sitemap/internal acquisition links."
+    ]
+  },
+  "api_reference_contract": {
+    "release_sources": [
+      "current repository route/API authority",
+      "owning capability signed evidence",
+      "P18 content manifest"
+    ],
+    "secret_classes": [
+      "passwords",
+      "sessions",
+      "tokens",
+      "OAuth secrets",
+      "payment secrets",
+      "API-key raw secrets",
+      "webhook secrets",
+      "database credentials"
+    ],
+    "rules": [
+      "API methods and paths are checked against current repository authority rather than copied from legacy documentation.",
+      "API Keys and generic outbound Webhooks may be documented as released because their P17 signed G3/G6 authority is inherited; later capabilities remain gated by their own evidence.",
+      "Examples use placeholders and never embed production credentials or secret-bearing evidence."
+    ]
+  },
+  "browser_contract": {
+    "shell_states": [
+      "article",
+      "search-open",
+      "nav-drawer",
+      "not-found",
+      "offline-static"
+    ],
+    "viewports": [
+      "Design System canonical desktop",
+      "Design System canonical tablet",
+      "Design System canonical mobile",
+      "320 CSS px reflow"
+    ],
+    "rules": [
+      "Search supports shortcut, arrow navigation and Escape with focus return.",
+      "Language/theme/Workspace controls are keyboard accessible and overlays do not stack.",
+      "English and Simplified Chinese long content/code blocks do not create root horizontal overflow.",
+      "No pageerror, console error, clipped required content or broken focus is accepted."
+    ]
+  },
+  "seo_contract": {
+    "gate": "G7 P18 Docs contribution",
+    "sitemap_children": [
+      "Docs EN child",
+      "Docs zh-CN child"
+    ],
+    "hard_failures": [
+      "empty/loading-only indexable HTML",
+      "200 soft 404",
+      "fake hreflang",
+      "query canonicalization",
+      "withdrawn/unreleased page in sitemap",
+      "orphan index page",
+      "wrong production deployment guidance"
+    ],
+    "later_owned": [
+      "P19 Website technical SEO and G9 performance",
+      "P20 release-wide G7 aggregation",
+      "P22 owner-controlled production G13/Search Console evidence"
+    ]
+  },
+  "environment_contract": {
+    "docs_framework": "Astro 7.2.2 + Starlight 0.41.7 inherited from P04; versions may change only through reviewed dependency change without changing the static-production boundary",
+    "search": "Pagefind build-time static index",
+    "node": "allowed for development/build/test only",
+    "nginx": "production static Docs serving authority",
+    "production_node_http_ssr_pm2": "PROHIBITED",
+    "production_docker_compose": "PROHIBITED"
+  },
+  "closure": {
+    "same_exact_head_required": true,
+    "required_case_range": "P18-T001..P18-T026",
+    "review_required": true,
+    "review_only_signed_child_required": true,
+    "defect_limits": {
+      "p0": 0,
+      "p1": 0,
+      "decision_required": 0
+    },
+    "phases": {
+      "pre-sign": {
+        "review_status": "PENDING",
+        "merge_authoritative": false
+      },
+      "signed": {
+        "review_status": "SIGNED",
+        "merge_authoritative": true
+      }
+    },
+    "scope_rule": "P18 closes only frozen Docs/multilingual discovery and P18 CAP-TECHNICAL-SEO contribution. P19-P22 remain later-owned."
+  },
+  "cases": [
+    {
+      "id": "P18-T001",
+      "name": "Bilingual Docs homes render authoritative raw HTML",
+      "driver": "python3 scripts/p18/integration.py --case P18-T001",
+      "oracle": "/docs/en/ and /docs/zh-CN/ return indexable 200 static HTML with one visible H1, unique title/description and reviewed META-DOCS fields; no loading-only document is accepted.",
+      "evidence": "artifacts/v10/P18/http/P18-T001.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P18-T002",
+      "name": "META-DOCS frontmatter and content ownership contract",
+      "driver": "python3 scripts/p18/integration.py --case P18-T002",
+      "oracle": "Every publishable document has title, description, locale, lastUpdated, canonical path, translation linkage and content owner; lastUpdated is content authority rather than build time.",
+      "evidence": "artifacts/v10/P18/content/P18-T002.json",
+      "owner": "Docs Content Owner"
+    },
+    {
+      "id": "P18-T003",
+      "name": "Docs canonical normalization and query exclusion",
+      "driver": "python3 scripts/p18/integration.py --case P18-T003",
+      "oracle": "CAN-DOCS derives lowercase canonical URLs from published frontmatter, preserves only the two Docs-home trailing-slash exceptions and never canonicals tracking/search/filter query variants.",
+      "evidence": "artifacts/v10/P18/seo/P18-T003.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T004",
+      "name": "Reciprocal hreflang and x-default authority",
+      "driver": "python3 scripts/p18/integration.py --case P18-T004",
+      "oracle": "ALT-DOCS is reciprocal only when both translations return published 200; Docs home provides English x-default and every alternate self-canonicalizes correctly.",
+      "evidence": "artifacts/v10/P18/seo/P18-T004.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T005",
+      "name": "Untranslated documents do not invent alternates",
+      "driver": "python3 scripts/p18/integration.py --case P18-T005",
+      "oracle": "An untranslated published article remains a valid locale document without a fabricated hreflang peer, fake translated route or acquisition link.",
+      "evidence": "artifacts/v10/P18/seo/P18-T005.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T006",
+      "name": "Withdrawn and unknown Docs status semantics",
+      "driver": "python3 scripts/p18/integration.py --case P18-T006",
+      "oracle": "Known withdrawn Docs return 410, unknown Docs return 404, neither enters sitemap or emits a false canonical/alternate, and no 200 soft-404 is accepted.",
+      "evidence": "artifacts/v10/P18/http/P18-T006.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P18-T007",
+      "name": "API reference release-state gating",
+      "driver": "python3 scripts/p18/integration.py --case P18-T007",
+      "oracle": "DOCS-API returns/publishes 200 only for APIs whose owning capability has released evidence; approved-but-unreleased contracts are visibly not released and excluded from sitemap/acquisition links.",
+      "evidence": "artifacts/v10/P18/api/P18-T007.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P18-T008",
+      "name": "English Pagefind index and discovery",
+      "driver": "python3 scripts/p18/integration.py --case P18-T008",
+      "oracle": "The static English Pagefind index contains only eligible published English Docs, returns relevant deterministic results and excludes noindex/withdrawn/unreleased-only content.",
+      "evidence": "artifacts/v10/P18/search/P18-T008.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P18-T009",
+      "name": "Simplified Chinese Pagefind index and discovery",
+      "driver": "python3 scripts/p18/integration.py --case P18-T009",
+      "oracle": "The static zh-CN Pagefind index contains only eligible published Simplified Chinese Docs and returns locale-correct deterministic results without cross-locale canonical corruption.",
+      "evidence": "artifacts/v10/P18/search/P18-T009.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P18-T010",
+      "name": "Docs search route robots and error-state contract",
+      "driver": "python3 scripts/p18/integration.py --case P18-T010",
+      "oracle": "DOCS-SEARCH stays noindex and outside sitemap/canonical sets; valid queries cover results/empty/offline-static and malformed queries produce 400 rather than a crawlable soft-success page.",
+      "evidence": "artifacts/v10/P18/search/P18-T010.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T011",
+      "name": "Pagefind keyboard and privacy interaction contract",
+      "driver": "python3 scripts/p18/browser.py --case P18-T011",
+      "oracle": "Search supports the documented shortcut, arrow-key navigation and Escape close/focus return; no default personalized search tracking is emitted.",
+      "evidence": "artifacts/v10/P18/browser/P18-T011.json",
+      "owner": "Accessibility Reviewer"
+    },
+    {
+      "id": "P18-T012",
+      "name": "Breadcrumb, ToC and previous-next navigation integrity",
+      "driver": "python3 scripts/p18/integration.py --case P18-T012",
+      "oracle": "Published articles expose route-correct breadcrumbs, heading-derived ToC and deterministic previous/next links without links to withdrawn, unknown or unreleased-only pages.",
+      "evidence": "artifacts/v10/P18/navigation/P18-T012.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P18-T013",
+      "name": "Docs sidebar graph and orphan-page prevention",
+      "driver": "python3 scripts/p18/integration.py --case P18-T013",
+      "oracle": "Every indexable Docs page has at least one crawlable internal parent and every published article/API page is reachable from the locale navigation graph; orphan count is zero.",
+      "evidence": "artifacts/v10/P18/crawl/P18-T013.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T014",
+      "name": "Locale sitemap children and lastmod authority",
+      "driver": "python3 scripts/p18/integration.py --case P18-T014",
+      "oracle": "Docs EN and zh-CN sitemap children contain only canonical indexable 200 pages, API pages only after release, and lastmod comes from the content record rather than build time.",
+      "evidence": "artifacts/v10/P18/seo/P18-T014.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T015",
+      "name": "Broken-link and static-asset integrity",
+      "driver": "python3 scripts/p18/integration.py --case P18-T015",
+      "oracle": "The complete published Docs graph has zero broken internal links/assets and external references are syntax/allowlist checked without turning network availability into false product authority.",
+      "evidence": "artifacts/v10/P18/crawl/P18-T015.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P18-T016",
+      "name": "Code-block correctness and prohibited-production guidance guard",
+      "driver": "python3 scripts/p18/integration.py --case P18-T016",
+      "oracle": "Executable/checkable code blocks pass syntax or contract validation where applicable and no Docker/Compose/PM2/Node production runtime guide is published.",
+      "evidence": "artifacts/v10/P18/content/P18-T016.json",
+      "owner": "Platform Lead"
+    },
+    {
+      "id": "P18-T017",
+      "name": "Native self-hosting guide accuracy without premature release claims",
+      "driver": "python3 scripts/p18/integration.py --case P18-T017",
+      "oracle": "Native self-hosting documentation reflects Nginx, PHP installer boundary, eight systemd services, MySQL/Redis/ClamAV/local-storage architecture while clearly separating P21/P22 unreleased install/package completion from approved contract.",
+      "evidence": "artifacts/v10/P18/content/P18-T017.json",
+      "owner": "Platform Lead"
+    },
+    {
+      "id": "P18-T018",
+      "name": "API source checking and secret-safe examples",
+      "driver": "python3 scripts/p18/integration.py --case P18-T018",
+      "oracle": "Published API reference methods/paths/scopes match checked current-repository route authority and examples use placeholders/redaction rather than real credentials, tokens, webhook secrets or API keys.",
+      "evidence": "artifacts/v10/P18/api/P18-T018.json",
+      "owner": "Backend Lead"
+    },
+    {
+      "id": "P18-T019",
+      "name": "Inherited P04 Docs shell remains authoritative",
+      "driver": "python3 scripts/p18/browser.py --case P18-T019",
+      "oracle": "P18 extends the signed P04 Astro/Starlight static Docs shell without replacing Design System tokens or its article/search-open/nav-drawer/not-found/offline-static state boundary.",
+      "evidence": "artifacts/v10/P18/browser/P18-T019.json",
+      "owner": "Frontend Lead"
+    },
+    {
+      "id": "P18-T020",
+      "name": "Docs accessibility interaction matrix",
+      "driver": "python3 scripts/p18/browser.py --case P18-T020",
+      "oracle": "Docs navigation, search, language/theme controls, article headings, code controls and focus order satisfy keyboard/name-role-value/visible-focus/zoom/reduced-motion requirements for the P18-applicable G5 subset.",
+      "evidence": "artifacts/v10/P18/browser/P18-T020.json",
+      "owner": "Accessibility Reviewer"
+    },
+    {
+      "id": "P18-T021",
+      "name": "Docs responsive browser matrix",
+      "driver": "python3 scripts/p18/browser.py --case P18-T021",
+      "oracle": "English and zh-CN representative Docs states pass canonical desktop/tablet/mobile viewports plus 320 CSS px reflow with no horizontal overflow, clipped required text, pageerror or console error.",
+      "evidence": "artifacts/v10/P18/browser/P18-T021.json",
+      "owner": "QA"
+    },
+    {
+      "id": "P18-T022",
+      "name": "Static build and production-runtime boundary",
+      "driver": "python3 scripts/p18/integration.py --case P18-T022",
+      "oracle": "Docs build is deterministic static output with primary content in initial HTML; Node/Pagefind are build-time only and no Node HTTP/SSR/PM2 runtime is introduced into production guidance or deployment authority.",
+      "evidence": "artifacts/v10/P18/build/P18-T022.json",
+      "owner": "Platform Lead"
+    },
+    {
+      "id": "P18-T023",
+      "name": "G7 Docs crawler and raw-HTTP conformance",
+      "driver": "python3 scripts/p18/integration.py --case P18-T023",
+      "oracle": "Crawler/raw-HTTP evidence proves metadata, canonical, reciprocal hreflang, status, internal links, sitemap membership, structured-data eligibility and noindex rules for the complete P18 Docs route family.",
+      "evidence": "artifacts/v10/P18/gates/P18-T023.json",
+      "owner": "SEO Owner"
+    },
+    {
+      "id": "P18-T024",
+      "name": "Deterministic content manifest and locale parity ledger",
+      "driver": "python3 scripts/p18/integration.py --case P18-T024",
+      "oracle": "A machine-readable content manifest accounts for every Docs route, locale, translation linkage, owner, release state, sitemap state and source digest with zero ambiguous or duplicate canonical ownership.",
+      "evidence": "artifacts/v10/P18/content/P18-T024.json",
+      "owner": "Docs Content Owner"
+    },
+    {
+      "id": "P18-T025",
+      "name": "P18 exact-head evidence coherence",
+      "driver": "python3 scripts/p18/evidence_coherence.py",
+      "oracle": "P18-T001..P18-T024 evidence, required workflow artifacts and inherited authorities are bound to one exact candidate SHA; mixed-head, stale, missing, malformed or secret-bearing evidence fails closed.",
+      "evidence": "artifacts/v10/P18/coherence/P18-T025.json",
+      "owner": "QA Lead"
+    },
+    {
+      "id": "P18-T026",
+      "name": "P18 accountable exact-head closure",
+      "driver": "python3 scripts/p18/closure_ci.py",
+      "oracle": "P18-T001..P18-T025 PASS, applicable exact-head regression matrix is complete, P0/P1/DECISION REQUIRED are 0/0/0, accountable review is signed as a review-only child, and only then merge_authoritative=true.",
+      "evidence": "artifacts/v10/P18/closure/P18-T026.json",
+      "owner": "SEO Owner + Frontend Lead + QA Lead"
+    }
+  ]
+}
