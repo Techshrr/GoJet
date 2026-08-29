@@ -43,45 +43,55 @@ async function t023() {
   const errors = [];
   const observations = [];
   const cases = [
-    ['home', '/', 'WEB-HOME', null],
-    ['product', '/products/links', 'WEB-LINKS', null],
-    ['solution', '/solutions/marketing', 'WEB-SOL-MARKETING', null],
-    ['developers', '/developers', 'WEB-DEVELOPERS', null],
-    ['pricing-unavailable', '/pricing?state=data-unavailable', 'WEB-PRICING', 'data-unavailable'],
-    ['security', '/security', 'WEB-SECURITY', null],
-    ['guide', '/guides/secure-link-sharing', 'WEB-GUIDE', null],
-    ['contact', '/contact', 'WEB-CONTACT', null],
-    ['legal', '/legal/terms', 'WEB-LEGAL-TERMS', null],
-    ['zh-home', '/zh-CN/', 'WEB-HOME', null],
-    ['maintenance', '/?state=maintenance', 'WEB-HOME', 'maintenance'],
+    { label: 'home', path: '/', routeId: 'WEB-HOME' },
+    { label: 'product', path: '/products/links', routeId: 'WEB-LINKS' },
+    { label: 'solution', path: '/solutions/marketing', routeId: 'WEB-SOL-MARKETING' },
+    { label: 'developers', path: '/developers', routeId: 'WEB-DEVELOPERS' },
+    { label: 'pricing-unavailable', path: '/pricing?state=data-unavailable', routeId: 'WEB-PRICING', state: 'data-unavailable' },
+    { label: 'security', path: '/security', routeId: 'WEB-SECURITY' },
+    { label: 'guide', path: '/guides/secure-link-sharing', routeId: 'WEB-GUIDE' },
+    { label: 'contact', path: '/contact', contact: true },
+    { label: 'legal', path: '/legal/terms', routeId: 'WEB-LEGAL-TERMS' },
+    { label: 'zh-home', path: '/zh-CN/', routeId: 'WEB-HOME' },
+    { label: 'maintenance', path: '/?state=maintenance', routeId: 'WEB-HOME', state: 'maintenance' },
   ];
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1 });
   const page = await context.newPage(); attach(page, 'T023');
-  for (const [label, path, routeId, state] of cases) {
-    const response = await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' });
+  for (const spec of cases) {
+    const response = await page.goto(`${baseUrl}${spec.path}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(100);
     const actual = await page.evaluate(() => ({
       routeId: document.querySelector('article.website-page')?.getAttribute('data-route-id') || null,
       state: document.querySelector('article.website-page')?.getAttribute('data-surface-state') || null,
+      contactPage: document.querySelector('[data-page="contact"]')?.getAttribute('data-state') || null,
+      contactForm: Boolean(document.querySelector('.contact-page form.contact-form')),
+      contactSubmit: document.querySelector('.contact-page button[type="submit"]')?.textContent?.trim() || null,
       h1: document.querySelector('main h1')?.textContent?.trim() || '',
       navLinks: document.querySelectorAll('header nav a[href]').length,
       ctas: document.querySelectorAll('.website-hero-actions a[href]').length,
       statusText: document.querySelector('[role="status"]')?.textContent?.trim() || null,
       placeholder: /\b(?:TODO|Lorem ipsum|placeholder)\b/i.test(document.body.innerText),
     }));
-    if (response?.status() !== 200) errors.push(`${label}: expected HTTP 200, got ${response?.status()}`);
-    if (actual.routeId !== routeId) errors.push(`${label}: route id ${actual.routeId} != ${routeId}`);
-    if (!actual.h1) errors.push(`${label}: missing H1`);
-    if (actual.navLinks < 5) errors.push(`${label}: primary navigation incomplete`);
-    if (actual.ctas < 2) errors.push(`${label}: conversion CTA set incomplete`);
-    if (actual.placeholder) errors.push(`${label}: placeholder copy detected`);
-    if (state && (!actual.statusText || actual.state !== state)) errors.push(`${label}: persistent state ${state} not rendered`);
-    observations.push({ label, path, status: response?.status(), ...actual });
+    if (response?.status() !== 200) errors.push(`${spec.label}: expected HTTP 200, got ${response?.status()}`);
+    if (!actual.h1) errors.push(`${spec.label}: missing H1`);
+    if (actual.navLinks < 5) errors.push(`${spec.label}: primary navigation incomplete`);
+    if (actual.placeholder) errors.push(`${spec.label}: placeholder copy detected`);
+    if (spec.contact) {
+      if (actual.contactPage !== 'input') errors.push(`contact: P14 ContactPage input state missing`);
+      if (!actual.contactForm || actual.contactSubmit !== 'Send message') errors.push('contact: real contact conversion form/submit control missing');
+    } else {
+      if (actual.routeId !== spec.routeId) errors.push(`${spec.label}: route id ${actual.routeId} != ${spec.routeId}`);
+      if (actual.ctas < 2) errors.push(`${spec.label}: conversion CTA set incomplete`);
+      if (spec.state && (!actual.statusText || actual.state !== spec.state)) errors.push(`${spec.label}: persistent state ${spec.state} not rendered`);
+    }
+    observations.push({ label: spec.label, path: spec.path, status: response?.status(), ...actual });
   }
   for (const [path, expected] of [['/guides/legacy-deployment', 410], ['/definitely-not-a-gojet-route', 404]]) {
-    const response = await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
+    const errorPage = await context.newPage();
+    const response = await errorPage.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
     if (response?.status() !== expected) errors.push(`${path}: expected ${expected}, got ${response?.status()}`);
     observations.push({ label: `http-${expected}`, path, status: response?.status() });
+    await errorPage.close();
   }
   await context.close();
   return writeCase(outDir, 'P19-T023', 'Desktop browser route and conversion matrix', errors, { viewport: viewports.desktop, cases: observations });
@@ -206,9 +216,14 @@ async function t026() {
     const file = `gjv10__website__p19__${label}__light__${viewportName}.png`; await page.screenshot({ path: `${capturesDir}/${file}`, fullPage: true });
     captures.push({ label, path, viewport: viewportName, dimensions: size, routeId: dom.routeId, file: `artifacts/v10/P19/captures/${file}` }); await context.close();
   }
-  const diagnosticErrors = diagnostics.console.length + diagnostics.page.length + diagnostics.request.length;
-  if (diagnosticErrors) errors.push(`browser diagnostics contain ${diagnosticErrors} console/page/request failures`);
-  return writeCase(visualDir, 'P19-T026', 'Design System visual conformance', errors, { captures, diagnostics, designTokenBound: true });
+  const visualDiagnostics = {
+    console: diagnostics.console.filter((item) => item.label.startsWith('T026-')),
+    page: diagnostics.page.filter((item) => item.label.startsWith('T026-')),
+    request: diagnostics.request.filter((item) => item.label.startsWith('T026-')),
+  };
+  const diagnosticErrors = visualDiagnostics.console.length + visualDiagnostics.page.length + visualDiagnostics.request.length;
+  if (diagnosticErrors) errors.push(`T026 screenshot matrix contains ${diagnosticErrors} console/page/request failures`);
+  return writeCase(visualDir, 'P19-T026', 'Design System visual conformance', errors, { captures, diagnostics: visualDiagnostics, designTokenBound: true });
 }
 
 const pass = [await t023(), await t024(), await t025(), await t026()].every(Boolean);
