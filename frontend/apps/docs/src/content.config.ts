@@ -9,9 +9,14 @@ const metaDocs = z.object({
   contentOwner: z.string().min(1),
 });
 
+const preserveRouteCase = ({ entry }: { entry: string }) => {
+  const withoutExtension = entry.replace(/\.(?:md|mdx|markdown|mdown|mkdn|mkd|mdwn)$/i, '');
+  return withoutExtension.replace(/\/index$/i, '');
+};
+
 export const collections = {
   docs: defineCollection({
-    loader: docsLoader(),
+    loader: docsLoader({ generateId: preserveRouteCase }),
     schema: docsSchema({ extend: metaDocs }),
   }),
 };

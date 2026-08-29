@@ -8,6 +8,7 @@ on:
       - 'frontend/apps/docs/**'
       - 'deploy/nginx/docs-p18.conf'
       - 'scripts/p18/integration.py'
+      - 'scripts/p18/content_metadata.py'
       - 'services/platformapi/cmd/server/admin_access.go'
       - 'artifacts/v10/P18/test-plan.json'
       - 'artifacts/v10/P18/review.md'
@@ -112,8 +113,10 @@ jobs:
           P18_HTTP_BASE: http://127.0.0.1:8098
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/p18/integration.py
-          for n in 001 002 003 004 005 006 007; do
+          python3 -m py_compile scripts/p18/integration.py scripts/p18/content_metadata.py
+          python3 scripts/p18/integration.py --case P18-T001
+          python3 scripts/p18/content_metadata.py
+          for n in 003 004 005 006 007; do
             python3 scripts/p18/integration.py --case "P18-T${n}"
           done
 

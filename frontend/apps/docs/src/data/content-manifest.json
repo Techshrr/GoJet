@@ -6,7 +6,7 @@
   "documents": [
     {
       "source": "en/index.mdx",
-      "sourceDigest": "sha256:e5e4fd942f2db6452d1ec373abee8dc23f5fbcd38a7f13cb37b495ad23acf911",
+      "sourceDigest": "sha256:75f8cf1fb1d76eed6a0b73bf47891c34fd1d3db380e6352d7dd1ffa1fcbe3d11",
       "locale": "en",
       "canonicalPath": "/docs/en/",
       "translation": "/docs/zh-CN/",
@@ -22,7 +22,7 @@
     },
     {
       "source": "zh-CN/index.mdx",
-      "sourceDigest": "sha256:9fc81632c611e23a33163987fd24a976d3cb4abc0e85589fc046cd10c672d61f",
+      "sourceDigest": "sha256:e4fbfb79f1df8653747a9b1f550d89920b3bb49a67040e6a4d469468d6121982",
       "locale": "zh-CN",
       "canonicalPath": "/docs/zh-CN/",
       "translation": "/docs/en/",
@@ -197,13 +197,13 @@
       "sitemap": true
     },
     {
-      "source": "en/security-model.mdx",
-      "sourceDigest": "sha256:b0678667626b3d42a1816c0262c68876d50b9b197981113560578ee341e7e5e2",
-      "locale": "en",
-      "canonicalPath": "/docs/en/security-model",
+      "source": "zh-CN/security-model.mdx",
+      "sourceDigest": "sha256:4be54663fca85c862207b80562d5b50a8bd3f8f4cc5859758741cf49c0138288",
+      "locale": "zh-CN",
+      "canonicalPath": "/docs/zh-CN/security-model",
       "translation": null,
-      "title": "Security model",
-      "description": "English-only overview of inherited GoJet V10 authorization, destination-risk, file-scan, domain-risk, and audit boundaries.",
+      "title": "安全模型",
+      "description": "GoJet V10 授权、目标风险、文件扫描、域名风险与审计边界的简体中文独立说明。",
       "lastUpdated": "2026-08-29",
       "contentOwner": "GoJet Security Documentation",
       "kind": "article",
