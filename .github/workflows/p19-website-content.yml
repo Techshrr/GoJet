@@ -1,0 +1,108 @@
+name: P19 Website Content Authority
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-content.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-content-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  content:
+    name: P19 T007-T016 truthful content authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+
+      - name: Validate frozen contract descendant and content drivers
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/content_cases.py scripts/p19/contact_cases.py
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['implementation_authorized'] is True and data['review_phase']=='pending', data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+
+      - name: Build exact pre-rendered Website
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/site build
+          test -f frontend/apps/site/dist/guides/secure-link-sharing.html
+          test -f frontend/apps/site/dist/zh-CN/guides/secure-link-sharing.html
+
+      - name: Run frozen P19 T007-T016 in order
+        run: |
+          set -euo pipefail
+          python3 scripts/p19/content_cases.py
+          python3 scripts/p19/contact_cases.py
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('artifacts/v10/P19')
+          mapping={**{f'P19-T{n:03d}':root/'content'/f'P19-T{n:03d}.json' for n in range(7,16)},'P19-T016':root/'contact'/'P19-T016.json'}
+          for cid,path in mapping.items():
+              data=json.loads(path.read_text())
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+
+      - name: Record exact-head content authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/content-authority
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P19/content-authority/implementation_commit.txt
+          sha256sum frontend/apps/site/src/website/content.json > artifacts/v10/P19/content-authority/content.sha256
+          sha256sum frontend/apps/site/src/website/authority.json > artifacts/v10/P19/content-authority/authority.sha256
+          git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/content-authority/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/content-authority/review_blob.txt
+
+      - name: Upload exact-head P19 content evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-content-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/content/
+            artifacts/v10/P19/contact/
+            artifacts/v10/P19/content-authority/
