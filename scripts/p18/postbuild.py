@@ -24,10 +24,14 @@ def document_output_path(canonical_path: str) -> Path:
     return DIST / relative / "index.html"
 
 
-def normalize_document_canonicals() -> None:
+def normalize_document_metadata() -> None:
     link_pattern = re.compile(r"<link\b[^>]*>", flags=re.I)
     canonical_rel = re.compile(r"\brel=[\"']canonical[\"']", flags=re.I)
+    alternate_rel = re.compile(r"\brel=[\"']alternate[\"']", flags=re.I)
+    hreflang_attr = re.compile(r"\bhreflang\s*=", flags=re.I)
     href_pattern = re.compile(r"(\bhref\s*=\s*[\"'])[^\"']*([\"'])", flags=re.I)
+    by_path = {entry["canonicalPath"]: entry for entry in MANIFEST["documents"]}
+    x_default = MANIFEST["policy"]["xDefault"]
 
     for entry in MANIFEST["documents"]:
         path = document_output_path(entry["canonicalPath"])
@@ -35,21 +39,43 @@ def normalize_document_canonicals() -> None:
             raise SystemExit(f"missing manifest Docs output: {path}")
         expected = SITE + entry["canonicalPath"]
         text = path.read_text(encoding="utf-8")
-        replacements = 0
+        canonical_replacements = 0
 
         def replace_link(match: re.Match[str]) -> str:
-            nonlocal replacements
+            nonlocal canonical_replacements
             tag = match.group(0)
+            if alternate_rel.search(tag) and hreflang_attr.search(tag):
+                return ""
             if not canonical_rel.search(tag):
                 return tag
-            replacements += 1
+            canonical_replacements += 1
             if href_pattern.search(tag):
                 return href_pattern.sub(lambda href: href.group(1) + expected + href.group(2), tag, count=1)
             return tag[:-1] + f' href="{expected}">'
 
         text = link_pattern.sub(replace_link, text)
-        if replacements != 1:
-            raise SystemExit(f"expected exactly one canonical link for {entry['canonicalPath']}, found {replacements}")
+        if canonical_replacements != 1:
+            raise SystemExit(
+                f"expected exactly one canonical link for {entry['canonicalPath']}, found {canonical_replacements}"
+            )
+
+        alternates = [(entry["locale"], entry["canonicalPath"])]
+        translation = entry["translation"]
+        if translation is not None:
+            peer = by_path.get(translation)
+            if peer is None or peer.get("translation") != entry["canonicalPath"]:
+                raise SystemExit(f"invalid reciprocal translation for {entry['canonicalPath']}")
+            alternates.append((peer["locale"], peer["canonicalPath"]))
+        if entry["kind"] == "home":
+            alternates.append(("x-default", x_default))
+
+        tags = "".join(
+            f'<link rel="alternate" hreflang="{escape(locale)}" href="{escape(SITE + canonical_path)}">'
+            for locale, canonical_path in alternates
+        )
+        if "</head>" not in text:
+            raise SystemExit(f"missing head close for {entry['canonicalPath']}")
+        text = text.replace("</head>", tags + "</head>", 1)
         path.write_text(text, encoding="utf-8")
 
 
@@ -106,7 +132,7 @@ def write_locale_sitemap(locale: str) -> None:
 def main() -> int:
     if not DIST.is_dir():
         raise SystemExit(f"Docs dist missing: {DIST}")
-    normalize_document_canonicals()
+    normalize_document_metadata()
     strip_search_metadata()
     remove_search_from_generated_sitemaps()
     write_locale_sitemap("en")
