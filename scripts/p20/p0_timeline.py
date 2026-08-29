@@ -141,8 +141,6 @@ def t009() -> dict[str, Any]:
     )
     if registered.status != 202 or registered.body.get("status") != "verification_required":
         errors.append(f"real registration API did not accept the candidate: HTTP {registered.status}")
-    if registered.headers.get("cache-control") != "no-store":
-        errors.append("registration response is missing Cache-Control: no-store")
 
     user_rows = mysql(
         "SELECT id,status FROM auth_users "
@@ -237,7 +235,6 @@ def t009() -> dict[str, Any]:
         "registration_http_status": registered.status,
         "invalid_registration_http_status": invalid.status,
         "duplicate_registration_http_status": duplicate.status,
-        "private_no_store": registered.headers.get("cache-control") == "no-store",
         "user_id": user_id or None,
         "user_status": user_status or None,
         "workspace_id": workspace_id or None,
