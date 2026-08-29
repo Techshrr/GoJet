@@ -93,7 +93,7 @@ def t010(data: dict[str, Any]) -> dict[str, Any]:
         status_long, _, _ = request(f'/docs/{locale}/search?q={'x'*300}')
         assert status_long == 400, (locale, status_long)
         routes.append({'locale': locale, 'valid_status': status, 'missing_query_status': status_missing, 'oversize_query_status': status_long})
-    empty = probe('en', 'p18definitelynomatchtoken')
+    empty = probe('en', 'qzxvjkbrmpfwy')
     assert empty['state'] == 'empty', empty
     offline = probe('en', 'API keys', True)
     assert offline['state'] == 'offline-static', offline
