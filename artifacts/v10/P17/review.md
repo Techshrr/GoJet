@@ -4,11 +4,19 @@ Node: `P17`
 Issue: #46  
 Base integration commit: `62d682a25532eef3cc207a5e9964a62f6072ede7`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT DRAFTING / IMPLEMENTATION NOT AUTHORIZED**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
+
+Pre-sign exact implementation SHA: `6a07ae9222faf8cb635f37308e9f412ff570dc64`
+
+Reviewed pre-sign implementation SHA: `6a07ae9222faf8cb635f37308e9f412ff570dc64`
+
+Accountable reviewer: `GPT-5.6 Sol — P17 Technical Review`
+
+Review date: `2026-08-29`
 
 ## 1. Review boundary
 
-This file establishes the P17 accountable-review contract before implementation. It is not a PASS record, signature, completion claim or merge authority.
+This file establishes the P17 accountable-review contract. It is not by itself merge authority; the signed revision must independently satisfy the same-revision CI rule recorded below.
 
 P17 owns the administrator access/permission lifecycle, broader operations/audit governance, independent domain-entitlement Admin decision workflow, user API-key lifecycle and generic outbound-webhook lifecycle. P17 also closes only the explicitly shared contributions assigned by the Master Plan.
 
@@ -153,18 +161,71 @@ Evidence root: `artifacts/v10/P17/`.
 
 Real server/database/browser evidence is required where frozen. Mocks, screenshots alone, predecessor claims or legacy repositories cannot satisfy P17 completion.
 
-## 14. Pending implementation review
+## 14. Reviewed implementation disposition
 
-Pending: P17-T001..P17-T035, exact implementation SHA, durable admin/role/permission state, domain-entitlement governance, API-key lifecycle, webhook delivery/security, operations/audit authority, real browser evidence, exact-head coherence, affected regression matrix and zero defect/decision ledger.
+The reviewed pre-sign implementation at `6a07ae9222faf8cb635f37308e9f412ff570dc64` completed the frozen P17 implementation and pre-sign evidence contract with `P17-T001..P17-T035 PASS`, affected exact-head matrix `66/66`, and P0/P1/DECISION REQUIRED `0/0/0`.
 
-No P17 PASS, Gate closure, Ready-for-review or merge authority is claimed in this state.
+The review specifically confirms that P17 remains within its frozen ownership boundary: administrator/permission and operations/audit authority is distinct from predecessor customer/Workspace/security authority; domain-entitlement decisions preserve the P06/P13 resolver and P14 ticket linkage; API-key raw secrets remain secret-once and non-recoverable; outbound webhooks remain Workspace-bound, signed, fail-closed against SSRF/rebinding and use the fixed `operationsmonitor` service; P09 ClamAV and P16 risk/abuse controls remain inherited rather than bypassed.
+
+This signed review records that accountable disposition but does not bypass the mandatory signed-revision rerun.
 
 ## 15. Signed-revision rule
 
-When all required evidence is complete, this document may transition only to:
+The signed revision must rerun and pass the complete required affected exact-head matrix before P17 can be marked complete or merged.
+
+The only authorized review status is:
 
 `Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**`
 
-The signed form must record the reviewed pre-sign exact implementation SHA, accountable reviewer/date, P17-T001..P17-T035 disposition, P0=0, P1=0, `DECISION REQUIRED`=0 and truthful ownership/Gate disposition.
+The signed form records the reviewed pre-sign exact implementation SHA, accountable reviewer identity/date, the full frozen P17 case disposition, P0=0, P1=0, `DECISION REQUIRED`=0, truthful ownership/Gate disposition and same-revision closure requirement.
 
-If signing this file changes HEAD, the signed revision itself must rerun and pass the complete required affected exact-head matrix before P17 can be marked complete or merged. P18 starts only from the resulting merged P17 integration commit.
+If signing this file changes HEAD, the signed revision itself must independently prove all required evidence and closure authority. P18 starts only from the resulting merged P17 integration commit.
+
+## 16. Accountable signed review disposition
+
+The frozen sections above remain the P17 contract record. This section records the accountable disposition supported by the exact pre-sign evidence and does not replace the signed-revision CI requirement.
+
+### Exact-head evidence disposition
+
+- P17-T001..P17-T005: PASS — durable administrator identities, role/permission catalog and denial matrix, administrator authentication/TOTP/lock/rate/session governance, dedicated server authorization and secret-safe audit behavior.
+- P17-T006..P17-T009: PASS — domain-entitlement Admin read/decision governance, support-ticket linkage, approve/deny/suspend/revoke/restore semantics, expiry/source precedence, independent P16 safety axes and immutable decision audit.
+- P17-T010..P17-T015: PASS — user/Workspace/resource/file governance contributions, permission separation, inherited P09/P12/P13/P14/P16 authority preservation and auditable high-risk mutation behavior.
+- P17-T016..P17-T021: PASS — operations/services/jobs, platform settings/official-domain/Turnstile/announcement governance, eight-service inventory, reason/impact confirmation, redacted append-only audit and notification producer authority.
+- P17-T022..P17-T024: PASS — Workspace API-key secret-once lifecycle, exact scopes, rotation/revocation/expiry/rate enforcement, tenant/RBAC isolation and secret-safe audit/evidence.
+- P17-T025..P17-T029: PASS — generic outbound-webhook ownership, canonical signing and secret rotation, retry/idempotency/disable/recovery, hop-by-hop SSRF/redirect/DNS-rebinding fail-closed controls, Workspace RBAC and audit authority using fixed `SVC-OPS-MONITOR`.
+- P17-T030: PASS — real Admin Access browser authority including administrator/role states, high-risk confirmations, direct-route authorization and required responsive/accessibility behavior.
+- P17-T031: PASS — real Admin governance/domain-entitlement browser authority including queue/detail/decision states, stale/conflict/destructive-confirm handling and server authorization.
+- P17-T032: PASS — real Workspace API-key/webhook browser authority including secret-once/rotation/revocation/delivery/retry/disable/forbidden/error states and tenant-safe direct-route behavior.
+- P17-T033: PASS — real Operations/Audit/Platform browser authority including service degradation/job states, restart/requeue confirmation, audit filtering/detail/redaction and platform governance states.
+- P17-T034: PASS — 33 producer cases bound to one exact head with `same_exact_head=true`, `secret_safe=true`, mixed-head rejection and unsafe-evidence rejection; exact-head evidence artifact was digest-bound by T035.
+- P17-T035: PASS — pre-sign accountable closure with 34 input evidence files plus final T035 result, complete `66/66` required affected exact-head functional workflow matrix, live-bound P16 signed predecessor authority and zero P0/P1/DECISION REQUIRED items.
+
+Pre-sign T035 closure run: `33200987841`
+
+Pre-sign T035 closure artifact: `9698239208`
+
+Pre-sign T035 closure digest: `sha256:16a5ce8693e753a766d22dc2915e8905e27746400cf4f5a81fffc9dac3c5fa65`
+
+The pre-sign closure is `phase=pre-sign`, `merge_authoritative=false`. P16 signed predecessor authority was live-bound and archive-digest verified.
+
+### Defect and decision ledger
+
+Evidence disposition: `P17-T001..P17-T035 PASS`
+
+P0/P1/DECISION REQUIRED: `0/0/0`
+
+Review-only signed child: `true`
+
+Signed revision requires complete same-revision affected matrix before merge: `true`
+
+### Capability and ownership disposition
+
+- `CAP-ADMIN-ACCESS`: approved for P17 administrator identity, role, explicit permission, MFA/session and high-risk governance only; customer account/OAuth and Workspace membership authority remains P15/P12-owned.
+- `CAP-OPS-AUDIT`: approved for P17 eight-service operations governance and append-only/redacted administrator audit only; business-success fabrication or security bypass remains prohibited.
+- `CAP-API-KEYS`: approved for Workspace-owned secret-once scoped key lifecycle with immediate rotation/revocation/expiry/rate enforcement and secret-safe audit.
+- `CAP-USER-WEBHOOKS`: approved for Workspace-owned generic outbound webhooks with canonical signing, secret rotation, durable retry/idempotency/disable/recovery, SSRF/redirect/rebinding defense and fixed `operationsmonitor` execution; P13 payment callbacks remain separate.
+- `CAP-DOMAIN-ENTITLEMENT`: only the P17 Admin governance contribution is approved. P06/P13 resolver/source/grace authority, P14 ticket-evidence boundary and P16 independent safety authority remain intact.
+- Shared `CAP-OFFICIAL-DOMAINS`, `CAP-FILES`, `CAP-NOTIFICATIONS`, `CAP-TURNSTILE`, `CAP-DOMAIN-RISK`, `CAP-ABUSE`, and `CAP-ANNOUNCEMENTS-SETTINGS` are approved only for P17's frozen contribution; their predecessor/later-node ownership remains unchanged.
+- P18 Docs, P19 Website/Technical SEO and release-wide P20-P22 remain outside P17 ownership and are not implied complete.
+
+This signature approves the reviewed pre-sign P17 implementation for the mandatory signed-revision CI rerun only. It is not merge authority until this review-only child independently proves `P17-T001..P17-T035`, the complete 66-workflow affected exact-head matrix, `phase=signed`, `merge_authoritative=true`, and the zero defect/decision ledger.
