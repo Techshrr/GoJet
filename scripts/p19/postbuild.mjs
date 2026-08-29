@@ -17,6 +17,7 @@ const localize = (path, locale) => locale === 'en' ? path : path === '/' ? '/zh-
 const nav = [
   ['/products','Products','产品'],['/solutions','Solutions','解决方案'],['/developers','Developers','开发者'],['/pricing','Pricing','定价']
 ];
+const approvedPaths = new Set(pages.flatMap((page) => [page.path, page.zhPath]));
 
 function materializeSocialCards() {
   const targetDir = join(dist, 'assets', 'social');
@@ -40,7 +41,12 @@ function breadcrumbJson(path, locale) {
   const parts = clean.split('/').filter(Boolean);
   const items = [{ '@type':'ListItem', position:1, name:'GoJet', item:canonical(locale==='en'?'/':'/zh-CN/') }];
   let current='';
-  parts.forEach((segment,index)=>{ current += `/${segment}`; items.push({ '@type':'ListItem', position:index+2, name:segment.replaceAll('-',' '), item:canonical(localize(current,locale)) }); });
+  parts.forEach((segment)=>{
+    current += `/${segment}`;
+    const localized = localize(current, locale);
+    if (!approvedPaths.has(localized)) return;
+    items.push({ '@type':'ListItem', position:items.length+1, name:segment.replaceAll('-',' '), item:canonical(localized) });
+  });
   return { '@context':'https://schema.org', '@type':'BreadcrumbList', itemListElement:items };
 }
 function structured(page, path, locale) {
