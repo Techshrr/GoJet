@@ -171,7 +171,14 @@ async function caseT019() {
   await offline.goto(`${base}/docs/en/search?q=GoJet`, { waitUntil: 'domcontentloaded' });
   await offline.waitForFunction(() => document.querySelector('[data-gojet-search]')?.getAttribute('data-state') === 'offline-static', null, { timeout: 12000 });
   const offlineState = await offline.locator('[data-gojet-search]').getAttribute('data-state');
-  assertCleanDiagnostics(offlineDiagnostics, 'P18-T019/offline-static', { allowRequestFailures: true });
+  const expectedPagefindFailures = offlineDiagnostics.request_failures.filter((row) => row.url.includes('/docs/pagefind/'));
+  const unexpectedRequestFailures = offlineDiagnostics.request_failures.filter((row) => !row.url.includes('/docs/pagefind/'));
+  const unexpectedConsoleErrors = offlineDiagnostics.console_errors.filter((message) => message !== 'Failed to load resource: net::ERR_FAILED');
+  if (!expectedPagefindFailures.length) throw new Error('P18-T019/offline-static: induced Pagefind failure was not observed');
+  if (unexpectedRequestFailures.length) throw new Error(`P18-T019/offline-static: unexpected request failures: ${JSON.stringify(unexpectedRequestFailures)}`);
+  if (unexpectedConsoleErrors.length) throw new Error(`P18-T019/offline-static: unexpected console errors: ${unexpectedConsoleErrors.join(' | ')}`);
+  if (offlineDiagnostics.page_errors.length) throw new Error(`P18-T019/offline-static: page errors: ${offlineDiagnostics.page_errors.join(' | ')}`);
+  if (offlineDiagnostics.external_requests.length) throw new Error(`P18-T019/offline-static: external requests: ${offlineDiagnostics.external_requests.join(' | ')}`);
   await offlineContext.close();
 
   return {
@@ -182,6 +189,7 @@ async function caseT019() {
     nav_drawer_state: 'expanded-and-closed',
     not_found_status: 404,
     offline_static_state: offlineState,
+    offline_pagefind_failures: expectedPagefindFailures.length,
   };
 }
 
