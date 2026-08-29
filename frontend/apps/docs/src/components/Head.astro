@@ -28,3 +28,21 @@ const englishHome = manifest.documents.find((entry) => entry.canonicalPath === m
 {current?.kind === 'home' && englishHome && (
   <link rel="alternate" hreflang="x-default" href={`${site}${englishHome.canonicalPath}`} />
 )}
+<script is:inline>
+  (() => {
+    const bindSearchFocusReturn = () => {
+      const search = document.querySelector('site-search');
+      const trigger = search?.querySelector('button[data-open-modal]');
+      const dialog = search?.querySelector('dialog');
+      if (!(trigger instanceof HTMLButtonElement) || !(dialog instanceof HTMLDialogElement)) return;
+      if (dialog.dataset.gojetFocusReturnBound === 'true') return;
+      dialog.dataset.gojetFocusReturnBound = 'true';
+      dialog.addEventListener('close', () => trigger.focus());
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bindSearchFocusReturn, { once: true });
+    } else {
+      bindSearchFocusReturn();
+    }
+  })();
+</script>
