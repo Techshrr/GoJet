@@ -1,0 +1,144 @@
+name: P19 Website Performance and Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: P19 T027-T030 performance runtime determinism authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      P19_SITE_URL: http://127.0.0.1:4194
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+      - name: Validate contract descendant and quality drivers
+        run: |
+          set -euo pipefail
+          node --check scripts/p19/performance_cases.mjs
+          python3 -m py_compile scripts/p19/runtime_cases.py scripts/p19/content_manifest.py scripts/p19/validate_contract.py
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['review_phase']=='pending' and data['implementation_authorized'] is True, data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+      - name: Frozen dependency install
+        run: pnpm install --frozen-lockfile
+      - name: First clean Website build
+        run: |
+          set -euo pipefail
+          pnpm --filter @gojet/site typecheck
+          rm -rf frontend/apps/site/dist
+          pnpm --filter @gojet/site build
+          rm -rf "$RUNNER_TEMP/p19-dist-first"
+          cp -a frontend/apps/site/dist "$RUNNER_TEMP/p19-dist-first"
+      - name: Second clean Website build
+        run: |
+          set -euo pipefail
+          rm -rf frontend/apps/site/dist
+          pnpm --filter @gojet/site build
+      - name: Start exact static Nginx performance fixture
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p19-quality-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p19-quality-nginx.pid;
+          events { worker_connections 256; }
+          http {
+            include /etc/nginx/mime.types;
+            default_type application/octet-stream;
+            access_log off;
+            error_log /tmp/p19-quality-nginx.log notice;
+            server {
+              listen 127.0.0.1:4194;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/site/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/site-p19.conf;
+              location / { return 404; }
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p19-quality-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p19-quality-nginx.conf"
+          for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:4194/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/p19-quality-nginx.log
+          exit 1
+      - name: Run frozen P19 T027-T030 in order
+        run: |
+          set -euo pipefail
+          node scripts/p19/performance_cases.mjs
+          python3 scripts/p19/runtime_cases.py
+          python3 scripts/p19/content_manifest.py --first "$RUNNER_TEMP/p19-dist-first" --second frontend/apps/site/dist
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          paths={
+            'P19-T027':Path('artifacts/v10/P19/performance/P19-T027.json'),
+            'P19-T028':Path('artifacts/v10/P19/performance/P19-T028.json'),
+            'P19-T029':Path('artifacts/v10/P19/runtime/P19-T029.json'),
+            'P19-T030':Path('artifacts/v10/P19/content/P19-T030.json'),
+          }
+          for cid,path in paths.items():
+              data=json.loads(path.read_text(encoding='utf-8'))
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+      - name: Record exact-head quality authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/quality-authority
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P19/quality-authority/implementation_commit.txt
+          sha256sum frontend/apps/site/dist/website-manifest.json frontend/apps/site/dist/sitemap-website.xml frontend/apps/site/dist/robots.txt frontend/apps/site/dist/social-cards.json > artifacts/v10/P19/quality-authority/publishable.sha256
+          git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/quality-authority/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/quality-authority/review_blob.txt
+      - name: Upload exact-head performance runtime determinism evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-quality-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/performance/
+            artifacts/v10/P19/runtime/
+            artifacts/v10/P19/content/P19-T030.json
+            artifacts/v10/P19/quality-authority/
+      - name: Stop Nginx
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/p19-quality-nginx.pid" ]; then kill "$(cat "$RUNNER_TEMP/p19-quality-nginx.pid")" || true; fi

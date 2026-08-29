@@ -1,0 +1,134 @@
+name: P19 Website Browser and Visual
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/tokens/**'
+      - 'frontend/packages/ui/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: P19 T023-T026 browser accessibility visual authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      P19_SITE_URL: http://127.0.0.1:4193
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+      - name: Validate contract descendant and browser driver
+        run: |
+          set -euo pipefail
+          node --check scripts/p19/browser_cases.mjs
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['review_phase']=='pending' and data['implementation_authorized'] is True, data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+      - name: Build exact static Website
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/site build
+      - name: Start exact static Nginx browser fixture
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p19-browser-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p19-browser-nginx.pid;
+          events { worker_connections 256; }
+          http {
+            include /etc/nginx/mime.types;
+            default_type application/octet-stream;
+            access_log off;
+            error_log /tmp/p19-browser-nginx.log notice;
+            server {
+              listen 127.0.0.1:4193;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/site/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/site-p19.conf;
+              location / { return 404; }
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p19-browser-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p19-browser-nginx.conf"
+          for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:4193/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/p19-browser-nginx.log
+          exit 1
+      - name: Generate and validate frozen T023-T026 browser evidence
+        run: |
+          set -euo pipefail
+          node scripts/p19/browser_cases.mjs
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          paths={
+            'P19-T023':Path('artifacts/v10/P19/browser/P19-T023.json'),
+            'P19-T024':Path('artifacts/v10/P19/browser/P19-T024.json'),
+            'P19-T025':Path('artifacts/v10/P19/browser/P19-T025.json'),
+            'P19-T026':Path('artifacts/v10/P19/visual/P19-T026.json'),
+          }
+          for cid,path in paths.items():
+              data=json.loads(path.read_text(encoding='utf-8'))
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+      - name: Record exact-head browser authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/browser-authority
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P19/browser-authority/implementation_commit.txt
+          git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/browser-authority/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/browser-authority/review_blob.txt
+          find artifacts/v10/P19/captures -type f -name '*.png' -print0 | sort -z | xargs -0 sha256sum > artifacts/v10/P19/browser-authority/captures.sha256
+      - name: Upload exact-head browser and visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-browser-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/browser/
+            artifacts/v10/P19/visual/P19-T026.json
+            artifacts/v10/P19/captures/
+            artifacts/v10/P19/browser-authority/
+      - name: Stop Nginx
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/p19-browser-nginx.pid" ]; then kill "$(cat "$RUNNER_TEMP/p19-browser-nginx.pid")" || true; fi
