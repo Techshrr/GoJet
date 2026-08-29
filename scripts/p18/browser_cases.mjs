@@ -145,7 +145,7 @@ async function caseT019() {
   const mobileDiagnostics = attachDiagnostics(mobile);
   await mobile.goto(`${base}/docs/en/getting-started`, { waitUntil: 'networkidle' });
   const drawerHost = mobile.locator('starlight-menu-button').first();
-  await drawerHost.waitFor({ state: 'visible', timeout: 12000 });
+  await drawerHost.waitFor({ state: 'attached', timeout: 12000 });
   await mobile.waitForFunction(() => Boolean(customElements.get('starlight-menu-button')), null, { timeout: 12000 });
   const drawerTrigger = drawerHost.locator('button').first();
   await drawerTrigger.waitFor({ state: 'visible', timeout: 12000 });
