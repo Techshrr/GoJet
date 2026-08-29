@@ -23,6 +23,11 @@ ASTRO_CONFIG = DOCS / "astro.config.mjs"
 NGINX = ROOT / "deploy/nginx/docs-p18.conf"
 HTTP_BASE = os.environ.get("P18_HTTP_BASE", "http://127.0.0.1:8098").rstrip("/")
 PUBLIC_BASE = "https://gojet.cc"
+EVIDENCE_PATHS = {
+    "P18-T022": ROOT / "artifacts/v10/P18/build/P18-T022.json",
+    "P18-T023": ROOT / "artifacts/v10/P18/gates/P18-T023.json",
+    "P18-T024": ROOT / "artifacts/v10/P18/content/P18-T024.json",
+}
 
 
 class Facts(HTMLParser):
@@ -317,9 +322,9 @@ def main() -> int:
         "secret_safe": True,
         **result,
     }
-    out = ROOT / "artifacts/v10/P18/quality"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / f"{args.case}.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output = EVIDENCE_PATHS[args.case]
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
