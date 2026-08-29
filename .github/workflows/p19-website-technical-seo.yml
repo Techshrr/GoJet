@@ -1,0 +1,95 @@
+name: P19 Website and Technical SEO Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'frontend/packages/**'
+      - 'deploy/nginx/**'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-technical-seo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P19 contract freeze and Website baseline guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact P19 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Validate frozen P19 product and test contract
+        id: contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p19/validate_contract.py
+          python3 scripts/p19/validate_contract.py | tee /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['node']=='P19' and data['status']=='PASS' and data['errors']==[], data
+          assert data['case_range']=='P19-T001..P19-T032', data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['merge_authoritative'] is False, data
+          assert len(data['contract_authority'])==40, data
+          PY
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prove current Website baseline still builds
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/site build
+          test -d frontend/apps/site/dist
+
+      - name: Record contract guard authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/contract-guard
+          cp /tmp/p19-contract.json artifacts/v10/P19/contract-guard/contract.json
+          git rev-parse HEAD > artifacts/v10/P19/contract-guard/implementation_commit.txt
+          git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/contract-guard/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/contract-guard/review_blob.txt
+          git rev-parse 43e693b10c0118e32d7f14c61156e0b06c155111:frontend/apps/site/package.json > artifacts/v10/P19/contract-guard/base_site_package_blob.txt
+
+      - name: Upload exact-head P19 contract authority
+        uses: actions/upload-artifact@v4
+        with:
+          name: p19-website-technical-seo-contract-${{ steps.contract.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/test-plan.json
+            artifacts/v10/P19/review.md
+            artifacts/v10/P19/contract-guard/
