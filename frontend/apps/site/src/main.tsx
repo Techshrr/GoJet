@@ -6,6 +6,7 @@ import { createGoJetQueryClient } from '@gojet/api-client';
 import { router } from './router';
 import '@gojet/ui/styles.css';
 import './shell/shell.css';
+import './website/website.css';
 import './contact/contact.css';
 import './auth/auth.css';
 import './trust/trust.css';

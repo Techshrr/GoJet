@@ -1,0 +1,334 @@
+name: P19 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'frontend/apps/docs/src/data/content-manifest.json'
+      - 'frontend/packages/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p19-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P19-T031 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P19 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify frozen P19 coherence boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/evidence_coherence.py
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['node']=='P19' and data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['case_range']=='P19-T001..P19-T032', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Wait for exact-head P19 producers and bind artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/coherence
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          required={
+            'P19 Website and Technical SEO Contract': {
+              'workflow':'p19-website-technical-seo.yml',
+              'artifact':f'p19-website-technical-seo-contract-{sha}',
+            },
+            'P19 Website Core Integration': {
+              'workflow':'p19-website-core.yml',
+              'artifact':f'gojet-v10-p19-site-core-{sha}',
+            },
+            'P19 Website Content Authority': {
+              'workflow':'p19-website-content.yml',
+              'artifact':f'gojet-v10-p19-content-{sha}',
+            },
+            'P19 Website Crawl and Discovery': {
+              'workflow':'p19-website-discovery.yml',
+              'artifact':f'gojet-v10-p19-discovery-{sha}',
+            },
+            'P19 Website Browser and Visual': {
+              'workflow':'p19-website-browser.yml',
+              'artifact':f'gojet-v10-p19-browser-{sha}',
+            },
+            'P19 Website Performance and Runtime': {
+              'workflow':'p19-website-quality.yml',
+              'artifact':f'gojet-v10-p19-quality-{sha}',
+            },
+          }
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          path=Path('artifacts/v10/P19/coherence/producer-manifest.json')
+          dispatched=set(); deadline=time.time()+135*60
+
+          def api(url, *, method='GET', body=None):
+            data=None if body is None else json.dumps(body).encode()
+            req=urllib.request.Request(url,data=data,method=method,headers=headers)
+            with urllib.request.urlopen(req,timeout=30) as response:
+              raw=response.read()
+              return json.loads(raw) if raw else None
+
+          def dispatch(workflow):
+            quoted=urllib.parse.quote(workflow,safe='')
+            api(f'https://api.github.com/repos/{repo}/actions/workflows/{quoted}/dispatches',
+                method='POST',body={'ref':ref})
+
+          while time.time()<deadline:
+            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
+            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            latest={}
+            for run in runs:
+              name=run.get('name')
+              if name in required and (name not in latest or int(run.get('id',0))>int(latest[name].get('id',0))):
+                latest[name]=run
+            missing=[name for name in required if name not in latest]
+            pending=[name for name in required if name in latest and latest[name].get('status')!='completed']
+            failed=[name for name in required if name in latest and latest[name].get('status')=='completed' and latest[name].get('conclusion')!='success']
+            entries={}
+            if not missing and not pending and not failed:
+              for name,spec in required.items():
+                run=latest[name]
+                artifacts=api(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts',[])
+                matches=[item for item in artifacts if item.get('name')==spec['artifact'] and not item.get('expired')]
+                if len(matches)!=1:
+                  failed.append(f'{name}:artifact:{spec["artifact"]}')
+                  continue
+                item=matches[0]
+                entries[name]={
+                  'workflow_file':spec['workflow'],
+                  'run_id':int(run['id']),
+                  'run_number':int(run.get('run_number',0)),
+                  'head_sha':run.get('head_sha'),
+                  'event':run.get('event'),
+                  'status':run.get('status'),
+                  'conclusion':run.get('conclusion'),
+                  'html_url':run.get('html_url'),
+                  'artifacts':[{
+                    'id':int(item['id']),
+                    'name':item['name'],
+                    'digest':item.get('digest'),
+                    'size_in_bytes':int(item.get('size_in_bytes',0)),
+                  }],
+                }
+            manifest={
+              'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+              'implementation_commit':sha,
+              'required_workflows':entries,
+              'missing':missing,'pending':pending,'failed':failed,
+              'dispatched_workflows':sorted(dispatched),
+            }
+            path.write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+            if failed:
+              raise SystemExit('required P19 producer/artifact failed: '+', '.join(failed))
+            if not missing and not pending and len(entries)==len(required):
+              print(f'P19 producers/artifacts green for {sha}')
+              break
+            for name in missing:
+              if name not in dispatched:
+                print(f'Dispatching missing P19 producer {name} via {required[name]["workflow"]} on {ref}',flush=True)
+                dispatch(required[name]['workflow'])
+                dispatched.add(name)
+            print(f'Waiting P19 producers missing={missing} pending={pending}',flush=True)
+            time.sleep(10)
+          else:
+            raise SystemExit(f'timed out waiting for P19 producers on {sha}')
+          PY
+
+      - name: Download and safely verify exact-head producer evidence
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p19-producers
+          mkdir -p /tmp/p19-producers artifacts/v10/P19/coherence/cases artifacts/v10/P19/coherence/contract-guard
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, stat, subprocess, zipfile
+          from pathlib import Path, PurePosixPath
+
+          root=Path('artifacts/v10/P19/coherence')
+          temp=Path('/tmp/p19-producers')
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']; sha=os.environ['EXACT_HEAD']
+          manifest=json.loads((root/'producer-manifest.json').read_text(encoding='utf-8'))
+          seen=set(); expected={f'P19-T{n:03d}' for n in range(1,31)}
+
+          def safe_extract(archive, dest):
+            names=set()
+            with zipfile.ZipFile(archive) as z:
+              for info in z.infolist():
+                pp=PurePosixPath(info.filename)
+                if pp.is_absolute() or '..' in pp.parts:
+                  raise SystemExit(f'unsafe artifact path: {info.filename}')
+                if info.filename in names:
+                  raise SystemExit(f'duplicate archive member: {info.filename}')
+                names.add(info.filename)
+                mode=(info.external_attr >> 16) & 0xFFFF
+                if stat.S_ISLNK(mode):
+                  raise SystemExit(f'symlink artifact member prohibited: {info.filename}')
+                target=dest.joinpath(*pp.parts)
+                if info.is_dir():
+                  target.mkdir(parents=True,exist_ok=True)
+                  continue
+                target.parent.mkdir(parents=True,exist_ok=True)
+                with z.open(info) as source, target.open('wb') as output:
+                  shutil.copyfileobj(source,output)
+
+          for workflow,row in manifest['required_workflows'].items():
+            artifact=row['artifacts'][0]
+            aid=int(artifact['id']); archive=temp/f'{aid}.zip'; dest=temp/str(aid)
+            dest.mkdir(parents=True,exist_ok=True)
+            env={**os.environ,'GH_TOKEN':token}
+            with archive.open('wb') as handle:
+              subprocess.run([
+                'gh','api','-H','Accept: application/vnd.github+json',
+                '-H','X-GitHub-Api-Version: 2022-11-28',
+                f'/repos/{repo}/actions/artifacts/{aid}/zip'
+              ],env=env,check=True,stdout=handle)
+            digest='sha256:'+hashlib.sha256(archive.read_bytes()).hexdigest()
+            if digest!=artifact['digest']:
+              raise SystemExit(f'artifact archive digest mismatch {artifact["name"]}: {digest} != {artifact["digest"]}')
+            safe_extract(archive,dest)
+            for source in dest.rglob('P19-T*.json'):
+              case=source.stem
+              if case not in expected:
+                continue
+              if case in seen:
+                raise SystemExit(f'duplicate producer evidence {case}')
+              shutil.copy2(source,root/'cases'/f'{case}.json')
+              seen.add(case)
+            if workflow=='P19 Website and Technical SEO Contract':
+              contracts=list(dest.rglob('contract.json'))
+              if len(contracts)!=1:
+                raise SystemExit(f'P19 contract artifact contract.json count={len(contracts)}')
+              shutil.copy2(contracts[0],root/'contract-guard'/'contract.json')
+          if seen!=expected:
+            raise SystemExit(f'P19 case evidence mismatch missing={sorted(expected-seen)} extra={sorted(seen-expected)}')
+          print(f'downloaded {len(seen)} exact-head P19 case evidence files for {sha}')
+          PY
+
+      - name: Live-bind P18 and public capability authorities
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']; head=os.environ['EXACT_HEAD']
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          def api(path):
+            req=urllib.request.Request(f'https://api.github.com/repos/{repo}{path}',headers=headers)
+            with urllib.request.urlopen(req,timeout=30) as response:
+              return json.loads(response.read())
+          def ancestor(older,newer):
+            return subprocess.run(['git','merge-base','--is-ancestor',older,newer],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
+
+          p18_run=api('/actions/runs/33260817755')
+          p18_art=api('/actions/artifacts/9717210947')
+          if not (
+            p18_run.get('head_sha')=='e8746159b02c729a877e3dcbd9655d415a5cc269'
+            and p18_run.get('status')=='completed' and p18_run.get('conclusion')=='success'
+            and p18_art.get('digest')=='sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4'
+            and p18_art.get('expired') is False
+            and int(p18_art.get('workflow_run',{}).get('id',0))==33260817755
+          ):
+            raise SystemExit('P18 signed predecessor live metadata mismatch')
+
+          authority=json.loads(Path('frontend/apps/site/src/website/authority.json').read_text(encoding='utf-8'))
+          rows=[]
+          for row in authority.get('signedIntegrations',[]):
+            node=row['node']; integration=row['integration']
+            live=api(f'/commits/{integration}')
+            exists=live.get('sha')==integration
+            in_ancestry=ancestor(integration,head)
+            if not exists or not in_ancestry:
+              raise SystemExit(f'{node} public capability integration live bind failed')
+            rows.append({
+              'node':node,
+              'integration':integration,
+              'capabilities':row.get('capabilities',[]),
+              'github_commit_exists':exists,
+              'in_head_ancestry':in_ancestry,
+            })
+
+          payload={
+            'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+            'implementation_commit':head,
+            'p18':{
+              'signed_source_commit':'e8746159b02c729a877e3dcbd9655d415a5cc269',
+              'integration_commit':'43e693b10c0118e32d7f14c61156e0b06c155111',
+              'closure_run_id':33260817755,
+              'artifact_id':9717210947,
+              'artifact_digest':'sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4',
+              'phase':'signed','review_phase':'signed','review_only_signed_child':True,'merge_authoritative':True,
+            },
+            'public_capabilities':rows,
+          }
+          path=Path('artifacts/v10/P19/coherence/inherited-authorities.json')
+          path.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Run frozen P19-T031 evidence coherence
+        run: |
+          set -euo pipefail
+          EXACT_HEAD="$EXACT_HEAD" python3 scripts/p19/evidence_coherence.py
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P19/coherence/P19-T031.json',encoding='utf-8'))
+          assert data['node']=='P19' and data['case']=='P19-T031', data
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          obs=data['observations']
+          assert obs['input_evidence_count']==30 and obs['same_exact_head'] is True, obs
+          assert obs['secret_safe'] is True and obs['producer_count']==6 and obs['producer_artifact_count']==6, obs
+          assert obs['p18_signed_predecessor_live_bound'] is True, obs
+          assert obs['public_capability_authority_count']==14 and obs['inherited_authorities_bound'] is True, obs
+          assert obs['mixed_head_rejected'] is True and obs['stale_head_rejected'] is True, obs
+          assert obs['malformed_evidence_rejected'] is True and obs['unsafe_evidence_rejected'] is True, obs
+          assert obs['merge_authoritative'] is False, obs
+          PY
+
+      - name: Upload P19 T031 exact-head authority
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/coherence/

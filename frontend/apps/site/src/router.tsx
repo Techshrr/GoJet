@@ -1,18 +1,19 @@
 import { lazy, Suspense } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
-import { MarketingPage } from './routes/ShellPage';
 import { AuthRoutePage } from './auth/AuthRoutePage';
+import { WebsitePage, websitePages } from './website/WebsitePage';
 
-const FoundationPage = lazy(() => import('./routes/FoundationPage'));
 const ContactPage = lazy(() => import('./contact/ContactPage'));
 const LinkUnavailablePage = lazy(() => import('./trust/LinkUnavailablePage'));
 const AbuseReportPage = lazy(() => import('./trust/AbuseReportPage'));
 const rootRoute = createRootRoute({ component: () => <Suspense fallback={<main aria-busy="true">Loading route…</main>}><Outlet /></Suspense> });
-const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <MarketingPage title="Product shell foundation" /> });
-const productsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products', component: () => <MarketingPage title="Products" /> });
-const solutionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/solutions', component: () => <MarketingPage title="Solutions" /> });
-const developersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/developers', component: () => <MarketingPage title="Developers" /> });
-const pricingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pricing', component: () => <MarketingPage title="Pricing" /> });
+
+const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <WebsitePage pathname="/" /> });
+const zhHomeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/zh-CN/', component: () => <WebsitePage pathname="/zh-CN/" /> });
+const productsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/products', component: () => <WebsitePage pathname="/products" /> });
+const solutionsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/solutions', component: () => <WebsitePage pathname="/solutions" /> });
+const developersRoute = createRoute({ getParentRoute: () => rootRoute, path: '/developers', component: () => <WebsitePage pathname="/developers" /> });
+const pricingRoute = createRoute({ getParentRoute: () => rootRoute, path: '/pricing', component: () => <WebsitePage pathname="/pricing" /> });
 const contactRoute = createRoute({ getParentRoute: () => rootRoute, path: '/contact', component: ContactPage });
 const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: '/login', component: () => <AuthRoutePage kind="login" /> });
 const registerRoute = createRoute({ getParentRoute: () => rootRoute, path: '/register', component: () => <AuthRoutePage kind="register" /> });
@@ -23,11 +24,16 @@ const oauthCallbackRoute = createRoute({ getParentRoute: () => rootRoute, path: 
 const socialRegistrationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/social-registration', component: () => <AuthRoutePage kind="social" /> });
 const linkUnavailableRoute = createRoute({ getParentRoute: () => rootRoute, path: '/linkunavailable', component: LinkUnavailablePage });
 const abuseReportRoute = createRoute({ getParentRoute: () => rootRoute, path: '/abuse/report', component: AbuseReportPage });
-const foundationRoute = createRoute({ getParentRoute: () => rootRoute, path: '/foundation', component: FoundationPage });
+
+const explicit = new Set(['/', '/zh-CN/', '/products', '/solutions', '/developers', '/pricing', '/contact']);
+const websiteRoutes = websitePages.flatMap((page) => [page.path, page.zhPath])
+  .filter((path) => !explicit.has(path))
+  .map((path) => createRoute({ getParentRoute: () => rootRoute, path: path as any, component: () => <WebsitePage pathname={path} /> }));
+
 const routeTree = rootRoute.addChildren([
-  homeRoute, productsRoute, solutionsRoute, developersRoute, pricingRoute, contactRoute,
-  loginRoute, registerRoute, verifyRoute, forgotRoute, resetRoute, oauthCallbackRoute,
-  socialRegistrationRoute, linkUnavailableRoute, abuseReportRoute, foundationRoute,
+  homeRoute, zhHomeRoute, productsRoute, solutionsRoute, developersRoute, pricingRoute,
+  ...websiteRoutes, contactRoute, loginRoute, registerRoute, verifyRoute, forgotRoute, resetRoute,
+  oauthCallbackRoute, socialRegistrationRoute, linkUnavailableRoute, abuseReportRoute,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

@@ -1,0 +1,120 @@
+{
+  "node": "P19",
+  "title": "Website and Technical SEO",
+  "issue": 50,
+  "base_integration_commit": "43e693b10c0118e32d7f14c61156e0b06c155111",
+  "specification_ids": [
+    "GJ-V10-MP-GREENFIELD-2026-08-20",
+    "GJ-V10-DS-GREENFIELD-2026-08-20",
+    "GJ-V10-IA-GREENFIELD-2026-08-20"
+  ],
+  "capability_contract": {
+    "capabilities": [
+      {"id":"CAP-TECHNICAL-SEO","ownership":"P19 Website contribution","gates":["G7","G9","G13"]},
+      {"id":"CAP-ANNOUNCEMENTS-SETTINGS","ownership":"P19 Website/public-content contribution only","gates":["G3","G6","G7"]}
+    ],
+    "master_predecessors": ["P18","P05-P17 public capability owners"],
+    "exit_gates": ["G4","G5","G7","G8","G9"]
+  },
+  "predecessor_signed_authority": {
+    "node":"P18",
+    "integration_commit":"43e693b10c0118e32d7f14c61156e0b06c155111",
+    "signed_source_commit":"e8746159b02c729a877e3dcbd9655d415a5cc269",
+    "closure_run_id":33260817755,
+    "artifact_id":9717210947,
+    "artifact_digest":"sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4",
+    "phase":"signed",
+    "review_phase":"signed",
+    "merge_authoritative":true,
+    "case_range":"P18-T001..P18-T026",
+    "affected_matrix":"10/10"
+  },
+  "route_contract": {
+    "authority":"Page-Level IA §3.1 Website registry only",
+    "route_ids":["WEB-HOME","WEB-PRODUCTS","WEB-LINKS","WEB-QR","WEB-FILES","WEB-TEXT","WEB-BIO","WEB-ANALYTICS","WEB-ROUTING","WEB-DOMAINS","WEB-SOLUTIONS","WEB-SOL-MARKETING","WEB-SOL-CREATORS","WEB-SOL-TEAMS","WEB-SOL-DEVELOPERS","WEB-DEVELOPERS","WEB-PRICING","WEB-SECURITY","WEB-GUIDES","WEB-GUIDE","WEB-ABOUT","WEB-CONTACT","WEB-LEGAL-TERMS","WEB-LEGAL-PRIVACY","WEB-LEGAL-AUP","WEB-LEGAL-ABUSE"],
+    "route_id_count":26,
+    "locales":["en","zh-CN"],
+    "canonical_id":"CAN-WEB",
+    "alternate_id":"ALT-WEB",
+    "metadata_id":"META-WEB",
+    "x_default":"English canonical",
+    "invented_paths":"PROHIBITED",
+    "guide_dynamic_route":"/guides/{slug} plus /zh-CN peer only when published/authorized"
+  },
+  "content_contract": {
+    "required_metadata":["title","description","h1","locale","updatedTime","contentOwner","canonicalPath","translation"],
+    "thin_keyword_pages":"PROHIBITED",
+    "crawler_only_rendering":"PROHIBITED",
+    "fake_dashboard_or_product_ui":"PROHIBITED",
+    "fabricated_ratings_reviews_compliance":"PROHIBITED",
+    "capability_claims":"SIGNED_RELEASE_AUTHORITY_ONLY",
+    "social_cards":"REQUIRED_WITH_LOCAL_ATTRIBUTION",
+    "content_manifest":"DETERMINISTIC"
+  },
+  "seo_contract": {
+    "gate":"G7 P19 Website contribution",
+    "sitemap_child":"Website child",
+    "raw_html_primary_content":true,
+    "structured_data":"IA eligibility only; must match visible content",
+    "soft_404":"PROHIBITED",
+    "orphan_index_pages":0
+  },
+  "performance_contract": {
+    "gate":"G9 P19 Website contribution",
+    "website_initial_js_gzip_max_kb":150,
+    "lcp_seconds_max":2.5,
+    "inp_ms_max":200,
+    "cls_max":0.1,
+    "website_loads_workspace_admin_bundle":"PROHIBITED",
+    "image_contract":"AVIF + WebP fallback; explicit dimensions; responsive srcset",
+    "font_contract":"self-host subset; avoid invisible-text blocking"
+  },
+  "environment_contract": {
+    "production_site_runtime":"STATIC_NGINX_ONLY",
+    "production_node_http_ssr_pm2":"PROHIBITED",
+    "production_docker_compose":"PROHIBITED",
+    "build_time_node_vite":"ALLOWED"
+  },
+  "closure": {
+    "same_exact_head_required":true,
+    "review_only_signed_child_required":true,
+    "required_case_range":"P19-T001..P19-T032",
+    "pre_sign_evidence_range":"P19-T001..P19-T031",
+    "defect_limits":{"p0":0,"p1":0,"decision_required":0},
+    "signed_merge_authority_fields":["phase=signed","review_phase=signed","review_only_signed_child=true","merge_authoritative=true"]
+  },
+  "cases": [
+    {"id":"P19-T001","name":"Exact bilingual Website route inventory and initial HTML","driver":"scripts/p19/site_cases.py","oracle":"All 26 IA §3.1 Website Route IDs exist only at approved English and zh-CN paths; canonical index pages contain primary content in raw HTML; no invented aliases.","evidence":"artifacts/v10/P19/site/P19-T001.json","owner":"Frontend Lead"},
+    {"id":"P19-T002","name":"META-WEB content registry and ownership","driver":"scripts/p19/site_cases.py","oracle":"Every publishable Website record has required META-WEB ownership, locale, canonical and translation data with deterministic identity.","evidence":"artifacts/v10/P19/content/P19-T002.json","owner":"Content Owner"},
+    {"id":"P19-T003","name":"CAN-WEB normalization and query exclusion","driver":"scripts/p19/seo_cases.py","oracle":"Self-canonical URLs use normalized localized paths; query/tracking/filter inputs never create canonicals; no canonical chain.","evidence":"artifacts/v10/P19/seo/P19-T003.json","owner":"SEO Owner"},
+    {"id":"P19-T004","name":"ALT-WEB reciprocal hreflang and x-default","driver":"scripts/p19/seo_cases.py","oracle":"en and zh-CN alternates are reciprocal only for published 200 peers; English canonical is x-default; no fake alternates.","evidence":"artifacts/v10/P19/seo/P19-T004.json","owner":"SEO Owner"},
+    {"id":"P19-T005","name":"Website HTTP semantics and soft-404 prevention","driver":"scripts/p19/http_cases.py","oracle":"Known pages use contractual status; unknown is 404; withdrawn guide/legal is 410 where specified; superseded legal redirect is intentional; no 200 soft 404.","evidence":"artifacts/v10/P19/http/P19-T005.json","owner":"Frontend Lead"},
+    {"id":"P19-T006","name":"Index policy and Website sitemap authority","driver":"scripts/p19/seo_cases.py","oracle":"Only canonical indexable 200 Website URLs enter Website sitemap; private/Auth/Workspace/Admin/UGC/error URLs are absent; lastmod is content-owned.","evidence":"artifacts/v10/P19/seo/P19-T006.json","owner":"SEO Owner"},
+    {"id":"P19-T007","name":"Released-capability claim gating","driver":"scripts/p19/content_cases.py","oracle":"Website claims only signed/integrated P05-P18 capabilities; deferred/unreleased capabilities are not promoted; no fake Dashboard/product UI.","evidence":"artifacts/v10/P19/content/P19-T007.json","owner":"Product Reviewer"},
+    {"id":"P19-T008","name":"Home content and partial-data states","driver":"scripts/p19/content_cases.py","oracle":"WEB-HOME represents real product tasks and truthful announcement/pricing/maintenance partial states.","evidence":"artifacts/v10/P19/content/P19-T008.json","owner":"Product Reviewer"},
+    {"id":"P19-T009","name":"Product-family factual parity","driver":"scripts/p19/content_cases.py","oracle":"Product pages describe only signed capability behavior and preserve security, entitlement, malware and risk boundaries.","evidence":"artifacts/v10/P19/content/P19-T009.json","owner":"Product Reviewer"},
+    {"id":"P19-T010","name":"Solution workflow factual parity","driver":"scripts/p19/content_cases.py","oracle":"Solution pages map to real signed workflows without fabricated outcomes, customer counts, ratings or endorsements.","evidence":"artifacts/v10/P19/content/P19-T010.json","owner":"Product Reviewer"},
+    {"id":"P19-T011","name":"Developers and Docs acquisition boundary","driver":"scripts/p19/content_cases.py","oracle":"Developer Website routes link only released API capabilities and P18 Docs canonical routes; unreleased methods are not acquisition targets.","evidence":"artifacts/v10/P19/content/P19-T011.json","owner":"Frontend Lead"},
+    {"id":"P19-T012","name":"Pricing truth and failure states","driver":"scripts/p19/content_cases.py","oracle":"Pricing uses reviewed plan/quota/entitlement fields, never fabricates price/availability, and handles data-unavailable/maintenance truthfully.","evidence":"artifacts/v10/P19/content/P19-T012.json","owner":"Product Reviewer"},
+    {"id":"P19-T013","name":"Security claims evidence boundary","driver":"scripts/p19/content_cases.py","oracle":"Security copy is grounded in signed Auth/Risk/Files/ClamAV/Domain/Abuse authority; no unverified compliance/certification or absolute-security claims.","evidence":"artifacts/v10/P19/content/P19-T013.json","owner":"Security Reviewer"},
+    {"id":"P19-T014","name":"Guide publication lifecycle","driver":"scripts/p19/content_cases.py","oracle":"Guide manifest is deterministic; published pages reachable; withdrawn 410; unknown 404; translation peers are never fabricated.","evidence":"artifacts/v10/P19/content/P19-T014.json","owner":"Content Owner"},
+    {"id":"P19-T015","name":"About and legal versioned content","driver":"scripts/p19/content_cases.py","oracle":"About/Terms/Privacy/AUP/Abuse use reviewed versioned content and contractual superseded/withdrawn behavior.","evidence":"artifacts/v10/P19/content/P19-T015.json","owner":"Content Owner"},
+    {"id":"P19-T016","name":"Contact conversion flow inheritance","driver":"scripts/p19/contact_cases.py","oracle":"WEB-CONTACT preserves P14/P15/P17 contact, Turnstile, rate and secret-safety authority with all required persistent states.","evidence":"artifacts/v10/P19/contact/P19-T016.json","owner":"Security Reviewer"},
+    {"id":"P19-T017","name":"Internal-link graph and orphan prevention","driver":"scripts/p19/crawl_cases.py","oracle":"Every indexable Website page is crawlably reachable from approved parents; zero indexable orphans/broken parent edges/fake locale links.","evidence":"artifacts/v10/P19/crawl/P19-T017.json","owner":"SEO Owner"},
+    {"id":"P19-T018","name":"JSON-LD eligibility and validation","driver":"scripts/p19/seo_cases.py","oracle":"Structured data is only IA-eligible, matches visible content, validates and contains no fabricated ratings/reviews/offers.","evidence":"artifacts/v10/P19/seo/P19-T018.json","owner":"SEO Owner"},
+    {"id":"P19-T019","name":"Social cards and asset attribution","driver":"scripts/p19/visual_cases.py","oracle":"OpenGraph/Twitter assets are deterministic, correctly dimensioned, locally controlled/attributed, non-broken and metadata-consistent.","evidence":"artifacts/v10/P19/visual/P19-T019.json","owner":"Design Lead"},
+    {"id":"P19-T020","name":"Robots and crawler policy parity","driver":"scripts/p19/crawl_cases.py","oracle":"Crawler policy keeps canonical Website crawlable, private/UGC acquisition excluded, and matches sitemap/index policy.","evidence":"artifacts/v10/P19/crawl/P19-T020.json","owner":"SEO Owner"},
+    {"id":"P19-T021","name":"Raw HTML and crawler/render parity","driver":"scripts/p19/crawl_cases.py","oracle":"Primary content, metadata, canonical, hreflang and eligible JSON-LD exist without client execution; no crawler-only differential rendering.","evidence":"artifacts/v10/P19/crawl/P19-T021.json","owner":"SEO Owner"},
+    {"id":"P19-T022","name":"Broken-link and static-asset integrity","driver":"scripts/p19/crawl_cases.py","oracle":"Internal links and href/src/srcset assets resolve; no broken canonical, hreflang, social-card or navigation targets.","evidence":"artifacts/v10/P19/crawl/P19-T022.json","owner":"QA Lead"},
+    {"id":"P19-T023","name":"Desktop browser route and conversion matrix","driver":"scripts/p19/browser_cases.py","oracle":"Representative Website families render real content, navigation, CTA and required error/partial states in a real browser with no placeholder UI.","evidence":"artifacts/v10/P19/browser/P19-T023.json","owner":"Frontend Lead"},
+    {"id":"P19-T024","name":"Responsive and 320 CSS px reflow matrix","driver":"scripts/p19/browser_cases.py","oracle":"Desktop/tablet/mobile/320 CSS px pass without clipped controls, overlap, horizontal content loss or hover-only actions.","evidence":"artifacts/v10/P19/browser/P19-T024.json","owner":"Frontend Lead"},
+    {"id":"P19-T025","name":"Accessibility semantic and interaction matrix","driver":"scripts/p19/browser_cases.py","oracle":"Keyboard order, visible focus, landmarks/headings, names/roles/values, reduced motion, image alternatives and persistent statuses pass.","evidence":"artifacts/v10/P19/browser/P19-T025.json","owner":"Accessibility Reviewer"},
+    {"id":"P19-T026","name":"Design System visual conformance","driver":"scripts/p19/visual_cases.py","oracle":"Website templates conform to Design System §§1-14 and IA §16 screenshot matrix; no placeholder icon, random illustration, broken image or uncontrolled motion.","evidence":"artifacts/v10/P19/visual/P19-T026.json","owner":"Design Lead"},
+    {"id":"P19-T027","name":"Website bundle isolation and initial JS budget","driver":"scripts/p19/performance_cases.py","oracle":"Initial JS <=150 KB gzip; Website does not load Workspace/Admin bundles; route splitting remains effective.","evidence":"artifacts/v10/P19/performance/P19-T027.json","owner":"Performance Owner"},
+    {"id":"P19-T028","name":"CWV image font and cache budgets","driver":"scripts/p19/performance_cases.py","oracle":"Frozen lab profile proves LCP <=2.5s, INP <=200ms, CLS <=0.1; principal images/fonts/cache satisfy Master performance contract.","evidence":"artifacts/v10/P19/performance/P19-T028.json","owner":"Performance Owner"},
+    {"id":"P19-T029","name":"Static Website production runtime boundary","driver":"scripts/p19/runtime_cases.py","oracle":"Website is pre-rendered/static through Nginx; production Node HTTP/SSR/PM2 and Docker/Compose remain prohibited; no crawler-only runtime path.","evidence":"artifacts/v10/P19/runtime/P19-T029.json","owner":"Frontend Lead"},
+    {"id":"P19-T030","name":"Deterministic Website manifest and bilingual parity ledger","driver":"scripts/p19/content_manifest.py","oracle":"Two clean builds produce equivalent publishable manifest/SEO inventory with explicit locale parity and stable source digests.","evidence":"artifacts/v10/P19/content/P19-T030.json","owner":"QA Lead"},
+    {"id":"P19-T031","name":"Exact-head evidence coherence","driver":"scripts/p19/evidence_coherence.py","oracle":"T001-T030 is complete, secret-safe, digest-bound and same-head; inherited P18/public capability authority is live-bound; mixed/stale/malformed evidence fails closed.","evidence":"artifacts/v10/P19/coherence/P19-T031.json","owner":"QA Lead"},
+    {"id":"P19-T032","name":"Accountable exact-head closure","driver":"scripts/p19/closure_ci.py","oracle":"Closure binds T001-T031, applicable regression, P19 G4/G5/G7/G8/G9 and defects 0/0/0; only a review-only signed child may become merge-authoritative.","evidence":"artifacts/v10/P19/closure/P19-T032.json","owner":"QA Lead"}
+  ]
+}

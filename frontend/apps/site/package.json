@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"build": "vite build", "typecheck": "tsc -p tsconfig.json --noEmit"},
+  "scripts": {"build": "vite build && node ../../../scripts/p19/postbuild.mjs", "typecheck": "tsc -p tsconfig.json --noEmit"},
   "dependencies": {
     "@gojet/api-client": "workspace:*",
     "@gojet/ui": "workspace:*",

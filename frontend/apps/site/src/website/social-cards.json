@@ -1,0 +1,26 @@
+{
+  "schema": "gojet.website-social-cards.v1",
+  "owner": "P19 Website",
+  "source": "scripts/p19/social_cards.mjs",
+  "attribution": "frontend/apps/site/public/assets/social/ATTRIBUTION.md",
+  "integrity": {
+    "algorithm": "sha256",
+    "authority": "Computed from the embedded deterministic bytes during postbuild and emitted to dist/social-cards.json."
+  },
+  "cards": {
+    "en": {
+      "path": "/assets/social/gojet-en.png",
+      "width": 1200,
+      "height": 630,
+      "mime": "image/png",
+      "alt": "GoJet — Controlled sharing. Clear operations."
+    },
+    "zh-CN": {
+      "path": "/assets/social/gojet-zh-cn.png",
+      "width": 1200,
+      "height": 630,
+      "mime": "image/png",
+      "alt": "GoJet — 可控分享，清晰运营。"
+    }
+  }
+}

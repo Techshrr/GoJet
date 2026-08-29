@@ -1,0 +1,114 @@
+name: P19 Closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'frontend/apps/docs/src/data/content-manifest.json'
+      - 'frontend/packages/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p19-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P19-T032 accountable exact-head closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P19 closure candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify P19 closure source and frozen contract
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/evidence_coherence.py scripts/p19/closure_ci.py
+          python3 scripts/p19/validate_contract.py > /tmp/p19-closure-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-closure-contract.json',encoding='utf-8'))
+          assert data['node']=='P19' and data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['case_range']=='P19-T001..P19-T032', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Run frozen P19-T032 accountable closure
+        run: |
+          set -euo pipefail
+          python3 scripts/p19/closure_ci.py
+
+      - name: Verify exact-head P19 closure result
+        id: closure
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P19/closure/P19-T032.json',encoding='utf-8'))
+          assert data['node']=='P19' and data['case']=='P19-T032', data
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['case_range']=='P19-T001..P19-T032', data
+          assert data['defects']=={'p0':0,'p1':0,'decision_required':0}, data
+          assert data['evidence']['input_case_count']==31 and data['evidence']['final_case_count']==32, data
+          assert data['applicable_matrix']['passed']==19 and data['applicable_matrix']['required']==19 and data['applicable_matrix']['complete'] is True, data
+          assert data['gates']['passed']==5 and data['gates']['required']==5 and data['gates']['complete'] is True, data
+          assert set(data['gates']['decisions'])=={'G4','G5','G7','G8','G9'}, data
+          assert all(item['status']=='PASS' for item in data['gates']['decisions'].values()), data
+          if data['review_phase']=='pending':
+            assert data['phase']=='pre-sign' and data['merge_authoritative'] is False, data
+            assert data['review_only_signed_child'] is False and data['signing_required'] is True, data
+          else:
+            assert data['review_phase']=='signed', data
+            assert data['phase']=='signed' and data['merge_authoritative'] is True, data
+            assert data['review_only_signed_child'] is True and data['signing_required'] is False, data
+            assert data['pre_sign_authority'], data
+          PY
+          printf 'sha=%s\n' "$EXACT_HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P19 exact-head closure authority
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-closure-${{ steps.closure.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/closure.json
+            artifacts/v10/P19/closure/P19-T032.json
+            artifacts/v10/P19/coherence/
+            artifacts/v10/P19/regression-manifest.json
+            artifacts/v10/P19/inherited/
+            artifacts/v10/P19/test-plan.json
+            artifacts/v10/P19/review.md
+            artifacts/v10/gates/G4/browser-responsive/
+            artifacts/v10/gates/G5/accessibility/
+            artifacts/v10/gates/G7/seo/
+            artifacts/v10/gates/G8/visual/
+            artifacts/v10/gates/G9/performance/
