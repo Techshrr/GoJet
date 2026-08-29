@@ -1,0 +1,309 @@
+name: P18 Evidence Coherence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/docs/**'
+      - 'frontend/packages/**'
+      - 'deploy/nginx/docs-p18.conf'
+      - 'scripts/p18/**'
+      - 'artifacts/v10/P18/**'
+      - '.github/workflows/p18-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p18-evidence-coherence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    name: P18-T025 exact-head evidence coherence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P18 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify frozen P18 coherence boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p18/validate_contract.py scripts/p18/evidence_coherence.py
+          python3 scripts/p18/validate_contract.py > /tmp/p18-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p18-contract.json', encoding='utf-8'))
+          assert data['node']=='P18' and data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='784870c56c48591d51663f5d5521c057d74108f9', data
+          assert data['case_range']=='P18-T001..P18-T026', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Wait for exact-head P18 producers and bind artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P18/coherence
+          python3 - <<'PY'
+          import json, os, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          required={
+            'P18 Docs Multilingual Discovery Contract': {
+              'workflow':'p18-docs-multilingual-discovery.yml',
+              'artifact':f'p18-docs-multilingual-discovery-contract-guard-{sha}',
+            },
+            'P18 Docs Core Integration': {
+              'workflow':'p18-docs-core.yml',
+              'artifact':f'gojet-v10-p18-docs-core-{sha}',
+            },
+            'P18 Docs Discovery Integration': {
+              'workflow':'p18-docs-discovery.yml',
+              'artifact':f'gojet-v10-p18-docs-discovery-{sha}',
+            },
+            'P18 Docs Quality Integration': {
+              'workflow':'p18-docs-quality.yml',
+              'artifact':f'gojet-v10-p18-docs-quality-{sha}',
+            },
+          }
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          path=Path('artifacts/v10/P18/coherence/producer-manifest.json')
+          dispatched=set(); deadline=time.time()+135*60
+
+          def api(url, *, method='GET', body=None):
+            data=None if body is None else json.dumps(body).encode()
+            req=urllib.request.Request(url,data=data,method=method,headers=headers)
+            with urllib.request.urlopen(req,timeout=30) as response:
+              raw=response.read()
+              return json.loads(raw) if raw else None
+
+          def dispatch(workflow):
+            quoted=urllib.parse.quote(workflow,safe='')
+            api(f'https://api.github.com/repos/{repo}/actions/workflows/{quoted}/dispatches',
+                method='POST',body={'ref':ref})
+
+          while time.time()<deadline:
+            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
+            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            latest={}
+            for run in runs:
+              name=run.get('name')
+              if name in required and (name not in latest or int(run.get('id',0))>int(latest[name].get('id',0))):
+                latest[name]=run
+            missing=[name for name in required if name not in latest]
+            pending=[name for name in required if name in latest and latest[name].get('status')!='completed']
+            failed=[name for name in required if name in latest and latest[name].get('status')=='completed' and latest[name].get('conclusion')!='success']
+            entries={}
+            if not missing and not pending and not failed:
+              for name,spec in required.items():
+                run=latest[name]
+                artifacts=api(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts',[])
+                matches=[item for item in artifacts if item.get('name')==spec['artifact'] and not item.get('expired')]
+                if len(matches)!=1:
+                  failed.append(f'{name}:artifact:{spec["artifact"]}')
+                  continue
+                item=matches[0]
+                entries[name]={
+                  'workflow_file':spec['workflow'],
+                  'run_id':int(run['id']),
+                  'run_number':int(run.get('run_number',0)),
+                  'head_sha':run.get('head_sha'),
+                  'event':run.get('event'),
+                  'status':run.get('status'),
+                  'conclusion':run.get('conclusion'),
+                  'html_url':run.get('html_url'),
+                  'artifacts':[{
+                    'id':int(item['id']),
+                    'name':item['name'],
+                    'digest':item.get('digest'),
+                    'size_in_bytes':int(item.get('size_in_bytes',0)),
+                  }],
+                }
+            manifest={
+              'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+              'implementation_commit':sha,
+              'required_workflows':entries,
+              'missing':missing,'pending':pending,'failed':failed,
+              'dispatched_workflows':sorted(dispatched),
+            }
+            path.write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+            if failed:
+              raise SystemExit('required P18 producer/artifact failed: '+', '.join(failed))
+            if not missing and not pending and len(entries)==len(required):
+              print(f'P18 producers/artifacts green for {sha}')
+              break
+            for name in missing:
+              if name not in dispatched:
+                print(f'Dispatching missing P18 producer {name} via {required[name]["workflow"]} on {ref}',flush=True)
+                dispatch(required[name]['workflow'])
+                dispatched.add(name)
+            print(f'Waiting P18 producers missing={missing} pending={pending}',flush=True)
+            time.sleep(10)
+          else:
+            raise SystemExit(f'timed out waiting for P18 producers on {sha}')
+          PY
+
+      - name: Download and verify exact-head producer evidence
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p18-producers
+          mkdir -p /tmp/p18-producers artifacts/v10/P18/coherence/cases artifacts/v10/P18/coherence/contract-guard
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, subprocess, zipfile
+          from pathlib import Path
+
+          root=Path('artifacts/v10/P18/coherence')
+          temp=Path('/tmp/p18-producers')
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']; sha=os.environ['EXACT_HEAD']
+          manifest=json.loads((root/'producer-manifest.json').read_text(encoding='utf-8'))
+          seen=set()
+          for workflow,row in manifest['required_workflows'].items():
+            artifact=row['artifacts'][0]
+            aid=int(artifact['id']); archive=temp/f'{aid}.zip'; dest=temp/str(aid)
+            dest.mkdir(parents=True,exist_ok=True)
+            env={**os.environ,'GH_TOKEN':token}
+            with archive.open('wb') as handle:
+              subprocess.run([
+                'gh','api','-H','Accept: application/vnd.github+json',
+                '-H','X-GitHub-Api-Version: 2022-11-28',
+                f'/repos/{repo}/actions/artifacts/{aid}/zip'
+              ],env=env,check=True,stdout=handle)
+            digest='sha256:'+hashlib.sha256(archive.read_bytes()).hexdigest()
+            if digest!=artifact['digest']:
+              raise SystemExit(f'artifact archive digest mismatch {artifact["name"]}: {digest} != {artifact["digest"]}')
+            with zipfile.ZipFile(archive) as z:
+              z.extractall(dest)
+            for source in dest.rglob('P18-T*.json'):
+              case=source.stem
+              if case not in {f'P18-T{n:03d}' for n in range(1,25)}:
+                continue
+              if case in seen:
+                raise SystemExit(f'duplicate producer evidence {case}')
+              shutil.copy2(source,root/'cases'/f'{case}.json')
+              seen.add(case)
+            if workflow=='P18 Docs Multilingual Discovery Contract':
+              contract=next((p for p in dest.rglob('contract.json') if 'contract-guard' in p.as_posix()),None)
+              if contract is None:
+                contract=next(iter(dest.rglob('contract.json')),None)
+              if contract is None:
+                raise SystemExit('P18 contract artifact missing contract.json')
+              shutil.copy2(contract,root/'contract-guard'/'contract.json')
+          expected={f'P18-T{n:03d}' for n in range(1,25)}
+          if seen!=expected:
+            raise SystemExit(f'P18 case evidence mismatch missing={sorted(expected-seen)} extra={sorted(seen-expected)}')
+          print(f'downloaded {len(seen)} exact-head P18 case evidence files for {sha}')
+          PY
+
+      - name: Bind inherited P17 and P04 signed authorities
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
+          def api(path):
+            req=urllib.request.Request(f'https://api.github.com/repos/{repo}{path}',headers=headers)
+            with urllib.request.urlopen(req,timeout=30) as response:
+              return json.loads(response.read())
+
+          p17_run=api('/actions/runs/33232541982')
+          p17_art=api('/actions/artifacts/9709093486')
+          if not (
+            p17_run.get('head_sha')=='5818406072a131db1c7d8aa7bc5ef8a7adc8d51f'
+            and p17_run.get('status')=='completed' and p17_run.get('conclusion')=='success'
+            and p17_art.get('digest')=='sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1'
+            and p17_art.get('expired') is False
+            and int(p17_art.get('workflow_run',{}).get('id',0))==33232541982
+          ):
+            raise SystemExit('P17 signed predecessor live metadata mismatch')
+
+          p04_run=api('/actions/runs/32392744860')
+          p04_art=api('/actions/artifacts/9415518410')
+          if not (
+            p04_run.get('head_sha')=='659e25e3c5e263ffb3dd74cde953e812b75a7439'
+            and p04_run.get('status')=='completed' and p04_run.get('conclusion')=='success'
+            and p04_art.get('digest')=='sha256:5f6b4ec5be87d866b07599e8bd32d75171a81523d29dd86441a524bf33cbc7bb'
+            and p04_art.get('expired') is False
+            and int(p04_art.get('workflow_run',{}).get('id',0))==32392744860
+          ):
+            raise SystemExit('P04 signed Docs-shell live metadata mismatch')
+
+          payload={
+            'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+            'p17':{
+              'signed_source_commit':'5818406072a131db1c7d8aa7bc5ef8a7adc8d51f',
+              'integration_commit':'08cb39bbe54717b711e2d09840ecde04b66bb50f',
+              'closure_run_id':33232541982,
+              'artifact_id':9709093486,
+              'artifact_digest':'sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1',
+              'phase':'signed','merge_authoritative':True,
+            },
+            'p04':{
+              'reviewed_pre_sign_commit':'659e25e3c5e263ffb3dd74cde953e812b75a7439',
+              'workflow_run_id':32392744860,
+              'artifact_id':9415518410,
+              'artifact_digest':'sha256:5f6b4ec5be87d866b07599e8bd32d75171a81523d29dd86441a524bf33cbc7bb',
+              'required_tests':'10/10',
+            },
+          }
+          path=Path('artifacts/v10/P18/coherence/inherited-authorities.json')
+          path.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Run frozen P18-T025 evidence coherence
+        run: |
+          set -euo pipefail
+          EXACT_HEAD="$EXACT_HEAD" python3 scripts/p18/evidence_coherence.py
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P18/coherence/P18-T025.json',encoding='utf-8'))
+          assert data['node']=='P18' and data['case']=='P18-T025', data
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='784870c56c48591d51663f5d5521c057d74108f9', data
+          obs=data['observations']
+          assert obs['input_evidence_count']==24 and obs['same_exact_head'] is True, obs
+          assert obs['secret_safe'] is True and obs['producer_count']==4 and obs['producer_artifact_count']==4, obs
+          assert obs['inherited_authorities_bound'] is True, obs
+          assert obs['mixed_head_rejected'] is True and obs['unsafe_evidence_rejected'] is True, obs
+          assert obs['merge_authoritative'] is False, obs
+          PY
+
+      - name: Upload P18 T025 exact-head authority
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p18-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P18/coherence/producer-manifest.json
+            artifacts/v10/P18/coherence/inherited-authorities.json
+            artifacts/v10/P18/coherence/evidence-index.json
+            artifacts/v10/P18/coherence/contract-guard/
+            artifacts/v10/P18/coherence/cases/P18-T*.json
+            artifacts/v10/P18/coherence/P18-T025.json
+            artifacts/v10/P18/test-plan.json
+            artifacts/v10/P18/review.md
