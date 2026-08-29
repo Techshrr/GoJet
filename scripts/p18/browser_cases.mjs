@@ -51,11 +51,22 @@ function assertCleanDiagnostics(diagnostics, label, { allowRequestFailures = fal
 }
 
 async function openSearchWithKeyboard(page) {
-  await page.keyboard.press('Control+K');
-  await page.waitForTimeout(160);
-  const dialog = page.locator('dialog[open], [role="dialog"]:visible').first();
-  if (!(await dialog.count())) throw new Error('Ctrl+K did not open the inherited Starlight search state');
-  return dialog;
+  const search = page.locator('site-search').first();
+  const openButton = search.locator('button[data-open-modal]').first();
+  await openButton.waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const button = document.querySelector('site-search button[data-open-modal]');
+    return button instanceof HTMLButtonElement && !button.disabled && Boolean(customElements.get('site-search'));
+  }, null, { timeout: 12000 });
+  const documentedShortcut = await openButton.getAttribute('aria-keyshortcuts');
+  if (!documentedShortcut || !/^(?:Control|Meta)\+K$/.test(documentedShortcut)) {
+    throw new Error(`Starlight search exposed an unexpected documented shortcut: ${String(documentedShortcut)}`);
+  }
+  const modifier = documentedShortcut.startsWith('Meta+') ? 'Meta' : 'Control';
+  await page.keyboard.press(`${modifier}+k`);
+  const dialog = search.locator('dialog[open]').first();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  return { dialog, documentedShortcut, openButton };
 }
 
 async function caseT011() {
@@ -64,30 +75,37 @@ async function caseT011() {
   const diagnostics = attachDiagnostics(page);
   await page.goto(`${base}/docs/en/`, { waitUntil: 'networkidle' });
   const before = await page.evaluate(() => document.activeElement?.outerHTML || '');
-  const dialog = await openSearchWithKeyboard(page);
+  const { dialog, documentedShortcut, openButton } = await openSearchWithKeyboard(page);
   const input = dialog.locator('input[type="search"], input').first();
+  await input.waitFor({ state: 'visible', timeout: 12000 });
   await input.fill('API keys');
-  await page.waitForTimeout(500);
   const choices = dialog.locator('a[href], [role="option"]');
+  await choices.first().waitFor({ state: 'visible', timeout: 12000 });
   const choiceCount = await choices.count();
   if (choiceCount < 1) throw new Error('search produced no keyboard choices');
   await page.keyboard.press('ArrowDown');
   const activeAfterArrow = await page.evaluate(() => document.activeElement?.tagName || '');
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(120);
-  const dialogAfterEscape = await page.locator('dialog[open], [role="dialog"]:visible').count();
+  await dialog.waitFor({ state: 'hidden', timeout: 5000 });
   const focusAfterEscape = await page.evaluate(() => ({
     tag: document.activeElement?.tagName || '',
     text: document.activeElement?.textContent?.trim() || '',
     aria: document.activeElement?.getAttribute('aria-label') || '',
   }));
-  if (dialogAfterEscape !== 0) throw new Error('Escape did not close search');
+  const triggerFocused = await openButton.evaluate((node) => document.activeElement === node);
+  if (!triggerFocused) throw new Error(`Escape did not return focus to the search trigger: ${JSON.stringify(focusAfterEscape)}`);
   assertCleanDiagnostics(diagnostics, 'P18-T011');
   await context.close();
   return {
-    shortcut: 'Control+K', dialog_opened: true, choice_count: choiceCount,
-    arrow_navigation_active_tag: activeAfterArrow, escape_closed: true,
-    focus_return: focusAfterEscape, external_requests: diagnostics.external_requests, before_focus: before,
+    shortcut: documentedShortcut,
+    dialog_opened: true,
+    choice_count: choiceCount,
+    arrow_navigation_active_tag: activeAfterArrow,
+    escape_closed: true,
+    focus_return: focusAfterEscape,
+    trigger_focus_returned: triggerFocused,
+    external_requests: diagnostics.external_requests,
+    before_focus: before,
   };
 }
 
@@ -112,9 +130,9 @@ async function caseT019() {
     header: Boolean(document.querySelector('header')),
   }));
   if (!shell.main || !shell.header || shell.h1 !== 1 || shell.nav < 1) throw new Error(`inherited P04 article shell missing: ${JSON.stringify(shell)}`);
-  const dialog = await openSearchWithKeyboard(page);
+  const { dialog } = await openSearchWithKeyboard(page);
   await page.keyboard.press('Escape');
-  if (!(await dialog.count())) throw new Error('search-open state was not proven');
+  await dialog.waitFor({ state: 'hidden', timeout: 5000 });
   assertCleanDiagnostics(diagnostics, 'P18-T019/article');
   await context.close();
 
@@ -206,9 +224,9 @@ async function caseT020() {
   const hasVisibleFocus = focus.outlineStyle !== 'none' && focus.outlineWidth !== '0px' || (focus.boxShadow && focus.boxShadow !== 'none');
   if (!hasVisibleFocus) throw new Error(`visible focus indicator missing: ${JSON.stringify(focus)}`);
 
-  const dialog = await openSearchWithKeyboard(page);
+  const { dialog } = await openSearchWithKeyboard(page);
   const searchInput = dialog.locator('input[type="search"], input').first();
-  if (!(await searchInput.count())) throw new Error('search dialog has no named input control');
+  await searchInput.waitFor({ state: 'visible', timeout: 12000 });
   await page.keyboard.press('Escape');
 
   const languagePresent = await page.locator('starlight-lang-select, [data-language-select], select[aria-label*="language" i], button[aria-label*="language" i]').count();
