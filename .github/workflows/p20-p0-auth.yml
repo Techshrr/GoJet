@@ -1,0 +1,206 @@
+name: P20 P0 Auth Timeline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/p20/p0_timeline.py'
+      - 'scripts/p20/common.py'
+      - 'scripts/p20/validate_contract.py'
+      - 'services/platformapi/cmd/server/**'
+      - 'internal/auth/**'
+      - 'internal/workspace/**'
+      - 'internal/support/**'
+      - 'internal/securetoken/**'
+      - 'migrations/**'
+      - 'artifacts/v10/P20/test-plan.json'
+      - '.github/workflows/p20-p0-auth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-p0-auth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t009:
+    name: P20-T009 real registration workflow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_P20_API_BASE: http://127.0.0.1:18081
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_AUTH_GRANT_KEY_ID: p20-t009-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p20-t009-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+
+    steps:
+      - name: Checkout exact P20 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify runtime clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P20 T009 source and frozen contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/validate_contract.py
+          gofmt -d internal/auth internal/workspace services/platformapi/cmd/server | tee /tmp/p20-t009-gofmt.diff
+          test ! -s /tmp/p20-t009-gofmt.diff
+          go test ./internal/auth ./internal/workspace ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through exact candidate head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build and start exact-head native platform API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/t009
+          go build -trimpath -o /tmp/gojet-p20-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+          /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t009/platformapi.pid
+          for attempt in $(seq 1 60); do
+            status="$(curl -sS -o /tmp/p20-me.json -w '%{http_code}' http://127.0.0.1:18081/api/me || true)"
+            if [ "$status" = 401 ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat artifacts/v10/P20/runtime/t009/platformapi.log || true
+          exit 1
+
+      - name: Run frozen P20-T009 oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/p0_timeline.py --case P20-T009
+
+      - name: Verify exact-head T009 evidence shape and secret exclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P20/p0/P20-T009.json')
+          if not path.is_file():
+              raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          errors=[]
+          if data.get('node')!='P20': errors.append('node mismatch')
+          if data.get('case')!='P20-T009': errors.append('case mismatch')
+          if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
+          if data.get('status') not in {'PASS','FAIL'}: errors.append('invalid status')
+          details=data.get('details',{})
+          if details.get('real_platform_api') is not True: errors.append('real API evidence missing')
+          if details.get('mock_authority') is not False: errors.append('mock authority detected')
+          if details.get('secret_material_recorded') is not False: errors.append('secret evidence policy violation')
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f"P20-T009 evidence shape bound to {os.environ['EXACT_HEAD']} with status={data['status']}")
+          PY
+          ! grep -RIE 'gvc_|grp_|glc_|goh_|gsr_|gos_|gpk_|gst_|gcs_|P20-T009!Strong-Passphrase|@example\.test|001122334455|89abcdef01234567|102132435465|authorization:' artifacts/v10/P20/p0 artifacts/v10/P20/runtime/t009 --exclude='*.pid' || { echo 'unsafe P20-T009 evidence content detected' >&2; exit 1; }
+
+      - name: Stop T009 native API
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/v10/P20/runtime/t009/platformapi.pid ]; then
+            kill "$(cat artifacts/v10/P20/runtime/t009/platformapi.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload exact-head P20-T009 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t009-real-registration-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/p0/P20-T009.json
+            artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+            artifacts/v10/P20/runtime/t009/platformapi.log
