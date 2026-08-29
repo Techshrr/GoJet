@@ -1,0 +1,17 @@
+{
+  "schema": "gojet.p20-defect-ledger.v1",
+  "node": "P20",
+  "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
+  "status": "ACTIVE",
+  "open": [],
+  "closed": [],
+  "decision_required": [],
+  "rules": {
+    "p0_open_max": 0,
+    "p1_open_max": 0,
+    "decision_required_max": 0,
+    "lower_severity_requires_disposition": true,
+    "gate_hard_failure_cannot_be_downgraded": true
+  },
+  "note": "Initial P20 ledger after exact contract/baseline entry guard. Any defect discovered by P20 verification must be recorded here before closure."
+}
