@@ -42,7 +42,7 @@ const action = `/docs/${locale}/search`;
   </div>
 </StarlightPage>
 
-<script define:vars={{ locale, idleText, emptyText, offlineText }}>
+<script type="module" define:vars={{ locale, idleText, emptyText, offlineText }}>
   const root = document.querySelector('[data-gojet-search]');
   const input = document.querySelector('#gojet-docs-query');
   const status = root?.querySelector('[data-search-status]');
