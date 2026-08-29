@@ -9,7 +9,7 @@ from common import HEAD, ROOT, ancestor, emit, fail_if_errors
 
 INTEGRATIONS = {
     "P00": "accc9273c8b4c5cdf07d150e955055168cc9cc7a",
-    "P01": "4f10d59c63b07b6b5f75f1be376edcd0fef4eb0",
+    "P01": "4f10d59c63b07b6b5f75f1be376edcd0fef4eb0b",
     "P02": "874c9a81dd169712e0268d175e4ba3738b4c9fba",
     "P03": "186f4b8808ac78d8b460ca13c1afc29f99d49605",
     "P04": "16cddfa89279d698f30607f4dec79f3ed2f55b59",
