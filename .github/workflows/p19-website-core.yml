@@ -57,7 +57,11 @@ jobs:
           assert data['status']=='PASS' and data['errors']==[], data
           assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
           assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
-          assert data['review_phase']=='pending' and data['implementation_authorized'] is True, data
+          assert data['review_phase'] in ('pending','signed'), data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True, data
+          else:
+              assert data['implementation_authorized'] is False, data
           assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
           PY
 
