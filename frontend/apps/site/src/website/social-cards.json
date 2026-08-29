@@ -1,0 +1,24 @@
+{
+  "schema": "gojet.website-social-cards.v1",
+  "owner": "P19 Website",
+  "source": "scripts/p19/social_cards.mjs",
+  "attribution": "frontend/apps/site/public/assets/social/ATTRIBUTION.md",
+  "cards": {
+    "en": {
+      "path": "/assets/social/gojet-en.png",
+      "width": 1200,
+      "height": 630,
+      "mime": "image/png",
+      "sha256": "c7d5ecedce4e971aa09050199d29b2b78d8aaf0a29a584d3448a25fb23e71bf1",
+      "alt": "GoJet — Controlled sharing. Clear operations."
+    },
+    "zh-CN": {
+      "path": "/assets/social/gojet-zh-cn.png",
+      "width": 1200,
+      "height": 630,
+      "mime": "image/png",
+      "sha256": "78904789d046a854017ac70ebfcc0a62d634ff073e8e8684bf5fdf6cd925542b",
+      "alt": "GoJet — 可控分享，清晰运营。"
+    }
+  }
+}

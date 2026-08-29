@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { SOCIAL_CARD_BINARY } from './social_cards.mjs';
 
 const cwd = process.cwd();
 const dist = join(cwd, 'dist');
 const pages = JSON.parse(readFileSync(join(cwd, 'src/website/content.json'), 'utf8'));
+const socialManifest = JSON.parse(readFileSync(join(cwd, 'src/website/social-cards.json'), 'utf8'));
 const base = 'https://gojet.cc';
 const sourceShell = readFileSync(join(dist, 'index.html'), 'utf8');
 writeFileSync(join(dist, 'app-shell.html'), sourceShell);
@@ -14,6 +17,20 @@ const localize = (path, locale) => locale === 'en' ? path : path === '/' ? '/zh-
 const nav = [
   ['/products','Products','产品'],['/solutions','Solutions','解决方案'],['/developers','Developers','开发者'],['/pricing','Pricing','定价']
 ];
+
+function materializeSocialCards() {
+  const targetDir = join(dist, 'assets', 'social');
+  mkdirSync(targetDir, { recursive: true });
+  for (const locale of ['en', 'zh-CN']) {
+    const record = socialManifest.cards[locale];
+    const binary = SOCIAL_CARD_BINARY[locale];
+    if (!record || !binary || record.path !== `/assets/social/${binary.file}`) throw new Error(`P19 social-card authority mismatch for ${locale}`);
+    const bytes = Buffer.from(binary.base64, 'base64');
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    if (digest !== record.sha256) throw new Error(`P19 social-card digest mismatch for ${locale}: ${digest}`);
+    writeFileSync(join(targetDir, binary.file), bytes);
+  }
+}
 
 function breadcrumbJson(path, locale) {
   const clean = path.replace(/^\/zh-CN(?=\/|$)/,'') || '/';
@@ -42,9 +59,11 @@ function staticBody(page, path, locale) {
 }
 function render(page, path, locale) {
   const copy = locale === 'en' ? page.en : page.zh;
+  const card = socialManifest.cards[locale];
+  const cardUrl = canonical(card.path);
   const body = staticBody(page,path,locale);
   const jsonld = JSON.stringify(structured(page,path,locale)).replaceAll('<','\\u003c');
-  const metadata = `<meta name="description" content="${esc(copy.description)}"><meta name="robots" content="index,follow"><link rel="canonical" href="${esc(canonical(path))}"><link rel="alternate" hreflang="en" href="${esc(canonical(page.path))}"><link rel="alternate" hreflang="zh-CN" href="${esc(canonical(page.zhPath))}"><link rel="alternate" hreflang="x-default" href="${esc(canonical(page.path))}"><meta property="og:type" content="website"><meta property="og:site_name" content="GoJet"><meta property="og:title" content="${esc(copy.title)}"><meta property="og:description" content="${esc(copy.description)}"><meta property="og:url" content="${esc(canonical(path))}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${esc(copy.title)}"><meta name="twitter:description" content="${esc(copy.description)}"><script type="application/ld+json">${jsonld}</script>`;
+  const metadata = `<meta name="description" content="${esc(copy.description)}"><meta name="robots" content="index,follow"><link rel="canonical" href="${esc(canonical(path))}"><link rel="alternate" hreflang="en" href="${esc(canonical(page.path))}"><link rel="alternate" hreflang="zh-CN" href="${esc(canonical(page.zhPath))}"><link rel="alternate" hreflang="x-default" href="${esc(canonical(page.path))}"><meta property="og:type" content="website"><meta property="og:site_name" content="GoJet"><meta property="og:title" content="${esc(copy.title)}"><meta property="og:description" content="${esc(copy.description)}"><meta property="og:url" content="${esc(canonical(path))}"><meta property="og:image" content="${esc(cardUrl)}"><meta property="og:image:type" content="${esc(card.mime)}"><meta property="og:image:width" content="${esc(card.width)}"><meta property="og:image:height" content="${esc(card.height)}"><meta property="og:image:alt" content="${esc(card.alt)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(copy.title)}"><meta name="twitter:description" content="${esc(copy.description)}"><meta name="twitter:image" content="${esc(cardUrl)}"><meta name="twitter:image:alt" content="${esc(card.alt)}"><script type="application/ld+json">${jsonld}</script>`;
   return sourceShell
     .replace('<html lang="en">', `<html lang="${locale}">`)
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(copy.title)}</title>`)
@@ -56,13 +75,16 @@ function outputPath(path) {
   if (path === '/zh-CN/') return join(dist,'zh-CN','index.html');
   return join(dist,`${path.slice(1)}.html`);
 }
+
+materializeSocialCards();
 for (const page of pages) {
   for (const [path,locale] of [[page.path,'en'],[page.zhPath,'zh-CN']]) {
     const target=outputPath(path); mkdirSync(dirname(target),{recursive:true}); writeFileSync(target,render(page,path,locale));
   }
 }
 const sitemapEntries=[];
-for(const page of pages){ for(const [path,locale] of [[page.path,'en'],[page.zhPath,'zh-CN']]) sitemapEntries.push(`<url><loc>${esc(canonical(path))}</loc><lastmod>${esc(page.updatedTime)}</lastmod><xhtml:link rel="alternate" hreflang="en" href="${esc(canonical(page.path))}"/><xhtml:link rel="alternate" hreflang="zh-CN" href="${esc(canonical(page.zhPath))}"/><xhtml:link rel="alternate" hreflang="x-default" href="${esc(canonical(page.path))}"/></url>`); }
+for(const page of pages){ for(const [path] of [[page.path,'en'],[page.zhPath,'zh-CN']]) sitemapEntries.push(`<url><loc>${esc(canonical(path))}</loc><lastmod>${esc(page.updatedTime)}</lastmod><xhtml:link rel="alternate" hreflang="en" href="${esc(canonical(page.path))}"/><xhtml:link rel="alternate" hreflang="zh-CN" href="${esc(canonical(page.zhPath))}"/><xhtml:link rel="alternate" hreflang="x-default" href="${esc(canonical(page.path))}"/></url>`); }
 writeFileSync(join(dist,'sitemap-website.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${sitemapEntries.join('')}</urlset>\n`);
-writeFileSync(join(dist,'website-manifest.json'),JSON.stringify({schema:'gojet.website-manifest.v1',generatedFrom:'src/website/content.json',routeIds:pages.map((p)=>p.routeId),pages:pages.flatMap((p)=>[{routeId:p.routeId,locale:'en',path:p.path,lastmod:p.updatedTime,contentOwner:p.contentOwner},{routeId:p.routeId,locale:'zh-CN',path:p.zhPath,lastmod:p.updatedTime,contentOwner:p.contentOwner}])},null,2)+'\n');
+writeFileSync(join(dist,'robots.txt'),`User-agent: *\nAllow: /\nDisallow: /app/\nDisallow: /admin/\nDisallow: /preview/\nDisallow: /api/\nSitemap: ${base}/sitemap-website.xml\n`);
+writeFileSync(join(dist,'website-manifest.json'),JSON.stringify({schema:'gojet.website-manifest.v1',generatedFrom:'src/website/content.json',routeIds:pages.map((p)=>p.routeId),socialCards:socialManifest.cards,robots:'robots.txt',pages:pages.flatMap((p)=>[{routeId:p.routeId,locale:'en',path:p.path,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:socialManifest.cards.en.path},{routeId:p.routeId,locale:'zh-CN',path:p.zhPath,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:socialManifest.cards['zh-CN'].path}])},null,2)+'\n');
 console.log(`P19 static Website: ${pages.length} route IDs / ${pages.length*2} canonical pages`);

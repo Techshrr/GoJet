@@ -1,0 +1,161 @@
+name: P19 Website Crawl and Discovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'frontend/apps/docs/src/data/content-manifest.json'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - 'artifacts/v10/P19/**'
+      - '.github/workflows/p19-website-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-discovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discovery:
+    name: P19 T017-T022 crawl, schema and social authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+
+      - name: Validate frozen contract descendant and discovery drivers
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/crawl_cases.py scripts/p19/seo_cases.py scripts/p19/visual_cases.py
+          node --check scripts/p19/postbuild.mjs
+          node --check scripts/p19/social_cards.mjs
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['implementation_authorized'] is True and data['review_phase']=='pending', data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+
+      - name: Build exact pre-rendered Website and deterministic discovery assets
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/site build
+          test -f frontend/apps/site/dist/robots.txt
+          test -f frontend/apps/site/dist/sitemap-website.xml
+          test -f frontend/apps/site/dist/assets/social/gojet-en.png
+          test -f frontend/apps/site/dist/assets/social/gojet-zh-cn.png
+          test -f frontend/apps/site/dist/assets/social/ATTRIBUTION.md
+
+      - name: Start exact static Nginx fixture
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p19-discovery-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p19-discovery-nginx.pid;
+          events { worker_connections 128; }
+          http {
+            access_log off;
+            error_log /tmp/p19-discovery-nginx.log notice;
+            server {
+              listen 127.0.0.1:4191;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/site/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/site-p19.conf;
+              location / { return 404; }
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p19-discovery-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p19-discovery-nginx.conf"
+          for url in / /zh-CN/ /products /zh-CN/products /robots.txt /sitemap-website.xml /assets/social/gojet-en.png /assets/social/gojet-zh-cn.png; do
+            curl --fail --silent --show-error "http://127.0.0.1:4191${url}" >/dev/null
+          done
+
+      - name: Run frozen P19 T017-T022 in order
+        run: |
+          set -euo pipefail
+          python3 scripts/p19/crawl_cases.py --case P19-T017
+          python3 scripts/p19/seo_cases.py --case P19-T018
+          python3 scripts/p19/visual_cases.py
+          python3 scripts/p19/crawl_cases.py --case P19-T020
+          python3 scripts/p19/crawl_cases.py --case P19-T021
+          python3 scripts/p19/crawl_cases.py --case P19-T022
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('artifacts/v10/P19')
+          paths={
+            'P19-T017':root/'crawl/P19-T017.json',
+            'P19-T018':root/'seo/P19-T018.json',
+            'P19-T019':root/'visual/P19-T019.json',
+            'P19-T020':root/'crawl/P19-T020.json',
+            'P19-T021':root/'crawl/P19-T021.json',
+            'P19-T022':root/'crawl/P19-T022.json',
+          }
+          for cid,path in paths.items():
+              data=json.loads(path.read_text(encoding='utf-8'))
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+
+      - name: Record exact-head discovery authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P19/discovery-authority
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P19/discovery-authority/implementation_commit.txt
+          sha256sum frontend/apps/site/dist/robots.txt > artifacts/v10/P19/discovery-authority/robots.sha256
+          sha256sum frontend/apps/site/dist/sitemap-website.xml > artifacts/v10/P19/discovery-authority/sitemap.sha256
+          sha256sum frontend/apps/site/dist/assets/social/gojet-en.png frontend/apps/site/dist/assets/social/gojet-zh-cn.png > artifacts/v10/P19/discovery-authority/social-cards.sha256
+          sha256sum frontend/apps/site/dist/website-manifest.json > artifacts/v10/P19/discovery-authority/website-manifest.sha256
+          git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/discovery-authority/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/discovery-authority/review_blob.txt
+
+      - name: Upload exact-head P19 discovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-discovery-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/crawl/
+            artifacts/v10/P19/seo/
+            artifacts/v10/P19/visual/
+            artifacts/v10/P19/discovery-authority/
+
+      - name: Stop Nginx
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/p19-discovery-nginx.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/p19-discovery-nginx.pid")" || true
+          fi
