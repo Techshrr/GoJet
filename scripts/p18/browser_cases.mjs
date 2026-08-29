@@ -140,7 +140,7 @@ async function caseT019() {
   assertCleanDiagnostics(diagnostics, 'P18-T019/article');
   await context.close();
 
-  const mobileContext = await browser.newContext({ viewport: canonicalViewports.mobile });
+  const mobileContext = await browser.newContext({ viewport: canonicalViewports.reflow320 });
   const mobile = await mobileContext.newPage();
   const mobileDiagnostics = attachDiagnostics(mobile);
   await mobile.goto(`${base}/docs/en/getting-started`, { waitUntil: 'networkidle' });
