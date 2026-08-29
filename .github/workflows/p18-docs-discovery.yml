@@ -88,6 +88,7 @@ jobs:
           P18_HTTP_BASE: http://127.0.0.1:8098
         run: |
           set -euo pipefail
+          export GITHUB_SHA="$(git rev-parse HEAD)"
           python3 -m py_compile scripts/p18/integration.py scripts/p18/core_cases.py scripts/p18/discovery_cases.py scripts/p18/browser.py scripts/p18/postbuild.py
           for n in 008 009 010; do python3 scripts/p18/integration.py --case "P18-T${n}"; done
           python3 scripts/p18/browser.py --case P18-T011
