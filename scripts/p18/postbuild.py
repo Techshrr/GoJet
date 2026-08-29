@@ -66,6 +66,23 @@ def normalize_document_metadata() -> None:
             if peer is None or peer.get("translation") != entry["canonicalPath"]:
                 raise SystemExit(f"invalid reciprocal translation for {entry['canonicalPath']}")
             alternates.append((peer["locale"], peer["canonicalPath"]))
+        else:
+            # Starlight derives a same-slug locale target even when no translated
+            # document exists. P18 ALT-DOCS forbids that fabricated route anywhere
+            # in the published HTML, not only in hreflang metadata. Keep the
+            # language-switch escape hatch useful by routing the absent locale to
+            # that locale's published Docs home instead of a fake article URL.
+            other_locale = "zh-CN" if entry["locale"] == "en" else "en"
+            fake_path = re.sub(
+                r"^/docs/(?:en|zh-CN)/",
+                f"/docs/{other_locale}/",
+                entry["canonicalPath"],
+                count=1,
+            )
+            locale_home = f"/docs/{other_locale}/"
+            if fake_path != locale_home and fake_path not in by_path:
+                text = text.replace(fake_path, locale_home)
+
         if entry["kind"] == "home":
             alternates.append(("x-default", x_default))
 
