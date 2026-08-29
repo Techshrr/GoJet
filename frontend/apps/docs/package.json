@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"build": "astro build", "typecheck": "astro check"},
+  "scripts": {
+    "build": "astro build && python3 ../../../scripts/p18/postbuild.py",
+    "typecheck": "astro check"
+  },
   "dependencies": {
     "@astrojs/starlight": "0.41.7",
     "@gojet/tokens": "workspace:*",
