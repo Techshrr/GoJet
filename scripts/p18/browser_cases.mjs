@@ -87,6 +87,10 @@ async function caseT011() {
   const activeAfterArrow = await page.evaluate(() => document.activeElement?.tagName || '');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden', timeout: 5000 });
+  await page.waitForFunction(() => {
+    const trigger = document.querySelector('site-search button[data-open-modal]');
+    return trigger instanceof HTMLButtonElement && document.activeElement === trigger;
+  }, null, { timeout: 3000 });
   const focusAfterEscape = await page.evaluate(() => ({
     tag: document.activeElement?.tagName || '',
     text: document.activeElement?.textContent?.trim() || '',
