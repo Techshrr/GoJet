@@ -1,0 +1,136 @@
+name: P19 Website Core Integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/site/**'
+      - 'deploy/nginx/site-p19.conf'
+      - 'scripts/p19/**'
+      - '.github/workflows/p19-website-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p19-site-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: P19 T001-T006 Website route and SEO authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      P19_SITE_URL: http://127.0.0.1:4189
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+
+      - name: Validate frozen P19 contract descendant
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/site_cases.py scripts/p19/seo_cases.py scripts/p19/http_cases.py
+          python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p19-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='d1e6f2a4af2006ccd44bf0d363144845efd535e0', data
+          assert data['review_phase']=='pending' and data['implementation_authorized'] is True, data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+
+      - name: Build pre-rendered Website
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site typecheck
+          pnpm --filter @gojet/site build
+          test -f frontend/apps/site/dist/sitemap-website.xml
+          test -f frontend/apps/site/dist/website-manifest.json
+
+      - name: Start exact static Nginx fixture
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p19-site-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p19-site-nginx.pid;
+          events { worker_connections 256; }
+          http {
+            access_log off;
+            error_log /tmp/p19-site-nginx.log notice;
+            server {
+              listen 127.0.0.1:4189;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/site/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/site-p19.conf;
+              location / { return 404; }
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p19-site-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p19-site-nginx.conf"
+          for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:4189/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/p19-site-nginx.log
+          exit 1
+
+      - name: Run frozen P19 T001-T006 in order
+        run: |
+          set -euo pipefail
+          python3 scripts/p19/site_cases.py
+          python3 scripts/p19/seo_cases.py
+          python3 scripts/p19/http_cases.py
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('artifacts/v10/P19/site-core')
+          for n in range(1,7):
+              p=root/f'P19-T{n:03d}.json'
+              data=json.loads(p.read_text())
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+
+      - name: Record exact-head Website core authority
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P19/site-core/implementation_commit.txt
+          sha256sum frontend/apps/site/src/website/content.json > artifacts/v10/P19/site-core/content.sha256
+          sha256sum frontend/apps/site/dist/sitemap-website.xml > artifacts/v10/P19/site-core/sitemap.sha256
+
+      - name: Upload exact-head P19 Website core evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p19-site-core-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P19/site-core/
+            frontend/apps/site/dist/website-manifest.json
+            frontend/apps/site/dist/sitemap-website.xml
+
+      - name: Stop Nginx
+        if: always()
+        run: nginx -s stop -c "$RUNNER_TEMP/p19-site-nginx.conf" || true
