@@ -102,7 +102,7 @@
     },
     {
       "source": "en/api/index.mdx",
-      "sourceDigest": "sha256:661b016a73bc993b75c33e427f30c82ec32f51b00d6e39f3889fe6856d2b1cf0",
+      "sourceDigest": "sha256:9aea49dde0c6de2af9a693ffccfdb680a96289f3822a06542ff1fca761c6a35e",
       "locale": "en",
       "canonicalPath": "/docs/en/api",
       "translation": "/docs/zh-CN/api",
@@ -118,7 +118,7 @@
     },
     {
       "source": "zh-CN/api/index.mdx",
-      "sourceDigest": "sha256:b855f9231e98bcbfc187ddd64fda67a903afa5c9198131ca795481df3078ade0",
+      "sourceDigest": "sha256:d083772b2c5efa7cc94410c588b62db39d1a0e8938d22db94421204f6f3341f5",
       "locale": "zh-CN",
       "canonicalPath": "/docs/zh-CN/api",
       "translation": "/docs/en/api",
