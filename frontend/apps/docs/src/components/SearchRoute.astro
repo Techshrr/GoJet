@@ -19,6 +19,10 @@ const action = `/docs/${locale}/search`;
   frontmatter={{
     title,
     description,
+    locale,
+    canonicalPath: action,
+    translation: null,
+    contentOwner: 'GoJet Documentation',
     pagefind: false,
     head: [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' } }],
   }}
