@@ -91,7 +91,7 @@ jobs:
 
           deadline = time.time() + 135 * 60
           while time.time() < deadline:
-              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
+              query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
               runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
               latest = {}
               for run in runs:

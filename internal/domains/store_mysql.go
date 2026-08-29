@@ -21,28 +21,28 @@ type MySQLStore struct {
 }
 
 type PlanSourceInput struct {
-	WorkspaceID     string
-	SourceKey       string
-	Status          EntitlementStatus
-	DomainLimit     uint32
-	StartsAt        time.Time
-	ExpiresAt       *time.Time
-	DegradedAt      *time.Time
-	GraceUntil      *time.Time
-	DecisionReason  string
+	WorkspaceID      string
+	SourceKey        string
+	Status           EntitlementStatus
+	DomainLimit      uint32
+	StartsAt         time.Time
+	ExpiresAt        *time.Time
+	DegradedAt       *time.Time
+	GraceUntil       *time.Time
+	DecisionReason   string
 	SecurityCategory string
 }
 
 type ManualApprovalInput struct {
-	WorkspaceID      string
-	SourceKey        string
-	DomainLimit      uint32
-	StartsAt         time.Time
-	ExpiresAt        time.Time
-	GrantedBy        string
-	SupportTicketID  string
-	DecisionReason   string
-	CorrelationID    string
+	WorkspaceID     string
+	SourceKey       string
+	DomainLimit     uint32
+	StartsAt        time.Time
+	ExpiresAt       time.Time
+	GrantedBy       string
+	SupportTicketID string
+	DecisionReason  string
+	CorrelationID   string
 }
 
 type AccessRequestInput struct {
@@ -71,7 +71,11 @@ func (s *MySQLStore) ResolveEntitlement(ctx context.Context, workspaceID string,
 	if err != nil {
 		return ResolvedEntitlement{}, err
 	}
-	return ResolveEntitlement(now, sources, request)
+	base, err := ResolveEntitlement(now, sources, request)
+	if err != nil {
+		return ResolvedEntitlement{}, err
+	}
+	return ApplyAdminEntitlementControl(ctx, s.db, workspaceID, now, base)
 }
 
 func (s *MySQLStore) UpsertPlanSource(ctx context.Context, input PlanSourceInput, correlationID string) (EntitlementSource, error) {

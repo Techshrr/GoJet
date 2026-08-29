@@ -1,0 +1,289 @@
+name: P17 Browser Governance Authority
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/admin/**'
+      - 'frontend/apps/workspace/**'
+      - 'frontend/packages/**'
+      - 'internal/admin/**'
+      - 'internal/trust/**'
+      - 'migrations/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'scripts/p17/browser*.mjs'
+      - 'scripts/p17/browserfixture/**'
+      - 'scripts/p17/adminfixture/**'
+      - 'scripts/p17/validate_contract.py'
+      - 'artifacts/v10/P17/test-plan.json'
+      - 'artifacts/v10/P17/review.md'
+      - '.github/workflows/p17-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p17-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: ${{ matrix.case }} real P17 browser authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [P17-T030, P17-T031, P17-T032, P17-T033]
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
+      GOJET_TEST_ADMIN_URL: http://localhost:4182
+      GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4180
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_ADMIN_ACCESS_ENABLED: '1'
+      GOJET_ADMIN_TOTP_KEY_ID: p17-browser-runtime-v1
+      GOJET_ADMIN_TOTP_KEY_HEX: 6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d
+      GOJET_ADMIN_ALLOWED_ORIGIN: http://localhost:4182
+      GOJET_ADMIN_LOGIN_RATE_LIMIT: '3'
+      GOJET_ADMIN_LOGIN_RATE_WINDOW: 5m
+
+    steps:
+      - name: Checkout exact P17 browser candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          check-latest: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Activate pinned pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.21.0
+          test "$(pnpm --version)" = "11.21.0"
+
+      - name: Install browser and database clients
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          test -x /usr/bin/google-chrome || test -x /usr/bin/google-chrome-stable || test -x /usr/bin/chromium
+          mysql --version
+          redis-cli --version
+
+      - name: Verify P17 browser source and frozen contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P17/browser artifacts/v10/P17/captures artifacts/v10/P17/runtime/browser
+          go mod verify
+          pnpm install --frozen-lockfile
+          node --check scripts/p17/browser_common.mjs
+          node --check scripts/p17/browser_030.mjs
+          node --check scripts/p17/browser_031.mjs
+          node --check scripts/p17/browser_032.mjs
+          node --check scripts/p17/browser_033.mjs
+          node --check scripts/p17/browser.mjs
+          python3 -m py_compile scripts/p17/validate_contract.py
+          pnpm run typecheck:packages
+          pnpm --filter @gojet/admin typecheck
+          pnpm --filter @gojet/workspace typecheck
+          gofmt -d internal/admin/*.go scripts/p17/browserfixture/*.go services/platformapi/cmd/server/admin_access.go | tee /tmp/p17-browser-gofmt.diff
+          test ! -s /tmp/p17-browser-gofmt.diff
+          go test ./...
+          go vet ./internal/admin ./internal/trust ./services/platformapi/cmd/server ./scripts/p17/browserfixture
+          python3 scripts/p17/validate_contract.py > /tmp/p17-browser-contract.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p17-browser-contract.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P17',data
+          assert data['status']=='PASS',data
+          assert data['errors']==[],data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Apply immutable migrations through exact P17 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          redis-cli -h 127.0.0.1 -p 6379 ping
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          redis-cli -h 127.0.0.1 -p 6379 FLUSHDB >/dev/null
+
+      - name: Seed pristine P17 browser durable authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./scripts/p17/browserfixture > /tmp/p17-browser-fixture.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p17-browser-fixture.json',encoding='utf-8'))
+          assert data['workspace_id']=='ws-p17-browser',data
+          assert data['owner_actor']=='owner-p17-browser',data
+          assert data['member_actor']=='member-p17-browser',data
+          # Never print fixture: it intentionally carries browser-only credentials.
+          PY
+
+      - name: Build native API and exact browser surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -trimpath -o /tmp/gojet-p17-browser-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p17-browser-platformapi > artifacts/v10/P17/runtime/browser/native-platformapi.sha256
+          VITE_P17_WORKSPACE_ID=ws-p17-browser pnpm --filter @gojet/workspace exec vite build --outDir dist-p17-browser
+          pnpm --filter @gojet/admin exec vite build --outDir dist-p17-browser
+
+      - name: Start native API and built P17 browser surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOJET_PLATFORMAPI_ADDR=127.0.0.1:18081 \
+          GOJET_ANALYTICS_ENABLED=0 \
+            /tmp/gojet-p17-browser-platformapi > artifacts/v10/P17/runtime/browser/platformapi.log 2>&1 & echo $! > artifacts/v10/P17/runtime/browser/platformapi.pid
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4180 --outDir dist-p17-browser > artifacts/v10/P17/runtime/browser/workspace.log 2>&1 & echo $! > artifacts/v10/P17/runtime/browser/workspace.pid
+          pnpm --filter @gojet/admin exec vite preview --host localhost --port 4182 --outDir dist-p17-browser > artifacts/v10/P17/runtime/browser/admin.log 2>&1 & echo $! > artifacts/v10/P17/runtime/browser/admin.pid
+          for attempt in $(seq 1 60); do
+            api_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/api/admin/auth/session || true)"
+            if test "$api_status" = '401' \
+              && curl -fsS http://127.0.0.1:4180/app/api-keys >/dev/null \
+              && curl -fsS http://localhost:4182/admin/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P17/runtime/browser/platformapi.log || true
+          cat artifacts/v10/P17/runtime/browser/workspace.log || true
+          cat artifacts/v10/P17/runtime/browser/admin.log || true
+          exit 1
+
+      - name: Run frozen P17 browser case
+        shell: bash
+        env:
+          P17_BROWSER_CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p17/browser.mjs --case "$P17_BROWSER_CASE"
+
+      - name: Verify exact-head P17 browser evidence
+        id: evidence
+        if: always()
+        shell: bash
+        env:
+          P17_BROWSER_CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          case=os.environ['P17_BROWSER_CASE']
+          head=os.environ['EXACT_HEAD']
+          path=Path(f'artifacts/v10/P17/browser/{case}.json')
+          assert path.is_file(),f'{case}: evidence missing'
+          raw=path.read_text(encoding='utf-8')
+          data=json.loads(raw)
+          assert data['node']=='P17',data
+          assert data['case']==case,data
+          assert data['status']=='PASS',data
+          assert data['exact_head']==head,(data['exact_head'],head)
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['errors']==[],data
+          checks=data.get('checks') or {}
+          assert checks and all(checks.values()),checks
+          policy=data.get('evidence_policy') or {}
+          assert policy and not any(policy.values()),policy
+          details=data.get('details') or {}
+          assert details.get('frozen_contract_completion') is True,details
+          assert details.get('closure_claim') is False,details
+          security=details.get('security_checks') or {}
+          assert security and all(security.values()),security
+          assert data['environment']['mysql_version'],data
+          assert data['environment']['redis_version'],data
+          minimum={'P17-T030':5,'P17-T031':5,'P17-T032':8,'P17-T033':12}[case]
+          assert int(details.get('screenshot_count') or 0) >= minimum,(case,details.get('screenshot_count'),minimum)
+          lowered=raw.lower()
+          for forbidden in ('p17-browser-root-password','p17-browser-limited-password','p17-browser-seed-password','gak_','gwhsec_','gojet_admin_session=','root:root@tcp'):
+            assert forbidden not in lowered,f'{case}: unsafe evidence contains {forbidden}'
+          if case=='P17-T030':
+            wanted={'input','invalid','locked','rate-limited','success','totp-required','totp','active','session-revoke-confirm','role-list','permission-conflict','permission-denied'}
+            actual={str(v).lower() for v in details.get('states',[])}
+            assert wanted <= actual,(wanted-actual,actual)
+          elif case=='P17-T031':
+            wanted={'requested','active-plan','active-manual','expired','suspended','revoked'}
+            actual=set(details.get('entitlement_states',[]))
+            assert wanted <= actual,(wanted-actual,actual)
+            assert {'queued','filtered-empty','destructive-confirm','conflict','permission-denied','error'} <= set(details.get('states',[])),details
+          elif case=='P17-T032':
+            assert {'empty','create','secret-once','expired','revoked','forbidden','error'} <= set(details.get('api_key_states',[])),details
+            assert {'empty','create','delivery','retrying','disabled','secret-rotate','forbidden'} <= set(details.get('webhook_states',[])),details
+          elif case=='P17-T033':
+            assert {'retrying','stale','failed','destructive-confirm','restart-confirm','permission-denied','partial-service-degradation'} <= set(details.get('operations_states',[])),details
+            assert {'stale','detail','filtered-empty','partial-diff','error'} <= set(details.get('audit_states',[])),details
+          PY
+          printf 'sha=%s\n' "$exact_head" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact-head P17 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p17-${{ matrix.case }}-browser-${{ steps.evidence.outputs.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/browser/${{ matrix.case }}.json
+            artifacts/v10/P17/captures/${{ matrix.case }}-*.png
+            artifacts/v10/P17/test-plan.json

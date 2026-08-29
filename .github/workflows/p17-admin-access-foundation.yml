@@ -1,0 +1,112 @@
+name: P17 Admin Access Foundation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'internal/admin/**'
+      - 'services/platformapi/cmd/server/admin_access.go'
+      - 'services/platformapi/cmd/server/main.go'
+      - 'migrations/000025_admin_access_audit.sql'
+      - 'artifacts/v10/P17/review.md'
+      - '.github/workflows/p17-admin-access-foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p17-admin-access-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: P17 T001-T005 admin authority foundation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Enforce formatting
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l internal/admin services/platformapi/cmd/server/admin_access.go services/platformapi/cmd/server/main.go)"
+          test -z "$files" || { printf '%s\n' "$files"; exit 1; }
+
+      - name: Compile and test admin authority
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./internal/admin ./services/platformapi/cmd/server
+
+      - name: Validate frozen P17 contract at candidate head
+        run: |
+          set -euo pipefail
+          python3 scripts/p17/validate_contract.py > /tmp/p17-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p17-contract.json', encoding='utf-8'))
+          assert data['status'] == 'PASS', data
+          assert data['review_phase'] in ('pending','signed'), data
+          if data['review_phase'] == 'pending':
+              assert data['implementation_authorized'] is True, data
+          else:
+              assert data['implementation_authorized'] is False, data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Apply P17 administrator authority migration
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+          mysql -h127.0.0.1 -uroot gojet < migrations/000025_admin_access_audit.sql
+          mysql -h127.0.0.1 -uroot gojet -NBe "SELECT COUNT(*) FROM admin_permissions" | grep -qx '16'
+          mysql -h127.0.0.1 -uroot gojet -NBe "SELECT COUNT(*) FROM admin_permissions WHERE permission LIKE '%*%'" | grep -qx '0'
+
+      - name: Prove administrator audit is append-only
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          mysql -h127.0.0.1 -uroot gojet <<'SQL'
+          INSERT INTO admin_audit_events
+            (actor_kind,actor_id,action,resource_type,resource_id,result,request_correlation_id,reason,before_json,after_json,metadata_json)
+          VALUES
+            ('system','ci','ci.audit.fixture','ci_fixture','fixture-1','success','ci-p17-foundation',NULL,JSON_OBJECT(),JSON_OBJECT(),JSON_OBJECT());
+          SQL
+          if mysql -h127.0.0.1 -uroot gojet -e "UPDATE admin_audit_events SET result='failed' WHERE actor_id='ci'"; then
+            echo 'append-only UPDATE guard failed open'
+            exit 1
+          fi
+          if mysql -h127.0.0.1 -uroot gojet -e "DELETE FROM admin_audit_events WHERE actor_id='ci'"; then
+            echo 'append-only DELETE guard failed open'
+            exit 1
+          fi

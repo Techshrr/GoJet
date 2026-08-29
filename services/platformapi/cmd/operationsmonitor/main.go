@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"log/slog"
 	"os"
@@ -10,12 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/trust"
 )
 
 func main() {
-	once := flag.Bool("once", false, "run one risk-worker and projection iteration, then exit")
+	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
 	flag.Parse()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -102,22 +104,60 @@ func main() {
 		BatchSize:     100,
 	}
 
-	runIteration := func(ctx context.Context) error {
-		worked, err := worker.RunOnce(ctx)
+	var webhookAuthority *adminaccess.WorkspaceWebhookAuthority
+	if os.Getenv("GOJET_WEBHOOK_DELIVERY_ENABLED") == "1" {
+		keyID := strings.TrimSpace(os.Getenv("GOJET_WEBHOOK_SECRET_KEY_ID"))
+		keyHex := strings.TrimSpace(os.Getenv("GOJET_WEBHOOK_SECRET_KEY_HEX"))
+		if keyID == "" {
+			keyID = strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_ID"))
+		}
+		if keyHex == "" {
+			keyHex = strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_HEX"))
+		}
+		key, decodeErr := hex.DecodeString(keyHex)
+		if decodeErr != nil || len(key) != 32 || keyID == "" {
+			logger.Error("webhook delivery secret-key configuration invalid")
+			os.Exit(1)
+		}
+		cipher, cipherErr := adminaccess.NewSecretCipher(keyID, key)
+		if cipherErr != nil {
+			logger.Error("webhook delivery secret-key initialization failed")
+			os.Exit(1)
+		}
+		webhookAuthority, err = adminaccess.NewWorkspaceWebhookAuthority(db, redisClient, cipher, nil, nil)
 		if err != nil {
+			logger.Error("operationsmonitor webhook authority initialization failed")
+			os.Exit(1)
+		}
+	}
+
+	runIteration := func(ctx context.Context) error {
+		worked, iterationErr := worker.RunOnce(ctx)
+		if iterationErr != nil {
 			logger.Warn("operationsmonitor risk iteration failed", "worked", worked)
 		}
 		projected, projectionErr := projector.RunOnce(ctx)
 		if projectionErr != nil {
 			logger.Warn("operationsmonitor projection iteration failed")
-			if err == nil {
-				err = projectionErr
+			if iterationErr == nil {
+				iterationErr = projectionErr
 			}
 		}
-		if worked || projected > 0 {
-			logger.Info("operationsmonitor iteration", "risk_worked", worked, "projected", projected)
+		webhookWorked := false
+		if webhookAuthority != nil {
+			var webhookErr error
+			webhookWorked, webhookErr = webhookAuthority.RunDeliveryOnce(ctx, time.Now().UTC())
+			if webhookErr != nil {
+				logger.Warn("operationsmonitor webhook iteration failed", "worked", webhookWorked)
+				if iterationErr == nil {
+					iterationErr = webhookErr
+				}
+			}
 		}
-		return err
+		if worked || projected > 0 || webhookWorked {
+			logger.Info("operationsmonitor iteration", "risk_worked", worked, "projected", projected, "webhook_worked", webhookWorked)
+		}
+		return iterationErr
 	}
 
 	if *once {
@@ -133,7 +173,7 @@ func main() {
 	defer cancel()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	logger.Info("operationsmonitor started", "service_id", trust.OperationsMonitorServiceID, "interval", interval.String())
+	logger.Info("operationsmonitor started", "service_id", trust.OperationsMonitorServiceID, "interval", interval.String(), "webhook_delivery_enabled", webhookAuthority != nil)
 	for {
 		_ = runIteration(ctx)
 		select {

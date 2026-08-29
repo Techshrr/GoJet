@@ -1,0 +1,183 @@
+name: P17 API-key Governance Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'internal/admin/**'
+      - 'internal/workspace/**'
+      - 'services/platformapi/cmd/server/admin_access.go'
+      - 'migrations/**'
+      - 'scripts/p17/integration.py'
+      - 'scripts/p17/integration_t001_t021.py'
+      - 'scripts/p17/api_key_integration.py'
+      - 'scripts/p17/api_key_case_runner/**'
+      - 'scripts/p17/adminfixture/**'
+      - 'scripts/p17/validate_contract.py'
+      - 'artifacts/v10/P17/test-plan.json'
+      - 'artifacts/v10/P17/review.md'
+      - '.github/workflows/p17-api-key-governance-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p17-api-key-governance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-key-governance:
+    name: ${{ matrix.case }} real API-key governance evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - P17-T022
+          - P17-T023
+          - P17-T024
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+
+    steps:
+      - name: Checkout exact P17 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify API-key governance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile \
+            scripts/p17/integration.py \
+            scripts/p17/integration_t001_t021.py \
+            scripts/p17/api_key_integration.py \
+            scripts/p17/validate_contract.py
+          gofmt -d \
+            internal/admin/api_keys.go \
+            internal/admin/api_keys_test.go \
+            internal/admin/http_api_keys.go \
+            scripts/p17/api_key_case_runner/*.go \
+            services/platformapi/cmd/server/admin_access.go | tee /tmp/p17-t022-t024-gofmt.diff
+          test ! -s /tmp/p17-t022-t024-gofmt.diff
+          grep -F 'secret_hash BINARY(32)' migrations/000028_workspace_api_keys.sql
+          grep -F 'strings.Contains(scope, "*")' internal/admin/api_keys.go
+          grep -F 'hashOpaque(secret)' internal/admin/api_keys.go
+          grep -F 'workspace_id=? AND id=?' internal/admin/api_keys.go
+          grep -F 'NewWorkspaceAPIKeyHTTPAPI' services/platformapi/cmd/server/admin_access.go
+          go test ./...
+          go vet ./internal/admin ./internal/workspace ./scripts/p17/adminfixture ./scripts/p17/api_key_case_runner ./services/platformapi/cmd/server
+          python3 scripts/p17/validate_contract.py > /tmp/p17-contract-guard.json
+          python3 - <<'PY'
+          import json, subprocess
+          data=json.load(open('/tmp/p17-contract-guard.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert data['node']=='P17',data
+          assert data['status']=='PASS',data
+          assert data['errors']==[],data
+          assert data['implementation_commit']==head,data
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['case_range']=='P17-T001..P17-T035',data
+          assert data['frozen_contract_preserved'] is True,data
+          assert data['review_phase'] in ('pending','signed'),data
+          if data['review_phase']=='pending':
+              assert data['implementation_authorized'] is True,data
+          else:
+              assert data['implementation_authorized'] is False,data
+          assert data['merge_authoritative'] is False,data
+          PY
+
+      - name: Run frozen case on pristine durable authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e \
+            "DROP DATABASE IF EXISTS gojet_test; CREATE DATABASE gojet_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration} for ${{ matrix.case }}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          redis-cli -h 127.0.0.1 -p 6379 FLUSHDB >/dev/null
+          python3 scripts/p17/integration.py --case "${{ matrix.case }}" | tee "/tmp/${{ matrix.case }}-result.json"
+
+      - name: Verify exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          case=os.environ['CASE_ID']
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          path=pathlib.Path('artifacts/v10/P17/api-keys')/(case+'.json')
+          data=json.load(open(path,encoding='utf-8'))
+          assert data['node']=='P17',data
+          assert data['case']==case,data
+          assert data['status']=='PASS',data
+          assert data['exact_head']==head,(data['exact_head'],head)
+          assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+          assert data['checks'] and all(data['checks'].values()),data
+          assert data['environment']['mysql_version'],data
+          assert data['environment']['redis_version'],data
+          assert not any(data['evidence_policy'].values()),data
+          PY
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          CASE_ID: ${{ matrix.case }}
+
+      - name: Upload exact-head evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p17-${{ matrix.case }}-api-key-governance-${{ steps.evidence.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P17/api-keys/${{ matrix.case }}.json
+            artifacts/v10/P17/test-plan.json
