@@ -123,10 +123,14 @@ def secret_safe(paths: list[Path], errors: list[str]) -> bool:
     return safe
 
 
+def case_identity(data: dict) -> object:
+    return data.get("case") if data.get("case") is not None else data.get("case_id")
+
+
 def case_schema_valid(data: dict, case_id: str, head: str) -> bool:
     return (
         isinstance(data, dict)
-        and data.get("case") == case_id
+        and case_identity(data) == case_id
         and data.get("status") == "PASS"
         and data.get("errors") == []
         and data.get("implementation_commit") == head
@@ -224,7 +228,7 @@ def main() -> int:
                 continue
             seen.add(case_id)
             data = load_json(path, errors)
-            need(data.get("case") == case_id, f"{case_id} case id mismatch", errors)
+            need(case_identity(data) == case_id, f"{case_id} case identity mismatch", errors)
             need(data.get("status") == "PASS", f"{case_id} status={data.get('status')}", errors)
             need(data.get("errors") == [], f"{case_id} errors={data.get('errors')}", errors)
             need(data.get("implementation_commit") == head, f"{case_id} exact-head mismatch", errors)
@@ -250,7 +254,7 @@ def main() -> int:
     is_secret_safe = secret_safe(sorted(set(inspectable)), errors)
 
     mixed_probe = {"case": "P19-T001", "status": "PASS", "errors": [], "implementation_commit": "0" * 40}
-    stale_probe = {"case": "P19-T001", "status": "PASS", "errors": [], "implementation_commit": BASE}
+    stale_probe = {"case_id": "P19-T001", "status": "PASS", "errors": [], "implementation_commit": BASE}
     malformed_probe = {"case": "P19-T001", "implementation_commit": head}
     mixed_head_rejected = not case_schema_valid(mixed_probe, "P19-T001", head)
     stale_head_rejected = not case_schema_valid(stale_probe, "P19-T001", head)
