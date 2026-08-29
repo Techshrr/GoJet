@@ -37,7 +37,9 @@ const englishHome = manifest.documents.find((entry) => entry.canonicalPath === m
       if (!(trigger instanceof HTMLButtonElement) || !(dialog instanceof HTMLDialogElement)) return;
       if (dialog.dataset.gojetFocusReturnBound === 'true') return;
       dialog.dataset.gojetFocusReturnBound = 'true';
-      dialog.addEventListener('close', () => trigger.focus());
+      dialog.addEventListener('close', () => {
+        requestAnimationFrame(() => trigger.focus({ preventScroll: true }));
+      });
     };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', bindSearchFocusReturn, { once: true });
