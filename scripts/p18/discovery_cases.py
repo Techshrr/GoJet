@@ -27,11 +27,16 @@ class CrawlFacts(HTMLParser):
         self.srcs: list[str] = []
         self.heading_ids: list[str] = []
         self.text: list[str] = []
+        self._main_depth = 0
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
+        if tag == 'main': self._main_depth += 1
         if tag == 'a' and values.get('href'): self.hrefs.append(values['href'] or '')
         if tag in ('img', 'script', 'source') and values.get('src'): self.srcs.append(values['src'] or '')
-        if tag in ('h2', 'h3') and values.get('id'): self.heading_ids.append(values['id'] or '')
+        if self._main_depth and tag in ('h2', 'h3') and values.get('id'): self.heading_ids.append(values['id'] or '')
+    def handle_endtag(self, tag: str) -> None:
+        if tag == 'main' and self._main_depth:
+            self._main_depth -= 1
     def handle_data(self, data: str) -> None:
         if data.strip(): self.text.append(data.strip())
 
