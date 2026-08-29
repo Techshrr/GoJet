@@ -4,11 +4,11 @@ Node: `P19`
 Issue: #50  
 Base integration commit: `43e693b10c0118e32d7f14c61156e0b06c155111`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT DRAFTING / IMPLEMENTATION NOT AUTHORIZED**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
 
 ## 1. Review boundary
 
-This file establishes the P19 accountable-review contract before implementation. It is not a PASS record, signature, completion claim or merge authority.
+This signed review records the accountable technical decision for the exact P19 pre-sign implementation identified below. It does not by itself create merge authority: the direct review-only child carrying this signature must independently rerun the complete exact-head matrix and `P19-T032` before merge.
 
 P19 owns only the Website and technical-SEO contribution defined by the Master Plan and Page-Level IA: real public Website content, bilingual indexable Website route families, conversion paths, `META-WEB`, `CAN-WEB`, `ALT-WEB`, Website sitemap child, eligible JSON-LD, internal links, social cards, asset attribution, Website browser/accessibility/visual evidence and the P19 G9 performance contribution.
 
@@ -98,11 +98,11 @@ P19 Website production delivery is static/pre-rendered through Nginx. Node/Vite 
 
 Production Node HTTP/SSR/PM2 and Docker/Compose remain prohibited. A crawler-only server path is not allowed.
 
-P21/P22 retain native release/install/production validation authority; P19 must not claim those later nodes complete.
+P21/P22 retain native release/install/production validation authority; P19 does not claim those later nodes complete.
 
 ## 12. Frozen evidence range
 
-The P19 test contract is frozen as `P19-T001..P19-T032`.
+The P19 test contract remains frozen as `P19-T001..P19-T032`.
 
 - T001-T022 cover exact Website routes, content authority, canonical/hreflang/status/sitemap/JSON-LD/social/crawler/link integrity and truthful conversion content.
 - T023-T026 cover real-browser, responsive, accessibility and Design System visual authority.
@@ -112,46 +112,63 @@ The P19 test contract is frozen as `P19-T001..P19-T032`.
 
 All evidence must bind to one exact candidate revision. Mixed-head, stale, malformed, missing or secret-bearing evidence fails closed.
 
-## 13. Closure discipline
+## 13. Pre-sign implementation authority reviewed
 
-Pre-sign closure may prove implementation readiness but is not merge authority.
+Reviewed pre-sign implementation SHA: `ab6fbf7ed99f069d5aefff4a6591ecc334efbc11`  
+Pre-sign T032 closure run: `33268124398`  
+Pre-sign T032 closure artifact: `9719330281`  
+Pre-sign T032 closure digest: `sha256:ee885a2e98ec6c6f1bb08a176a0c8f435a9505ef6e5396d3b221a242b5ea2ce2`  
+Evidence disposition: `P19-T001..P19-T031 PASS`  
+Applicable exact-head regression: `19/19 PASS`  
+P19 Gate contribution: `G4/G5/G7/G8/G9 = 5/5 PASS`  
+P0/P1/DECISION REQUIRED: `0/0/0`
 
-Final merge authority requires:
+The pre-sign closure is explicitly `phase=pre-sign`, `review_phase=pending`, `review_only_signed_child=false`, `merge_authoritative=false`. This review therefore approves the reviewed implementation but does not supersede the same-revision CI requirement for the signed child.
 
-1. `P19-T001..P19-T031` PASS on one pre-sign implementation SHA;
-2. all applicable exact-head regression workflows PASS;
-3. P19-owned G4/G5/G7/G8/G9 evidence PASS;
-4. P0/P1/DECISION REQUIRED = `0/0/0`;
-5. this review changed to the signed status by a direct review-only child commit;
-6. the signed child independently reruns required exact-head evidence and `P19-T032`;
-7. final closure reports `phase=signed`, `review_phase=signed`, `review_only_signed_child=true`, `merge_authoritative=true`.
+## 14. Accountable reviewer decisions
 
-Until those conditions hold, P19 must not be merged and P20 must not start.
-
-## Accountable review placeholders
-
-### SEO Owner — PENDING
+### SEO Owner — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as SEO Owner`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: exact bilingual route inventory, `META-WEB`/`CAN-WEB`/`ALT-WEB`, HTTP semantics, sitemap/index policy, internal-link graph, JSON-LD, robots/raw-HTML parity and broken-link/static-asset evidence are same-head PASS; P19 G7 contribution is PASS.
 
-### Frontend Lead — PENDING
+### Frontend Lead — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Frontend Lead`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: static Website build, approved route/conversion surfaces, desktop/tablet/mobile/320 CSS px browser matrix and static Nginx runtime boundary are same-head PASS; no crawler-only or production Node/SSR/PM2 serving path is accepted.
 
-### Design Lead — PENDING
+### Design Lead — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Design Lead`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: deterministic social assets/attribution and Design System §§1-14 / IA §16 screenshot conformance are same-head PASS; P19 G8 contribution is PASS.
 
-### Accessibility Reviewer — PENDING
+### Accessibility Reviewer — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Accessibility Reviewer`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: keyboard order, visible focus, semantic structure, names/roles/values, reduced motion, image alternatives, persistent status behavior and reflow evidence are same-head PASS; P19 G5 contribution is PASS.
 
-### Performance Owner — PENDING
+### Performance Owner — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Performance Owner`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: initial JS budget, Website bundle isolation, frozen-lab LCP/INP/CLS, image/font/cache contracts and deterministic clean-build evidence are same-head PASS; P19 G9 contribution is PASS.
 
-### QA Lead — PENDING
+### QA Lead — APPROVED
 Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as QA Lead`  
-Decision: **PENDING**
+Decision: **APPROVED**  
+Basis: P19-T001..P19-T031 is complete, exact-head, digest-bound and secret-safe; P18 and P05-P18 public capability authorities are live-bound; mixed/stale/malformed evidence fails closed; applicable regression is 19/19 PASS and defects are 0/0/0.
 
-No signature is present in this contract-drafting state.
+## 15. Signed-child closure requirement
+
+This signature is valid only on the direct child of `ab6fbf7ed99f069d5aefff4a6591ecc334efbc11` whose sole changed path is `artifacts/v10/P19/review.md`.
+
+That signed child must independently rerun all required exact-head P19 producers, T031, the 19-workflow applicable regression matrix and T032. Merge authority exists only if the resulting closure reports all of the following simultaneously:
+
+- `phase=signed`
+- `review_phase=signed`
+- `review_only_signed_child=true`
+- `merge_authoritative=true`
+- `P19-T001..P19-T032 PASS`
+- `G4/G5/G7/G8/G9 = 5/5 PASS`
+- P0/P1/DECISION REQUIRED = `0/0/0`
+
+Until that signed-child closure succeeds, P19 must not be merged and P20 must not start.
