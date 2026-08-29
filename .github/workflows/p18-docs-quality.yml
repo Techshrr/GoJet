@@ -66,26 +66,53 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --filter @gojet/docs typecheck
           pnpm --filter @gojet/docs build
-          digest_dist() {
-            python3 - <<'PY'
+          snapshot_dist() {
+            local output="$1"
+            python3 - "$output" <<'PY'
           import hashlib
+          import json
+          import sys
           from pathlib import Path
           path = Path('frontend/apps/docs/dist')
           digest = hashlib.sha256()
+          files = {}
           for item in sorted(candidate for candidate in path.rglob('*') if candidate.is_file()):
-              rel = item.relative_to(path).as_posix().encode('utf-8')
+              rel_text = item.relative_to(path).as_posix()
+              rel = rel_text.encode('utf-8')
+              data = item.read_bytes()
               digest.update(len(rel).to_bytes(4, 'big'))
               digest.update(rel)
-              data = item.read_bytes()
               digest.update(len(data).to_bytes(8, 'big'))
               digest.update(data)
-          print('sha256:' + digest.hexdigest())
+              files[rel_text] = 'sha256:' + hashlib.sha256(data).hexdigest()
+          payload = {'digest': 'sha256:' + digest.hexdigest(), 'files': files}
+          Path(sys.argv[1]).write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(payload['digest'])
           PY
           }
-          digest_a="$(digest_dist)"
+          digest_a="$(snapshot_dist /tmp/p18-build-a.json | tail -n1)"
           pnpm --filter @gojet/docs build
-          digest_b="$(digest_dist)"
-          test "$digest_a" = "$digest_b"
+          digest_b="$(snapshot_dist /tmp/p18-build-b.json | tail -n1)"
+          printf 'P18 build digest A: %s\n' "$digest_a"
+          printf 'P18 build digest B: %s\n' "$digest_b"
+          python3 - <<'PY'
+          import json
+          a = json.load(open('/tmp/p18-build-a.json', encoding='utf-8'))
+          b = json.load(open('/tmp/p18-build-b.json', encoding='utf-8'))
+          if a['digest'] != b['digest']:
+              left, right = a['files'], b['files']
+              only_a = sorted(set(left) - set(right))
+              only_b = sorted(set(right) - set(left))
+              changed = sorted(path for path in set(left) & set(right) if left[path] != right[path])
+              print('P18 deterministic build mismatch')
+              print('only_first=', only_a)
+              print('only_second=', only_b)
+              print('changed=', changed)
+              for path in changed[:40]:
+                  print(f'changed_hash {path}: {left[path]} -> {right[path]}')
+              raise SystemExit(1)
+          print('P18 deterministic build trees are byte-identical')
+          PY
           printf 'P18_BUILD_DIGEST_A=%s\n' "$digest_a" >> "$GITHUB_ENV"
           printf 'P18_BUILD_DIGEST_B=%s\n' "$digest_b" >> "$GITHUB_ENV"
           printf '%s\n%s\n' "$digest_a" "$digest_b" > /tmp/p18-build-digests.txt
