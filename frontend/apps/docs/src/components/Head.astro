@@ -1,0 +1,30 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+import manifest from '../data/content-manifest.json';
+
+const site = 'https://gojet.cc';
+const actualPath = Astro.url.pathname;
+const equivalentPath = (expected: string, actual: string) => {
+  if (expected === actual) return true;
+  if (expected.endsWith('/') && expected.slice(0, -1) === actual) return true;
+  if (actual.endsWith('/') && actual.slice(0, -1) === expected) return true;
+  return false;
+};
+const current = manifest.documents.find((entry) => equivalentPath(entry.canonicalPath, actualPath));
+const peer = current?.translation
+  ? manifest.documents.find((entry) => entry.canonicalPath === current.translation)
+  : undefined;
+const englishHome = manifest.documents.find((entry) => entry.canonicalPath === manifest.policy.xDefault);
+---
+<Default {...Astro.props} />
+{current && <meta name="gojet:content-owner" content={current.contentOwner} />}
+{current && <meta name="gojet:last-updated" content={current.lastUpdated} />}
+{current?.translation && peer && (
+  <>
+    <link rel="alternate" hreflang={current.locale} href={`${site}${current.canonicalPath}`} />
+    <link rel="alternate" hreflang={peer.locale} href={`${site}${peer.canonicalPath}`} />
+  </>
+)}
+{current?.kind === 'home' && englishHome && (
+  <link rel="alternate" hreflang="x-default" href={`${site}${englishHome.canonicalPath}`} />
+)}

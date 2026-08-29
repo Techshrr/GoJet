@@ -1,0 +1,24 @@
+---
+title: 开始使用
+description: 了解 GoJet V10 的 Workspace、公开资源、管理员边界与文档发布状态规则。
+locale: zh-CN
+lastUpdated: 2026-08-29
+canonicalPath: /docs/zh-CN/getting-started
+translation: /docs/en/getting-started
+contentOwner: GoJet Documentation
+---
+
+GoJet V10 将公开资源、Workspace 操作、管理员治理和文档划分为彼此独立授权的表面。
+
+## 产品表面
+
+1. **公开资源**只有在自身生命周期与安全检查通过后才能解析或展示。
+2. **Workspace** 操作始终由服务端执行租户与角色授权。
+3. **Admin** 操作使用独立管理员权限，并进入不可变的审计边界。
+4. **Docs** 为静态文档，不能通过“写进文档”把未发布合同变成产品权限。
+
+## 发布状态规则
+
+合同在实现完成前可以被说明，但必须明确标记为未发布；在取得签署实现依据前，不得进入已发布 API 获取路径或语言站点地图。
+
+接下来可阅读 [API 参考](./api/) 或 [原生自托管](./self-hosting)。
