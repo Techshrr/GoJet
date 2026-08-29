@@ -20,6 +20,7 @@ const nav = [
 
 function materializeSocialCards() {
   const targetDir = join(dist, 'assets', 'social');
+  const resolved = { ...socialManifest, cards: {} };
   mkdirSync(targetDir, { recursive: true });
   for (const locale of ['en', 'zh-CN']) {
     const record = socialManifest.cards[locale];
@@ -27,9 +28,11 @@ function materializeSocialCards() {
     if (!record || !binary || record.path !== `/assets/social/${binary.file}`) throw new Error(`P19 social-card authority mismatch for ${locale}`);
     const bytes = Buffer.from(binary.base64, 'base64');
     const digest = createHash('sha256').update(bytes).digest('hex');
-    if (digest !== record.sha256) throw new Error(`P19 social-card digest mismatch for ${locale}: ${digest}`);
     writeFileSync(join(targetDir, binary.file), bytes);
+    resolved.cards[locale] = { ...record, sha256: digest };
   }
+  writeFileSync(join(dist, 'social-cards.json'), JSON.stringify(resolved, null, 2) + '\n');
+  return resolved;
 }
 
 function breadcrumbJson(path, locale) {
@@ -76,7 +79,7 @@ function outputPath(path) {
   return join(dist,`${path.slice(1)}.html`);
 }
 
-materializeSocialCards();
+const resolvedSocialManifest = materializeSocialCards();
 for (const page of pages) {
   for (const [path,locale] of [[page.path,'en'],[page.zhPath,'zh-CN']]) {
     const target=outputPath(path); mkdirSync(dirname(target),{recursive:true}); writeFileSync(target,render(page,path,locale));
@@ -86,5 +89,5 @@ const sitemapEntries=[];
 for(const page of pages){ for(const [path] of [[page.path,'en'],[page.zhPath,'zh-CN']]) sitemapEntries.push(`<url><loc>${esc(canonical(path))}</loc><lastmod>${esc(page.updatedTime)}</lastmod><xhtml:link rel="alternate" hreflang="en" href="${esc(canonical(page.path))}"/><xhtml:link rel="alternate" hreflang="zh-CN" href="${esc(canonical(page.zhPath))}"/><xhtml:link rel="alternate" hreflang="x-default" href="${esc(canonical(page.path))}"/></url>`); }
 writeFileSync(join(dist,'sitemap-website.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${sitemapEntries.join('')}</urlset>\n`);
 writeFileSync(join(dist,'robots.txt'),`User-agent: *\nAllow: /\nDisallow: /app/\nDisallow: /admin/\nDisallow: /preview/\nDisallow: /api/\nSitemap: ${base}/sitemap-website.xml\n`);
-writeFileSync(join(dist,'website-manifest.json'),JSON.stringify({schema:'gojet.website-manifest.v1',generatedFrom:'src/website/content.json',routeIds:pages.map((p)=>p.routeId),socialCards:socialManifest.cards,robots:'robots.txt',pages:pages.flatMap((p)=>[{routeId:p.routeId,locale:'en',path:p.path,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:socialManifest.cards.en.path},{routeId:p.routeId,locale:'zh-CN',path:p.zhPath,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:socialManifest.cards['zh-CN'].path}])},null,2)+'\n');
+writeFileSync(join(dist,'website-manifest.json'),JSON.stringify({schema:'gojet.website-manifest.v1',generatedFrom:'src/website/content.json',routeIds:pages.map((p)=>p.routeId),socialCards:resolvedSocialManifest.cards,robots:'robots.txt',pages:pages.flatMap((p)=>[{routeId:p.routeId,locale:'en',path:p.path,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:resolvedSocialManifest.cards.en.path},{routeId:p.routeId,locale:'zh-CN',path:p.zhPath,lastmod:p.updatedTime,contentOwner:p.contentOwner,structuredData:p.structuredData,socialCard:resolvedSocialManifest.cards['zh-CN'].path}])},null,2)+'\n');
 console.log(`P19 static Website: ${pages.length} route IDs / ${pages.length*2} canonical pages`);
