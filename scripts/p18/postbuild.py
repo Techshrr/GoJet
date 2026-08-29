@@ -14,6 +14,45 @@ MANIFEST = json.loads((DOCS / "src/data/content-manifest.json").read_text(encodi
 SITE = "https://gojet.cc"
 
 
+def document_output_path(canonical_path: str) -> Path:
+    prefix = "/docs/"
+    if not canonical_path.startswith(prefix):
+        raise SystemExit(f"invalid Docs canonical path: {canonical_path}")
+    relative = canonical_path[len(prefix):].strip("/")
+    if not relative:
+        raise SystemExit(f"invalid empty Docs canonical path: {canonical_path}")
+    return DIST / relative / "index.html"
+
+
+def normalize_document_canonicals() -> None:
+    link_pattern = re.compile(r"<link\b[^>]*>", flags=re.I)
+    canonical_rel = re.compile(r"\brel=[\"']canonical[\"']", flags=re.I)
+    href_pattern = re.compile(r"(\bhref\s*=\s*[\"'])[^\"']*([\"'])", flags=re.I)
+
+    for entry in MANIFEST["documents"]:
+        path = document_output_path(entry["canonicalPath"])
+        if not path.is_file():
+            raise SystemExit(f"missing manifest Docs output: {path}")
+        expected = SITE + entry["canonicalPath"]
+        text = path.read_text(encoding="utf-8")
+        replacements = 0
+
+        def replace_link(match: re.Match[str]) -> str:
+            nonlocal replacements
+            tag = match.group(0)
+            if not canonical_rel.search(tag):
+                return tag
+            replacements += 1
+            if href_pattern.search(tag):
+                return href_pattern.sub(lambda href: href.group(1) + expected + href.group(2), tag, count=1)
+            return tag[:-1] + f' href="{expected}">'
+
+        text = link_pattern.sub(replace_link, text)
+        if replacements != 1:
+            raise SystemExit(f"expected exactly one canonical link for {entry['canonicalPath']}, found {replacements}")
+        path.write_text(text, encoding="utf-8")
+
+
 def strip_search_metadata() -> None:
     for locale in ("en", "zh-CN"):
         path = DIST / locale / "search" / "index.html"
@@ -67,6 +106,7 @@ def write_locale_sitemap(locale: str) -> None:
 def main() -> int:
     if not DIST.is_dir():
         raise SystemExit(f"Docs dist missing: {DIST}")
+    normalize_document_canonicals()
     strip_search_metadata()
     remove_search_from_generated_sitemaps()
     write_locale_sitemap("en")
