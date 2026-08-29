@@ -15,6 +15,18 @@ def load(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def active_deploy_text() -> str:
+    lines: list[str] = []
+    for path in sorted((ROOT / "deploy").rglob("*")):
+        if not path.is_file() or path.name.lower() == "readme.md":
+            continue
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def main() -> int:
     errors: list[str] = []
     one_path = os.environ.get("P20_BUILD_ONE", "")
@@ -42,11 +54,7 @@ def main() -> int:
     if missing:
         errors.append(f"frontend app build output missing: {missing}")
 
-    deploy_text = "\n".join(
-        path.read_text(encoding="utf-8", errors="replace")
-        for path in sorted((ROOT / "deploy").rglob("*"))
-        if path.is_file() and path.name.lower() != "readme.md"
-    )
+    deploy_text = active_deploy_text()
     prohibited = []
     patterns = {
         "production_node_proxy": r"(?i)proxy_pass\s+http://[^;]*(?:node|vite|next|astro)",
