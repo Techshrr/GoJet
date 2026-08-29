@@ -1,0 +1,28 @@
+---
+title: Generic outbound webhooks
+description: Released Workspace webhook lifecycle, delivery, retry, and secret-rotation routes from signed P17 authority.
+locale: en
+lastUpdated: 2026-08-29
+canonicalPath: /docs/en/api/webhooks
+translation: /docs/zh-CN/api/webhooks
+contentOwner: GoJet API Documentation
+---
+
+Generic outbound webhooks are released under the signed P17 `CAP-USER-WEBHOOKS` authority. They are distinct from payment-provider callback ingress.
+
+## Routes
+
+```http
+GET /api/workspaces/{workspaceId}/webhooks
+POST /api/workspaces/{workspaceId}/webhooks
+GET /api/workspaces/{workspaceId}/webhooks/{webhookId}
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/rotate-secret
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/enable
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/disable
+GET /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries/{deliveryId}/retry
+```
+
+## Delivery boundary
+
+Webhook signing, secret rotation, retry/idempotency, disable/recovery, and destination validation are server-authoritative. Delivery is handled through the fixed `operationsmonitor` service. Use `WEBHOOK_ID` and `DELIVERY_ID` placeholders in examples; never copy a real signing secret into a document.

@@ -1,0 +1,30 @@
+---
+title: Native self-hosting
+description: Native GoJet V10 self-hosting architecture and the boundary between approved architecture and later release validation.
+locale: en
+lastUpdated: 2026-08-29
+canonicalPath: /docs/en/self-hosting
+translation: /docs/zh-CN/self-hosting
+contentOwner: GoJet Platform Documentation
+---
+
+GoJet V10 production architecture is native: Nginx serves public/static surfaces, PHP is limited to the installer boundary, Go services run under systemd, and MySQL, Redis, ClamAV, and local storage provide the reviewed platform dependencies.
+
+## Fixed service inventory
+
+The production service inventory is exactly:
+
+1. `redirectengine`
+2. `analyticsworker`
+3. `analyticsreconciler`
+4. `platformapi`
+5. `mailworker`
+6. `fileworker`
+7. `operationsmonitor`
+8. `logreceiver`
+
+P18 documents this already-approved architecture. It does **not** claim that the P21 native release package or the P22 fresh-install and production-candidate validation has completed.
+
+## Static Docs serving
+
+The documentation application is built ahead of deployment. Nginx serves the resulting static files. Search indexing is also produced at build time; it does not add a production application server.

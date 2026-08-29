@@ -1,0 +1,21 @@
+---
+title: 安全模型
+description: GoJet V10 授权、目标风险、文件扫描、域名风险与审计边界的简体中文独立说明。
+locale: zh-CN
+lastUpdated: 2026-08-29
+canonicalPath: /docs/zh-CN/security-model
+translation: null
+contentOwner: GoJet Security Documentation
+---
+
+本页在当前 P18 内容集中仅提供简体中文版本。除非英文翻译经过审核，否则不会发布 `/docs/en/security-model` 路由，也不会伪造英文 hreflang。
+
+## 相互独立的权限与安全轴
+
+- Workspace 与管理员权限在每个受保护请求上由服务端重新检查。
+- 目标风险与域名风险继续作为彼此独立的安全轴。
+- 强制 ClamAV 扫描仍是文件恶意软件判定权限。
+- 支付回调与通用出站 Webhook 属于不同的信任边界。
+- 高风险管理员变更必须可审计，同时不得记录原始密钥。
+
+缺少英文翻译不会产生合成的英文页面。

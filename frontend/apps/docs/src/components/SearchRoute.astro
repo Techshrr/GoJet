@@ -1,0 +1,117 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+interface Props {
+  locale: 'en' | 'zh-CN';
+  title: string;
+  description: string;
+  placeholder: string;
+  idleText: string;
+  emptyText: string;
+  offlineText: string;
+}
+
+const { locale, title, description, placeholder, idleText, emptyText, offlineText } = Astro.props;
+const action = `/docs/${locale}/search`;
+---
+
+<StarlightPage
+  frontmatter={{
+    title,
+    description,
+    locale,
+    canonicalPath: action,
+    translation: null,
+    contentOwner: 'GoJet Documentation',
+    pagefind: false,
+    head: [{ tag: 'meta', attrs: { name: 'robots', content: 'noindex,nofollow' } }],
+  }}
+>
+  <div data-pagefind-ignore="all" data-gojet-search data-locale={locale} data-state="idle">
+    <form action={action} method="get" role="search" class="gojet-search-route__form">
+      <label for="gojet-docs-query">{locale === 'en' ? 'Search documentation' : '搜索文档'}</label>
+      <div class="gojet-search-route__row">
+        <input id="gojet-docs-query" name="q" type="search" autocomplete="off" maxlength="256" placeholder={placeholder} required />
+        <button type="submit">{locale === 'en' ? 'Search' : '搜索'}</button>
+      </div>
+    </form>
+    <p data-search-status aria-live="polite">{idleText}</p>
+    <ol data-search-results class="gojet-search-route__results"></ol>
+    <p data-search-empty hidden>{emptyText}</p>
+    <p data-search-offline hidden>{offlineText}</p>
+  </div>
+</StarlightPage>
+
+<script type="module" define:vars={{ locale, idleText, emptyText, offlineText }}>
+  const root = document.querySelector('[data-gojet-search]');
+  const input = document.querySelector('#gojet-docs-query');
+  const status = root?.querySelector('[data-search-status]');
+  const list = root?.querySelector('[data-search-results]');
+  const empty = root?.querySelector('[data-search-empty]');
+  const offline = root?.querySelector('[data-search-offline]');
+  const params = new URLSearchParams(window.location.search);
+  const query = (params.get('q') || '').trim();
+
+  const setState = (value) => {
+    if (root) root.dataset.state = value;
+  };
+
+  if (input) input.value = query;
+  if (!query || query.length > 256) {
+    setState('invalid');
+  } else {
+    setState('loading');
+    if (status) status.textContent = locale === 'en' ? `Searching for “${query}”…` : `正在搜索“${query}”…`;
+    try {
+      const pagefind = await import('/docs/pagefind/pagefind.js');
+      await pagefind.init();
+      const search = await pagefind.search(query);
+      const rows = [];
+      for (const result of search.results.slice(0, 24)) {
+        const data = await result.data();
+        const url = new URL(data.url, window.location.origin);
+        let path = url.pathname;
+        if (!path.startsWith('/docs/')) path = `/docs${path.startsWith('/') ? '' : '/'}${path}`;
+        if (!path.startsWith(`/docs/${locale}/`) || path === `/docs/${locale}/search`) continue;
+        rows.push({ href: path, title: data.meta?.title || path, excerpt: data.excerpt || '' });
+        if (rows.length >= 10) break;
+      }
+      if (!rows.length) {
+        setState('empty');
+        if (status) status.textContent = emptyText;
+        if (empty) empty.hidden = false;
+      } else {
+        setState('results');
+        if (status) status.textContent = locale === 'en' ? `${rows.length} result(s)` : `${rows.length} 个结果`;
+        for (const row of rows) {
+          const item = document.createElement('li');
+          const link = document.createElement('a');
+          link.href = row.href;
+          link.textContent = row.title;
+          item.append(link);
+          if (row.excerpt) {
+            const summary = document.createElement('p');
+            summary.innerHTML = row.excerpt;
+            item.append(summary);
+          }
+          list?.append(item);
+        }
+      }
+    } catch (error) {
+      console.warn('GoJet Docs static search unavailable', error);
+      setState('offline-static');
+      if (status) status.textContent = offlineText;
+      if (offline) offline.hidden = false;
+    }
+  }
+</script>
+
+<style>
+  .gojet-search-route__form { display: grid; gap: .75rem; max-width: 48rem; }
+  .gojet-search-route__row { display: flex; gap: .75rem; align-items: stretch; }
+  .gojet-search-route__row input { min-width: 0; flex: 1 1 auto; padding: .65rem .75rem; border: 1px solid var(--sl-color-gray-5); border-radius: .5rem; background: var(--sl-color-bg); color: var(--sl-color-text); }
+  .gojet-search-route__row button { flex: 0 0 auto; padding: .65rem 1rem; border-radius: .5rem; }
+  .gojet-search-route__results { display: grid; gap: 1rem; padding-inline-start: 1.25rem; }
+  .gojet-search-route__results p { margin-block: .35rem 0; }
+  @media (max-width: 30rem) { .gojet-search-route__row { flex-direction: column; } }
+</style>

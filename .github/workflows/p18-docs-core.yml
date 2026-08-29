@@ -1,0 +1,154 @@
+name: P18 Docs Core Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/apps/docs/**'
+      - 'deploy/nginx/docs-p18.conf'
+      - 'scripts/p18/integration.py'
+      - 'scripts/p18/content_metadata.py'
+      - 'services/platformapi/cmd/server/admin_access.go'
+      - 'artifacts/v10/P18/test-plan.json'
+      - 'artifacts/v10/P18/review.md'
+      - '.github/workflows/p18-docs-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p18-docs-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-core:
+    name: P18 T001-T007 docs core evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Validate frozen P18 authority before implementation evidence
+        run: |
+          set -euo pipefail
+          python3 scripts/p18/validate_contract.py > /tmp/p18-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p18-contract.json', encoding='utf-8'))
+          assert data['status'] == 'PASS', data
+          assert data['implementation_authorized'] is True or data['review_phase'] == 'signed', data
+          assert data['case_range'] == 'P18-T001..P18-T026', data
+          PY
+
+      - name: Build static Docs
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/docs typecheck
+          pnpm --filter @gojet/docs build
+          test -d frontend/apps/docs/dist
+
+      - name: Install Nginx test binary when absent
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nginx
+          fi
+          nginx -v
+
+      - name: Start exact static Docs HTTP fixture
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/p18-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p18-nginx.pid;
+          events { worker_connections 128; }
+          http {
+            access_log off;
+            error_log $RUNNER_TEMP/p18-nginx-error.log notice;
+            server {
+              listen 127.0.0.1:8098;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/docs/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/docs-p18.conf;
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p18-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p18-nginx.conf"
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8098/docs/en/ >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat "$RUNNER_TEMP/p18-nginx-error.log" || true
+          exit 1
+
+      - name: Run frozen P18 T001-T007 in order
+        env:
+          P18_HTTP_BASE: http://127.0.0.1:8098
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p18/integration.py scripts/p18/content_metadata.py
+          python3 scripts/p18/integration.py --case P18-T001
+          python3 scripts/p18/content_metadata.py
+          for n in 003 004 005 006 007; do
+            python3 scripts/p18/integration.py --case "P18-T${n}"
+          done
+
+      - name: Record exact-head core authority
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          mkdir -p artifacts/v10/P18/core
+          printf '%s\n' "$head" > artifacts/v10/P18/core/implementation_commit.txt
+          printf '%s\n' 'P18-T001..P18-T007' > artifacts/v10/P18/core/case_range.txt
+          cp frontend/apps/docs/src/data/content-manifest.json artifacts/v10/P18/core/content-manifest.json
+          cp /tmp/p18-contract.json artifacts/v10/P18/core/contract.json
+
+      - name: Upload P18 exact-head Docs core evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p18-docs-core-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P18/http/P18-T001.json
+            artifacts/v10/P18/content/P18-T002.json
+            artifacts/v10/P18/seo/P18-T003.json
+            artifacts/v10/P18/seo/P18-T004.json
+            artifacts/v10/P18/seo/P18-T005.json
+            artifacts/v10/P18/http/P18-T006.json
+            artifacts/v10/P18/api/P18-T007.json
+            artifacts/v10/P18/core/
+
+      - name: Stop Nginx
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/p18-nginx.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/p18-nginx.pid")" || true
+          fi

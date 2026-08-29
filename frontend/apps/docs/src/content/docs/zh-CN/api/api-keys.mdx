@@ -1,0 +1,29 @@
+---
+title: Workspace API Keys
+description: 来自 P17 签署依据的 Workspace API Key 生命周期接口与安全规则。
+locale: zh-CN
+lastUpdated: 2026-08-29
+canonicalPath: /docs/zh-CN/api/api-keys
+translation: /docs/en/api/api-keys
+contentOwner: GoJet API Documentation
+---
+
+Workspace API Key 已在 P17 `CAP-API-KEYS` 签署权限下发布。原始密钥由服务端生成，只返回一次，之后不可恢复。
+
+## 接口
+
+```http
+GET /api/workspaces/{workspaceId}/api-keys
+POST /api/workspaces/{workspaceId}/api-keys
+POST /api/workspaces/{workspaceId}/api-keys/{keyId}/rotate
+POST /api/workspaces/{workspaceId}/api-keys/{keyId}/revoke
+```
+
+## 安全合同
+
+创建、轮换、吊销、过期、Scope、速率限制、租户授权和审计均由服务端决定。文档样例只使用占位符，绝不包含真实 API Key。
+
+```text
+Authorization: Bearer <API_KEY_RETURNED_ONCE>
+Workspace: WORKSPACE_ID
+```

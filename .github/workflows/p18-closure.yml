@@ -1,0 +1,108 @@
+name: P18 Closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/docs/**'
+      - 'frontend/packages/**'
+      - 'deploy/nginx/docs-p18.conf'
+      - 'scripts/p18/**'
+      - 'artifacts/v10/P18/**'
+      - '.github/workflows/p18-*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: p18-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    name: P18-T026 accountable exact-head closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout exact P18 closure candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify P18 closure source and frozen contract
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile scripts/p18/validate_contract.py scripts/p18/evidence_coherence.py scripts/p18/closure_ci.py
+          python3 scripts/p18/validate_contract.py > /tmp/p18-closure-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p18-closure-contract.json',encoding='utf-8'))
+          assert data['node']=='P18' and data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='784870c56c48591d51663f5d5521c057d74108f9', data
+          assert data['case_range']=='P18-T001..P18-T026', data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['merge_authoritative'] is False, data
+          PY
+
+      - name: Run frozen P18-T026 accountable closure
+        run: |
+          set -euo pipefail
+          python3 scripts/p18/closure_ci.py
+
+      - name: Verify exact-head P18 closure result
+        id: closure
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('artifacts/v10/P18/closure/P18-T026.json',encoding='utf-8'))
+          assert data['node']=='P18' and data['case']=='P18-T026', data
+          assert data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='784870c56c48591d51663f5d5521c057d74108f9', data
+          assert data['case_range']=='P18-T001..P18-T026', data
+          assert data['defects']=={'p0':0,'p1':0,'decision_required':0}, data
+          assert data['evidence']['input_case_count']==25 and data['evidence']['final_case_count']==26, data
+          assert data['affected_matrix']['passed']==10 and data['affected_matrix']['required']==10 and data['affected_matrix']['complete'] is True, data
+          if data['review_phase']=='pending':
+            assert data['phase']=='pre-sign' and data['merge_authoritative'] is False, data
+            assert data['review_only_signed_child'] is False and data['signing_required'] is True, data
+          else:
+            assert data['review_phase']=='signed', data
+            assert data['phase']=='signed' and data['merge_authoritative'] is True, data
+            assert data['review_only_signed_child'] is True and data['signing_required'] is False, data
+            assert data['pre_sign_authority'], data
+          PY
+          printf 'sha=%s\n' "$EXACT_HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Upload P18 exact-head closure authority
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p18-closure-${{ steps.closure.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P18/closure.json
+            artifacts/v10/P18/closure/P18-T026.json
+            artifacts/v10/P18/coherence/P18-T025.json
+            artifacts/v10/P18/coherence/evidence-index.json
+            artifacts/v10/P18/coherence/producer-manifest.json
+            artifacts/v10/P18/coherence/inherited-authorities.json
+            artifacts/v10/P18/regression-manifest.json
+            artifacts/v10/P18/inherited/
+            artifacts/v10/P18/test-plan.json
+            artifacts/v10/P18/review.md

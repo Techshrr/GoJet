@@ -1,0 +1,191 @@
+name: P18 Docs Quality Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/apps/docs/**'
+      - 'frontend/packages/tokens/**'
+      - 'deploy/nginx/docs-p18.conf'
+      - 'scripts/p18/**'
+      - 'artifacts/v10/P18/test-plan.json'
+      - 'artifacts/v10/P18/review.md'
+      - '.github/workflows/p18-docs-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p18-docs-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: P18 T019-T024 shell accessibility runtime crawler evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Validate frozen P18 authority
+        run: |
+          set -euo pipefail
+          python3 scripts/p18/validate_contract.py > /tmp/p18-contract.json
+          python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/p18-contract.json', encoding='utf-8'))
+          assert data['status'] == 'PASS' and data['frozen_contract_preserved'] is True, data
+          assert data['implementation_authorized'] is True or data['review_phase'] == 'signed', data
+          assert data['case_range'] == 'P18-T001..P18-T026', data
+          PY
+
+      - name: Build deterministic static Docs twice
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/docs typecheck
+          pnpm --filter @gojet/docs build
+          snapshot_dist() {
+            local output="$1"
+            python3 - "$output" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+          path = Path('frontend/apps/docs/dist')
+          digest = hashlib.sha256()
+          files = {}
+          for item in sorted(candidate for candidate in path.rglob('*') if candidate.is_file()):
+              rel_text = item.relative_to(path).as_posix()
+              rel = rel_text.encode('utf-8')
+              data = item.read_bytes()
+              digest.update(len(rel).to_bytes(4, 'big'))
+              digest.update(rel)
+              digest.update(len(data).to_bytes(8, 'big'))
+              digest.update(data)
+              files[rel_text] = 'sha256:' + hashlib.sha256(data).hexdigest()
+          payload = {'digest': 'sha256:' + digest.hexdigest(), 'files': files}
+          Path(sys.argv[1]).write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(payload['digest'])
+          PY
+          }
+          digest_a="$(snapshot_dist /tmp/p18-build-a.json | tail -n1)"
+          pnpm --filter @gojet/docs build
+          digest_b="$(snapshot_dist /tmp/p18-build-b.json | tail -n1)"
+          printf 'P18 build digest A: %s\n' "$digest_a"
+          printf 'P18 build digest B: %s\n' "$digest_b"
+          python3 - <<'PY'
+          import json
+          a = json.load(open('/tmp/p18-build-a.json', encoding='utf-8'))
+          b = json.load(open('/tmp/p18-build-b.json', encoding='utf-8'))
+          if a['digest'] != b['digest']:
+              left, right = a['files'], b['files']
+              only_a = sorted(set(left) - set(right))
+              only_b = sorted(set(right) - set(left))
+              changed = sorted(path for path in set(left) & set(right) if left[path] != right[path])
+              print('P18 deterministic build mismatch')
+              print('only_first=', only_a)
+              print('only_second=', only_b)
+              print('changed=', changed)
+              for path in changed[:40]:
+                  print(f'changed_hash {path}: {left[path]} -> {right[path]}')
+              raise SystemExit(1)
+          print('P18 deterministic build trees are byte-identical')
+          PY
+          printf 'P18_BUILD_DIGEST_A=%s\n' "$digest_a" >> "$GITHUB_ENV"
+          printf 'P18_BUILD_DIGEST_B=%s\n' "$digest_b" >> "$GITHUB_ENV"
+          printf '%s\n%s\n' "$digest_a" "$digest_b" > /tmp/p18-build-digests.txt
+          test -f frontend/apps/docs/dist/pagefind/pagefind.js
+          test -f frontend/apps/docs/dist/sitemap-docs-en.xml
+          test -f frontend/apps/docs/dist/sitemap-docs-zh-CN.xml
+
+      - name: Start exact static Nginx fixture
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p18-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p18-nginx.pid;
+          events { worker_connections 128; }
+          http {
+            access_log off;
+            error_log $RUNNER_TEMP/p18-nginx-error.log notice;
+            server {
+              listen 127.0.0.1:8098;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/docs/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/docs-p18.conf;
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p18-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p18-nginx.conf"
+          for _ in $(seq 1 20); do curl -fsS 'http://127.0.0.1:8098/docs/en/' >/dev/null && exit 0; sleep .25; done
+          cat "$RUNNER_TEMP/p18-nginx-error.log" || true
+          exit 1
+
+      - name: Run frozen P18 T019-T024 in order
+        env:
+          P18_HTTP_BASE: http://127.0.0.1:8098
+        run: |
+          set -euo pipefail
+          export GITHUB_SHA="$(git rev-parse HEAD)"
+          python3 -m py_compile scripts/p18/browser.py scripts/p18/integration.py scripts/p18/quality_cases.py scripts/p18/postbuild.py
+          node --check scripts/p18/browser_cases.mjs
+          python3 scripts/p18/browser.py --case P18-T019
+          python3 scripts/p18/browser.py --case P18-T020
+          python3 scripts/p18/browser.py --case P18-T021
+          python3 scripts/p18/integration.py --case P18-T022
+          python3 scripts/p18/integration.py --case P18-T023
+          python3 scripts/p18/integration.py --case P18-T024
+
+      - name: Record exact-head quality authority
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          mkdir -p artifacts/v10/P18/quality-authority
+          printf '%s\n' "$head" > artifacts/v10/P18/quality-authority/implementation_commit.txt
+          printf '%s\n' 'P18-T019..P18-T024' > artifacts/v10/P18/quality-authority/case_range.txt
+          cp /tmp/p18-contract.json artifacts/v10/P18/quality-authority/contract.json
+          cp /tmp/p18-build-digests.txt artifacts/v10/P18/quality-authority/static-build-digests.txt
+
+      - name: Upload exact-head P18 quality evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p18-docs-quality-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P18/browser/P18-T019.json
+            artifacts/v10/P18/browser/P18-T020.json
+            artifacts/v10/P18/browser/P18-T021.json
+            artifacts/v10/P18/build/P18-T022.json
+            artifacts/v10/P18/gates/P18-T023.json
+            artifacts/v10/P18/content/P18-T024.json
+            artifacts/v10/P18/quality-authority/
+
+      - name: Stop Nginx
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/p18-nginx.pid" ]; then kill "$(cat "$RUNNER_TEMP/p18-nginx.pid")" || true; fi

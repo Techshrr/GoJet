@@ -67,7 +67,24 @@ jobs:
           nohup pnpm --filter @gojet/site exec vite preview --host 127.0.0.1 --port 4173 >/tmp/gojet-site.log 2>&1 &
           nohup pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4174 >/tmp/gojet-workspace.log 2>&1 &
           nohup pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4175 >/tmp/gojet-admin.log 2>&1 &
-          nohup pnpm --filter @gojet/docs exec astro preview --host 127.0.0.1 --port 4176 >/tmp/gojet-docs.log 2>&1 &
+          if ! command -v nginx >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y nginx; fi
+          cat > "$RUNNER_TEMP/p04-docs-nginx.conf" <<EOF
+          worker_processes 1;
+          pid $RUNNER_TEMP/p04-docs-nginx.pid;
+          events { worker_connections 128; }
+          http {
+            access_log off;
+            error_log /tmp/gojet-docs.log notice;
+            server {
+              listen 127.0.0.1:4176;
+              server_name localhost;
+              root $GITHUB_WORKSPACE/frontend/apps/docs/dist;
+              include $GITHUB_WORKSPACE/deploy/nginx/docs-p18.conf;
+            }
+          }
+          EOF
+          nginx -t -c "$RUNNER_TEMP/p04-docs-nginx.conf"
+          nginx -c "$RUNNER_TEMP/p04-docs-nginx.conf"
           nohup php -S 127.0.0.1:4177 -t installer/public >/tmp/gojet-installer.log 2>&1 &
           for url in http://127.0.0.1:4173/ http://127.0.0.1:4174/app http://127.0.0.1:4175/admin http://127.0.0.1:4176/docs/en/ http://127.0.0.1:4177/; do
             ready=0

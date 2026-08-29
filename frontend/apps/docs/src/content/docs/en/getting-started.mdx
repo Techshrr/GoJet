@@ -1,0 +1,24 @@
+---
+title: Getting started
+description: Understand GoJet V10 workspaces, public resources, administration boundaries, and release-state documentation rules.
+locale: en
+lastUpdated: 2026-08-29
+canonicalPath: /docs/en/getting-started
+translation: /docs/zh-CN/getting-started
+contentOwner: GoJet Documentation
+---
+
+GoJet V10 separates public resources, Workspace operations, administrator governance, and documentation into independently authorized surfaces.
+
+## Product surfaces
+
+1. **Public resources** resolve or render only after their own lifecycle and safety checks.
+2. **Workspace** operations remain tenant- and role-authorized by the server.
+3. **Admin** operations use dedicated administrator permissions and immutable audit boundaries.
+4. **Docs** are static and cannot create product authority by documenting an unreleased contract.
+
+## Release-state rule
+
+A documentation page can explain a contract before release only when it is visibly marked not released. It must not be placed in the published API acquisition graph or locale sitemap until signed implementation evidence exists.
+
+Continue with [the API reference](./api/) or [native self-hosting](./self-hosting).

@@ -1,0 +1,28 @@
+---
+title: 通用出站 Webhooks
+description: 来自 P17 签署依据的 Workspace Webhook 生命周期、投递、重试与密钥轮换接口。
+locale: zh-CN
+lastUpdated: 2026-08-29
+canonicalPath: /docs/zh-CN/api/webhooks
+translation: /docs/en/api/webhooks
+contentOwner: GoJet API Documentation
+---
+
+通用出站 Webhook 已在 P17 `CAP-USER-WEBHOOKS` 签署权限下发布，并且与支付提供商回调入口严格分离。
+
+## 接口
+
+```http
+GET /api/workspaces/{workspaceId}/webhooks
+POST /api/workspaces/{workspaceId}/webhooks
+GET /api/workspaces/{workspaceId}/webhooks/{webhookId}
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/rotate-secret
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/enable
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/disable
+GET /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries
+POST /api/workspaces/{workspaceId}/webhooks/{webhookId}/deliveries/{deliveryId}/retry
+```
+
+## 投递边界
+
+Webhook 签名、密钥轮换、重试/幂等、停用/恢复与目标地址校验均由服务端决定。投递通过固定的 `operationsmonitor` 服务执行。示例仅使用 `WEBHOOK_ID` 与 `DELIVERY_ID` 占位符，不得把真实签名密钥复制到文档。
