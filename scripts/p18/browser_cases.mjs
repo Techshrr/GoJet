@@ -31,7 +31,7 @@ function attachDiagnostics(page) {
   page.on('console', (message) => {
     if (message.type() === 'error') diagnostics.console_errors.push(message.text());
   });
-  page.on('pageerror', (error) => diagnostics.page_errors.push(String(error));
+  page.on('pageerror', (error) => diagnostics.page_errors.push(String(error)));
   page.on('request', (request) => {
     try {
       if (new URL(request.url()).origin !== baseOrigin) diagnostics.external_requests.push(request.url());
