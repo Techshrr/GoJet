@@ -146,6 +146,34 @@ def write_locale_sitemap(locale: str) -> None:
     (DIST / f"sitemap-docs-{locale}.xml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def normalize_pagefind_entry() -> None:
+    """Canonicalize Pagefind's JSON manifest without changing its semantics.
+
+    With a multilingual index, Pagefind may serialize the language map in a
+    different object-key order between otherwise byte-identical builds. The
+    browser parses this file as JSON, so object order has no runtime meaning.
+    P18 nevertheless requires the deployed static tree itself to be
+    deterministic, so normalize the complete object recursively by key before
+    the final dist digest is taken.
+    """
+    path = DIST / "pagefind" / "pagefind-entry.json"
+    if not path.is_file():
+        raise SystemExit(f"missing Pagefind entry manifest: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"invalid Pagefind entry manifest {path}: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("version"), str):
+        raise SystemExit("Pagefind entry manifest must contain a string version")
+    languages = payload.get("languages")
+    if not isinstance(languages, dict) or not languages:
+        raise SystemExit("Pagefind entry manifest must contain at least one language")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     if not DIST.is_dir():
         raise SystemExit(f"Docs dist missing: {DIST}")
@@ -154,6 +182,7 @@ def main() -> int:
     remove_search_from_generated_sitemaps()
     write_locale_sitemap("en")
     write_locale_sitemap("zh-CN")
+    normalize_pagefind_entry()
     return 0
 
 
