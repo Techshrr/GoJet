@@ -151,6 +151,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/p18/browser.py scripts/p18/integration.py scripts/p18/quality_cases.py scripts/p18/postbuild.py
+          node --check scripts/p18/browser_cases.mjs
           python3 scripts/p18/browser.py --case P18-T019
           python3 scripts/p18/browser.py --case P18-T020
           python3 scripts/p18/browser.py --case P18-T021
@@ -178,9 +179,9 @@ jobs:
             artifacts/v10/P18/browser/P18-T019.json
             artifacts/v10/P18/browser/P18-T020.json
             artifacts/v10/P18/browser/P18-T021.json
-            artifacts/v10/P18/quality/P18-T022.json
-            artifacts/v10/P18/quality/P18-T023.json
-            artifacts/v10/P18/quality/P18-T024.json
+            artifacts/v10/P18/build/P18-T022.json
+            artifacts/v10/P18/gates/P18-T023.json
+            artifacts/v10/P18/content/P18-T024.json
             artifacts/v10/P18/quality-authority/
 
       - name: Stop Nginx
