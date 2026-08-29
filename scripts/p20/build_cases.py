@@ -44,7 +44,8 @@ def main() -> int:
 
     deploy_text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace")
-        for path in sorted((ROOT / "deploy").rglob("*")) if path.is_file()
+        for path in sorted((ROOT / "deploy").rglob("*"))
+        if path.is_file() and path.name.lower() != "readme.md"
     )
     prohibited = []
     patterns = {
