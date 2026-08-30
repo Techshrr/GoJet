@@ -74,14 +74,10 @@ func parseAuthRateLimit(raw string) (int64, error) {
 
 func parseAuthRateWindow(raw string) (time.Duration, error) {
 	seconds, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
-	if err != nil || seconds <= 0 {
+	if err != nil || seconds <= 0 || seconds > int64((24*time.Hour)/time.Second) {
 		return 0, authn.ErrInvalid
 	}
-	window := time.Duration(seconds) * time.Second
-	if window < time.Second || window > 24*time.Hour {
-		return 0, authn.ErrInvalid
-	}
-	return window, nil
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func authRateRequest(r *http.Request) (authn.AuthRateSurface, string, bool) {
@@ -106,11 +102,8 @@ func authRateRequest(r *http.Request) (authn.AuthRateSurface, string, bool) {
 		return surface, "anonymous", true
 	}
 	raw, err := io.ReadAll(io.LimitReader(r.Body, authHTTPBodyLimit+1))
-	if err != nil {
-		return surface, "anonymous", true
-	}
 	r.Body = io.NopCloser(bytes.NewReader(raw))
-	if len(raw) > authHTTPBodyLimit {
+	if err != nil || len(raw) > authHTTPBodyLimit {
 		return surface, "anonymous", true
 	}
 	var body authRateRequestBody
