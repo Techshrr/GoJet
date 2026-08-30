@@ -3,7 +3,24 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D006",
+      "severity": "P1",
+      "title": "Analytics API rejects real authenticated session authority",
+      "case": "P20-T014",
+      "issue": 67,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": ["G3", "G6", "G10"],
+      "discovered_head": "20f57d1926b552153fbfb06ca97c37315df7cf17",
+      "discovery_workflow_run": 33313407114,
+      "discovery_workflow_job": 99262381065,
+      "discovery_artifact_id": 9732748609,
+      "discovery_artifact_digest": "sha256:ef5728afce538694d6c922632a86dfa0336912346a1cff0328217dadd9e16c25",
+      "failure": "real authenticated session is not accepted as Analytics API reporting authority; HTTP 503 auth_dependency_unavailable after real transport, worker aggregation and idempotent reconciliation succeeded"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -236,5 +253,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D005 passed exact-head remediation verification on 68716252271507a28b0ade4139a2c456a81eb39c and is now recorded closed. The P1 ledger is clean. P20-T013 remains forbidden until this closure-ledger head re-establishes exact-head Whole Product Contract, Candidate/Traceability Freeze, and P20-T009..T012 coherence."
+  "note": "P20-D006 is an open P1 release blocker discovered by exact-head P20-T014 live analytics continuity on 20f57d1926b552153fbfb06ca97c37315df7cf17. Transport, worker aggregation, MySQL reporting state and idempotent reconciliation passed; production Analytics API rejected the valid real P15 session with HTTP 503 auth_dependency_unavailable. P20-T015 and all later P0 timeline cases remain forbidden until D006 is remediated, verified, closed in this ledger, and exact-head P20 authority is re-established."
 }
