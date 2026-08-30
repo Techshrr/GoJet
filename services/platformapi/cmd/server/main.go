@@ -102,7 +102,18 @@ func main() {
 		}
 		analyticsAPI = analytics.NewAPIWithActorResolver(analyticsStore, analyticsAuthority.resolve, analyticsEnabled)
 	}
-	qrAPI := qrcodes.NewAPI(qrcodes.NewStore(db, qrQuota), store, risk, testAuth)
+	var qrAPI *qrcodes.API
+	qrStore := qrcodes.NewStore(db, qrQuota)
+	if testAuth {
+		qrAPI = qrcodes.NewAPI(qrStore, store, risk, true)
+	} else {
+		qrAuthority, authorityErr := buildQRSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure QR authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		qrAPI = qrcodes.NewAPIWithActorResolver(qrStore, store, risk, qrAuthority.resolve)
+	}
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
 	qrHandler := qrAPI.Handler()
