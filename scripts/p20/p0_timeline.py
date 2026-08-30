@@ -330,6 +330,82 @@ def t010() -> dict[str, Any]:
     return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
 
 
+def t011() -> dict[str, Any]:
+    errors: list[str] = []
+    details: dict[str, Any] = {
+        "real_platform_api": True,
+        "real_mysql": True,
+        "real_redis": True,
+        "mock_authority": False,
+        "secret_material_recorded": False,
+    }
+
+    t010_path = ROOT / "artifacts" / "v10" / "P20" / "p0" / "P20-T010.json"
+    if not t010_path.is_file():
+        errors.append("T011 requires same-run T010 evidence")
+        return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+    try:
+        t010_evidence = json.loads(t010_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        errors.append("T011 could not read same-run T010 evidence")
+        return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+    if t010_evidence.get("status") != "PASS" or t010_evidence.get("implementation_commit") != HEAD:
+        errors.append("T011 same-run T010 evidence is not exact-head PASS")
+        return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+
+    env = os.environ.copy()
+    env["P20_EXACT_HEAD"] = HEAD
+    runner = subprocess.run(
+        ["go", "run", "./scripts/p20/t011_runner"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if runner.returncode != 0:
+        errors.append("T011 runtime runner failed before producing safe evidence")
+        details["runner_exit_code"] = runner.returncode
+        return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+    try:
+        runtime = json.loads(runner.stdout)
+    except json.JSONDecodeError:
+        errors.append("T011 runtime runner did not produce safe JSON evidence")
+        return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+
+    runtime_errors = runtime.get("errors")
+    runtime_details = runtime.get("details")
+    if not isinstance(runtime_errors, list) or not all(isinstance(item, str) for item in runtime_errors):
+        errors.append("T011 runtime runner returned an invalid error ledger")
+    else:
+        errors.extend(runtime_errors)
+    if not isinstance(runtime_details, dict):
+        errors.append("T011 runtime runner returned invalid detail evidence")
+    else:
+        details.update(runtime_details)
+
+    t010_details = t010_evidence.get("details", {})
+    if not isinstance(t010_details, dict):
+        errors.append("T011 T010 detail evidence is invalid")
+    else:
+        same_user = details.get("user_id") == t010_details.get("user_id")
+        same_workspace = details.get("workspace_id") == t010_details.get("workspace_id")
+        details["t010_user_correlation_preserved"] = same_user
+        details["t010_workspace_correlation_preserved"] = same_workspace
+        details["t010_evidence_bound"] = True
+        if not same_user or not same_workspace:
+            errors.append("T011 runtime identity/workspace did not correlate to T010")
+
+    if details.get("secret_material_recorded") is not False:
+        errors.append("T011 runtime evidence reported secret material")
+    if details.get("mock_authority") is not False:
+        errors.append("T011 runtime evidence reported mock authority")
+
+    details["next_case"] = "P20-T012" if not errors else None
+    return emit("P20-T011", "p0", "Real login session and account workflow", errors, details)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True)
@@ -338,6 +414,8 @@ def main() -> int:
         payload = t009()
     elif args.case == "P20-T010":
         payload = t010()
+    elif args.case == "P20-T011":
+        payload = t011()
     else:
         raise SystemExit(f"unsupported P20 P0 tranche case: {args.case}")
     fail_if_errors([payload])
