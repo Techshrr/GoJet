@@ -1,0 +1,109 @@
+name: P20 Files Remediation Guard
+
+on:
+  push:
+    branches:
+      - develop/p20-d008-files-session-authority
+    paths:
+      - 'internal/files/**'
+      - 'services/platformapi/cmd/server/files*.go'
+      - 'services/platformapi/cmd/server/main.go'
+      - 'services/platformapi/cmd/server/workspace_session_auth.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/p20/validate_contract.py'
+      - 'artifacts/v10/P20/test-plan.json'
+      - '.github/workflows/p20-files-remediation.yml'
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+    paths:
+      - 'internal/files/**'
+      - 'services/platformapi/cmd/server/files*.go'
+      - 'services/platformapi/cmd/server/main.go'
+      - 'services/platformapi/cmd/server/workspace_session_auth.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/p20/validate_contract.py'
+      - 'artifacts/v10/P20/test-plan.json'
+      - '.github/workflows/p20-files-remediation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-files-remediation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Files authority compile and unit guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact remediation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify remediation formatting and dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          gofmt -d \
+            internal/files/actor_resolver.go \
+            internal/files/actor_resolver_test.go \
+            internal/files/httpapi.go \
+            services/platformapi/cmd/server/files.go \
+            services/platformapi/cmd/server/files_session_auth.go \
+            services/platformapi/cmd/server/files_session_auth_test.go \
+            services/platformapi/cmd/server/main.go \
+            | tee /tmp/p20-files-remediation-gofmt.diff
+          test ! -s /tmp/p20-files-remediation-gofmt.diff
+
+      - name: Run scoped native unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/files ./services/platformapi/cmd/server
+          go vet ./internal/files ./services/platformapi/cmd/server
+
+      - name: Preserve frozen P20 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/validate_contract.py > /tmp/p20-files-remediation-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-files-remediation-contract.json', encoding='utf-8'))
+          assert data['status'] == 'PASS', data
+          assert data['contract_authority'] == '050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+      - name: Record exact remediation head
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p20-files-remediation-evidence
+          git rev-parse HEAD > /tmp/p20-files-remediation-evidence/implementation_commit.txt
+          cp /tmp/p20-files-remediation-contract.json /tmp/p20-files-remediation-evidence/contract.json 2>/dev/null || true
+
+      - name: Upload remediation guard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-files-remediation-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/p20-files-remediation-evidence
+          if-no-files-found: error
+          retention-days: 14

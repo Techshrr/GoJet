@@ -117,7 +117,7 @@ func main() {
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
 	qrHandler := qrAPI.Handler()
-	filesHandler, filesEnabled, err := buildFilesHandler(db, testAuth)
+	filesHandler, filesEnabled, err := buildFilesHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure files", "error", err)
 		os.Exit(1)
