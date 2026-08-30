@@ -155,12 +155,12 @@ func problemCode(body map[string]any) string {
 
 func main() {
 	details := map[string]any{
-		"real_platform_api":          false,
-		"real_auth_mail_queue":       false,
-		"real_p14_mail_worker":       false,
-		"mock_authority":             false,
-		"token_rule_bypass":          false,
-		"secret_material_recorded":   false,
+		"real_platform_api":         false,
+		"real_auth_mail_queue":      false,
+		"real_p14_mail_worker":      false,
+		"mock_authority":            false,
+		"token_rule_bypass":         false,
+		"secret_material_recorded":  false,
 		"verification_code_storage": "memory_only",
 	}
 
