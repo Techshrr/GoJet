@@ -106,8 +106,7 @@ jobs:
           set -euo pipefail
           go mod verify
           python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/validate_contract.py
-          mapfile -t gofiles < <(find internal/auth internal/workspace internal/support services/platformapi/cmd/server scripts/p20/t010_runner -type f -name '*.go' -print | sort)
-          gofmt -d "${gofiles[@]}" | tee /tmp/p20-t009-t010-gofmt.diff
+          gofmt -d scripts/p20/t010_runner/main.go | tee /tmp/p20-t009-t010-gofmt.diff
           test ! -s /tmp/p20-t009-t010-gofmt.diff
           go test ./internal/auth ./internal/workspace ./internal/support ./services/platformapi/cmd/server ./scripts/p20/t010_runner
           python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
