@@ -18,6 +18,7 @@ on:
       - 'scripts/p20/**'
       - 'artifacts/v10/P20/**'
       - '.github/workflows/p20-candidate-freeze.yml'
+      - '.github/workflows/p20-p0-auth.yml'
   workflow_dispatch:
 
 permissions:
