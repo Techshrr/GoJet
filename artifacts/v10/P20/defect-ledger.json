@@ -3,7 +3,24 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D009",
+      "severity": "P1",
+      "title": "Text API rejects real authenticated session authority",
+      "case": "P20-T017",
+      "issue": 79,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": ["G3", "G6", "G10"],
+      "discovered_head": "fb4264a3dba5cf87bf95022190ac14e7433ef8e3",
+      "discovery_workflow_run": 33329125465,
+      "discovery_workflow_job": 99304400816,
+      "discovery_artifact_id": 9737151121,
+      "discovery_artifact_digest": "sha256:25077dd6abe69bf1b3561229ce95d8fafa845682bd927207fa8f09f0cb7b7c0f",
+      "failure": "real authenticated session is not accepted as Text API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T016, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable Text row delta 0"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -458,5 +475,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D008 are closed with exact-head verification evidence. No P0/P1 defects or decision-required items remain open. P20-T017 remains forbidden until the ledger-closure head re-establishes exact-head P20-T016, P20 contract and Candidate Freeze coherence."
+  "note": "P20-D009 is an open P1 release blocker discovered by exact-head P20-T017 live Text continuity on fb4264a3dba5cf87bf95022190ac14e7433ef8e3. P20-T018 remains forbidden until D009 is remediated, formally verified and closed with same-head P20 contract and Candidate Freeze coherence."
 }
