@@ -10,7 +10,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from common import HEAD, emit, fail_if_errors
+from common import HEAD, ROOT, emit, fail_if_errors
 
 
 @dataclass
@@ -251,13 +251,95 @@ def t009() -> dict[str, Any]:
     return emit("P20-T009", "p0", "Real registration workflow", errors, details)
 
 
+def t010() -> dict[str, Any]:
+    errors: list[str] = []
+    details: dict[str, Any] = {
+        "mock_authority": False,
+        "token_rule_bypass": False,
+        "secret_material_recorded": False,
+    }
+
+    t009_path = ROOT / "artifacts" / "v10" / "P20" / "p0" / "P20-T009.json"
+    if not t009_path.is_file():
+        errors.append("T010 requires same-run T009 evidence")
+        return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+    try:
+        t009_evidence = json.loads(t009_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        errors.append("T010 could not read same-run T009 evidence")
+        return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+    if t009_evidence.get("status") != "PASS" or t009_evidence.get("implementation_commit") != HEAD:
+        errors.append("T010 same-run T009 evidence is not exact-head PASS")
+        return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+
+    env = os.environ.copy()
+    env["P20_EXACT_HEAD"] = HEAD
+    runner = subprocess.run(
+        ["go", "run", "./scripts/p20/t010_runner"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if runner.returncode != 0:
+        errors.append("T010 runtime runner failed before producing safe evidence")
+        details["runner_exit_code"] = runner.returncode
+        return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+    try:
+        runtime = json.loads(runner.stdout)
+    except json.JSONDecodeError:
+        errors.append("T010 runtime runner did not produce safe JSON evidence")
+        return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+
+    runtime_errors = runtime.get("errors")
+    runtime_details = runtime.get("details")
+    if not isinstance(runtime_errors, list) or not all(isinstance(item, str) for item in runtime_errors):
+        errors.append("T010 runtime runner returned an invalid error ledger")
+    else:
+        errors.extend(runtime_errors)
+    if not isinstance(runtime_details, dict):
+        errors.append("T010 runtime runner returned invalid detail evidence")
+    else:
+        details.update(runtime_details)
+
+    t009_details = t009_evidence.get("details", {})
+    if not isinstance(t009_details, dict):
+        errors.append("T010 T009 detail evidence is invalid")
+    else:
+        same_user = details.get("user_id") == t009_details.get("user_id")
+        same_workspace = details.get("workspace_id") == t009_details.get("workspace_id")
+        details["t009_user_correlation_preserved"] = same_user
+        details["t009_workspace_correlation_preserved"] = same_workspace
+        details["t009_evidence_bound"] = True
+        if not same_user or not same_workspace:
+            errors.append("T010 runtime identity/workspace did not correlate to T009")
+
+    if details.get("secret_material_recorded") is not False:
+        errors.append("T010 runtime evidence reported secret material")
+    if details.get("mock_authority") is not False:
+        errors.append("T010 runtime evidence reported mock authority")
+    if details.get("token_rule_bypass") is not False:
+        errors.append("T010 runtime evidence reported token-rule bypass")
+
+    if not errors:
+        details["next_case"] = "P20-T011"
+    else:
+        details["next_case"] = None
+    return emit("P20-T010", "p0", "Real email verification workflow", errors, details)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True)
     args = parser.parse_args()
-    if args.case != "P20-T009":
+    if args.case == "P20-T009":
+        payload = t009()
+    elif args.case == "P20-T010":
+        payload = t010()
+    else:
         raise SystemExit(f"unsupported P20 P0 tranche case: {args.case}")
-    payload = t009()
     fail_if_errors([payload])
     return 0
 
