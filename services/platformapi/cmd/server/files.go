@@ -10,10 +10,31 @@ import (
 	"time"
 
 	"github.com/Techshrr/GoJet/internal/files"
+	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/redis/go-redis/v9"
 )
 
-func buildFilesHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
+func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+	var redisClient *redis.Client
+	if !testAuth && os.Getenv("GOJET_FILES_ENABLED") == "1" {
+		redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
+		if redisAddr == "" {
+			return nil, false, fmt.Errorf("GOJET_REDIS_ADDR is required when production Files are enabled")
+		}
+		redisDB := 0
+		if raw := strings.TrimSpace(os.Getenv("GOJET_REDIS_DB")); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 0 {
+				return nil, false, fmt.Errorf("GOJET_REDIS_DB must be a non-negative integer")
+			}
+			redisDB = parsed
+		}
+		redisClient = links.NewRedisClient(redisAddr, os.Getenv("GOJET_REDIS_PASSWORD"), redisDB)
+	}
+	return buildFilesHandlerWithAuthority(db, redisClient, testAuth)
+}
+
+func buildFilesHandlerWithAuthority(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_FILES_ENABLED") != "1" {
 		return nil, false, nil
 	}
