@@ -5,11 +5,11 @@
   "status": "ACTIVE",
   "open": [
     {
-      "id": "P20-D002",
+      "id": "P20-D003",
       "severity": "P1",
-      "title": "Real password login bypasses signed Redis auth rate protection",
+      "title": "Auth rate IP bucket uses proxy peer instead of trusted client IP",
       "case": "P20-T011",
-      "issue": 58,
+      "issue": 61,
       "release_blocking": true,
       "gate_hard_failure": true,
       "affected_gates": [
@@ -17,12 +17,32 @@
         "G6",
         "G10"
       ],
-      "discovered_head": "b694c125be8b29cb9521d4f861378c92b4c40cc0",
-      "discovery_workflow_run": 33286347944,
-      "discovery_workflow_job": 99190098966,
-      "discovery_artifact_id": 9724641893,
-      "discovery_artifact_digest": "sha256:fd6fcbd32544172d815178e9ee5753eb0ae7714701c547ccb3af81930ee92c77",
-      "failure": "real password login path did not traverse signed Redis auth rate protection"
+      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "discovery_review_pr": 59,
+      "discovery_review_id": 5059772765,
+      "discovery_review_comment_id": 3888287418,
+      "discovery_reviewed_commit": "215f546c86997d95b72f2f56edc215aa0f2baaee",
+      "failure": "auth rate IP bucket uses immediate proxy peer instead of trusted originating client"
+    },
+    {
+      "id": "P20-D004",
+      "severity": "P1",
+      "title": "Workspace API rejects real authenticated session authority",
+      "case": "P20-T011",
+      "issue": 62,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "discovery_workflow_run": 33288665486,
+      "discovery_workflow_job": 99196299445,
+      "discovery_artifact_id": 9725338440,
+      "discovery_artifact_digest": "sha256:2e55479d2d700cda14d3f4f0a65ec01e1b64d7887df443095ab5e0458bcd4c00",
+      "failure": "real authenticated session is not accepted as Workspace API identity authority"
     }
   ],
   "closed": [
@@ -68,6 +88,46 @@
         "t009_status": "PASS"
       },
       "closed_at": "2026-08-30T00:27:08Z"
+    },
+    {
+      "id": "P20-D002",
+      "severity": "P1",
+      "title": "Real password login bypasses signed Redis auth rate protection",
+      "case": "P20-T011",
+      "issue": 58,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "b694c125be8b29cb9521d4f861378c92b4c40cc0",
+      "discovery_workflow_run": 33286347944,
+      "discovery_workflow_job": 99190098966,
+      "discovery_artifact_id": 9724641893,
+      "discovery_artifact_digest": "sha256:fd6fcbd32544172d815178e9ee5753eb0ae7714701c547ccb3af81930ee92c77",
+      "failure": "real password login path did not traverse signed Redis auth rate protection",
+      "remediation_pr": 59,
+      "remediation_merge_commit": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "verification_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "verification_workflow_run": 33288665486,
+      "verification_workflow_job": 99196299445,
+      "verification_artifact_id": 9725338440,
+      "verification_artifact_digest": "sha256:2e55479d2d700cda14d3f4f0a65ec01e1b64d7887df443095ab5e0458bcd4c00",
+      "resolution": "Native platformapi composes the existing P15 RedisAuthRateLimiter over the signed authentication abuse surfaces with explicit runtime policy inputs and no invented production default.",
+      "verified_outcome": {
+        "login_rate_protection_observed": true,
+        "login_rate_protection_redis_key_count": 2,
+        "invalid_login_http_status": 401,
+        "invalid_login_created_session": false,
+        "login_http_status": 200,
+        "me_http_status": 200,
+        "mock_authority": false,
+        "secret_material_recorded": false,
+        "d002_checkpoint_status": "PASS"
+      },
+      "closed_at": "2026-08-30T03:05:26Z"
     }
   ],
   "decision_required": [],
@@ -78,5 +138,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D002 is the active fail-fast blocker discovered by live exact-head P20-T011 evidence. T012 is forbidden until D002 is remediated, T011 passes on the remediation head, the defect is closed, and the closure-ledger revision re-establishes coherent exact-head evidence without regression."
+  "note": "P20-D002 is closed by live exact-head P20-T011 evidence. P20-D003 and P20-D004 are the active P1 release blockers. T012 is forbidden until both are remediated and closed, P20-T011 passes on a later coherent exact head, and the closure-ledger revision re-establishes exact-head evidence without regression."
 }
