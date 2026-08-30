@@ -3,7 +3,28 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D002",
+      "severity": "P1",
+      "title": "Real password login bypasses signed Redis auth rate protection",
+      "case": "P20-T011",
+      "issue": 58,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "b694c125be8b29cb9521d4f861378c92b4c40cc0",
+      "discovery_workflow_run": 33286347944,
+      "discovery_workflow_job": 99190098966,
+      "discovery_artifact_id": 9724641893,
+      "discovery_artifact_digest": "sha256:fd6fcbd32544172d815178e9ee5753eb0ae7714701c547ccb3af81930ee92c77",
+      "failure": "real password login path did not traverse signed Redis auth rate protection"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -57,5 +78,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 is closed only by live exact-head T009 evidence. T010 may begin after the closure-ledger revision itself re-establishes exact-head T009 and T001-T008 evidence without regression."
+  "note": "P20-D002 is the active fail-fast blocker discovered by live exact-head P20-T011 evidence. T012 is forbidden until D002 is remediated, T011 passes on the remediation head, the defect is closed, and the closure-ledger revision re-establishes coherent exact-head evidence without regression."
 }
