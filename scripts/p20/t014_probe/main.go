@@ -23,10 +23,10 @@ type t013Evidence struct {
 	Status               string `json:"status"`
 	ImplementationCommit string `json:"implementation_commit"`
 	Details              struct {
-		UserID       string `json:"user_id"`
-		WorkspaceID  string `json:"workspace_id"`
-		LinkID       uint64 `json:"link_id"`
-		ClickEventID string `json:"click_event_id"`
+		UserID        string `json:"user_id"`
+		WorkspaceID   string `json:"workspace_id"`
+		LinkID        uint64 `json:"link_id"`
+		ClickEventID  string `json:"click_event_id"`
 		ClickSequence uint64 `json:"click_sequence"`
 	} `json:"details"`
 }
@@ -63,14 +63,14 @@ func main() {
 		ImplementationCommit: exactHead,
 		Errors:               []string{},
 		Details: map[string]any{
-			"real_mysql":                true,
-			"real_redis_transport":      true,
-			"real_analyticsworker":      true,
-			"real_analyticsreconciler":  true,
-			"real_platform_api":         true,
-			"mock_authority":            false,
-			"test_header_authority":     false,
-			"secret_material_recorded":  false,
+			"real_mysql":               true,
+			"real_redis_transport":     true,
+			"real_analyticsworker":     true,
+			"real_analyticsreconciler": true,
+			"real_platform_api":        true,
+			"mock_authority":           false,
+			"test_header_authority":    false,
+			"secret_material_recorded": false,
 		},
 	}
 	finish := func() {
@@ -180,8 +180,8 @@ func main() {
 	result.Details["mysql_reporting_aggregate_before_reconcile"] = aggregateBefore
 
 	firstLogs, err := runBinary(ctx, reconcilerBin, map[string]string{
-		"GOJET_ANALYTICS_RECONCILER_ONCE":    "1",
-		"GOJET_ANALYTICS_RECONCILE_REPAIR":   "1",
+		"GOJET_ANALYTICS_RECONCILER_ONCE":  "1",
+		"GOJET_ANALYTICS_RECONCILE_REPAIR": "1",
 	})
 	if err != nil {
 		fail("T014 probe first native reconciliation cycle failed")
@@ -208,8 +208,8 @@ func main() {
 	}
 
 	secondLogs, err := runBinary(ctx, reconcilerBin, map[string]string{
-		"GOJET_ANALYTICS_RECONCILER_ONCE":    "1",
-		"GOJET_ANALYTICS_RECONCILE_REPAIR":   "1",
+		"GOJET_ANALYTICS_RECONCILER_ONCE":  "1",
+		"GOJET_ANALYTICS_RECONCILE_REPAIR": "1",
 	})
 	if err != nil {
 		fail("T014 probe second native reconciliation cycle failed")
@@ -226,8 +226,8 @@ func main() {
 
 	email := "p20-t009-" + strings.ToLower(exactHead[:12]) + "@example.test"
 	login, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/auth/login", map[string]any{
-		"email": email,
-		"password": "P20-T009!Strong-Passphrase-2026",
+		"email":          email,
+		"password":       "P20-T009!Strong-Passphrase-2026",
 		"correlation_id": "p20-t014-login-" + exactHead[:12],
 	}, "")
 	if err != nil {
