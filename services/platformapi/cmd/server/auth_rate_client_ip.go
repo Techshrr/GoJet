@@ -84,20 +84,25 @@ func authRateClientAddress(r *http.Request, trusted authTrustedProxies) string {
 		return peer.String()
 	}
 	parts := strings.Split(forwarded, ",")
-	if len(parts) == 0 || len(parts) > maxAuthForwardedHops {
+	if len(parts) == 0 {
 		return peer.String()
 	}
 
 	current := peer
+	checkedTrustedHops := 0
 	for i := len(parts) - 1; i >= 0; i-- {
 		if !trusted.contains(current) {
 			break
+		}
+		if checkedTrustedHops >= maxAuthForwardedHops {
+			return peer.String()
 		}
 		hop, valid := parseAuthForwardedAddress(parts[i])
 		if !valid {
 			return peer.String()
 		}
 		current = hop
+		checkedTrustedHops++
 	}
 	return current.String()
 }
