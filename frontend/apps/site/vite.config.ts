@@ -4,8 +4,10 @@ import { defineConfig, type Plugin } from 'vite';
 
 const configuredApiTarget = process.env.GOJET_PLATFORMAPI_PROXY?.trim();
 const devApiTarget = configuredApiTarget || 'http://127.0.0.1:8081';
-const devProxy = { '/api': { target: devApiTarget, changeOrigin: false } };
-const previewProxy = configuredApiTarget ? { '/api': { target: configuredApiTarget, changeOrigin: false } } : {};
+const devProxy = { '/api': { target: devApiTarget, changeOrigin: false, xfwd: true } };
+const previewProxy = configuredApiTarget
+  ? { '/api': { target: configuredApiTarget, changeOrigin: false, xfwd: true } }
+  : {};
 
 const previewProviderFallback: Plugin = {
   name: 'gojet-preview-provider-fallback',

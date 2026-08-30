@@ -30,6 +30,10 @@ func buildAuthRateMiddleware(client *redis.Client) (func(http.Handler) http.Hand
 	if err != nil {
 		return nil, err
 	}
+	trustedProxies, err := parseAuthTrustedProxyCIDRs(os.Getenv("GOJET_AUTH_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return nil, err
+	}
 	limiter, err := authn.NewRedisAuthRateLimiter(client, limit, window)
 	if err != nil {
 		return nil, err
@@ -47,7 +51,8 @@ func buildAuthRateMiddleware(client *redis.Client) (func(http.Handler) http.Hand
 				next.ServeHTTP(w, r)
 				return
 			}
-			decision, err := limiter.Allow(r.Context(), surface, identity, r.RemoteAddr)
+			clientAddr := authRateClientAddress(r, trustedProxies)
+			decision, err := limiter.Allow(r.Context(), surface, identity, clientAddr)
 			if err != nil {
 				authn.ApplyPrivateAuthHeaders(w.Header())
 				writeAuthProblem(w, http.StatusServiceUnavailable, authRateUnavailableCode, "The authentication service could not complete the request.")
