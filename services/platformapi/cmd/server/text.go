@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	textshares "github.com/Techshrr/GoJet/internal/text"
+	"github.com/redis/go-redis/v9"
 )
 
-func buildTextHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+func buildTextHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_TEXT_ENABLED") != "1" {
 		return nil, false, nil
 	}
@@ -24,7 +25,16 @@ func buildTextHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 		return nil, false, fmt.Errorf("GOJET_TEXT_PUBLIC_AUTH_SECRET must be at least 32 bytes when Text is enabled")
 	}
 	store := textshares.NewStore(db, quota)
-	api, err := textshares.NewAPI(store, testAuth, []byte(publicAuthSecret))
+	var api *textshares.API
+	if testAuth {
+		api, err = textshares.NewAPI(store, true, []byte(publicAuthSecret))
+	} else {
+		authority, authorityErr := buildTextSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			return nil, false, fmt.Errorf("configure Text authentication authority: %w", authorityErr)
+		}
+		api, err = textshares.NewAPIWithActorResolver(store, authority.resolve, []byte(publicAuthSecret))
+	}
 	if err != nil {
 		return nil, false, fmt.Errorf("configure Text API: %w", err)
 	}
