@@ -3,28 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D005",
-      "severity": "P1",
-      "title": "Links API rejects real authenticated session authority",
-      "case": "P20-T012",
-      "issue": 65,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "f43ff86a7540eeaf2055426d33b297855551d773",
-      "discovery_workflow_run": 33297234583,
-      "discovery_workflow_job": 99218898897,
-      "discovery_artifact_id": 9727832578,
-      "discovery_artifact_digest": "sha256:6821528b09e677656b4fae5fb71c48cdd798ba6bef76da0ef28b4ca58e2810fa",
-      "failure": "real authenticated session is not accepted as Links API mutation authority"
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -34,11 +13,7 @@
       "issue": 55,
       "release_blocking": true,
       "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
+      "affected_gates": ["G3", "G6", "G10"],
       "discovered_head": "1500a531ce55959294635ea559c08cd6cb97caa7",
       "discovery_workflow_run": 33272014441,
       "discovery_workflow_job": 99152055907,
@@ -77,11 +52,7 @@
       "issue": 58,
       "release_blocking": true,
       "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
+      "affected_gates": ["G3", "G6", "G10"],
       "discovered_head": "b694c125be8b29cb9521d4f861378c92b4c40cc0",
       "discovery_workflow_run": 33286347944,
       "discovery_workflow_job": 99190098966,
@@ -117,11 +88,7 @@
       "issue": 61,
       "release_blocking": true,
       "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
+      "affected_gates": ["G3", "G6", "G10"],
       "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
       "discovery_review_pr": 59,
       "discovery_review_id": 5059772765,
@@ -160,11 +127,7 @@
       "issue": 62,
       "release_blocking": true,
       "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
+      "affected_gates": ["G3", "G6", "G10"],
       "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
       "discovery_workflow_run": 33288665486,
       "discovery_workflow_job": 99196299445,
@@ -204,6 +167,65 @@
         "secret_material_recorded": false
       },
       "closed_at": "2026-08-30T06:14:43Z"
+    },
+    {
+      "id": "P20-D005",
+      "severity": "P1",
+      "title": "Links API rejects real authenticated session authority",
+      "case": "P20-T012",
+      "issue": 65,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": ["G3", "G6", "G10"],
+      "discovered_head": "f43ff86a7540eeaf2055426d33b297855551d773",
+      "discovery_workflow_run": 33297234583,
+      "discovery_workflow_job": 99218898897,
+      "discovery_artifact_id": 9727832578,
+      "discovery_artifact_digest": "sha256:6821528b09e677656b4fae5fb71c48cdd798ba6bef76da0ef28b4ca58e2810fa",
+      "failure": "real authenticated session is not accepted as Links API mutation authority",
+      "remediation_pr": 66,
+      "remediation_merge_commit": "68716252271507a28b0ade4139a2c456a81eb39c",
+      "verification_head": "68716252271507a28b0ade4139a2c456a81eb39c",
+      "verification_workflow_run": 33298698373,
+      "verification_workflow_job": 99222701422,
+      "verification_artifact_id": 9728299632,
+      "verification_artifact_digest": "sha256:427d99df2f0662bd93e1930926c5f0bce085bb493a84eaa5264578d601a230cb",
+      "supporting_contract_workflow_run": 33298698439,
+      "supporting_contract_workflow_job": 99222701199,
+      "supporting_contract_artifact_id": 9728276201,
+      "supporting_contract_artifact_digest": "sha256:96850247f68afd094e6b5ef7d88704b960bdcd80a2d96b3ba130b9c21603510f",
+      "resolution": "Native platformapi composes the real P15 server-side session and unsafe-method Origin/one-time-CSRF authority into the P05 Links actor boundary, resolves the authoritative Workspace membership role server-side, rejects test-header substitution in production, preserves viewer read-only behavior, and retains the predecessor P05 test-auth adapter without changing Link persistence/version/audit/fingerprint/risk semantics.",
+      "verified_outcome": {
+        "t009_status": "PASS",
+        "t010_status": "PASS",
+        "t011_status": "PASS",
+        "t012_status": "PASS",
+        "link_create_http_status": 201,
+        "link_create_version": 1,
+        "link_create_workspace_matches_t009": true,
+        "mysql_create_matches_api": true,
+        "link_create_audit_count": 1,
+        "link_update_http_status": 200,
+        "link_update_version": 2,
+        "mysql_update_matches_api": true,
+        "link_update_audit_count": 1,
+        "version_conflict_http_status": 409,
+        "if_match_conflict": true,
+        "viewer_mutation_http_status": 403,
+        "viewer_mutation_error_code": "read_only",
+        "links_rbac_server_side": true,
+        "destination_fingerprint_changed": true,
+        "destination_fingerprint_continuity": true,
+        "risk_invariants": true,
+        "real_platform_api": true,
+        "real_mysql": true,
+        "real_redis": true,
+        "real_p05_links": true,
+        "mock_authority": false,
+        "test_header_authority": false,
+        "secret_material_recorded": false
+      },
+      "closed_at": "2026-08-30T07:20:50Z"
     }
   ],
   "decision_required": [],
@@ -214,5 +236,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D005 is the sole open P1 blocker. P20-T012 is frozen at the real Links mutation authority failure on exact head f43ff86a7540eeaf2055426d33b297855551d773. P20-T013 is forbidden until D005 is remediated, T012 is exact-head PASS, and the P1 ledger is clean."
+  "note": "P20-D005 passed exact-head remediation verification on 68716252271507a28b0ade4139a2c456a81eb39c and is now recorded closed. The P1 ledger is clean. P20-T013 remains forbidden until this closure-ledger head re-establishes exact-head Whole Product Contract, Candidate/Traceability Freeze, and P20-T009..T012 coherence."
 }
