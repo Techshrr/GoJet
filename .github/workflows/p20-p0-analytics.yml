@@ -10,6 +10,7 @@ on:
       - 'scripts/p20/t011_runner/**'
       - 'scripts/p20/t012_runner/**'
       - 'scripts/p20/t013_runner/**'
+      - 'scripts/p20/t014_case.py'
       - 'scripts/p20/t014_probe/**'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
@@ -39,8 +40,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t009-t014-probe:
-    name: P20-T009/T014 real analytics continuity probe
+  t009-t014:
+    name: P20-T009/T014 real analytics timeline
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:
@@ -119,14 +120,14 @@ jobs:
           mysql --version
           redis-cli -h 127.0.0.1 -p 6379 ping
 
-      - name: Verify T014 probe source and frozen contract boundary
+      - name: Verify T014 case source and frozen contract boundary
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
-          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/validate_contract.py
-          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go | tee /tmp/p20-t014-probe-gofmt.diff
-          test ! -s /tmp/p20-t014-probe-gofmt.diff
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/validate_contract.py
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go | tee /tmp/p20-t014-gofmt.diff
+          test ! -s /tmp/p20-t014-gofmt.diff
           go test ./internal/auth ./internal/workspace ./internal/links ./internal/analytics ./internal/domains ./internal/support ./services/platformapi/cmd/server ./services/redirectengine/cmd/server ./services/analyticsworker/cmd/worker ./services/analyticsreconciler/cmd/reconciler ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner ./scripts/p20/t013_runner ./scripts/p20/t014_probe
           python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
           python3 - <<'PY'
@@ -195,12 +196,41 @@ jobs:
             python3 scripts/p20/p0_timeline.py --case "$case"
           done
 
-      - name: Run exact-head P20-T014 live analytics continuity probe
+      - name: Run frozen P20-T014 exact-head analytics case
         shell: bash
         run: |
           set -euo pipefail
-          export P20_EXACT_HEAD="$(git rev-parse HEAD)"
-          go run ./scripts/p20/t014_probe
+          python3 scripts/p20/t014_case.py
+
+      - name: Validate exact-head P20-T014 evidence shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          path=Path('artifacts/v10/P20/p0/P20-T014.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          details=data['details']
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert details['real_analytics_flow'] is True,details
+          assert details['real_session_authenticated'] is True,details
+          assert details['analyticsworker_event_correlated'] is True,details
+          assert details['mysql_reporting_aggregate_before_reconcile']==1,details
+          assert details['reconciliation_idempotent'] is True,details
+          assert details['workspace_reporting_state']=='complete',details
+          assert details['workspace_reporting_state_reason']=='reconciled',details
+          assert details['report_http_status']==200,details
+          assert details['report_total_clicks']==1,details
+          assert details['analytics_report_correlated'] is True,details
+          assert details['mock_authority'] is False,details
+          assert details['test_header_authority'] is False,details
+          assert details['secret_material_recorded'] is False,details
+          assert details['next_case']=='P20-T015',details
+          PY
 
       - name: Capture T014 authoritative runtime state
         if: always()
@@ -229,11 +259,11 @@ jobs:
           done
           true
 
-      - name: Upload exact-head T014 live probe evidence
+      - name: Upload exact-head P20-T014 timeline evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p20-t014-live-analytics-probe-${{ github.event.pull_request.head.sha || github.sha }}
+          name: p20-t009-t014-analytics-timeline-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -242,6 +272,7 @@ jobs:
             artifacts/v10/P20/p0/P20-T011.json
             artifacts/v10/P20/p0/P20-T012.json
             artifacts/v10/P20/p0/P20-T013.json
+            artifacts/v10/P20/p0/P20-T014.json
             artifacts/v10/P20/runtime/t009/native-platformapi.sha256
             artifacts/v10/P20/runtime/t009/platformapi.log
             artifacts/v10/P20/runtime/t013/native-redirectengine.sha256
