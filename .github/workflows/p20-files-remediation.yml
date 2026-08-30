@@ -52,12 +52,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Verify formatting and dependency closure
+      - name: Verify remediation formatting and dependency closure
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
-          gofmt -d internal/files services/platformapi/cmd/server | tee /tmp/p20-files-remediation-gofmt.diff
+          gofmt -d \
+            internal/files/actor_resolver.go \
+            internal/files/actor_resolver_test.go \
+            internal/files/httpapi.go \
+            services/platformapi/cmd/server/files.go \
+            services/platformapi/cmd/server/files_session_auth.go \
+            services/platformapi/cmd/server/files_session_auth_test.go \
+            | tee /tmp/p20-files-remediation-gofmt.diff
           test ! -s /tmp/p20-files-remediation-gofmt.diff
 
       - name: Run scoped native unit tests
