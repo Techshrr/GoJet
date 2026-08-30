@@ -90,7 +90,18 @@ func main() {
 		linksAPI = links.NewAPIWithActorResolver(store, linksAuthority.resolve)
 	}
 	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
-	analyticsAPI := analytics.NewAPI(analytics.NewStore(db), testAuth, analyticsEnabled)
+	var analyticsAPI *analytics.API
+	analyticsStore := analytics.NewStore(db)
+	if testAuth {
+		analyticsAPI = analytics.NewAPI(analyticsStore, true, analyticsEnabled)
+	} else {
+		analyticsAuthority, authorityErr := buildAnalyticsSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Analytics authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		analyticsAPI = analytics.NewAPIWithActorResolver(analyticsStore, analyticsAuthority.resolve, analyticsEnabled)
+	}
 	qrAPI := qrcodes.NewAPI(qrcodes.NewStore(db, qrQuota), store, risk, testAuth)
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
