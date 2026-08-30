@@ -122,7 +122,7 @@ func main() {
 		logger.Error("configure files", "error", err)
 		os.Exit(1)
 	}
-	textHandler, textEnabled, err := buildTextHandler(db, testAuth)
+	textHandler, textEnabled, err := buildTextHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Text Sharing", "error", err)
 		os.Exit(1)
