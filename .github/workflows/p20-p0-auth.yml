@@ -8,11 +8,13 @@ on:
       - 'scripts/p20/p0_timeline.py'
       - 'scripts/p20/t010_runner/**'
       - 'scripts/p20/t011_runner/**'
+      - 'scripts/p20/t012_runner/**'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
       - 'services/platformapi/cmd/server/**'
       - 'internal/auth/**'
       - 'internal/workspace/**'
+      - 'internal/links/**'
       - 'internal/support/**'
       - 'internal/securetoken/**'
       - 'migrations/**'
@@ -30,10 +32,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  t009-t011:
-    name: P20-T009/T011 real registration verification and login session workflow
+  t009-t012:
+    name: P20-T009/T012 real auth and Link workflow
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     services:
       mysql:
         image: mysql:8.4.11
@@ -103,15 +105,15 @@ jobs:
           mysql --version
           redis-cli -h 127.0.0.1 -p 6379 ping
 
-      - name: Verify P20 T009-T011 source and frozen contract boundary
+      - name: Verify P20 T009-T012 source and frozen contract boundary
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
           python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/validate_contract.py
-          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go | tee /tmp/p20-t009-t011-gofmt.diff
-          test ! -s /tmp/p20-t009-t011-gofmt.diff
-          go test ./internal/auth ./internal/workspace ./internal/support ./services/platformapi/cmd/server ./scripts/p20/t010_runner ./scripts/p20/t011_runner
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go | tee /tmp/p20-t009-t012-gofmt.diff
+          test ! -s /tmp/p20-t009-t012-gofmt.diff
+          go test ./internal/auth ./internal/workspace ./internal/links ./internal/support ./services/platformapi/cmd/server ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner
           python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
           python3 - <<'PY'
           import json
@@ -173,10 +175,8 @@ jobs:
           import json, os
           from pathlib import Path
           path=Path('artifacts/v10/P20/p0/P20-T009.json')
-          if not path.is_file():
-              raise SystemExit(f'missing {path}')
-          data=json.loads(path.read_text(encoding='utf-8'))
-          errors=[]
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8')); errors=[]
           if data.get('node')!='P20': errors.append('node mismatch')
           if data.get('case')!='P20-T009': errors.append('case mismatch')
           if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
@@ -206,10 +206,8 @@ jobs:
           import json, os
           from pathlib import Path
           path=Path('artifacts/v10/P20/p0/P20-T010.json')
-          if not path.is_file():
-              raise SystemExit(f'missing {path}')
-          data=json.loads(path.read_text(encoding='utf-8'))
-          errors=[]
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8')); errors=[]
           if data.get('node')!='P20': errors.append('node mismatch')
           if data.get('case')!='P20-T010': errors.append('case mismatch')
           if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
@@ -244,10 +242,8 @@ jobs:
           import json, os
           from pathlib import Path
           path=Path('artifacts/v10/P20/p0/P20-T011.json')
-          if not path.is_file():
-              raise SystemExit(f'missing {path}')
-          data=json.loads(path.read_text(encoding='utf-8'))
-          errors=[]
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8')); errors=[]
           if data.get('node')!='P20': errors.append('node mismatch')
           if data.get('case')!='P20-T011': errors.append('case mismatch')
           if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
@@ -265,7 +261,49 @@ jobs:
           PY
           ! grep -RIE 'gvc_|grp_|glc_|goh_|gsr_|gos_|gpk_|gst_|gcs_|gcf_|P20-T009!Strong-Passphrase|@example\.test|001122334455|89abcdef01234567|102132435465|authorization:' artifacts/v10/P20/p0/P20-T011.json artifacts/v10/P20/runtime/t009 --exclude='*.pid' || { echo 'unsafe P20-T011 evidence content detected' >&2; exit 1; }
 
-      - name: Stop T009-T011 native API
+      - name: Run frozen P20-T012 oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/p0_timeline.py --case P20-T012
+
+      - name: Verify exact-head T012 evidence shape and secret exclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path('artifacts/v10/P20/p0/P20-T012.json')
+          if not path.is_file(): raise SystemExit(f'missing {path}')
+          data=json.loads(path.read_text(encoding='utf-8')); errors=[]
+          if data.get('node')!='P20': errors.append('node mismatch')
+          if data.get('case')!='P20-T012': errors.append('case mismatch')
+          if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append('exact-head mismatch')
+          if data.get('status') not in {'PASS','FAIL'}: errors.append('invalid status')
+          details=data.get('details',{})
+          for key in ('real_platform_api','real_mysql','real_redis','real_p05_links'):
+              if details.get(key) is not True: errors.append(f'{key} evidence missing')
+          if details.get('mock_authority') is not False: errors.append('mock authority detected')
+          if details.get('test_header_authority') is not False: errors.append('test-header authority detected')
+          if details.get('secret_material_recorded') is not False: errors.append('secret evidence policy violation')
+          if details.get('t011_user_correlation_preserved') is not True: errors.append('T011 user correlation missing')
+          if details.get('t011_workspace_correlation_preserved') is not True: errors.append('T011 workspace correlation missing')
+          if data.get('status') == 'PASS':
+              required_true=('link_create_workspace_matches_t009','link_create_fingerprint_present','mysql_create_matches_api','if_match_conflict','destination_fingerprint_changed','mysql_update_matches_api','destination_fingerprint_continuity','links_rbac_server_side','workspace_role_restored','audit_log','version_contract','risk_invariants')
+              for key in required_true:
+                  if details.get(key) is not True: errors.append(f'T012 PASS missing {key}')
+              if details.get('link_create_http_status') != 201: errors.append('T012 PASS create status mismatch')
+              if details.get('link_update_http_status') != 200: errors.append('T012 PASS update status mismatch')
+              if details.get('viewer_mutation_http_status') != 403: errors.append('T012 PASS viewer denial mismatch')
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f"P20-T012 evidence shape bound to {os.environ['EXACT_HEAD']} with status={data['status']}")
+          PY
+          ! grep -RIE 'gvc_|grp_|glc_|goh_|gsr_|gos_|gpk_|gst_|gcs_|gcf_|P20-T009!Strong-Passphrase|@example\.test|001122334455|89abcdef01234567|102132435465|authorization:' artifacts/v10/P20/p0/P20-T012.json artifacts/v10/P20/runtime/t009 --exclude='*.pid' || { echo 'unsafe P20-T012 evidence content detected' >&2; exit 1; }
+
+      - name: Stop T009-T012 native API
         if: always()
         shell: bash
         run: |
@@ -274,16 +312,17 @@ jobs:
             kill "$(cat artifacts/v10/P20/runtime/t009/platformapi.pid)" 2>/dev/null || true
           fi
 
-      - name: Upload exact-head P20-T009/T011 evidence
+      - name: Upload exact-head P20-T009/T012 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p20-t009-t011-real-auth-${{ github.event.pull_request.head.sha || github.sha }}
+          name: p20-t009-t012-real-auth-links-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
             artifacts/v10/P20/p0/P20-T009.json
             artifacts/v10/P20/p0/P20-T010.json
             artifacts/v10/P20/p0/P20-T011.json
+            artifacts/v10/P20/p0/P20-T012.json
             artifacts/v10/P20/runtime/t009/native-platformapi.sha256
             artifacts/v10/P20/runtime/t009/platformapi.log
