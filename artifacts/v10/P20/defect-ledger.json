@@ -3,7 +3,24 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D008",
+      "severity": "P1",
+      "title": "Files API rejects real authenticated session authority",
+      "case": "P20-T016",
+      "issue": 75,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": ["G3", "G6", "G10"],
+      "discovered_head": "0d72333e0e57bb9444823bb543ded5b848c0c5f8",
+      "discovery_workflow_run": 33323903812,
+      "discovery_workflow_job": 99290560686,
+      "discovery_artifact_id": 9735733883,
+      "discovery_artifact_digest": "sha256:cb9a5abd2da891e5697317ea0a910cceb3ee34e922ab9ce27e7de2797a2a5fd2",
+      "failure": "real authenticated session is not accepted as Files API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P09-T005 through P09-T010 ClamAV/fileworker authority, P20-T009 through P20-T015, real session/CSRF authority and owner Workspace membership all succeeded; durable Files row delta 0"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -377,5 +394,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D007 are closed with exact-head verification evidence. No P0/P1 defects or decision-required items remain open. P20-T016 remains forbidden until the ledger-closure head re-establishes exact-head P20-T015, P20 contract and Candidate Freeze coherence."
+  "note": "P20-D008 is an open P1 release blocker discovered by exact-head P20-T016 live Files continuity on 0d72333e0e57bb9444823bb543ded5b848c0c5f8. P20-T017 remains forbidden until D008 is remediated, formally verified and closed with same-head P20 contract and Candidate Freeze coherence."
 }
