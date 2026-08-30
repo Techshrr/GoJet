@@ -10,8 +10,8 @@ import (
 // registered account inside the caller-owned transaction. It deliberately
 // reuses the P12 Workspace schema/RBAC semantics without introducing a second
 // identity authority or committing independently from account registration.
-func (s *Store) ProvisionInitialWorkspaceTx(ctx context.Context, tx *sql.Tx, principal Principal, name, correlationID string) (string, error) {
-	if s == nil || s.db == nil || tx == nil {
+func ProvisionInitialWorkspaceTx(ctx context.Context, tx *sql.Tx, principal Principal, name, correlationID string) (string, error) {
+	if tx == nil {
 		return "", ErrInvalid
 	}
 	name = strings.TrimSpace(name)
