@@ -78,7 +78,17 @@ func main() {
 		qrQuota = parsed
 	}
 
-	linksAPI := links.NewAPI(store, testAuth)
+	var linksAPI *links.API
+	if testAuth {
+		linksAPI = links.NewAPI(store, true)
+	} else {
+		linksAuthority, authorityErr := buildLinksSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Links authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		linksAPI = links.NewAPIWithActorResolver(store, linksAuthority.resolve)
+	}
 	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
 	analyticsAPI := analytics.NewAPI(analytics.NewStore(db), testAuth, analyticsEnabled)
 	qrAPI := qrcodes.NewAPI(qrcodes.NewStore(db, qrQuota), store, risk, testAuth)
