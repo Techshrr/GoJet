@@ -1,0 +1,177 @@
+name: P20 D009 Ledger Close
+
+on:
+  push:
+    branches:
+      - tmp/p20-d009-ledger-close
+    paths:
+      - '.github/workflows/p20-d009-ledger-close.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  close-ledger:
+    name: Record D009 closure ledger
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact P20 verification branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Require formalization authority head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "dd6cbd0ab18f4c75ddd286981f288455773f2299"
+
+      - name: Move P20-D009 from open to closed without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+          import json
+          import re
+          import textwrap
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          raw = path.read_text(encoding='utf-8')
+          data = json.loads(raw)
+          open_items = data.get('open')
+          if not isinstance(open_items, list) or len(open_items) != 1 or open_items[0].get('id') != 'P20-D009':
+              raise SystemExit(f'unexpected open defect ledger: {open_items!r}')
+          if data.get('decision_required') != []:
+              raise SystemExit('decision_required is not empty')
+          if any(item.get('id') == 'P20-D009' for item in data.get('closed', [])):
+              raise SystemExit('P20-D009 is already present in closed ledger')
+
+          d009 = dict(open_items[0])
+          d009.update({
+              'remediation_pr': 82,
+              'remediation_merge_commit': '4fb4db8fcb77d8773c5352dd6d5f1387f0475857',
+              'verification_head': 'dd6cbd0ab18f4c75ddd286981f288455773f2299',
+              'verification_workflow_run': 33331000126,
+              'verification_workflow_job': 99309420925,
+              'verification_artifact_id': 9737678936,
+              'verification_artifact_digest': 'sha256:9a9a1e02d5fa7fa3272a78c0aafa70271a767d99c6a5613b77f17aa9959f1752',
+              'supporting_contract_workflow_run': 33331000229,
+              'supporting_contract_workflow_job': 99309422586,
+              'supporting_contract_artifact_id': 9737658393,
+              'supporting_contract_artifact_digest': 'sha256:87bd0ba112cb75795b7175e57c986de44117a250112e75f2cebddf3b9e8be6f3',
+              'supporting_p10_contract_workflow_run': 33329772978,
+              'supporting_p10_contract_workflow_job': 99306143641,
+              'supporting_p10_contract_artifact_id': 9737369822,
+              'supporting_p10_contract_artifact_digest': 'sha256:8c6df334f44c77e8f5a1cf794c13e9ce2c968479453bb2689ed56b9f4012e676',
+              'supporting_p10_browser_workflow_run': 33329772878,
+              'supporting_p10_browser_workflow_job': 99306143363,
+              'supporting_p10_browser_artifact_id': 9737509925,
+              'supporting_p10_browser_artifact_digest': 'sha256:a9702ec839fdd8a08a2d6688d36df3ba276d88fdf4c89ed3d0c7107819fb96ba',
+              'supporting_p15_auth_workflow_run': 33329772941,
+              'supporting_p15_auth_workflow_job': 99306143783,
+              'supporting_p15_auth_artifact_id': 9737356076,
+              'supporting_p15_auth_artifact_digest': 'sha256:ebf50bc4ea3c957bea4d162468876ecab2f18372692121c0d8cec7d06fb2db69',
+              'resolution': 'Native platformapi composes the real P15 server-side session and authoritative P12 Workspace membership into the P10 Text actor boundary, inherits Origin and one-time CSRF/replay authority for unsafe Text methods, rejects production test-header substitution, preserves viewer read-only behavior and the predecessor P10 test adapter, while leaving Text persistence, quota, public slug, password gate, one-time consumption, expiry, public download, permanent noindex/UGC and abuse-entry semantics unchanged.',
+              'verified_outcome': {
+                  't009_status': 'PASS',
+                  't010_status': 'PASS',
+                  't011_status': 'PASS',
+                  't012_status': 'PASS',
+                  't013_status': 'PASS',
+                  't014_status': 'PASS',
+                  't015_status': 'PASS',
+                  't016_status': 'PASS',
+                  't017_status': 'PASS',
+                  'login_http_status': 200,
+                  'real_session_authenticated': True,
+                  'csrf_authority_issued': True,
+                  'text_create_http_status': 201,
+                  'text_create_row_delta': 1,
+                  'text_create_identity_bound': True,
+                  'workspace_read_http_status': 200,
+                  'workspace_read_content_matches': True,
+                  'public_read_http_status': 200,
+                  'public_content_matches': True,
+                  'permanent_noindex': True,
+                  'canonical_abuse_entry': True,
+                  'text_update_http_status': 200,
+                  'text_update_version': 2,
+                  'public_update_visible': True,
+                  'text_expire_update_http_status': 200,
+                  'expired_public_http_status': 410,
+                  'expired_content_hidden': True,
+                  't016_user_correlation_preserved': True,
+                  't016_workspace_correlation_preserved': True,
+                  'real_mysql': True,
+                  'real_platform_api': True,
+                  'mock_authority': False,
+                  'test_header_authority': False,
+                  'secret_material_recorded': False,
+                  'next_case': 'P20-T018',
+              },
+              'closed_at': '2026-08-30T19:33:08Z',
+          })
+          d009.pop('status', None)
+
+          open_start = raw.index('  "open": [')
+          closed_start = raw.index('  "closed": [', open_start)
+          raw = raw[:open_start] + '  "open": [],\n' + raw[closed_start:]
+
+          marker = '\n  ],\n  "decision_required": []'
+          insert_at = raw.rfind(marker)
+          if insert_at < 0:
+              raise SystemExit('closed-list terminator not found')
+          rendered = textwrap.indent(json.dumps(d009, indent=2, ensure_ascii=False), '    ')
+          raw = raw[:insert_at] + ',\n' + rendered + raw[insert_at:]
+
+          new_note = ('P20-D001 through P20-D009 are recorded closed from their merged remediation and exact-head formal verification authority. '
+                      'D009 closure evidence is bound to dd6cbd0ab18f4c75ddd286981f288455773f2299; because this ledger update creates a new candidate HEAD, '
+                      'P20-T018 remains LOCKED until the closure HEAD re-establishes formal P20-T017, P20 Contract, and Candidate Freeze PASS with no open P0/P1 defects.')
+          raw, count = re.subn(r'  "note": ".*"\n\}', '  "note": ' + json.dumps(new_note, ensure_ascii=False) + '\n}', raw, count=1)
+          if count != 1:
+              raise SystemExit('ledger note replacement failed')
+
+          updated = json.loads(raw)
+          if updated.get('open') != []:
+              raise SystemExit('closure ledger still has open defects')
+          if updated.get('decision_required') != []:
+              raise SystemExit('closure ledger has decision-required items')
+          ids = [item.get('id') for item in updated.get('closed', [])]
+          if ids.count('P20-D009') != 1 or len(ids) != 9:
+              raise SystemExit(f'unexpected closed ledger ids: {ids}')
+          path.write_text(raw, encoding='utf-8')
+          PY
+
+      - name: Validate ledger-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "artifacts/v10/P20/defect-ledger.json"
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          assert data['open']==[], data['open']
+          assert data['decision_required']==[], data['decision_required']
+          assert [x['id'] for x in data['closed']][-1]=='P20-D009', data['closed'][-1]
+          PY
+          git diff --stat
+          git diff -- artifacts/v10/P20/defect-ledger.json
+
+      - name: Commit ledger-only closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20: close D009 after formal T017 verification'
+          git push origin HEAD:develop/p20-whole-product-verification
+          git rev-parse HEAD
