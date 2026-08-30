@@ -207,6 +207,7 @@ jobs:
         shell: bash
         run: |
           set +e
+          mkdir -p artifacts/v10/P20/runtime/t014
           export MYSQL_PWD=root
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT event_id,workspace_id,link_id,click_sequence,stream_id FROM analytics_events ORDER BY occurred_at,event_id" > artifacts/v10/P20/runtime/t014/mysql-events.tsv 2>/dev/null
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,link_id,bucket_start,clicks FROM analytics_hourly_aggregates ORDER BY bucket_start,link_id" > artifacts/v10/P20/runtime/t014/mysql-hourly.tsv 2>/dev/null
