@@ -3,28 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D004",
-      "severity": "P1",
-      "title": "Workspace API rejects real authenticated session authority",
-      "case": "P20-T011",
-      "issue": 62,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
-      "discovery_workflow_run": 33288665486,
-      "discovery_workflow_job": 99196299445,
-      "discovery_artifact_id": 9725338440,
-      "discovery_artifact_digest": "sha256:2e55479d2d700cda14d3f4f0a65ec01e1b64d7887df443095ab5e0458bcd4c00",
-      "failure": "real authenticated session is not accepted as Workspace API identity authority"
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -151,6 +130,59 @@
         "p15_t024_real_browser_proxy_authority": "PASS"
       },
       "closed_at": "2026-08-30T03:20:05Z"
+    },
+    {
+      "id": "P20-D004",
+      "severity": "P1",
+      "title": "Workspace API rejects real authenticated session authority",
+      "case": "P20-T011",
+      "issue": 62,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "discovery_workflow_run": 33288665486,
+      "discovery_workflow_job": 99196299445,
+      "discovery_artifact_id": 9725338440,
+      "discovery_artifact_digest": "sha256:2e55479d2d700cda14d3f4f0a65ec01e1b64d7887df443095ab5e0458bcd4c00",
+      "failure": "real authenticated session is not accepted as Workspace API identity authority",
+      "remediation_pr": 64,
+      "remediation_merge_commit": "a307713d3a3b2746b33340fb88833ea3c38c5493",
+      "verification_head": "a307713d3a3b2746b33340fb88833ea3c38c5493",
+      "verification_workflow_run": 33296332430,
+      "verification_workflow_job": 99216516210,
+      "verification_artifact_id": 9727551422,
+      "verification_artifact_digest": "sha256:ae49c9322077b65d67d7e8242bb083238513a00fa021c7b4c9f71a624531d026",
+      "supporting_contract_workflow_run": 33296332382,
+      "supporting_contract_workflow_job": 99216516054,
+      "supporting_contract_artifact_id": 9727529157,
+      "supporting_contract_artifact_digest": "sha256:3fe96baf83d48db1ee16f6f786a25884562ead81ea38afcb4c388a0c55ae42e0",
+      "resolution": "Native platformapi composes the real P15 server-side session into the Workspace principal boundary, loads the authoritative active verified user, enforces P15 Origin and one-time CSRF authority for unsafe Workspace methods, and preserves P12 membership/RBAC plus predecessor test-auth fixtures.",
+      "verified_outcome": {
+        "t009_status": "PASS",
+        "t010_status": "PASS",
+        "t011_status": "PASS",
+        "login_rate_protection_observed": true,
+        "workspace_api_http_status": 200,
+        "workspace_api_identity_matches_t009": true,
+        "workspace_role": "owner",
+        "logout_http_status": 200,
+        "logout_response_status": "logged_out",
+        "server_side_revocation_enforced": true,
+        "session_status_after_logout": "revoked",
+        "stale_cookie_http_status": 410,
+        "stale_cookie_error_code": "revoked_token",
+        "real_mysql": true,
+        "real_redis": true,
+        "real_platform_api": true,
+        "mock_authority": false,
+        "secret_material_recorded": false
+      },
+      "closed_at": "2026-08-30T06:14:43Z"
     }
   ],
   "decision_required": [],
@@ -161,5 +193,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D003 are closed with exact-head evidence. P20-D004 is the sole active P1 release blocker. T012 is forbidden until D004 is remediated and closed, P20-T011 passes on a later coherent exact head, and the closure-ledger revision re-establishes exact-head evidence without regression."
+  "note": "P20-D001 through P20-D004 are closed with exact-head remediation evidence. The closure-ledger revision must now re-establish P20-T011 and candidate/traceability coherence on the ledger HEAD before P20-T012 is authorized."
 }
