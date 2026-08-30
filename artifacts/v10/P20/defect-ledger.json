@@ -3,7 +3,41 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D001",
+      "severity": "P1",
+      "title": "Real registration lacks owner Workspace correlation",
+      "case": "P20-T009",
+      "issue": 55,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "authority_head": "1500a531ce55959294635ea559c08cd6cb97caa7",
+      "workflow_run": 33272014441,
+      "workflow_job": 99152055907,
+      "artifact_id": 9720393895,
+      "artifact_digest": "sha256:9797e1a24b8be8fee2cb81d75c92c2f4b9138331083b300b53ad794824a809ba",
+      "failure": "registration does not establish exactly one real owner Workspace correlation; found 0 membership(s)",
+      "passed_boundaries": [
+        "real native platformapi registration HTTP 202",
+        "invalid registration HTTP 400 with zero durable auth-user writes",
+        "duplicate registration HTTP 409 with unchanged durable user/grant/mail state",
+        "one pending auth user",
+        "one live verification grant",
+        "one durable verification mail job",
+        "one correlated registration audit event",
+        "mock authority false",
+        "secret evidence exclusion passed"
+      ],
+      "required_remediation_boundary": "Preserve P12 server-authoritative Workspace membership/RBAC and P15 server-side production identity/session authority; do not use X-GoJet-Test-* identity, mock Workspace authority, frozen-oracle weakening or route invention.",
+      "closure_requirement": "Governed product remediation integrated into P20 candidate ancestry, followed by exact-head P20-T009 PASS with one real owner Workspace correlation and no regression of registration/mail/audit semantics."
+    }
+  ],
   "closed": [],
   "decision_required": [],
   "rules": {
@@ -13,5 +47,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "Initial P20 ledger after exact contract/baseline entry guard. Any defect discovered by P20 verification must be recorded here before closure."
+  "note": "P20-D001 was discovered by exact-head whole-product verification. P20-T010 and later P0-timeline cases must not be claimed while the first failing frozen case remains unresolved."
 }
