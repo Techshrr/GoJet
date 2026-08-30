@@ -15,6 +15,7 @@ on:
       - 'internal/securetoken/**'
       - 'migrations/**'
       - 'artifacts/v10/P20/test-plan.json'
+      - 'artifacts/v10/P20/defect-ledger.json'
       - '.github/workflows/p20-p0-auth.yml'
   workflow_dispatch:
 
