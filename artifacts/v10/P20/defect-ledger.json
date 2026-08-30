@@ -3,7 +3,24 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D007",
+      "severity": "P1",
+      "title": "QR API rejects real authenticated session authority",
+      "case": "P20-T015",
+      "issue": 71,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": ["G3", "G6", "G10"],
+      "discovered_head": "5c6b1ae082209a6110a4bd1b772477a8e582be5f",
+      "discovery_workflow_run": 33317524146,
+      "discovery_workflow_job": 99273576222,
+      "discovery_artifact_id": 9733937989,
+      "discovery_artifact_digest": "sha256:17d06c2b7a33c20fc9ced9ca3d36adbfa9d25f0bc71bca7acb7e5c66cf3aef9e",
+      "failure": "real authenticated session is not accepted as QR API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through P20-T014, real session/CSRF authority and source Link risk allow all succeeded"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -301,5 +318,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D006 are closed with exact-head verification evidence. No P0/P1 defects or decision-required items remain open. T015 remains forbidden until the ledger-closure head re-establishes exact-head P20-T014, P20 contract and Candidate Freeze coherence."
+  "note": "P20-D007 is an open P1 release blocker discovered by exact-head P20-T015 live QR continuity on 5c6b1ae082209a6110a4bd1b772477a8e582be5f. P20-T016 remains forbidden until D007 is remediated, formally verified and closed with same-head P20 contract and Candidate Freeze coherence."
 }
