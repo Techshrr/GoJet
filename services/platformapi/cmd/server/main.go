@@ -100,7 +100,7 @@ func main() {
 		logger.Error("configure Bio", "error", err)
 		os.Exit(1)
 	}
-	workspaceHandler, workspaceEnabled, err := buildWorkspaceHandler(db, testAuth)
+	workspaceHandler, workspaceEnabled, err := buildWorkspaceHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Workspace organization", "error", err)
 		os.Exit(1)
