@@ -3,7 +3,28 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D005",
+      "severity": "P1",
+      "title": "Links API rejects real authenticated session authority",
+      "case": "P20-T012",
+      "issue": 65,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "f43ff86a7540eeaf2055426d33b297855551d773",
+      "discovery_workflow_run": 33297234583,
+      "discovery_workflow_job": 99218898897,
+      "discovery_artifact_id": 9727832578,
+      "discovery_artifact_digest": "sha256:6821528b09e677656b4fae5fb71c48cdd798ba6bef76da0ef28b4ca58e2810fa",
+      "failure": "real authenticated session is not accepted as Links API mutation authority"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -193,5 +214,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D004 are closed with exact-head remediation evidence. The closure-ledger revision must now re-establish P20-T011 and candidate/traceability coherence on the ledger HEAD before P20-T012 is authorized."
+  "note": "P20-D005 is the sole open P1 blocker. P20-T012 is frozen at the real Links mutation authority failure on exact head f43ff86a7540eeaf2055426d33b297855551d773. P20-T013 is forbidden until D005 is remediated, T012 is exact-head PASS, and the P1 ledger is clean."
 }
