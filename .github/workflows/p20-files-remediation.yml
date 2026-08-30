@@ -7,6 +7,7 @@ on:
     paths:
       - 'internal/files/**'
       - 'services/platformapi/cmd/server/files*.go'
+      - 'services/platformapi/cmd/server/main.go'
       - 'services/platformapi/cmd/server/workspace_session_auth.go'
       - 'go.mod'
       - 'go.sum'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'internal/files/**'
       - 'services/platformapi/cmd/server/files*.go'
+      - 'services/platformapi/cmd/server/main.go'
       - 'services/platformapi/cmd/server/workspace_session_auth.go'
       - 'go.mod'
       - 'go.sum'
@@ -64,6 +66,7 @@ jobs:
             services/platformapi/cmd/server/files.go \
             services/platformapi/cmd/server/files_session_auth.go \
             services/platformapi/cmd/server/files_session_auth_test.go \
+            services/platformapi/cmd/server/main.go \
             | tee /tmp/p20-files-remediation-gofmt.diff
           test ! -s /tmp/p20-files-remediation-gofmt.diff
 
