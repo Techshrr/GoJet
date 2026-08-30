@@ -3,7 +3,8 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
+  "open": [],
+  "closed": [
     {
       "id": "P20-D001",
       "severity": "P1",
@@ -17,28 +18,37 @@
         "G6",
         "G10"
       ],
-      "authority_head": "1500a531ce55959294635ea559c08cd6cb97caa7",
-      "workflow_run": 33272014441,
-      "workflow_job": 99152055907,
-      "artifact_id": 9720393895,
-      "artifact_digest": "sha256:9797e1a24b8be8fee2cb81d75c92c2f4b9138331083b300b53ad794824a809ba",
+      "discovered_head": "1500a531ce55959294635ea559c08cd6cb97caa7",
+      "discovery_workflow_run": 33272014441,
+      "discovery_workflow_job": 99152055907,
+      "discovery_artifact_id": 9720393895,
+      "discovery_artifact_digest": "sha256:9797e1a24b8be8fee2cb81d75c92c2f4b9138331083b300b53ad794824a809ba",
       "failure": "registration does not establish exactly one real owner Workspace correlation; found 0 membership(s)",
-      "passed_boundaries": [
-        "real native platformapi registration HTTP 202",
-        "invalid registration HTTP 400 with zero durable auth-user writes",
-        "duplicate registration HTTP 409 with unchanged durable user/grant/mail state",
-        "one pending auth user",
-        "one live verification grant",
-        "one durable verification mail job",
-        "one correlated registration audit event",
-        "mock authority false",
-        "secret evidence exclusion passed"
-      ],
-      "required_remediation_boundary": "Preserve P12 server-authoritative Workspace membership/RBAC and P15 server-side production identity/session authority; do not use X-GoJet-Test-* identity, mock Workspace authority, frozen-oracle weakening or route invention.",
-      "closure_requirement": "Governed product remediation integrated into P20 candidate ancestry, followed by exact-head P20-T009 PASS with one real owner Workspace correlation and no regression of registration/mail/audit semantics."
+      "remediation_pr": 57,
+      "remediation_merge_commit": "6f4ecb6150c2bef3262457634c536f39d5c4079a",
+      "verification_head": "6f4ecb6150c2bef3262457634c536f39d5c4079a",
+      "verification_workflow_run": 33283016320,
+      "verification_workflow_job": 99181276499,
+      "verification_artifact_id": 9723636720,
+      "verification_artifact_digest": "sha256:232846241a7118b6c1b654978d6e63efd54ca4687136275400dc98f5e3665f59",
+      "resolution": "Native platformapi registration composes P15 auth persistence and P12 initial Workspace provisioning inside the same caller-owned MySQL transaction.",
+      "verified_outcome": {
+        "registration_http_status": 202,
+        "invalid_registration_http_status": 400,
+        "duplicate_registration_http_status": 409,
+        "invalid_write_count": 0,
+        "duplicate_state_unchanged": true,
+        "verification_grant_count": 1,
+        "verification_mail_job_count": 1,
+        "registration_audit_count": 1,
+        "workspace_role": "owner",
+        "mock_authority": false,
+        "secret_material_recorded": false,
+        "t009_status": "PASS"
+      },
+      "closed_at": "2026-08-30T00:27:08Z"
     }
   ],
-  "closed": [],
   "decision_required": [],
   "rules": {
     "p0_open_max": 0,
@@ -47,5 +57,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 was discovered by exact-head whole-product verification. P20-T010 and later P0-timeline cases must not be claimed while the first failing frozen case remains unresolved."
+  "note": "P20-D001 is closed only by live exact-head T009 evidence. T010 may begin after the closure-ledger revision itself re-establishes exact-head T009 and T001-T008 evidence without regression."
 }
