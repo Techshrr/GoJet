@@ -79,6 +79,38 @@ func TestAuthRateClientAddressWalksTrustedProxyChainRightToLeft(t *testing.T) {
 	}
 }
 
+func TestAuthRateClientAddressIgnoresOversizedSpoofPrefixAfterOrigin(t *testing.T) {
+	t.Parallel()
+	trusted, err := parseAuthTrustedProxyCIDRs("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	req.RemoteAddr = "127.0.0.1:4185"
+	req.Header.Set("X-Forwarded-For", strings.Repeat("192.0.2.200,", maxAuthForwardedHops+16)+"198.51.100.24")
+	if got := authRateClientAddress(req, trusted); got != "198.51.100.24" {
+		t.Fatalf("oversized attacker-controlled left prefix collapsed to proxy bucket: got %q", got)
+	}
+}
+
+func TestAuthRateClientAddressBoundsAllTrustedChain(t *testing.T) {
+	t.Parallel()
+	trusted, err := parseAuthTrustedProxyCIDRs("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := make([]string, maxAuthForwardedHops+1)
+	for i := range parts {
+		parts[i] = "10.0.0.8"
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	req.RemoteAddr = "127.0.0.1:4185"
+	req.Header.Set("X-Forwarded-For", strings.Join(parts, ","))
+	if got := authRateClientAddress(req, trusted); got != "127.0.0.1" {
+		t.Fatalf("unbounded all-trusted chain should fail safely to immediate peer: got %q", got)
+	}
+}
+
 func TestAuthRateClientAddressFailsSafeOnMalformedTrustedChain(t *testing.T) {
 	t.Parallel()
 	trusted, err := parseAuthTrustedProxyCIDRs("")
