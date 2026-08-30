@@ -5,26 +5,6 @@
   "status": "ACTIVE",
   "open": [
     {
-      "id": "P20-D003",
-      "severity": "P1",
-      "title": "Auth rate IP bucket uses proxy peer instead of trusted client IP",
-      "case": "P20-T011",
-      "issue": 61,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
-      "discovery_review_pr": 59,
-      "discovery_review_id": 5059772765,
-      "discovery_review_comment_id": 3888287418,
-      "discovery_reviewed_commit": "215f546c86997d95b72f2f56edc215aa0f2baaee",
-      "failure": "auth rate IP bucket uses immediate proxy peer instead of trusted originating client"
-    },
-    {
       "id": "P20-D004",
       "severity": "P1",
       "title": "Workspace API rejects real authenticated session authority",
@@ -128,6 +108,49 @@
         "d002_checkpoint_status": "PASS"
       },
       "closed_at": "2026-08-30T03:05:26Z"
+    },
+    {
+      "id": "P20-D003",
+      "severity": "P1",
+      "title": "Auth rate IP bucket uses proxy peer instead of trusted client IP",
+      "case": "P20-T011",
+      "issue": 61,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "c7e0cceccb4380b61ce213084a236dc4c5946f52",
+      "discovery_review_pr": 59,
+      "discovery_review_id": 5059772765,
+      "discovery_review_comment_id": 3888287418,
+      "discovery_reviewed_commit": "215f546c86997d95b72f2f56edc215aa0f2baaee",
+      "failure": "auth rate IP bucket uses immediate proxy peer instead of trusted originating client",
+      "remediation_pr": 63,
+      "remediation_merge_commit": "724c38c686f0bd5f5354e299847365db76f6cb33",
+      "verification_head": "724c38c686f0bd5f5354e299847365db76f6cb33",
+      "verification_workflow_run": 33289916481,
+      "verification_workflow_job": 99199628982,
+      "verification_artifact_id": 9725645841,
+      "verification_artifact_digest": "sha256:d5574720c9a31a1f24e962fdf60497ebf2b427a5a1bb235f868e51d2a6685780",
+      "supporting_browser_workflow_run": 33289916596,
+      "supporting_browser_workflow_job": 99199629103,
+      "supporting_browser_artifact_id": 9725651393,
+      "supporting_browser_artifact_digest": "sha256:a60a7386d6234112eac61444ba76146748d236907cb2f4ecec2b7290ce7e66df",
+      "resolution": "Auth rate middleware derives the IP bucket from a bounded trusted-proxy chain, ignores untrusted forwarding authority, safely handles malformed chains, and repository Vite proxies emit forwarding headers for the local trusted boundary.",
+      "verified_outcome": {
+        "go_whole_repository_baseline": true,
+        "frontend_whole_workspace_baseline": true,
+        "untrusted_forwarding_ignored": true,
+        "trusted_proxy_origin_resolved": true,
+        "spoofed_left_prefix_ignored": true,
+        "oversized_left_prefix_does_not_collapse_to_proxy": true,
+        "malformed_chain_fails_safe": true,
+        "p15_t024_real_browser_proxy_authority": "PASS"
+      },
+      "closed_at": "2026-08-30T03:20:05Z"
     }
   ],
   "decision_required": [],
@@ -138,5 +161,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D002 is closed by live exact-head P20-T011 evidence. P20-D003 and P20-D004 are the active P1 release blockers. T012 is forbidden until both are remediated and closed, P20-T011 passes on a later coherent exact head, and the closure-ledger revision re-establishes exact-head evidence without regression."
+  "note": "P20-D001 through P20-D003 are closed with exact-head evidence. P20-D004 is the sole active P1 release blocker. T012 is forbidden until D004 is remediated and closed, P20-T011 passes on a later coherent exact head, and the closure-ledger revision re-establishes exact-head evidence without regression."
 }
