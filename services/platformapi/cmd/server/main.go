@@ -120,6 +120,14 @@ func main() {
 		logger.Error("configure Authentication, OAuth and Account", "error", err)
 		os.Exit(1)
 	}
+	if authEnabled {
+		authRateMiddleware, rateErr := buildAuthRateMiddleware(redisClient)
+		if rateErr != nil {
+			logger.Error("configure Authentication rate protection", "error", rateErr)
+			os.Exit(1)
+		}
+		authHandler = authRateMiddleware(authHandler)
+	}
 	accountHandler, accountEnabled, err := buildAccountHandler(db, redisClient)
 	if err != nil {
 		logger.Error("configure Account settings", "error", err)
