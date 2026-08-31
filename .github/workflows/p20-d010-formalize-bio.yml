@@ -1,0 +1,93 @@
+name: P20 D010 Formalize Bio
+
+on:
+  push:
+    branches:
+      - tmp/p20-d010-formalization
+
+permissions:
+  contents: write
+
+jobs:
+  formalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout P20 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+
+      - name: Generate formal T018 workflow from exact live authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="ef7a2ecdf53388bcff9ee498d476aba5e8b102da"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          src = Path('.github/workflows/p20-p0-bio.yml')
+          dst = Path('.github/workflows/p20-p0-bio-formal.yml')
+          text = src.read_text(encoding='utf-8')
+
+          replacements = [
+              ('name: P20 P0 Bio Timeline', 'name: P20 P0 Bio Formal Timeline'),
+              ('group: p20-p0-bio-${{ github.event.pull_request.number || github.ref }}', 'group: p20-p0-bio-formal-${{ github.event.pull_request.number || github.ref }}'),
+              ('  t009-t018-live:', '  t009-t018-formal:'),
+              ('    name: P20-T009/T018 real Bio discovery timeline', '    name: P20-T009/T018 real Bio formal timeline'),
+              ('      - name: Verify T018 source and frozen contract boundary', '      - name: Verify formal T018 source and frozen contract boundary'),
+              ('scripts/p20/t017_case.py scripts/p20/validate_contract.py', 'scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/validate_contract.py'),
+              ('/tmp/p20-t018-gofmt.diff', '/tmp/p20-t018-formal-gofmt.diff'),
+              ('      - name: Run exact-head P20-T018 Bio live probe\n        shell: bash\n        run: |\n          set -euo pipefail\n          exact_head="$(git rev-parse HEAD)"\n          P20_EXACT_HEAD="$exact_head" go run ./scripts/p20/t018_probe\n', '''      - name: Run formal exact-head P20-T018 Bio case\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 scripts/p20/t018_case.py\n          python3 - <<'PY2'\n          import json, subprocess\n          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()\n          data=json.load(open('artifacts/v10/P20/p0/P20-T018.json',encoding='utf-8'))\n          assert data['status']=='PASS',data\n          assert data['implementation_commit']==head,data\n          assert data['errors']==[],data\n          assert data['details']['next_case']=='P20-T019',data\n          PY2\n'''),
+              ('      - name: Upload exact-head T018 live evidence', '      - name: Upload exact-head T018 formal evidence'),
+              ('name: p20-t018-live-bio-${{ github.event.pull_request.head.sha || github.sha }}', 'name: p20-t018-formal-bio-${{ github.event.pull_request.head.sha || github.sha }}'),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing expected source fragment: {old!r}')
+              text = text.replace(old, new, 1)
+
+          anchor = "      - 'scripts/p20/t018_probe/**'\n"
+          if anchor not in text:
+              raise SystemExit('missing t018 probe path anchor')
+          text = text.replace(anchor, anchor + "      - 'scripts/p20/t018_case.py'\n", 1)
+
+          anchor = "      - '.github/workflows/p20-p0-bio.yml'\n"
+          if anchor not in text:
+              raise SystemExit('missing bio workflow path anchor')
+          text = text.replace(anchor, anchor + "      - '.github/workflows/p20-p0-bio-formal.yml'\n", 1)
+
+          anchor = "            artifacts/v10/P20/p0/P20-T017.json\n"
+          if anchor not in text:
+              raise SystemExit('missing T017 artifact anchor')
+          text = text.replace(anchor, anchor + "            artifacts/v10/P20/p0/P20-T018.json\n", 1)
+
+          dst.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate formalization-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/p20/t018_case.py
+          test -f .github/workflows/p20-p0-bio-formal.yml
+          python3 -m py_compile scripts/p20/t018_case.py
+          grep -F 'name: P20 P0 Bio Formal Timeline' .github/workflows/p20-p0-bio-formal.yml
+          grep -F 'python3 scripts/p20/t018_case.py' .github/workflows/p20-p0-bio-formal.yml
+          grep -F 'artifacts/v10/P20/p0/P20-T018.json' .github/workflows/p20-p0-bio-formal.yml
+          grep -F 'p20-t018-formal-bio-' .github/workflows/p20-p0-bio-formal.yml
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = '.github/workflows/p20-p0-bio-formal.yml'
+
+      - name: Commit formal workflow to P20 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/p20-p0-bio-formal.yml
+          git commit -m 'P20: add formal T018 Bio timeline'
+          git push origin HEAD:develop/p20-whole-product-verification
