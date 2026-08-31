@@ -3,7 +3,24 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+    "id": "P20-D010",
+    "severity": "P1",
+    "title": "Bio API rejects real authenticated session authority",
+    "case": "P20-T018",
+    "issue": 83,
+    "release_blocking": true,
+    "gate_hard_failure": true,
+    "affected_gates": ["G3", "G6", "G10"],
+    "discovered_head": "645f42946d2985f510f7e673137e98f8aff31cb1",
+    "discovery_workflow_run": 33347382280,
+    "discovery_workflow_job": 99354001408,
+    "discovery_artifact_id": 9742509259,
+    "discovery_artifact_digest": "sha256:12972017746ab764a8b5e4cdf16ddeb47a870cf995359564fd543be23feab0a5",
+    "failure": "real authenticated session is not accepted as Bio API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T017, same-head P11 Bio risk/public/noindex predecessor authority, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable Bio row delta 0"
+  }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -540,5 +557,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D009 are recorded closed from their merged remediation and exact-head formal verification authority. D009 closure evidence is bound to dd6cbd0ab18f4c75ddd286981f288455773f2299; because this ledger update creates a new candidate HEAD, P20-T018 remains LOCKED until the closure HEAD re-establishes formal P20-T017, P20 Contract, and Candidate Freeze PASS with no open P0/P1 defects."
+  "note": "P20-D001 through P20-D009 are closed. P20-D010 is an open P1 release blocker discovered by exact-head P20-T018 live Bio continuity on 645f42946d2985f510f7e673137e98f8aff31cb1. P20-T019 remains forbidden until D010 is remediated, formally verified and closed with same-head P20 contract and Candidate Freeze coherence."
 }
