@@ -1,0 +1,664 @@
+name: P20 D010 Product Stage
+
+on:
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+    paths:
+      - '.github/workflows/p20-d010-product-stage.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d010-product-stage
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Stage D010 Bio session authority remediation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact remediation staging head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply exact Bio authority remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_head="$(git rev-parse HEAD^)"
+          test "$base_head" = "bb6add73382ff2ffbf0eef216be99e42d85d51f5"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('internal/bio/httpapi.go')
+          text = path.read_text(encoding='utf-8')
+
+          old_struct = '''type API struct {
+          \tstore           *Store
+          \trisk            RiskAuthority
+          \ttestAuthEnabled bool
+          }
+          '''
+          new_struct = '''type API struct {
+          \tstore           *Store
+          \trisk            RiskAuthority
+          \ttestAuthEnabled bool
+          \tactorResolver   ActorResolver
+          }
+          '''
+          assert text.count(old_struct) == 1, 'Bio API struct boundary drifted'
+          text = text.replace(old_struct, new_struct, 1)
+
+          old_ctor = '''func NewAPI(store *Store, risk RiskAuthority, testAuthEnabled bool) (*API, error) {
+          \tif store == nil || risk == nil {
+          \t\treturn nil, ErrInvalidInput
+          \t}
+          \treturn &API{store: store, risk: risk, testAuthEnabled: testAuthEnabled}, nil
+          }
+          '''
+          new_ctor = '''func NewAPI(store *Store, risk RiskAuthority, testAuthEnabled bool) (*API, error) {
+          \tif store == nil || risk == nil {
+          \t\treturn nil, ErrInvalidInput
+          \t}
+          \treturn &API{store: store, risk: risk, testAuthEnabled: testAuthEnabled}, nil
+          }
+
+          func NewAPIWithActorResolver(store *Store, risk RiskAuthority, resolver ActorResolver) (*API, error) {
+          \tif store == nil || risk == nil || resolver == nil {
+          \t\treturn nil, ErrInvalidInput
+          \t}
+          \treturn &API{store: store, risk: risk, actorResolver: resolver}, nil
+          }
+          '''
+          assert text.count(old_ctor) == 1, 'Bio constructor boundary drifted'
+          text = text.replace(old_ctor, new_ctor, 1)
+
+          old_auth = '''func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (actorContext, bool) {
+          \tif !a.testAuthEnabled {
+          \t\twriteAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tactorID := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
+          \trole := strings.ToLower(strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace-Role")))
+          \theaderWorkspace := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace"))
+          \tif actorID == "" || role == "" || headerWorkspace == "" || headerWorkspace != workspaceID {
+          \t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tif role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+          \t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tif mutation && role == "viewer" {
+          \t\twriteAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+          \t\treturn actorContext{}, false
+          \t}
+          \treturn actorContext{ActorID: actorID, Role: role}, true
+          }
+          '''
+          new_auth = '''func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (actorContext, bool) {
+          \tif a.actorResolver != nil {
+          \t\tactor, err := a.actorResolver(r, strings.TrimSpace(workspaceID))
+          \t\tif err != nil {
+          \t\t\tswitch {
+          \t\t\tcase errors.Is(err, ErrAuthenticationRequired):
+          \t\t\t\twriteAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+          \t\t\tcase errors.Is(err, ErrForbidden):
+          \t\t\t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\t\tdefault:
+          \t\t\t\twriteAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+          \t\t\t}
+          \t\t\treturn actorContext{}, false
+          \t\t}
+          \t\tactorID := strings.TrimSpace(actor.ActorID)
+          \t\trole := strings.ToLower(strings.TrimSpace(actor.Role))
+          \t\tif actorID == "" || strings.TrimSpace(workspaceID) == "" {
+          \t\t\twriteAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+          \t\t\treturn actorContext{}, false
+          \t\t}
+          \t\tif role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+          \t\t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\t\treturn actorContext{}, false
+          \t\t}
+          \t\tif mutation && role == "viewer" {
+          \t\t\twriteAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+          \t\t\treturn actorContext{}, false
+          \t\t}
+          \t\treturn actorContext{ActorID: actorID, Role: role}, true
+          \t}
+
+          \t// Preserve the predecessor P11 test-only adapter for isolated P11 authority tests.
+          \tif !a.testAuthEnabled {
+          \t\twriteAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tactorID := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
+          \trole := strings.ToLower(strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace-Role")))
+          \theaderWorkspace := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace"))
+          \tif actorID == "" || role == "" || headerWorkspace == "" || headerWorkspace != workspaceID {
+          \t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tif role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+          \t\twriteAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+          \t\treturn actorContext{}, false
+          \t}
+          \tif mutation && role == "viewer" {
+          \t\twriteAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+          \t\treturn actorContext{}, false
+          \t}
+          \treturn actorContext{ActorID: actorID, Role: role}, true
+          }
+          '''
+          assert text.count(old_auth) == 1, 'Bio authenticate boundary drifted'
+          text = text.replace(old_auth, new_auth, 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('services/platformapi/cmd/server/bio.go')
+          text = path.read_text(encoding='utf-8')
+          old = '''\tstore := bio.NewStore(db, quota)
+          \trisk := bio.NewRedisRiskAuthority(redisClient)
+          \tapi, err := bio.NewAPI(store, risk, testAuth)
+          \tif err != nil {
+          \t\treturn nil, false, fmt.Errorf("configure Bio API: %w", err)
+          \t}
+          '''
+          new = '''\tstore := bio.NewStore(db, quota)
+          \trisk := bio.NewRedisRiskAuthority(redisClient)
+          \tvar api *bio.API
+          \tif testAuth {
+          \t\tapi, err = bio.NewAPI(store, risk, true)
+          \t} else {
+          \t\tauthority, authorityErr := buildBioSessionAuthority(db, redisClient)
+          \t\tif authorityErr != nil {
+          \t\t\treturn nil, false, fmt.Errorf("configure Bio authentication authority: %w", authorityErr)
+          \t\t}
+          \t\tapi, err = bio.NewAPIWithActorResolver(store, risk, authority.resolve)
+          \t}
+          \tif err != nil {
+          \t\treturn nil, false, fmt.Errorf("configure Bio API: %w", err)
+          \t}
+          '''
+          assert text.count(old) == 1, 'platformapi Bio construction boundary drifted'
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          cat > internal/bio/actor_resolver.go <<'EOF'
+          package bio
+
+          import (
+          	"errors"
+          	"net/http"
+          )
+
+          var (
+          	ErrAuthenticationRequired    = errors.New("bio authentication required")
+          	ErrForbidden                 = errors.New("bio workspace access forbidden")
+          	ErrAuthenticationUnavailable = errors.New("bio authentication dependency unavailable")
+          )
+
+          // Actor is the server-authoritative identity and Workspace role accepted by
+          // the Bio API after the authentication/session boundary has been resolved.
+          type Actor struct {
+          	ActorID string
+          	Role    string
+          }
+
+          // ActorResolver resolves a real request and path Workspace into the identity
+          // authority used by Bio. Production resolvers must not derive authority from
+          // X-GoJet-Test-* headers; those headers remain isolated to NewAPI test mode.
+          type ActorResolver func(*http.Request, string) (Actor, error)
+          EOF
+
+          cat > internal/bio/actor_resolver_test.go <<'EOF'
+          package bio
+
+          import (
+          	"errors"
+          	"net/http"
+          	"net/http/httptest"
+          	"strings"
+          	"testing"
+          )
+
+          func TestBioActorResolverPrefersServerAuthorityOverTestHeaders(t *testing.T) {
+          	api := &API{actorResolver: func(r *http.Request, workspaceID string) (Actor, error) {
+          		if workspaceID != "real-workspace" {
+          			t.Fatalf("unexpected workspace %q", workspaceID)
+          		}
+          		if r.Header.Get("X-GoJet-Test-Actor") != "spoofed" {
+          			t.Fatal("test precondition missing spoofed header")
+          		}
+          		return Actor{ActorID: "real-user", Role: "owner"}, nil
+          	}}
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/bio-pages", nil)
+          	req.Header.Set("X-GoJet-Test-Actor", "spoofed")
+          	req.Header.Set("X-GoJet-Test-Workspace-Role", "viewer")
+          	req.Header.Set("X-GoJet-Test-Workspace", "real-workspace")
+          	recorder := httptest.NewRecorder()
+
+          	actor, ok := api.authenticate(recorder, req, "real-workspace", true)
+          	if !ok {
+          		t.Fatalf("resolver authority rejected: status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          	if actor.ActorID != "real-user" || actor.Role != "owner" {
+          		t.Fatalf("test headers influenced authoritative actor: %#v", actor)
+          	}
+          }
+
+          func TestBioActorResolverPreservesViewerReadOnly(t *testing.T) {
+          	api := &API{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "viewer"}, nil
+          	}}
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/bio-pages", nil)
+          	recorder := httptest.NewRecorder()
+          	if _, ok := api.authenticate(recorder, req, "real-workspace", true); ok {
+          		t.Fatal("viewer mutation unexpectedly authorized")
+          	}
+          	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"read_only"`) {
+          		t.Fatalf("unexpected viewer denial: status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          }
+
+          func TestBioActorResolverAllowsViewerRead(t *testing.T) {
+          	api := &API{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "viewer"}, nil
+          	}}
+          	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/bio-pages", nil)
+          	recorder := httptest.NewRecorder()
+          	actor, ok := api.authenticate(recorder, req, "real-workspace", false)
+          	if !ok || actor.ActorID != "real-user" || actor.Role != "viewer" {
+          		t.Fatalf("viewer read authority rejected: ok=%v actor=%#v status=%d body=%s", ok, actor, recorder.Code, recorder.Body.String())
+          	}
+          }
+
+          func TestBioActorResolverMapsAuthorityErrors(t *testing.T) {
+          	tests := []struct {
+          		name string
+          		err  error
+          		want int
+          		code string
+          	}{
+          		{"required", ErrAuthenticationRequired, http.StatusUnauthorized, "authentication_required"},
+          		{"forbidden", ErrForbidden, http.StatusForbidden, "forbidden"},
+          		{"unavailable", ErrAuthenticationUnavailable, http.StatusServiceUnavailable, "auth_dependency_unavailable"},
+          		{"unexpected", errors.New("backend failure"), http.StatusServiceUnavailable, "auth_dependency_unavailable"},
+          	}
+          	for _, tt := range tests {
+          		t.Run(tt.name, func(t *testing.T) {
+          			api := &API{actorResolver: func(*http.Request, string) (Actor, error) { return Actor{}, tt.err }}
+          			recorder := httptest.NewRecorder()
+          			req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/bio-pages", nil)
+          			if _, ok := api.authenticate(recorder, req, "real-workspace", false); ok {
+          				t.Fatal("authority error unexpectedly authorized")
+          			}
+          			if recorder.Code != tt.want || !strings.Contains(recorder.Body.String(), `"code":"`+tt.code+`"`) {
+          				t.Fatalf("unexpected authority mapping: status=%d body=%s", recorder.Code, recorder.Body.String())
+          			}
+          		})
+          	}
+          }
+
+          func TestBioActorResolverRejectsUnknownRole(t *testing.T) {
+          	api := &API{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "superuser"}, nil
+          	}}
+          	recorder := httptest.NewRecorder()
+          	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/bio-pages", nil)
+          	if _, ok := api.authenticate(recorder, req, "real-workspace", false); ok {
+          		t.Fatal("unknown role unexpectedly authorized")
+          	}
+          	if recorder.Code != http.StatusForbidden {
+          		t.Fatalf("unknown role status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          }
+          EOF
+
+          cat > services/platformapi/cmd/server/bio_session_auth.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"database/sql"
+          	"errors"
+          	"net/http"
+          	"strings"
+
+          	biodomain "github.com/Techshrr/GoJet/internal/bio"
+          	"github.com/Techshrr/GoJet/internal/workspace"
+          	"github.com/redis/go-redis/v9"
+          )
+
+          type bioSessionAuthority struct {
+          	resolvePrincipal func(*http.Request) (workspace.Principal, error)
+          	lookupRole       func(context.Context, string, string) (string, error)
+          }
+
+          func buildBioSessionAuthority(db *sql.DB, redisClient *redis.Client) (*bioSessionAuthority, error) {
+          	if db == nil || redisClient == nil {
+          		return nil, biodomain.ErrAuthenticationUnavailable
+          	}
+          	workspaceAuthority, err := buildWorkspaceSessionAuthority(db, redisClient)
+          	if err != nil {
+          		return nil, err
+          	}
+          	return &bioSessionAuthority{
+          		resolvePrincipal: workspaceAuthority.resolve,
+          		lookupRole: func(ctx context.Context, workspaceID, userID string) (string, error) {
+          			var role string
+          			err := db.QueryRowContext(ctx,
+          				"SELECT role FROM workspace_memberships WHERE workspace_id=? AND user_id=?",
+          				workspaceID, userID,
+          			).Scan(&role)
+          			return role, err
+          		},
+          	}, nil
+          }
+
+          func (a *bioSessionAuthority) resolve(request *http.Request, workspaceID string) (biodomain.Actor, error) {
+          	if a == nil || a.resolvePrincipal == nil || a.lookupRole == nil || request == nil {
+          		return biodomain.Actor{}, biodomain.ErrAuthenticationUnavailable
+          	}
+          	workspaceID = strings.TrimSpace(workspaceID)
+          	if workspaceID == "" {
+          		return biodomain.Actor{}, biodomain.ErrForbidden
+          	}
+
+          	principal, err := a.resolvePrincipal(request)
+          	if err != nil {
+          		return biodomain.Actor{}, bioAuthorityError(err)
+          	}
+          	userID := strings.TrimSpace(principal.UserID)
+          	if userID == "" {
+          		return biodomain.Actor{}, biodomain.ErrAuthenticationUnavailable
+          	}
+
+          	role, err := a.lookupRole(request.Context(), workspaceID, userID)
+          	if err != nil {
+          		if errors.Is(err, sql.ErrNoRows) {
+          			return biodomain.Actor{}, biodomain.ErrForbidden
+          		}
+          		return biodomain.Actor{}, biodomain.ErrAuthenticationUnavailable
+          	}
+          	role = strings.ToLower(strings.TrimSpace(role))
+          	if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+          		return biodomain.Actor{}, biodomain.ErrForbidden
+          	}
+          	return biodomain.Actor{ActorID: userID, Role: role}, nil
+          }
+
+          func bioAuthorityError(err error) error {
+          	switch {
+          	case errors.Is(err, workspace.ErrAuthenticationRequired):
+          		return biodomain.ErrAuthenticationRequired
+          	case errors.Is(err, workspace.ErrForbidden):
+          		return biodomain.ErrForbidden
+          	default:
+          		return biodomain.ErrAuthenticationUnavailable
+          	}
+          }
+          EOF
+
+          cat > services/platformapi/cmd/server/bio_session_auth_test.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"database/sql"
+          	"errors"
+          	"net/http"
+          	"net/http/httptest"
+          	"testing"
+
+          	biodomain "github.com/Techshrr/GoJet/internal/bio"
+          	"github.com/Techshrr/GoJet/internal/workspace"
+          )
+
+          func TestBioSessionAuthorityResolvesPrincipalAndMembership(t *testing.T) {
+          	authority := &bioSessionAuthority{
+          		resolvePrincipal: func(r *http.Request) (workspace.Principal, error) {
+          			if r.Header.Get("X-GoJet-Test-Actor") != "spoofed" {
+          				t.Fatal("test precondition missing spoofed header")
+          			}
+          			return workspace.Principal{UserID: "real-user", Email: "real@example.test"}, nil
+          		},
+          		lookupRole: func(ctx context.Context, workspaceID, userID string) (string, error) {
+          			if workspaceID != "real-workspace" || userID != "real-user" {
+          				t.Fatalf("unexpected membership lookup %q/%q", workspaceID, userID)
+          			}
+          			return "owner", nil
+          		},
+          	}
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/bio-pages", nil)
+          	req.Header.Set("X-GoJet-Test-Actor", "spoofed")
+          	req.Header.Set("X-GoJet-Test-Workspace-Role", "viewer")
+          	actor, err := authority.resolve(req, "real-workspace")
+          	if err != nil {
+          		t.Fatalf("resolve: %v", err)
+          	}
+          	if actor.ActorID != "real-user" || actor.Role != "owner" {
+          		t.Fatalf("test headers influenced authoritative actor: %#v", actor)
+          	}
+          }
+
+          func TestBioSessionAuthorityRequiresMembership(t *testing.T) {
+          	authority := &bioSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole: func(context.Context, string, string) (string, error) { return "", sql.ErrNoRows },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "workspace-without-membership")
+          	if !errors.Is(err, biodomain.ErrForbidden) {
+          		t.Fatalf("missing membership did not fail forbidden: %v", err)
+          	}
+          }
+
+          func TestBioSessionAuthorityFailsUnavailableOnMembershipBackendError(t *testing.T) {
+          	authority := &bioSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole: func(context.Context, string, string) (string, error) { return "", errors.New("mysql unavailable") },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
+          	if !errors.Is(err, biodomain.ErrAuthenticationUnavailable) {
+          		t.Fatalf("membership backend failure did not fail unavailable: %v", err)
+          	}
+          }
+
+          func TestBioSessionAuthorityRejectsUnknownRole(t *testing.T) {
+          	authority := &bioSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole: func(context.Context, string, string) (string, error) { return "superuser", nil },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
+          	if !errors.Is(err, biodomain.ErrForbidden) {
+          		t.Fatalf("unknown role was not rejected: %v", err)
+          	}
+          }
+
+          func TestBioAuthorityErrorMapping(t *testing.T) {
+          	tests := []struct {
+          		input error
+          		want  error
+          	}{
+          		{workspace.ErrAuthenticationRequired, biodomain.ErrAuthenticationRequired},
+          		{workspace.ErrForbidden, biodomain.ErrForbidden},
+          		{workspace.ErrAuthenticationUnavailable, biodomain.ErrAuthenticationUnavailable},
+          		{errors.New("unexpected"), biodomain.ErrAuthenticationUnavailable},
+          	}
+          	for _, tt := range tests {
+          		if got := bioAuthorityError(tt.input); !errors.Is(got, tt.want) {
+          			t.Fatalf("mapping %v: got %v want %v", tt.input, got, tt.want)
+          		}
+          	}
+          }
+          EOF
+
+          cat > .github/workflows/p20-bio-remediation.yml <<'EOF'
+          name: P20 Bio Remediation Guard
+
+          on:
+            push:
+              branches:
+                - develop/p20-d010-bio-session-authority
+              paths:
+                - 'internal/bio/**'
+                - 'services/platformapi/cmd/server/bio*.go'
+                - 'services/platformapi/cmd/server/workspace_session_auth.go'
+                - 'go.mod'
+                - 'go.sum'
+                - 'scripts/p11/validate_contract.py'
+                - 'scripts/p20/validate_contract.py'
+                - 'artifacts/v10/P11/**'
+                - 'artifacts/v10/P20/test-plan.json'
+                - '.github/workflows/p20-bio-remediation.yml'
+            pull_request:
+              branches:
+                - develop/p20-whole-product-verification
+              paths:
+                - 'internal/bio/**'
+                - 'services/platformapi/cmd/server/bio*.go'
+                - 'services/platformapi/cmd/server/workspace_session_auth.go'
+                - 'go.mod'
+                - 'go.sum'
+                - 'scripts/p11/validate_contract.py'
+                - 'scripts/p20/validate_contract.py'
+                - 'artifacts/v10/P11/**'
+                - 'artifacts/v10/P20/test-plan.json'
+                - '.github/workflows/p20-bio-remediation.yml'
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: p20-bio-remediation-${{ github.event.pull_request.number || github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            guard:
+              name: Bio authority compile and unit guard
+              runs-on: ubuntu-24.04
+              timeout-minutes: 15
+              steps:
+                - name: Checkout exact remediation head
+                  uses: actions/checkout@v4
+                  with:
+                    ref: ${{ github.event.pull_request.head.sha || github.sha }}
+                    fetch-depth: 0
+                    persist-credentials: false
+
+                - name: Set up Go from repository contract
+                  uses: actions/setup-go@v5
+                  with:
+                    go-version-file: go.mod
+                    cache: true
+
+                - name: Verify remediation formatting and dependency closure
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    go mod verify
+                    gofmt -d \
+                      internal/bio/actor_resolver.go \
+                      internal/bio/actor_resolver_test.go \
+                      internal/bio/httpapi.go \
+                      services/platformapi/cmd/server/bio.go \
+                      services/platformapi/cmd/server/bio_session_auth.go \
+                      services/platformapi/cmd/server/bio_session_auth_test.go \
+                      | tee /tmp/p20-bio-remediation-gofmt.diff
+                    test ! -s /tmp/p20-bio-remediation-gofmt.diff
+
+                - name: Run scoped native unit tests
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    go test ./internal/bio ./services/platformapi/cmd/server
+                    go vet ./internal/bio ./services/platformapi/cmd/server
+
+                - name: Preserve frozen P11 and P20 contracts
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    python3 scripts/p11/validate_contract.py > /tmp/p20-bio-remediation-p11-contract.json
+                    python3 scripts/p20/validate_contract.py > /tmp/p20-bio-remediation-p20-contract.json
+                    python3 - <<'PY'
+                    import json
+                    p11=json.load(open('/tmp/p20-bio-remediation-p11-contract.json', encoding='utf-8'))
+                    p20=json.load(open('/tmp/p20-bio-remediation-p20-contract.json', encoding='utf-8'))
+                    assert p11['status'] == 'PASS', p11
+                    assert p20['status'] == 'PASS', p20
+                    assert p20['contract_authority'] == '050fd7052d71ff77858b153abcbc466a1243af2f', p20
+                    assert p20['frozen_contract_preserved'] is True, p20
+                    PY
+
+                - name: Record exact remediation head
+                  if: always()
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    mkdir -p /tmp/p20-bio-remediation-evidence
+                    git rev-parse HEAD > /tmp/p20-bio-remediation-evidence/implementation_commit.txt
+                    cp /tmp/p20-bio-remediation-p11-contract.json /tmp/p20-bio-remediation-evidence/p11-contract.json 2>/dev/null || true
+                    cp /tmp/p20-bio-remediation-p20-contract.json /tmp/p20-bio-remediation-evidence/p20-contract.json 2>/dev/null || true
+
+                - name: Upload remediation guard evidence
+                  if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: p20-bio-remediation-${{ github.event.pull_request.head.sha || github.sha }}
+                    path: /tmp/p20-bio-remediation-evidence
+                    if-no-files-found: error
+                    retention-days: 14
+          EOF
+
+          gofmt -w \
+            internal/bio/actor_resolver.go \
+            internal/bio/actor_resolver_test.go \
+            internal/bio/httpapi.go \
+            services/platformapi/cmd/server/bio.go \
+            services/platformapi/cmd/server/bio_session_auth.go \
+            services/platformapi/cmd/server/bio_session_auth_test.go
+
+          go mod verify
+          go test ./internal/bio ./services/platformapi/cmd/server
+          go vet ./internal/bio ./services/platformapi/cmd/server
+          python3 scripts/p11/validate_contract.py > /tmp/p11-contract.json
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json
+          p11=json.load(open('/tmp/p11-contract.json', encoding='utf-8'))
+          p20=json.load(open('/tmp/p20-contract.json', encoding='utf-8'))
+          assert p11['status']=='PASS', p11
+          assert p20['status']=='PASS', p20
+          assert p20['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', p20
+          assert p20['frozen_contract_preserved'] is True, p20
+          PY
+
+          rm .github/workflows/p20-d010-product-stage.yml
+
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/p20-bio-remediation.yml',
+              'internal/bio/actor_resolver.go',
+              'internal/bio/actor_resolver_test.go',
+              'internal/bio/httpapi.go',
+              'services/platformapi/cmd/server/bio.go',
+              'services/platformapi/cmd/server/bio_session_auth.go',
+              'services/platformapi/cmd/server/bio_session_auth_test.go',
+          }
+          base='bb6add73382ff2ffbf0eef216be99e42d85d51f5'
+          actual=set(filter(None, subprocess.check_output(['git','diff','--name-only',base], text=True).splitlines()))
+          assert actual == expected, {'actual': sorted(actual), 'expected': sorted(expected)}
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'P20-D010: compose real Bio session authority'
+          git push origin HEAD:develop/p20-d010-bio-session-authority
