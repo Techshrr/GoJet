@@ -42,7 +42,7 @@ func TestBioSessionAuthorityResolvesPrincipalAndMembership(t *testing.T) {
 func TestBioSessionAuthorityRequiresMembership(t *testing.T) {
 	authority := &bioSessionAuthority{
 		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
-		lookupRole: func(context.Context, string, string) (string, error) { return "", sql.ErrNoRows },
+		lookupRole:       func(context.Context, string, string) (string, error) { return "", sql.ErrNoRows },
 	}
 	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "workspace-without-membership")
 	if !errors.Is(err, biodomain.ErrForbidden) {
@@ -53,7 +53,7 @@ func TestBioSessionAuthorityRequiresMembership(t *testing.T) {
 func TestBioSessionAuthorityFailsUnavailableOnMembershipBackendError(t *testing.T) {
 	authority := &bioSessionAuthority{
 		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
-		lookupRole: func(context.Context, string, string) (string, error) { return "", errors.New("mysql unavailable") },
+		lookupRole:       func(context.Context, string, string) (string, error) { return "", errors.New("mysql unavailable") },
 	}
 	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
 	if !errors.Is(err, biodomain.ErrAuthenticationUnavailable) {
@@ -64,7 +64,7 @@ func TestBioSessionAuthorityFailsUnavailableOnMembershipBackendError(t *testing.
 func TestBioSessionAuthorityRejectsUnknownRole(t *testing.T) {
 	authority := &bioSessionAuthority{
 		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
-		lookupRole: func(context.Context, string, string) (string, error) { return "superuser", nil },
+		lookupRole:       func(context.Context, string, string) (string, error) { return "superuser", nil },
 	}
 	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
 	if !errors.Is(err, biodomain.ErrForbidden) {
