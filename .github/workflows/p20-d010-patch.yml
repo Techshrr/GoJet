@@ -1,0 +1,87 @@
+name: P20 D010 Exact Patch
+
+on:
+  push:
+    branches:
+      - develop/p20-d010-bio-session-authority
+    paths:
+      - 'scripts/p20/d010_bio_patch.py'
+      - '.github/workflows/p20-d010-patch.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d010-exact-patch
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    name: Apply and validate D010 Bio wiring
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact remediation head with push authority
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply exact patch and validate product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          registration_head='bb6add73382ff2ffbf0eef216be99e42d85d51f5'
+          git merge-base --is-ancestor "$registration_head" HEAD
+
+          python3 scripts/p20/d010_bio_patch.py
+
+          gofmt -w \
+            internal/bio/actor_resolver.go \
+            internal/bio/actor_resolver_test.go \
+            internal/bio/httpapi.go \
+            services/platformapi/cmd/server/bio.go \
+            services/platformapi/cmd/server/bio_session_auth.go \
+            services/platformapi/cmd/server/bio_session_auth_test.go
+
+          go mod verify
+          go test ./internal/bio ./services/platformapi/cmd/server
+          go vet ./internal/bio ./services/platformapi/cmd/server
+
+          python3 scripts/p11/validate_contract.py > /tmp/p20-d010-p11-contract.json
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d010-p20-contract.json
+          python3 - <<'PY'
+          import json
+          p11=json.load(open('/tmp/p20-d010-p11-contract.json', encoding='utf-8'))
+          p20=json.load(open('/tmp/p20-d010-p20-contract.json', encoding='utf-8'))
+          assert p11['status']=='PASS', p11
+          assert p20['status']=='PASS', p20
+          assert p20['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', p20
+          assert p20['frozen_contract_preserved'] is True, p20
+          PY
+
+          rm -f scripts/p20/d010_bio_patch.py
+          rm -f .github/workflows/p20-d010-product-stage.yml
+          rm -f .github/workflows/p20-d010-patch.yml
+
+          python3 - <<'PY'
+          import subprocess
+          registration='bb6add73382ff2ffbf0eef216be99e42d85d51f5'
+          expected={
+              'internal/bio/actor_resolver.go',
+              'internal/bio/actor_resolver_test.go',
+              'internal/bio/httpapi.go',
+              'services/platformapi/cmd/server/bio.go',
+              'services/platformapi/cmd/server/bio_session_auth.go',
+              'services/platformapi/cmd/server/bio_session_auth_test.go',
+          }
+          actual=set(filter(None, subprocess.check_output(['git','diff','--name-only',registration], text=True).splitlines()))
+          assert actual==expected, {'actual':sorted(actual),'expected':sorted(expected)}
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'P20-D010: compose real Bio session authority'
+          git push origin HEAD:develop/p20-d010-bio-session-authority
