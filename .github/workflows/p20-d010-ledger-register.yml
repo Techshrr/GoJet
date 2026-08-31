@@ -1,0 +1,104 @@
+name: P20 D010 Ledger Register
+
+on:
+  push:
+    branches:
+      - tmp/p20-d010-ledger-register
+    paths:
+      - '.github/workflows/p20-d010-ledger-register.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    name: Record D010 open defect
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact T018 discovery head
+        uses: actions/checkout@v4
+        with:
+          ref: 645f42946d2985f510f7e673137e98f8aff31cb1
+          fetch-depth: 0
+
+      - name: Register D010 without rewriting closed history
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          raw = path.read_text(encoding='utf-8')
+          data = json.loads(raw)
+          assert data['open'] == [], data['open']
+          assert [item['id'] for item in data['closed']] == [f'P20-D{i:03d}' for i in range(1, 10)], data['closed']
+          assert data['decision_required'] == [], data['decision_required']
+
+          entry = '''    {
+              "id": "P20-D010",
+              "severity": "P1",
+              "title": "Bio API rejects real authenticated session authority",
+              "case": "P20-T018",
+              "issue": 83,
+              "release_blocking": true,
+              "gate_hard_failure": true,
+              "affected_gates": ["G3", "G6", "G10"],
+              "discovered_head": "645f42946d2985f510f7e673137e98f8aff31cb1",
+              "discovery_workflow_run": 33347382280,
+              "discovery_workflow_job": 99354001408,
+              "discovery_artifact_id": 9742509259,
+              "discovery_artifact_digest": "sha256:12972017746ab764a8b5e4cdf16ddeb47a870cf995359564fd543be23feab0a5",
+              "failure": "real authenticated session is not accepted as Bio API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T017, same-head P11 Bio risk/public/noindex predecessor authority, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable Bio row delta 0"
+            }'''.replace('          ', '')
+
+          marker = '  "open": [],\n  "closed": ['
+          replacement = '  "open": [\n' + entry + '\n  ],\n  "closed": ['
+          assert raw.count(marker) == 1
+          raw = raw.replace(marker, replacement, 1)
+
+          old_note = 'P20-D001 through P20-D009 are recorded closed from their merged remediation and exact-head formal verification authority. D009 closure evidence is bound to dd6cbd0ab18f4c75ddd286981f288455773f2299; because this ledger update creates a new candidate HEAD, P20-T018 remains LOCKED until the closure HEAD re-establishes formal P20-T017, P20 Contract, and Candidate Freeze PASS with no open P0/P1 defects.'
+          new_note = 'P20-D001 through P20-D009 are closed. P20-D010 is an open P1 release blocker discovered by exact-head P20-T018 live Bio continuity on 645f42946d2985f510f7e673137e98f8aff31cb1. P20-T019 remains forbidden until D010 is remediated, formally verified and closed with same-head P20 contract and Candidate Freeze coherence.'
+          assert raw.count(old_note) == 1
+          raw = raw.replace(old_note, new_note, 1)
+
+          updated = json.loads(raw)
+          assert [item['id'] for item in updated['open']] == ['P20-D010']
+          assert [item['id'] for item in updated['closed']] == [f'P20-D{i:03d}' for i in range(1, 10)]
+          assert updated['decision_required'] == []
+          path.write_text(raw, encoding='utf-8')
+          PY
+
+      - name: Validate ledger-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
+          python3 scripts/p20/defect_cases.py || true
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          assert [x['id'] for x in data['open']] == ['P20-D010'], data
+          assert data['open'][0]['severity'] == 'P1', data
+          assert data['open'][0]['release_blocking'] is True, data
+          assert data['open'][0]['gate_hard_failure'] is True, data
+          assert data['decision_required'] == [], data
+          PY
+          git diff --check
+          git diff -- artifacts/v10/P20/defect-ledger.json
+
+      - name: Commit ledger registration to P20 branch
+        shell: bash
+        env:
+          TARGET_BRANCH: develop/p20-whole-product-verification
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20: register D010 Bio session authority defect'
+          git push origin "HEAD:${TARGET_BRANCH}"
+          git rev-parse HEAD
