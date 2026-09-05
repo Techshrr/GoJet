@@ -65,7 +65,7 @@ jobs:
           once(old,new)
           once('          mkdir -p artifacts/v10/P20/runtime/t018\n', '          mkdir -p artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019\n')
           once('      - name: Upload exact-head T019 live evidence', '      - name: Upload exact-head T019 formal evidence')
-          once('name: p20-t019-live-domain-${{ github.event.pull_request.head.sha || github.sha }}', 'name: p20-t019-formal-domain-${{ github.event.pull_request.head.sha || github.sha }}')
+          once('name: p20-t019-live-domain-', 'name: p20-t019-formal-domain-')
           once('            artifacts/v10/P20/p0/P20-T018.json\n', '            artifacts/v10/P20/p0/P20-T018.json\n            artifacts/v10/P20/p0/P20-T019.json\n')
 
           out=Path('staging/p20-p0-domain-formal.yml.generated')
