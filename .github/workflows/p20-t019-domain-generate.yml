@@ -1,4 +1,4 @@
-name: P20 T019 Probe Gofmt Stage
+name: P20 T019 P17 Validator Fix Stage
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  format:
+  stage:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout staging branch
@@ -29,26 +29,36 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Gofmt exact T019 probe only
+      - name: Patch only the P17 predecessor schema validator
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C p20 rev-parse HEAD)" = '125e1f982af3ad4ff51b03079bd8a4f9db41fd75'
-          gofmt -w p20/scripts/p20/t019_probe/main.go
+          test "$(git -C p20 rev-parse HEAD)" = '439b230aef21d1650a965ea7d649a9fa2e3594f2'
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('p20/.github/workflows/p20-p0-domain.yml')
+          text=path.read_text(encoding='utf-8')
+          old="""          for case in ('P17-T008','P17-T009'):\n              data=json.loads((Path('artifacts/v10/P17/domain')/f'{case}.json').read_text(encoding='utf-8'))\n              assert data['status']=='PASS',data\n              assert data['exact_head']==head,data\n              assert data['errors']==[],data\n"""
+          new="""          for case in ('P17-T008','P17-T009'):\n              data=json.loads((Path('artifacts/v10/P17/domain')/f'{case}.json').read_text(encoding='utf-8'))\n              assert data['node']=='P17',data\n              assert data['case']==case,data\n              assert data['status']=='PASS',data\n              assert data['exact_head']==head,(data['exact_head'],head)\n              assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data\n              assert data['checks'] and all(data['checks'].values()),data\n              assert data['environment']['mysql_version'],data\n              assert data['environment']['redis_version'],data\n              assert data['environment']['mysql']=='real MySQL 8.x service',data\n              assert data['environment']['redis']=='real Redis 7.x service',data\n              assert not any(data['evidence_policy'].values()),data\n"""
+          assert text.count(old)==1, text.count(old)
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
+          PY
           git -C p20 diff --check
           test "$(git -C p20 diff --name-only | wc -l | tr -d ' ')" = '1'
-          test "$(git -C p20 diff --name-only)" = 'scripts/p20/t019_probe/main.go'
-          test -z "$(gofmt -d p20/scripts/p20/t019_probe/main.go)"
+          test "$(git -C p20 diff --name-only)" = '.github/workflows/p20-p0-domain.yml'
+          grep -F "assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data" p20/.github/workflows/p20-p0-domain.yml
+          grep -F "assert data['checks'] and all(data['checks'].values()),data" p20/.github/workflows/p20-p0-domain.yml
+          test "$(grep -Fc "assert data['errors']==[],data" p20/.github/workflows/p20-p0-domain.yml)" = '1'
 
-      - name: Persist formatted probe blob on temporary branch
+      - name: Persist validated workflow blob on temporary branch
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p staging-repo/staging
-          cp p20/scripts/p20/t019_probe/main.go staging-repo/staging/p20-t019-probe.go.formatted
+          cp p20/.github/workflows/p20-p0-domain.yml staging-repo/staging/p20-p0-domain.yml.p17-validator-fixed
           git -C staging-repo config user.name 'Ethan H.'
           git -C staging-repo config user.email '118724895+Techshrr@users.noreply.github.com'
-          git -C staging-repo add staging/p20-t019-probe.go.formatted
+          git -C staging-repo add staging/p20-p0-domain.yml.p17-validator-fixed
           git -C staging-repo diff --cached --check
-          git -C staging-repo commit -m 'P20 T019: stage gofmt probe blob'
+          git -C staging-repo commit -m 'P20 T019: stage corrected P17 validator blob'
           git -C staging-repo push origin HEAD:tmp/p20-t019-domain-workflow
