@@ -1,0 +1,132 @@
+name: P20 Whole Product Verification Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'installer/**'
+      - 'migrations/**'
+      - 'deploy/**'
+      - 'config/**'
+      - 'contracts/**'
+      - 'specifications/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/p20/**'
+      - 'artifacts/v10/P20/**'
+      - '.github/workflows/p20-whole-product-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: P20 contract freeze and whole-product baseline guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact P20 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          go version
+          node --version
+          pnpm --version
+
+      - name: Validate frozen P20 product and test contract
+        id: contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p20/validate_contract.py
+          python3 scripts/p20/validate_contract.py | tee /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract.json',encoding='utf-8'))
+          assert data['node']=='P20' and data['status']=='PASS' and data['errors']==[], data
+          assert data['case_range']=='P20-T001..P20-T049', data
+          assert data['frozen_contract_preserved'] is True, data
+          assert data['review_phase'] in ('pending','signed'), data
+          assert data['merge_authoritative'] is False, data
+          assert len(data['contract_authority'])==40, data
+          assert data['p0_workflow_steps']==15, data
+          assert data['release_candidate_gate_rows']==11, data
+          if data['mode']=='contract-freeze':
+              assert data['implementation_commit']==data['contract_authority'], data
+              assert data['implementation_authorized'] is False, data
+          elif data['review_phase']=='pending':
+              assert data['mode']=='verification-guard' and data['implementation_authorized'] is True, data
+          else:
+              assert data['mode']=='signed-review-guard' and data['implementation_authorized'] is False, data
+          PY
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prove current Go whole-repository baseline
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Prove current frontend workspace baseline
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm -r --if-present typecheck
+          pnpm -r --if-present build
+          test -d frontend/apps/admin/dist
+          test -d frontend/apps/docs/dist
+          test -d frontend/apps/site/dist
+          test -d frontend/apps/workspace/dist
+
+      - name: Record exact-head P20 contract authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/contract-guard
+          cp /tmp/p20-contract.json artifacts/v10/P20/contract-guard/contract.json
+          git rev-parse HEAD > artifacts/v10/P20/contract-guard/implementation_commit.txt
+          git rev-parse HEAD:artifacts/v10/P20/test-plan.json > artifacts/v10/P20/contract-guard/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P20/review.md > artifacts/v10/P20/contract-guard/review_blob.txt
+          git rev-parse 6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c:artifacts/v10/P19/review.md > artifacts/v10/P20/contract-guard/p19_signed_review_blob.txt
+          git rev-parse HEAD:contracts/traceability/capability-matrix.snapshot.md > artifacts/v10/P20/contract-guard/capability_matrix_blob.txt
+          git rev-parse HEAD:contracts/traceability/route-registry.snapshot.md > artifacts/v10/P20/contract-guard/route_registry_blob.txt
+          git show -s --format='%H%n%P%n%T' 6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c > artifacts/v10/P20/contract-guard/p19_integration_identity.txt
+
+      - name: Upload exact-head P20 contract authority
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-whole-product-verification-contract-${{ steps.contract.outputs.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/test-plan.json
+            artifacts/v10/P20/review.md
+            artifacts/v10/P20/contract-guard/
