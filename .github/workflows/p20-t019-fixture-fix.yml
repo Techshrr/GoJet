@@ -20,52 +20,30 @@ jobs:
           ref: develop/p20-whole-product-verification
           fetch-depth: 0
 
-      - name: Correct only the T019 discovery fixture and error classification
+      - name: Correct only T019 discovery fixture and error classification
         shell: bash
         run: |
           set -euo pipefail
           expected_head='0681eff1a779343aef578b98cb39fea916f14ea6'
           test "$(git rev-parse HEAD)" = "$expected_head"
-
           python3 - <<'PY'
           from pathlib import Path
-
           path=Path('scripts/p20/t019_probe/main.go')
           text=path.read_text(encoding='utf-8')
-
           old='hostname := "p20-t019-" + suffix + ".example.test"'
           new='hostname := "p20-t019-" + suffix + ".example.com"'
           assert text.count(old)==1, text.count(old)
           text=text.replace(old,new,1)
-
-          old_block='''\tresult.Details["domain_create_http_status"] = created.Status
-\tresult.Details["domain_create_error_code"] = nestedErrorCode(created.Body)
-\tresult.Details["domain_create_row_delta"] = rowsAfter - rowsBefore
-\tif created.Status != http.StatusCreated {
-\t\tresult.Details["domain_create_failed_without_write"] = rowsAfter == rowsBefore
-\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")
-\t\treturn
-\t}
-'''
-          new_block='''\tresult.Details["domain_create_http_status"] = created.Status
-\terrorCode := nestedErrorCode(created.Body)
-\tresult.Details["domain_create_error_code"] = errorCode
-\tresult.Details["domain_create_row_delta"] = rowsAfter - rowsBefore
-\tif created.Status != http.StatusCreated {
-\t\tresult.Details["domain_create_failed_without_write"] = rowsAfter == rowsBefore
-\t\tif created.Status == http.StatusServiceUnavailable && errorCode == "auth_dependency_unavailable" {
-\t\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")
-\t\t} else {
-\t\t\tfail(fmt.Sprintf("T019 custom-domain create reached business validation but failed with HTTP %d code=%s", created.Status, errorCode))
-\t\t}
-\t\treturn
-\t}
-'''
-          assert text.count(old_block)==1, text.count(old_block)
-          text=text.replace(old_block,new_block,1)
+          old='\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")'
+          new=('\t\tif created.Status == http.StatusServiceUnavailable && nestedErrorCode(created.Body) == "auth_dependency_unavailable" {\n'
+               '\t\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")\n'
+               '\t\t} else {\n'
+               '\t\t\tfail(fmt.Sprintf("T019 custom-domain create reached business validation but failed with HTTP %d code=%s", created.Status, nestedErrorCode(created.Body)))\n'
+               '\t\t}')
+          assert text.count(old)==1, text.count(old)
+          text=text.replace(old,new,1)
           path.write_text(text,encoding='utf-8')
           PY
-
           gofmt -w scripts/p20/t019_probe/main.go
           gofmt -d scripts/p20/t019_probe/main.go | tee /tmp/t019-gofmt.diff
           test ! -s /tmp/t019-gofmt.diff
