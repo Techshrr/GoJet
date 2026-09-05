@@ -369,9 +369,17 @@ jobs:
               assert data['errors']==[],data
           for case in ('P17-T008','P17-T009'):
               data=json.loads((Path('artifacts/v10/P17/domain')/f'{case}.json').read_text(encoding='utf-8'))
+              assert data['node']=='P17',data
+              assert data['case']==case,data
               assert data['status']=='PASS',data
-              assert data['exact_head']==head,data
-              assert data['errors']==[],data
+              assert data['exact_head']==head,(data['exact_head'],head)
+              assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data
+              assert data['checks'] and all(data['checks'].values()),data
+              assert data['environment']['mysql_version'],data
+              assert data['environment']['redis_version'],data
+              assert data['environment']['mysql']=='real MySQL 8.x service',data
+              assert data['environment']['redis']=='real Redis 7.x service',data
+              assert not any(data['evidence_policy'].values()),data
           PRED
 
           echo 'Resetting durable state for the correlated P20 timeline'
