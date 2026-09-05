@@ -1,0 +1,425 @@
+name: P20 D011 Product Stage
+
+on:
+  push:
+    branches:
+      - tmp/p20-d011-product-stage
+    paths:
+      - '.github/workflows/p20-d011-product-stage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  stage-product:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout D011 product branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-d011-domain-session-authority
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Apply scoped Domains production authority remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '0681eff1a779343aef578b98cb39fea916f14ea6'
+
+          cat > internal/domains/actor_resolver.go <<'GO'
+          package domains
+
+          import (
+          	"errors"
+          	"net/http"
+          )
+
+          var (
+          	ErrAuthenticationRequired    = errors.New("domains authentication required")
+          	ErrForbidden                 = errors.New("domains workspace access forbidden")
+          	ErrAuthenticationUnavailable = errors.New("domains authentication dependency unavailable")
+          )
+
+          // Actor is the server-authoritative identity and Workspace role accepted by
+          // the Domains API after the authentication/session boundary has been resolved.
+          type Actor struct {
+          	ActorID string
+          	Role    string
+          }
+
+          // ActorResolver resolves a real request and path Workspace into the identity
+          // authority used by Domains. Production resolvers must not derive authority
+          // from X-GoJet-Test-* headers; those headers remain isolated to test mode.
+          type ActorResolver func(*http.Request, string) (Actor, error)
+          GO
+
+          cat > internal/domains/actor_resolver_test.go <<'GO'
+          package domains
+
+          import (
+          	"errors"
+          	"net/http"
+          	"net/http/httptest"
+          	"strings"
+          	"testing"
+          )
+
+          func TestDomainsActorResolverPrefersServerAuthorityOverTestHeaders(t *testing.T) {
+          	api := &WorkspaceDomainsAPI{actorResolver: func(r *http.Request, workspaceID string) (Actor, error) {
+          		if workspaceID != "real-workspace" {
+          			t.Fatalf("unexpected workspace %q", workspaceID)
+          		}
+          		if r.Header.Get("X-GoJet-Test-Actor") != "spoofed" {
+          			t.Fatal("test precondition missing spoofed header")
+          		}
+          		return Actor{ActorID: "real-user", Role: "owner"}, nil
+          	}}
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/domains", nil)
+          	req.Header.Set("X-GoJet-Test-Actor", "spoofed")
+          	req.Header.Set("X-GoJet-Test-Workspace-Role", "viewer")
+          	req.Header.Set("X-GoJet-Test-Workspace", "real-workspace")
+          	recorder := httptest.NewRecorder()
+
+          	actor, ok := api.authenticate(recorder, req, "real-workspace", true)
+          	if !ok {
+          		t.Fatalf("resolver authority rejected: status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          	if actor.ActorID != "real-user" || actor.Role != "owner" {
+          		t.Fatalf("test headers influenced authoritative actor: %#v", actor)
+          	}
+          }
+
+          func TestDomainsActorResolverPreservesViewerReadOnly(t *testing.T) {
+          	api := &WorkspaceDomainsAPI{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "viewer"}, nil
+          	}}
+          	recorder := httptest.NewRecorder()
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/domains", nil)
+          	if _, ok := api.authenticate(recorder, req, "real-workspace", true); ok {
+          		t.Fatal("viewer mutation unexpectedly authorized")
+          	}
+          	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"read_only"`) {
+          		t.Fatalf("unexpected viewer denial: status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          }
+
+          func TestDomainsActorResolverAllowsViewerRead(t *testing.T) {
+          	api := &WorkspaceDomainsAPI{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "viewer"}, nil
+          	}}
+          	recorder := httptest.NewRecorder()
+          	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/domains", nil)
+          	actor, ok := api.authenticate(recorder, req, "real-workspace", false)
+          	if !ok || actor.ActorID != "real-user" || actor.Role != "viewer" {
+          		t.Fatalf("viewer read rejected: ok=%v actor=%#v status=%d body=%s", ok, actor, recorder.Code, recorder.Body.String())
+          	}
+          }
+
+          func TestDomainsActorResolverMapsAuthorityErrors(t *testing.T) {
+          	tests := []struct {
+          		name string
+          		err  error
+          		want int
+          		code string
+          	}{
+          		{"required", ErrAuthenticationRequired, http.StatusUnauthorized, "authentication_required"},
+          		{"forbidden", ErrForbidden, http.StatusForbidden, "forbidden"},
+          		{"unavailable", ErrAuthenticationUnavailable, http.StatusServiceUnavailable, "auth_dependency_unavailable"},
+          		{"unexpected", errors.New("backend failure"), http.StatusServiceUnavailable, "auth_dependency_unavailable"},
+          	}
+          	for _, tt := range tests {
+          		t.Run(tt.name, func(t *testing.T) {
+          			api := &WorkspaceDomainsAPI{actorResolver: func(*http.Request, string) (Actor, error) { return Actor{}, tt.err }}
+          			recorder := httptest.NewRecorder()
+          			req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/domains", nil)
+          			if _, ok := api.authenticate(recorder, req, "real-workspace", false); ok {
+          				t.Fatal("authority error unexpectedly authorized")
+          			}
+          			if recorder.Code != tt.want || !strings.Contains(recorder.Body.String(), `"code":"`+tt.code+`"`) {
+          				t.Fatalf("unexpected mapping: status=%d body=%s", recorder.Code, recorder.Body.String())
+          			}
+          		})
+          	}
+          }
+
+          func TestDomainsActorResolverRejectsUnknownRole(t *testing.T) {
+          	api := &WorkspaceDomainsAPI{actorResolver: func(*http.Request, string) (Actor, error) {
+          		return Actor{ActorID: "real-user", Role: "superuser"}, nil
+          	}}
+          	recorder := httptest.NewRecorder()
+          	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/real-workspace/domains", nil)
+          	if _, ok := api.authenticate(recorder, req, "real-workspace", false); ok {
+          		t.Fatal("unknown role unexpectedly authorized")
+          	}
+          	if recorder.Code != http.StatusForbidden {
+          		t.Fatalf("unknown role status=%d body=%s", recorder.Code, recorder.Body.String())
+          	}
+          }
+          GO
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('internal/domains/httpapi.go')
+          text=path.read_text(encoding='utf-8')
+          old='''type WorkspaceDomainsAPI struct {\n\tstore           *MySQLStore\n\ttestAuthEnabled bool\n}\n'''
+          new='''type WorkspaceDomainsAPI struct {\n\tstore           *MySQLStore\n\ttestAuthEnabled bool\n\tactorResolver   ActorResolver\n}\n'''
+          assert text.count(old)==1
+          text=text.replace(old,new,1)
+
+          old='''func NewWorkspaceDomainsAPI(store *MySQLStore, testAuthEnabled bool) *WorkspaceDomainsAPI {\n\treturn &WorkspaceDomainsAPI{store: store, testAuthEnabled: testAuthEnabled}\n}\n'''
+          new='''func NewWorkspaceDomainsAPI(store *MySQLStore, testAuthEnabled bool) *WorkspaceDomainsAPI {\n\treturn &WorkspaceDomainsAPI{store: store, testAuthEnabled: testAuthEnabled}\n}\n\nfunc NewWorkspaceDomainsAPIWithActorResolver(store *MySQLStore, resolver ActorResolver) *WorkspaceDomainsAPI {\n\treturn &WorkspaceDomainsAPI{store: store, actorResolver: resolver}\n}\n'''
+          assert text.count(old)==1
+          text=text.replace(old,new,1)
+
+          old='''func (a *WorkspaceDomainsAPI) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (domainActor, bool) {\n\tif !a.testAuthEnabled {\n\t\twriteDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")\n\t\treturn domainActor{}, false\n\t}\n'''
+          new='''func (a *WorkspaceDomainsAPI) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (domainActor, bool) {\n\tif a.actorResolver != nil {\n\t\tactor, err := a.actorResolver(r, strings.TrimSpace(workspaceID))\n\t\tif err != nil {\n\t\t\tswitch {\n\t\t\tcase errors.Is(err, ErrAuthenticationRequired):\n\t\t\t\twriteDomainAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")\n\t\t\tcase errors.Is(err, ErrForbidden):\n\t\t\t\twriteDomainAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")\n\t\t\tdefault:\n\t\t\t\twriteDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")\n\t\t\t}\n\t\t\treturn domainActor{}, false\n\t\t}\n\t\tactorID := strings.TrimSpace(actor.ActorID)\n\t\trole := strings.ToLower(strings.TrimSpace(actor.Role))\n\t\tif actorID == "" || strings.TrimSpace(workspaceID) == "" {\n\t\t\twriteDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")\n\t\t\treturn domainActor{}, false\n\t\t}\n\t\tif role != "owner" && role != "admin" && role != "member" && role != "viewer" {\n\t\t\twriteDomainAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")\n\t\t\treturn domainActor{}, false\n\t\t}\n\t\tif mutation && role == "viewer" {\n\t\t\twriteDomainAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")\n\t\t\treturn domainActor{}, false\n\t\t}\n\t\treturn domainActor{ActorID: actorID, Role: role}, true\n\t}\n\n\t// Preserve the predecessor P06 test-only adapter for isolated P06 authority tests.\n\tif !a.testAuthEnabled {\n\t\twriteDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")\n\t\treturn domainActor{}, false\n\t}\n'''
+          assert text.count(old)==1
+          text=text.replace(old,new,1)
+          path.write_text(text,encoding='utf-8')
+          PY
+
+          cat > services/platformapi/cmd/server/domains_session_auth.go <<'GO'
+          package main
+
+          import (
+          	"context"
+          	"database/sql"
+          	"errors"
+          	"net/http"
+          	"strings"
+
+          	"github.com/Techshrr/GoJet/internal/domains"
+          	"github.com/Techshrr/GoJet/internal/workspace"
+          	"github.com/redis/go-redis/v9"
+          )
+
+          type domainsSessionAuthority struct {
+          	resolvePrincipal func(*http.Request) (workspace.Principal, error)
+          	lookupRole       func(context.Context, string, string) (string, error)
+          }
+
+          func buildDomainsSessionAuthority(db *sql.DB, redisClient *redis.Client) (*domainsSessionAuthority, error) {
+          	if db == nil || redisClient == nil {
+          		return nil, domains.ErrAuthenticationUnavailable
+          	}
+          	workspaceAuthority, err := buildWorkspaceSessionAuthority(db, redisClient)
+          	if err != nil {
+          		return nil, err
+          	}
+          	return &domainsSessionAuthority{
+          		resolvePrincipal: workspaceAuthority.resolve,
+          		lookupRole: func(ctx context.Context, workspaceID, userID string) (string, error) {
+          			var role string
+          			err := db.QueryRowContext(ctx,
+          				"SELECT role FROM workspace_memberships WHERE workspace_id=? AND user_id=?",
+          				workspaceID, userID,
+          			).Scan(&role)
+          			return role, err
+          		},
+          	}, nil
+          }
+
+          func (a *domainsSessionAuthority) resolve(request *http.Request, workspaceID string) (domains.Actor, error) {
+          	if a == nil || a.resolvePrincipal == nil || a.lookupRole == nil || request == nil {
+          		return domains.Actor{}, domains.ErrAuthenticationUnavailable
+          	}
+          	workspaceID = strings.TrimSpace(workspaceID)
+          	if workspaceID == "" {
+          		return domains.Actor{}, domains.ErrForbidden
+          	}
+          	principal, err := a.resolvePrincipal(request)
+          	if err != nil {
+          		return domains.Actor{}, domainsAuthorityError(err)
+          	}
+          	userID := strings.TrimSpace(principal.UserID)
+          	if userID == "" {
+          		return domains.Actor{}, domains.ErrAuthenticationUnavailable
+          	}
+          	role, err := a.lookupRole(request.Context(), workspaceID, userID)
+          	if err != nil {
+          		if errors.Is(err, sql.ErrNoRows) {
+          			return domains.Actor{}, domains.ErrForbidden
+          		}
+          		return domains.Actor{}, domains.ErrAuthenticationUnavailable
+          	}
+          	role = strings.ToLower(strings.TrimSpace(role))
+          	if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+          		return domains.Actor{}, domains.ErrForbidden
+          	}
+          	return domains.Actor{ActorID: userID, Role: role}, nil
+          }
+
+          func domainsAuthorityError(err error) error {
+          	switch {
+          	case errors.Is(err, workspace.ErrAuthenticationRequired):
+          		return domains.ErrAuthenticationRequired
+          	case errors.Is(err, workspace.ErrForbidden):
+          		return domains.ErrForbidden
+          	default:
+          		return domains.ErrAuthenticationUnavailable
+          	}
+          }
+          GO
+
+          cat > services/platformapi/cmd/server/domains_session_auth_test.go <<'GO'
+          package main
+
+          import (
+          	"context"
+          	"database/sql"
+          	"errors"
+          	"net/http"
+          	"net/http/httptest"
+          	"testing"
+
+          	"github.com/Techshrr/GoJet/internal/domains"
+          	"github.com/Techshrr/GoJet/internal/workspace"
+          )
+
+          func TestDomainsSessionAuthorityResolvesPrincipalAndMembership(t *testing.T) {
+          	authority := &domainsSessionAuthority{
+          		resolvePrincipal: func(r *http.Request) (workspace.Principal, error) {
+          			if r.Header.Get("X-GoJet-Test-Actor") != "spoofed" {
+          				t.Fatal("test precondition missing spoofed header")
+          			}
+          			return workspace.Principal{UserID: "real-user", Email: "real@example.test"}, nil
+          		},
+          		lookupRole: func(ctx context.Context, workspaceID, userID string) (string, error) {
+          			if workspaceID != "real-workspace" || userID != "real-user" {
+          				t.Fatalf("unexpected membership lookup %q/%q", workspaceID, userID)
+          			}
+          			return "owner", nil
+          		},
+          	}
+          	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/real-workspace/domains", nil)
+          	req.Header.Set("X-GoJet-Test-Actor", "spoofed")
+          	req.Header.Set("X-GoJet-Test-Workspace-Role", "viewer")
+          	actor, err := authority.resolve(req, "real-workspace")
+          	if err != nil {
+          		t.Fatalf("resolve: %v", err)
+          	}
+          	if actor.ActorID != "real-user" || actor.Role != "owner" {
+          		t.Fatalf("test headers influenced authoritative actor: %#v", actor)
+          	}
+          }
+
+          func TestDomainsSessionAuthorityRequiresMembership(t *testing.T) {
+          	authority := &domainsSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole:       func(context.Context, string, string) (string, error) { return "", sql.ErrNoRows },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "workspace-without-membership")
+          	if !errors.Is(err, domains.ErrForbidden) {
+          		t.Fatalf("missing membership did not fail forbidden: %v", err)
+          	}
+          }
+
+          func TestDomainsSessionAuthorityFailsUnavailableOnMembershipBackendError(t *testing.T) {
+          	authority := &domainsSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole:       func(context.Context, string, string) (string, error) { return "", errors.New("mysql unavailable") },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
+          	if !errors.Is(err, domains.ErrAuthenticationUnavailable) {
+          		t.Fatalf("backend failure did not fail unavailable: %v", err)
+          	}
+          }
+
+          func TestDomainsSessionAuthorityRejectsUnknownRole(t *testing.T) {
+          	authority := &domainsSessionAuthority{
+          		resolvePrincipal: func(*http.Request) (workspace.Principal, error) { return workspace.Principal{UserID: "real-user"}, nil },
+          		lookupRole:       func(context.Context, string, string) (string, error) { return "superuser", nil },
+          	}
+          	_, err := authority.resolve(httptest.NewRequest(http.MethodGet, "/", nil), "real-workspace")
+          	if !errors.Is(err, domains.ErrForbidden) {
+          		t.Fatalf("unknown role was not rejected: %v", err)
+          	}
+          }
+
+          func TestDomainsAuthorityErrorMapping(t *testing.T) {
+          	tests := []struct{ input, want error }{
+          		{workspace.ErrAuthenticationRequired, domains.ErrAuthenticationRequired},
+          		{workspace.ErrForbidden, domains.ErrForbidden},
+          		{workspace.ErrAuthenticationUnavailable, domains.ErrAuthenticationUnavailable},
+          		{errors.New("unexpected"), domains.ErrAuthenticationUnavailable},
+          	}
+          	for _, tt := range tests {
+          		if got := domainsAuthorityError(tt.input); !errors.Is(got, tt.want) {
+          			t.Fatalf("mapping %v: got %v want %v", tt.input, got, tt.want)
+          		}
+          	}
+          }
+          GO
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('services/platformapi/cmd/server/main.go')
+          text=path.read_text(encoding='utf-8')
+          old='''\tdomainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)\n'''
+          new='''\tvar domainsAPI *domains.WorkspaceDomainsAPI\n\tif testAuth {\n\t\tdomainsAPI = domains.NewWorkspaceDomainsAPI(domainStore, true)\n\t} else {\n\t\tdomainsAuthority, authorityErr := buildDomainsSessionAuthority(db, redisClient)\n\t\tif authorityErr != nil {\n\t\t\tlogger.Error("configure Domains authentication authority", "error", authorityErr)\n\t\t\tos.Exit(1)\n\t\t}\n\t\tdomainsAPI = domains.NewWorkspaceDomainsAPIWithActorResolver(domainStore, domainsAuthority.resolve)\n\t}\n'''
+          assert text.count(old)==1
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
+          PY
+
+          gofmt -w \
+            internal/domains/actor_resolver.go \
+            internal/domains/actor_resolver_test.go \
+            internal/domains/httpapi.go \
+            services/platformapi/cmd/server/domains_session_auth.go \
+            services/platformapi/cmd/server/domains_session_auth_test.go \
+            services/platformapi/cmd/server/main.go
+
+      - name: Validate exact remediation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          go test ./internal/domains ./services/platformapi/cmd/server
+          go vet ./internal/domains ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d011-contract.json
+          python3 - <<'PY'
+          import json
+          p20=json.load(open('/tmp/p20-d011-contract.json',encoding='utf-8'))
+          assert p20['status']=='PASS',p20
+          assert p20['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',p20
+          assert p20['frozen_contract_preserved'] is True,p20
+          PY
+          git diff --check
+          expected='''internal/domains/actor_resolver.go
+          internal/domains/actor_resolver_test.go
+          internal/domains/httpapi.go
+          services/platformapi/cmd/server/domains_session_auth.go
+          services/platformapi/cmd/server/domains_session_auth_test.go
+          services/platformapi/cmd/server/main.go'''
+          actual="$(git status --short | sed 's/^...//' | sort)"
+          printf '%s\n' "$actual"
+          test "$(printf '%s\n' "$actual" | wc -l | tr -d ' ')" = '6'
+          for file in internal/domains/actor_resolver.go internal/domains/actor_resolver_test.go internal/domains/httpapi.go services/platformapi/cmd/server/domains_session_auth.go services/platformapi/cmd/server/domains_session_auth_test.go services/platformapi/cmd/server/main.go; do
+            printf '%s\n' "$actual" | grep -Fx "$file"
+          done
+          git diff --stat
+
+      - name: Commit scoped product remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add \
+            internal/domains/actor_resolver.go \
+            internal/domains/actor_resolver_test.go \
+            internal/domains/httpapi.go \
+            services/platformapi/cmd/server/domains_session_auth.go \
+            services/platformapi/cmd/server/domains_session_auth_test.go \
+            services/platformapi/cmd/server/main.go
+          git commit -m 'P20-D011: compose real Custom Domain session authority'
+          git push origin HEAD:develop/p20-d011-domain-session-authority
+          git rev-parse HEAD
