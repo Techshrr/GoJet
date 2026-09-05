@@ -8,7 +8,7 @@ on:
       - '.github/workflows/p20-t019-domain-generate.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
@@ -19,7 +19,7 @@ jobs:
         with:
           ref: tmp/p20-t019-domain-workflow
           path: generator
-          persist-credentials: false
+          fetch-depth: 0
 
       - name: Checkout exact P20 integration branch
         uses: actions/checkout@v4
@@ -53,3 +53,17 @@ jobs:
           path: repo/.github/workflows/p20-p0-domain.yml
           if-no-files-found: error
           retention-days: 7
+
+      - name: Persist identical validated blob on temporary branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p generator/staging
+          cp repo/.github/workflows/p20-p0-domain.yml generator/staging/p20-p0-domain.yml.generated
+          test "$(sha256sum generator/staging/p20-p0-domain.yml.generated | awk '{print $1}')" = '0e2bb364e9029d7ccf7c175f83f1ec157fc6279d507fe4ff5919be559ae41bac'
+          git -C generator config user.name 'Ethan H.'
+          git -C generator config user.email '118724895+Techshrr@users.noreply.github.com'
+          git -C generator add staging/p20-p0-domain.yml.generated
+          git -C generator diff --cached --check
+          git -C generator commit -m 'P20 T019: stage validated Domain workflow blob'
+          git -C generator push origin HEAD:tmp/p20-t019-domain-workflow
