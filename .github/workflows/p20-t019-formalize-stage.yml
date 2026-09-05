@@ -1,0 +1,95 @@
+name: P20 T019 Formalization Stage
+
+on:
+  push:
+    branches:
+      - tmp/p20-t019-formalization
+    paths:
+      - 'scripts/p20/t019_formal_probe/**'
+      - 'scripts/p20/t019_case.py'
+      - '.github/workflows/p20-t019-formalize-stage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate-stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout formalization branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp/p20-t019-formalization
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate formal T019 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -w scripts/p20/t019_formal_probe/main.go
+          python3 -m py_compile scripts/p20/t019_case.py
+          go test ./scripts/p20/t019_formal_probe ./internal/domains ./internal/links ./services/platformapi/cmd/server
+          gofmt -d scripts/p20/t019_formal_probe/main.go | tee /tmp/t019-formal-gofmt.diff
+          test ! -s /tmp/t019-formal-gofmt.diff
+          git diff --check
+
+      - name: Generate formal Domain workflow blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('.github/workflows/p20-p0-domain.yml')
+          text=p.read_text(encoding='utf-8')
+
+          def once(old,new):
+              global text
+              n=text.count(old)
+              assert n==1,(old,n)
+              text=text.replace(old,new,1)
+
+          once("      - 'scripts/p20/t019_probe/**'\n", "      - 'scripts/p20/t019_probe/**'\n      - 'scripts/p20/t019_case.py'\n      - 'scripts/p20/t019_formal_probe/**'\n")
+          once('  t009-t019-live:\n    name: P20-T009/T019 real custom-domain timeline', '  t009-t019-formal:\n    name: P20-T009/T019 real custom-domain formal timeline')
+          once('scripts/p20/t018_case.py scripts/p20/validate_contract.py', 'scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/validate_contract.py')
+          once('scripts/p20/t019_probe/main.go | tee /tmp/p20-t019-gofmt.diff', 'scripts/p20/t019_probe/main.go scripts/p20/t019_formal_probe/main.go | tee /tmp/p20-t019-gofmt.diff')
+          once('./scripts/p20/t018_probe ./scripts/p20/t019_probe\n', './scripts/p20/t018_probe ./scripts/p20/t019_probe ./scripts/p20/t019_formal_probe\n')
+          old='''      - name: Run exact-head P20-T019 custom-domain live probe\n        shell: bash\n        run: |\n          set -euo pipefail\n          exact_head="$(git rev-parse HEAD)"\n          P20_EXACT_HEAD="$exact_head" go run ./scripts/p20/t019_probe\n'''
+          new='''      - name: Run formal exact-head P20-T019 custom-domain case\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 scripts/p20/t019_case.py\n          python3 - <<'PY'\n          import json, subprocess\n          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()\n          data=json.load(open('artifacts/v10/P20/p0/P20-T019.json',encoding='utf-8'))\n          assert data['status']=='PASS',data\n          assert data['implementation_commit']==head,data\n          assert data['errors']==[],data\n          assert data['details']['next_case']=='P20-T020',data\n          PY\n'''
+          once(old,new)
+          once('          mkdir -p artifacts/v10/P20/runtime/t018\n', '          mkdir -p artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019\n')
+          once('      - name: Upload exact-head T019 live evidence', '      - name: Upload exact-head T019 formal evidence')
+          once('name: p20-t019-live-domain-${{ github.event.pull_request.head.sha || github.sha }}', 'name: p20-t019-formal-domain-${{ github.event.pull_request.head.sha || github.sha }}')
+          once('            artifacts/v10/P20/p0/P20-T018.json\n', '            artifacts/v10/P20/p0/P20-T018.json\n            artifacts/v10/P20/p0/P20-T019.json\n')
+
+          out=Path('staging/p20-p0-domain-formal.yml.generated')
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text(text,encoding='utf-8')
+          PY
+          grep -F 'P20-T009/T019 real custom-domain formal timeline' staging/p20-p0-domain-formal.yml.generated
+          grep -F 'python3 scripts/p20/t019_case.py' staging/p20-p0-domain-formal.yml.generated
+          grep -F 'P20-T019.json' staging/p20-p0-domain-formal.yml.generated
+          cp scripts/p20/t019_formal_probe/main.go staging/t019_formal_probe.go
+          cp scripts/p20/t019_case.py staging/t019_case.py
+          sha256sum staging/p20-p0-domain-formal.yml.generated staging/t019_formal_probe.go staging/t019_case.py
+
+      - name: Persist validated staging blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add scripts/p20/t019_formal_probe/main.go staging/p20-p0-domain-formal.yml.generated staging/t019_formal_probe.go staging/t019_case.py
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No staging changes required.'
+            exit 0
+          fi
+          git commit -m 'P20 T019: stage validated formal lifecycle blobs'
+          git push origin HEAD:tmp/p20-t019-formalization
