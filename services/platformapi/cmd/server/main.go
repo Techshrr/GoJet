@@ -89,7 +89,17 @@ func main() {
 		}
 		linksAPI = links.NewAPIWithActorResolver(store, linksAuthority.resolve)
 	}
-	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
+	var domainsAPI *domains.WorkspaceDomainsAPI
+	if testAuth {
+		domainsAPI = domains.NewWorkspaceDomainsAPI(domainStore, true)
+	} else {
+		domainsAuthority, authorityErr := buildDomainsSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Domains authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		domainsAPI = domains.NewWorkspaceDomainsAPIWithActorResolver(domainStore, domainsAuthority.resolve)
+	}
 	var analyticsAPI *analytics.API
 	analyticsStore := analytics.NewStore(db)
 	if testAuth {
