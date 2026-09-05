@@ -3,7 +3,28 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D011",
+      "severity": "P1",
+      "title": "Custom Domain API rejects real authenticated session authority",
+      "case": "P20-T019",
+      "issue": 90,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "d36c19100319c6ad6391dddf7bd5d8b0b04185ca",
+      "discovery_workflow_run": 33969396192,
+      "discovery_workflow_job": 101315105073,
+      "discovery_artifact_id": 9970541360,
+      "discovery_artifact_digest": "sha256:ff58252bac8cbac61dbd4930c01208e1ceeed03c1631f7d9d06fa92405be5d69",
+      "failure": "real authenticated session is not accepted as Custom Domain API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T018, same-head P06/P17 domain predecessor authority, real P15 session/CSRF authority, owner Workspace membership and active structured manual_approval entitlement all succeeded; durable custom-domain row delta 0"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -629,5 +650,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D010 are closed. P20-D010 remediation and formal P20-T018 authority are verified. P20-T019 remains locked until the D010 closure head re-establishes same-head P20-T018 Formal, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required all zero; issue #83 remains open until that closure authority is recorded."
+  "note": "P20-D001 through P20-D010 are closed. P20-D011 is an open P1 release blocker discovered by exact-head P20-T019 live Custom Domain continuity on d36c19100319c6ad6391dddf7bd5d8b0b04185ca. P20-T020 remains FORBIDDEN until D011 is remediated, formally verified and closed with same-head P20-T019, P20 Contract and Candidate Freeze coherence."
 }
