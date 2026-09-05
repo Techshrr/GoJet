@@ -58,13 +58,13 @@ func main() {
 		ImplementationCommit: exactHead,
 		Errors:               []string{},
 		Details: map[string]any{
-			"real_mysql":               true,
-			"real_platform_api":        true,
+			"real_mysql":                 true,
+			"real_platform_api":          true,
 			"real_session_authenticated": false,
-			"csrf_authority_issued":    false,
-			"mock_authority":           false,
-			"test_header_authority":    false,
-			"secret_material_recorded": false,
+			"csrf_authority_issued":      false,
+			"mock_authority":             false,
+			"test_header_authority":      false,
+			"secret_material_recorded":   false,
 		},
 	}
 	finish := func() {
