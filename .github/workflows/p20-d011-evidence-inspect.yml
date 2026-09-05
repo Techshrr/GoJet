@@ -1,0 +1,67 @@
+name: P20 D011 Evidence Inspect
+
+on:
+  push:
+    branches:
+      - tmp/p20-d011-evidence-inspect
+    paths:
+      - '.github/workflows/p20-d011-evidence-inspect.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Inspect exact T019 artifact and Candidate Freeze blocker
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo='Techshrr/GoJet'
+          run_t019='33974402563'
+          artifact_name='p20-t019-live-domain-c5351700b07b06e5a5effc209e82fdabd52c64fd'
+
+          rm -rf /tmp/t019
+          mkdir -p /tmp/t019
+          gh run download "$run_t019" -R "$repo" -n "$artifact_name" -D /tmp/t019
+          echo '=== T019 PROBE PATHS ==='
+          find /tmp/t019 -type f -print | sort
+          probe="$(find /tmp/t019 -type f -path '*/runtime/t019/probe.json' -print -quit)"
+          test -n "$probe"
+          echo '=== T019 PROBE JSON ==='
+          cat "$probe"
+          python3 - "$probe" <<'PY'
+          import json, sys
+          p=json.load(open(sys.argv[1],encoding='utf-8'))
+          d=p.get('details',{})
+          assert p.get('implementation_commit')=='c5351700b07b06e5a5effc209e82fdabd52c64fd', p
+          assert d.get('real_session_authenticated') is True, p
+          assert d.get('csrf_authority_issued') is True, p
+          assert d.get('mock_authority') is False, p
+          assert d.get('test_header_authority') is False, p
+          assert d.get('secret_material_recorded') is False, p
+          assert d.get('domain_create_http_status')==201, p
+          assert d.get('domain_create_row_delta')==1, p
+          assert d.get('domain_create_error_code') in ('', None), p
+          assert d.get('domain_create_identity_bound') is True, p
+          assert str(d.get('domain_hostname','')).endswith('.example.com'), p
+          errors=p.get('errors') or []
+          assert len(errors)==1, p
+          assert 'extend the case through the real P06 ownership/DNS/HTTPS/risk workflow before claiming PASS' in errors[0], p
+          assert 'auth_dependency_unavailable' not in json.dumps(p), p
+          print('T019_DISCOVERY_AUTH_REMEDIATED=true')
+          print('T019_FULL_LIFECYCLE_PASS=false')
+          PY
+
+          echo '=== CANDIDATE FREEZE FAILED STEP ==='
+          gh run view 33974402422 -R "$repo" --log-failed | tail -n 180
+
+          echo '=== EXACT-HEAD ARTIFACT METADATA ==='
+          for rid in 33974345286 33974402434 33974402386 33974402571 33974402562 33974402563; do
+            echo "--- run=$rid ---"
+            gh api "repos/Techshrr/GoJet/actions/runs/$rid/artifacts" --jq '.artifacts[] | {id,name,digest,expired,head_sha:.workflow_run.head_sha}'
+          done
