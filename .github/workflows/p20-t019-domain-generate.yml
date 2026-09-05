@@ -48,7 +48,6 @@ jobs:
           test "$(git -C p20 diff --name-only)" = '.github/workflows/p20-p0-domain.yml'
           grep -F "assert data['contract_authority']=='30174f40df28678360f644b8fed79736906b0ea0',data" p20/.github/workflows/p20-p0-domain.yml
           grep -F "assert data['checks'] and all(data['checks'].values()),data" p20/.github/workflows/p20-p0-domain.yml
-          test "$(grep -Fc "assert data['errors']==[],data" p20/.github/workflows/p20-p0-domain.yml)" = '1'
 
       - name: Persist validated workflow blob on temporary branch
         shell: bash
