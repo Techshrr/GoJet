@@ -1,0 +1,95 @@
+name: P20 T019 Fixture Fix
+
+on:
+  push:
+    branches:
+      - tmp/p20-t019-fixture-fix
+    paths:
+      - '.github/workflows/p20-t019-fixture-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 verification branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+
+      - name: Correct only the T019 discovery fixture and error classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head='0681eff1a779343aef578b98cb39fea916f14ea6'
+          test "$(git rev-parse HEAD)" = "$expected_head"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path=Path('scripts/p20/t019_probe/main.go')
+          text=path.read_text(encoding='utf-8')
+
+          old='hostname := "p20-t019-" + suffix + ".example.test"'
+          new='hostname := "p20-t019-" + suffix + ".example.com"'
+          assert text.count(old)==1, text.count(old)
+          text=text.replace(old,new,1)
+
+          old_block='''\tresult.Details["domain_create_http_status"] = created.Status
+\tresult.Details["domain_create_error_code"] = nestedErrorCode(created.Body)
+\tresult.Details["domain_create_row_delta"] = rowsAfter - rowsBefore
+\tif created.Status != http.StatusCreated {
+\t\tresult.Details["domain_create_failed_without_write"] = rowsAfter == rowsBefore
+\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")
+\t\treturn
+\t}
+'''
+          new_block='''\tresult.Details["domain_create_http_status"] = created.Status
+\terrorCode := nestedErrorCode(created.Body)
+\tresult.Details["domain_create_error_code"] = errorCode
+\tresult.Details["domain_create_row_delta"] = rowsAfter - rowsBefore
+\tif created.Status != http.StatusCreated {
+\t\tresult.Details["domain_create_failed_without_write"] = rowsAfter == rowsBefore
+\t\tif created.Status == http.StatusServiceUnavailable && errorCode == "auth_dependency_unavailable" {
+\t\t\tfail("real authenticated session is not accepted as custom-domain API mutation authority")
+\t\t} else {
+\t\t\tfail(fmt.Sprintf("T019 custom-domain create reached business validation but failed with HTTP %d code=%s", created.Status, errorCode))
+\t\t}
+\t\treturn
+\t}
+'''
+          assert text.count(old_block)==1, text.count(old_block)
+          text=text.replace(old_block,new_block,1)
+          path.write_text(text,encoding='utf-8')
+          PY
+
+          gofmt -w scripts/p20/t019_probe/main.go
+          gofmt -d scripts/p20/t019_probe/main.go | tee /tmp/t019-gofmt.diff
+          test ! -s /tmp/t019-gofmt.diff
+          go test ./scripts/p20/t019_probe ./internal/domains
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
+          test "$(git diff --name-only)" = 'scripts/p20/t019_probe/main.go'
+          git diff -- scripts/p20/t019_probe/main.go
+
+      - name: Commit fixture correction to P20 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add scripts/p20/t019_probe/main.go
+          git commit -m 'P20: correct T019 registrable hostname fixture'
+          git push origin HEAD:develop/p20-whole-product-verification
+          git rev-parse HEAD
