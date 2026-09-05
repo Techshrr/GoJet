@@ -41,8 +41,8 @@ jobs:
           grep -F 'P17-T008' repo/.github/workflows/p20-p0-domain.yml
           grep -F 'P06-T018' repo/.github/workflows/p20-p0-domain.yml
           git -C repo diff --check
-          test "$(git -C repo diff --name-only | wc -l | tr -d ' ')" = '1'
-          test "$(git -C repo diff --name-only)" = '.github/workflows/p20-p0-domain.yml'
+          test "$(git -C repo status --porcelain | wc -l | tr -d ' ')" = '1'
+          test "$(git -C repo status --porcelain)" = '?? .github/workflows/p20-p0-domain.yml'
 
       - name: Commit T019 workflow to P20 branch
         shell: bash
