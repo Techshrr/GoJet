@@ -1,0 +1,72 @@
+name: P20 D012 Product Stage
+
+on:
+  push:
+    branches:
+      - tmp/p20-d012-product-stage
+    paths:
+      - '.github/workflows/p20-d012-product-stage.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage-product:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact remediation branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-d012-support-session-authority
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Patch Support composition only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '0ab13850edc9f95682334d897d1b23dae60a0ade'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('services/platformapi/cmd/server/support.go')
+          text=p.read_text(encoding='utf-8')
+          old="""\tprincipalResolver := supportPrincipalResolver{testAuth: testAuth}\n\trequesterAPI, err := support.NewAPI(\n\t\tauditedRequesterStore,\n\t\tworkspaceStore,\n\t\tauditedDomainProjector,\n\t\tworkspaceStore,\n\t\tprincipalResolver,\n\t\tverifier,\n\t\tguard,\n\t\tguard,\n\t)\n"""
+          new="""\tvar requesterPrincipalResolver support.PrincipalResolver\n\tif testAuth {\n\t\trequesterPrincipalResolver = supportPrincipalResolver{testAuth: true}\n\t} else {\n\t\trequesterPrincipalResolver, err = buildSupportSessionPrincipalResolver(db, redisClient)\n\t\tif err != nil {\n\t\t\treturn nil, false, err\n\t\t}\n\t}\n\trequesterAPI, err := support.NewAPI(\n\t\tauditedRequesterStore,\n\t\tworkspaceStore,\n\t\tauditedDomainProjector,\n\t\tworkspaceStore,\n\t\trequesterPrincipalResolver,\n\t\tverifier,\n\t\tguard,\n\t\tguard,\n\t)\n"""
+          assert text.count(old)==1, text.count(old)
+          text=text.replace(old,new,1)
+          old2="""\tadminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, principalResolver, ticketAdminPermissions, workspaceStore)\n"""
+          new2="""\tadminPrincipalResolver := supportPrincipalResolver{testAuth: testAuth}\n\tadminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, adminPrincipalResolver, ticketAdminPermissions, workspaceStore)\n"""
+          assert text.count(old2)==1, text.count(old2)
+          text=text.replace(old2,new2,1)
+          old3="""\tadminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, principalResolver, mailAdminPermissions)\n"""
+          new3="""\tadminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, adminPrincipalResolver, mailAdminPermissions)\n"""
+          assert text.count(old3)==1, text.count(old3)
+          text=text.replace(old3,new3,1)
+          p.write_text(text,encoding='utf-8')
+          PY
+          gofmt -w services/platformapi/cmd/server/support.go services/platformapi/cmd/server/support_session_auth.go services/platformapi/cmd/server/support_session_auth_test.go
+          git diff --check
+          test "$(git diff --name-only)" = 'services/platformapi/cmd/server/support.go'
+
+      - name: Verify scoped Support authority composition
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./services/platformapi/cmd/server ./internal/support ./internal/workspace ./internal/auth
+          go test ./...
+          gofmt -d services/platformapi/cmd/server/support.go services/platformapi/cmd/server/support_session_auth.go services/platformapi/cmd/server/support_session_auth_test.go | tee /tmp/d012-gofmt.diff
+          test ! -s /tmp/d012-gofmt.diff
+
+      - name: Upload validated Support composition
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-d012-support-composition
+          path: services/platformapi/cmd/server/support.go
+          if-no-files-found: error
+          retention-days: 7
