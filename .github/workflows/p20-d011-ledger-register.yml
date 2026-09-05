@@ -1,0 +1,103 @@
+name: P20 D011 Ledger Register
+
+on:
+  push:
+    branches:
+      - tmp/p20-d011-ledger-register
+    paths:
+      - '.github/workflows/p20-d011-ledger-register.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  register-ledger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Register D011 without rewriting closed history
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head='d36c19100319c6ad6391dddf7bd5d8b0b04185ca'
+          test "$(git rev-parse HEAD)" = "$expected_head"
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          path=Path('artifacts/v10/P20/defect-ledger.json')
+          raw=path.read_text(encoding='utf-8')
+          data=json.loads(raw)
+          assert data['open']==[], data['open']
+          assert data['decision_required']==[], data['decision_required']
+          assert [item.get('id') for item in data['closed']]==[f'P20-D{i:03d}' for i in range(1,11)], data['closed'][-1]
+
+          d011={
+            'id':'P20-D011',
+            'severity':'P1',
+            'title':'Custom Domain API rejects real authenticated session authority',
+            'case':'P20-T019',
+            'issue':90,
+            'release_blocking':True,
+            'gate_hard_failure':True,
+            'affected_gates':['G3','G6','G10'],
+            'discovered_head':'d36c19100319c6ad6391dddf7bd5d8b0b04185ca',
+            'discovery_workflow_run':33969396192,
+            'discovery_workflow_job':101315105073,
+            'discovery_artifact_id':9970541360,
+            'discovery_artifact_digest':'sha256:ff58252bac8cbac61dbd4930c01208e1ceeed03c1631f7d9d06fa92405be5d69',
+            'failure':'real authenticated session is not accepted as Custom Domain API mutation authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T018, same-head P06/P17 domain predecessor authority, real P15 session/CSRF authority, owner Workspace membership and active structured manual_approval entitlement all succeeded; durable custom-domain row delta 0'
+          }
+          rendered=json.dumps(d011,indent=2,ensure_ascii=False)
+          rendered='\n'.join('    '+line for line in rendered.splitlines())
+          old='  "open": [],\n'
+          assert raw.count(old)==1
+          raw=raw.replace(old,'  "open": [\n'+rendered+'\n  ],\n',1)
+
+          new_note=('P20-D001 through P20-D010 are closed. P20-D011 is an open P1 release blocker discovered by exact-head '
+                    'P20-T019 live Custom Domain continuity on d36c19100319c6ad6391dddf7bd5d8b0b04185ca. '
+                    'P20-T020 remains FORBIDDEN until D011 is remediated, formally verified and closed with same-head '
+                    'P20-T019, P20 Contract and Candidate Freeze coherence.')
+          raw,count=re.subn(r'  "note": ".*"\n\}', '  "note": '+json.dumps(new_note,ensure_ascii=False)+'\n}', raw, count=1)
+          assert count==1
+
+          updated=json.loads(raw)
+          assert len(updated['open'])==1 and updated['open'][0]['id']=='P20-D011', updated['open']
+          assert updated['open'][0]['issue']==90
+          assert updated['open'][0]['severity']=='P1'
+          assert updated['open'][0]['release_blocking'] is True
+          assert updated['open'][0]['gate_hard_failure'] is True
+          assert updated['decision_required']==[]
+          assert [item.get('id') for item in updated['closed']]==[f'P20-D{i:03d}' for i in range(1,11)]
+          path.write_text(raw,encoding='utf-8')
+          PY
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
+          test "$(git diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          assert [x['id'] for x in data['open']]==['P20-D011']
+          assert data['decision_required']==[]
+          assert len(data['closed'])==10 and data['closed'][-1]['id']=='P20-D010'
+          PY
+          git diff --stat
+          git diff -- artifacts/v10/P20/defect-ledger.json
+
+      - name: Commit ledger-only registration to P20 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20: register D011 Custom Domain session authority defect'
+          git push origin HEAD:develop/p20-whole-product-verification
+          git rev-parse HEAD
