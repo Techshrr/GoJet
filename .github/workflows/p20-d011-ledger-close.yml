@@ -1,0 +1,175 @@
+name: P20 D011 Ledger Close
+
+on:
+  push:
+    branches:
+      - tmp/p20-d011-ledger-close
+    paths:
+      - '.github/workflows/p20-d011-ledger-close.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-ledger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+
+      - name: Close D011 in defect ledger only
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head='b8d403cf626c44193403ba3e440ef3a4d1465cb8'
+          test "$(git rev-parse HEAD)" = "$expected_head"
+          python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          open_items = data.get('open')
+          assert isinstance(open_items, list), data
+          matches = [item for item in open_items if item.get('id') == 'P20-D011']
+          assert len(matches) == 1, open_items
+          assert [item.get('id') for item in open_items] == ['P20-D011'], open_items
+          d = matches[0]
+          assert d.get('issue') == 90, d
+          assert d.get('severity') == 'P1', d
+          assert d.get('case') == 'P20-T019', d
+
+          data['open'] = []
+          d.update({
+              'remediation_pr': 91,
+              'remediation_merge_commit': '2e05bcdb5c2e5fac3326738079be294fb0f9978b',
+              'verification_head': 'b8d403cf626c44193403ba3e440ef3a4d1465cb8',
+              'verification_workflow_run': 33977963942,
+              'verification_workflow_job': 101337906691,
+              'verification_artifact_id': 9973067779,
+              'verification_artifact_digest': 'sha256:0c23286ee701e5910da43c5dfbb1031e2508bd3deb0a9b678ab1fa513138dc51',
+              'supporting_contract_workflow_run': 33977963965,
+              'supporting_contract_workflow_job': 101337907396,
+              'supporting_contract_artifact_id': 9973034202,
+              'supporting_contract_artifact_digest': 'sha256:b40396c22a2016df6ae64442a74ba6ef9b9cf3caf27041d4b6a08e0c34b83b22',
+              'supporting_candidate_preclosure_workflow_run': 33977963890,
+              'supporting_candidate_preclosure_workflow_job': 101337906541,
+              'supporting_candidate_preclosure_p0_open': 0,
+              'supporting_candidate_preclosure_p1_open': 1,
+              'supporting_candidate_preclosure_decision_required': 0,
+              'supporting_candidate_preclosure_sole_blocker': 'P20-D011',
+              'supporting_remediation_guard_workflow_run': 33974345286,
+              'supporting_remediation_guard_artifact_id': 9971860336,
+              'supporting_remediation_guard_artifact_digest': 'sha256:3ff4f0a22fa6a666cefc99da6ffbb7c8ba79acef2cf7bbd6699c8337dc403c0a',
+              'supporting_p06_integration_workflow_run': 33974402434,
+              'supporting_p06_integration_artifact_id': 9971889322,
+              'supporting_p06_integration_artifact_digest': 'sha256:d88a3087226194094870f7d8d67fb91fbcd502d1b8a3ad35ee1d16a548004c23',
+              'supporting_p17_domain_workflow_run': 33974402386,
+              'supporting_p17_domain_artifact_id': 9971894384,
+              'supporting_p17_domain_artifact_digest': 'sha256:e249f5e309d6a63acdfc0454d336e9c7d03a6acbb09d414e8c72f824daa9d5ef',
+              'supporting_p15_auth_workflow_run': 33974402571,
+              'supporting_p15_auth_artifact_id': 9971964514,
+              'supporting_p15_auth_artifact_digest': 'sha256:ca77eb45037fc688f64aeebd1631ab7fb6794f65315adda313e91b378f8afde6',
+              'supporting_premerge_contract_workflow_run': 33974402562,
+              'supporting_premerge_contract_artifact_id': 9972000369,
+              'supporting_premerge_contract_artifact_digest': 'sha256:d94a6ccaa98fcab686c065609814a255be2dfadcc5e89482c5ecb526445d99ec',
+              'supporting_discovery_workflow_run': 33974402563,
+              'supporting_discovery_artifact_id': 9971992211,
+              'supporting_discovery_artifact_digest': 'sha256:3dac092c53cf9e5df0ae2cf9e97223e110c718bc3934d07f2abad693e87b2352',
+              'resolution': 'Native platformapi composes the real P15 server-side session and authoritative P12 Workspace membership into the P06 Domains actor boundary, inherits Origin and one-time CSRF/replay authority for unsafe Domain methods, rejects production test-header substitution, preserves owner/admin/member mutation and viewer read-only behavior plus the predecessor P06 test adapter, while leaving structured entitlement sources and support-ticket independence, domain limits, ownership-secret/TXT verification, ingress DNS, HTTPS/TLS readiness, domain-risk evaluation, revalidation/history, routing, custom-domain Link-assignment guards, downgrade grace and audit semantics unchanged.',
+              'verified_outcome': {
+                  't019_status': 'PASS',
+                  'login_http_status': 200,
+                  'real_session_authenticated': True,
+                  'csrf_authority_issued': True,
+                  'auth_rate_window_respected': True,
+                  'domain_create_http_status': 201,
+                  'domain_create_row_delta': 1,
+                  'domain_create_identity_bound': True,
+                  'structured_entitlement_active': True,
+                  'support_ticket_reference_not_authority': True,
+                  'ownership_outcome': 'verified',
+                  'final_ownership_status': 'verified',
+                  'dns_txt_queries': 1,
+                  'ingress_before_ownership_denied': True,
+                  'ingress_preflight_avoided_dns': True,
+                  'ingress_outcome': 'valid',
+                  'final_ingress_dns_status': 'valid',
+                  'dns_cname_queries': 1,
+                  'https_before_ingress_denied': True,
+                  'https_active': True,
+                  'final_https_status': 'active',
+                  'real_tls_handshake': True,
+                  'tls_version': 'TLS1.3',
+                  'risk_before_https_denied': True,
+                  'risk_review_persisted': True,
+                  'risk_allow_persisted': True,
+                  'final_risk_status': 'allow',
+                  'risk_evaluator_calls': 2,
+                  'axes_conjunctive_ready': True,
+                  'ready_for_new_links': True,
+                  'not_ready_link_http_status': 409,
+                  'not_ready_link_error_code': 'domain_unavailable',
+                  'not_ready_link_zero_write': True,
+                  'ready_link_http_status': 201,
+                  'ready_link_row_delta': 1,
+                  'ready_link_domain_kind': 'custom',
+                  'ready_link_hostname_bound': True,
+                  'ready_link_workspace_bound': True,
+                  'domain_revalidation_rows': 5,
+                  'revalidation_history_bound': True,
+                  'audit_secret_leak': False,
+                  'p06_entitlement_ticket_independence_proven': True,
+                  'p06_ownership_dns_https_risk_axes_proven': True,
+                  'p06_link_assignment_guard_proven': True,
+                  'p06_revalidation_history_proven': True,
+                  'p17_ticket_manager_cannot_grant_entitlement': True,
+                  'p17_entitlement_and_safety_conjunctive': True,
+                  't018_user_correlation_preserved': True,
+                  't018_workspace_correlation_preserved': True,
+                  'real_mysql': True,
+                  'real_platform_api': True,
+                  'real_dns_udp': True,
+                  'mock_authority': False,
+                  'test_header_authority': False,
+                  'secret_material_recorded': False,
+                  'next_case': 'P20-T020'
+              },
+              'closed_at': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z'),
+          })
+          closed = data.get('closed')
+          assert isinstance(closed, list), data
+          assert not any(item.get('id') == 'P20-D011' for item in closed), closed
+          closed.append(d)
+          data['closed'] = closed
+          data['note'] = 'P20-D001 through P20-D011 are closed. P20-T019 formal authority is established on b8d403cf626c44193403ba3e440ef3a4d1465cb8. P20-T020 remains locked until the D011 closure head re-establishes same-head P20-T019 Formal, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required all zero; issue #90 remains open until that closure authority is recorded.'
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+          python3 scripts/p20/defect_cases.py | tee /tmp/p20-d011-closure-t008.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/p20-d011-closure-t008.json',encoding='utf-8'))
+          assert d['case']=='P20-T008',d
+          assert d['status']=='PASS',d
+          assert d['details']['p0_open']==0,d
+          assert d['details']['p1_open']==0,d
+          assert d['details']['decision_required']==0,d
+          assert d['details']['closed_count']==11,d
+          PY
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
+          test "$(git diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
+
+      - name: Commit guarded D011 ledger closure to P20 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20: close D011 after formal T019 verification'
+          git push origin HEAD:develop/p20-whole-product-verification
