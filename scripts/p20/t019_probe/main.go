@@ -222,7 +222,7 @@ func main() {
 	}
 	result.Details["domain_rows_before"] = rowsBefore
 
-	hostname := "p20-t019-" + suffix + ".example.test"
+	hostname := "p20-t019-" + suffix + ".example.com"
 	created, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/workspaces/"+workspaceID+"/domains", map[string]any{
 		"hostname":      hostname,
 		"change_reason": "P20 T019 real custom-domain create",
@@ -237,7 +237,11 @@ func main() {
 	result.Details["domain_create_row_delta"] = rowsAfter - rowsBefore
 	if created.Status != http.StatusCreated {
 		result.Details["domain_create_failed_without_write"] = rowsAfter == rowsBefore
-		fail("real authenticated session is not accepted as custom-domain API mutation authority")
+		if created.Status == http.StatusServiceUnavailable && nestedErrorCode(created.Body) == "auth_dependency_unavailable" {
+			fail("real authenticated session is not accepted as custom-domain API mutation authority")
+		} else {
+			fail(fmt.Sprintf("T019 custom-domain create reached business validation but failed with HTTP %d code=%s", created.Status, nestedErrorCode(created.Body)))
+		}
 		return
 	}
 
