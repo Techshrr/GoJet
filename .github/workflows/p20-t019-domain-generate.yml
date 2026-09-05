@@ -8,7 +8,7 @@ on:
       - '.github/workflows/p20-t019-domain-generate.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   generate:
@@ -27,6 +27,7 @@ jobs:
           ref: develop/p20-whole-product-verification
           path: repo
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Generate and validate T019 workflow
         shell: bash
@@ -43,13 +44,12 @@ jobs:
           git -C repo diff --check
           test "$(git -C repo status --porcelain | wc -l | tr -d ' ')" = '1'
           test "$(git -C repo status --porcelain)" = '?? .github/workflows/p20-p0-domain.yml'
+          sha256sum repo/.github/workflows/p20-p0-domain.yml | tee /tmp/p20-t019-workflow.sha256
 
-      - name: Commit T019 workflow to P20 branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git -C repo config user.name 'Ethan H.'
-          git -C repo config user.email '118724895+Techshrr@users.noreply.github.com'
-          git -C repo add .github/workflows/p20-p0-domain.yml
-          git -C repo commit -m 'P20: add T019 custom-domain live timeline'
-          git -C repo push origin HEAD:develop/p20-whole-product-verification
+      - name: Upload validated T019 workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t019-domain-workflow
+          path: repo/.github/workflows/p20-p0-domain.yml
+          if-no-files-found: error
+          retention-days: 7
