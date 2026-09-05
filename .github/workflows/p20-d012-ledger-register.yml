@@ -1,0 +1,68 @@
+name: P20 D012 Ledger Register Stage
+
+on:
+  push:
+    branches:
+      - tmp/p20-d012-ledger-register
+    paths:
+      - '.github/workflows/p20-d012-ledger-register.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage-ledger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration head
+        uses: actions/checkout@v4
+        with:
+          ref: 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate D012 ledger registration artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '1f10c5ca47d9192ca1d109b2f3351081bbe02b0f'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('artifacts/v10/P20/defect-ledger.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data['schema']=='gojet.p20-defect-ledger.v1'
+          assert data['node']=='P20'
+          assert data['open']==[]
+          assert [x['id'] for x in data['closed']]==[f'P20-D{i:03d}' for i in range(1,12)]
+          assert data['decision_required']==[]
+          data['open']=[{
+            'id':'P20-D012','severity':'P1',
+            'title':'Support requester API rejects real authenticated session authority',
+            'case':'P20-T020','issue':93,
+            'release_blocking':True,'gate_hard_failure':True,
+            'affected_gates':['G3','G6','G10'],
+            'discovered_head':'1f10c5ca47d9192ca1d109b2f3351081bbe02b0f',
+            'discovery_workflow_run':33981169847,
+            'discovery_workflow_job':101346528919,
+            'discovery_artifact_id':9974019175,
+            'discovery_artifact_digest':'sha256:ed04147cb3fd79e6bd0f97907b3641e541b0347f625ab3109926224385c37399',
+            'failure':'real authenticated session is not accepted as Support API requester authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T019, same-head P14 T001-T021 Support predecessor authority, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable Support ticket row delta 0 and message row delta 0'
+          }]
+          data['note']='P20-D001 through P20-D011 are closed. P20-D012 is an open P1 release blocker discovered by exact-head P20-T020 Support requester continuity on 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f. P20-T021 remains forbidden until D012 is remediated, formally verified and closed with same-head P20 Contract and Candidate Freeze coherence.'
+          path.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          python3 -m json.tool artifacts/v10/P20/defect-ledger.json >/dev/null
+          git diff --check
+          test "$(git diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
+          mkdir -p /tmp/d012-ledger
+          cp artifacts/v10/P20/defect-ledger.json /tmp/d012-ledger/defect-ledger.json
+          git diff -- artifacts/v10/P20/defect-ledger.json > /tmp/d012-ledger/defect-ledger.patch
+
+      - name: Upload D012 ledger artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-d012-ledger-registration
+          path: /tmp/d012-ledger/
+          if-no-files-found: error
+          retention-days: 7
