@@ -42,6 +42,9 @@ jobs:
           gofmt_guard = 'gofmt -d scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go | tee /tmp/t020-admin-boundary-gofmt.diff'
           assert script.count(gofmt_guard) == 1
           script = script.replace(gofmt_guard, 'gofmt -w scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go\n' + gofmt_guard, 1)
+          diff_guard = 'git diff --name-only | sort > /tmp/actual-files'
+          assert script.count(diff_guard) == 1
+          script = script.replace(diff_guard, 'git add -N scripts/p20/t020_probe/admin_authority.go\n' + diff_guard, 1)
           Path('/tmp/p20-t020-admin-boundary-register.sh').write_text(script, encoding='utf-8')
           PY
           git fetch origin develop/p20-whole-product-verification
