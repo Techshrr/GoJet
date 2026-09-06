@@ -1,0 +1,78 @@
+name: P20 T020 Admin Boundary Harness Sync V2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p20-t020-admin-boundary-register-sync-v2.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-t020-admin-boundary-register-sync-v2
+  cancel-in-progress: false
+
+jobs:
+  register:
+    name: Execute T020 Admin boundary with official Turnstile test credential
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout staging source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Extract audited staging block and run corrected fixture on exact base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/p20-t020-admin-boundary-register.yml').read_text(encoding='utf-8')
+          marker = "      - name: Apply bounded T020 harness extension\n        shell: bash\n        run: |\n"
+          assert source.count(marker) == 1
+          block = source.split(marker, 1)[1]
+          lines = block.splitlines()
+          assert lines and all((not line) or line.startswith('          ') for line in lines)
+          Path('/tmp/p20-t020-admin-boundary-register.sh').write_text(
+              '\n'.join(line[10:] if line else '' for line in lines) + '\n', encoding='utf-8'
+          )
+          PY
+          git fetch origin develop/p20-whole-product-verification
+          git checkout --detach origin/develop/p20-whole-product-verification
+
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/p20-p0-support.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old_secret = "      GOJET_TURNSTILE_SECRET: $" + "{{ secrets.P20_TURNSTILE_TEST_SECRET }}\n"
+          new_secret = "      GOJET_TURNSTILE_SECRET: 1x0000000000000000000000000000000AA\n"
+          assert text.count(old_secret) == 1
+          text = text.replace(old_secret, new_secret, 1)
+          old_preflight = '''      - name: Require isolated Turnstile CI test secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then
+            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2
+            exit 1
+          fi
+          test "$GOJET_TEST_AUTH_ENABLED" = '0'
+'''
+          new_preflight = '''      - name: Require official isolated Turnstile CI test credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GOJET_TURNSTILE_SECRET" = '1x0000000000000000000000000000000AA'
+          test "$GOJET_TEST_AUTH_ENABLED" = '0'
+'''
+          assert text.count(old_preflight) == 1
+          text = text.replace(old_preflight, new_preflight, 1)
+          workflow.write_text(text, encoding='utf-8')
+          PY
+
+          bash /tmp/p20-t020-admin-boundary-register.sh
