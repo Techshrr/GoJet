@@ -1,0 +1,90 @@
+name: P20 D013 Ledger Register
+
+on:
+  push:
+    branches:
+      - chore/p20-d013-ledger-register
+    paths:
+      - '.github/workflows/p20-d013-ledger-register.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d013-ledger-register
+  cancel-in-progress: false
+
+jobs:
+  register:
+    name: Register D013 in P20 defect ledger
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration base
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded D013 ledger registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head='b6b3f5ba00b7e5f6fadbbd0a515667fd2eefff46'
+          test "$(git rev-parse HEAD)" = "$expected_head"
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data['schema'] == 'gojet.p20-defect-ledger.v1'
+          assert [row['id'] for row in data['open']] == ['P20-D012'], data['open']
+          assert all(row['id'] != 'P20-D013' for row in data['closed'])
+
+          data['open'].append({
+              'id': 'P20-D013',
+              'severity': 'P1',
+              'title': 'Support Admin reply rejects real P17 Admin permission authority',
+              'case': 'P20-T020',
+              'issue': 98,
+              'release_blocking': True,
+              'gate_hard_failure': True,
+              'affected_gates': ['G3', 'G6', 'G10'],
+              'discovered_head': '53d75de6ea085400d5e3d602e89d56f1d7aaab96',
+              'discovery_workflow_run': 34046109241,
+              'discovery_workflow_job': 101521327184,
+              'discovery_artifact_id': 9993439681,
+              'discovery_artifact_digest': 'sha256:51973c18fd468bf90ec3eb94daed16fa3fd33086f2f0453b8178bd548a831714',
+              'failure': 'real P17 Admin session and tickets.manage/mail.manage authority are valid, but Support Admin reply returns HTTP 503 admin_permission_unavailable with zero durable Admin-reply writes after the same exact-head T020 requester ticket create and requester reply both persist successfully'
+          })
+          data['note'] = (
+              'P20-D001 through P20-D011 are closed. P20-D012 and P20-D013 are open P1 release blockers in P20-T020. '
+              'Exact-head 53d75de6ea085400d5e3d602e89d56f1d7aaab96 proves the D012 requester-session remediation through durable ticket create and requester reply, '
+              'then discovers D013 at the independent P17 Admin permission-composition boundary. P20-T021 remains forbidden until both open blockers are formally remediated and closed.'
+          )
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json', encoding='utf-8'))
+          assert [row['id'] for row in data['open']] == ['P20-D012', 'P20-D013']
+          assert all(row['severity'] == 'P1' for row in data['open'])
+          assert all(row['release_blocking'] is True for row in data['open'])
+          assert all(row['gate_hard_failure'] is True for row in data['open'])
+          assert data['decision_required'] == []
+          PY
+
+          printf '%s\n' 'artifacts/v10/P20/defect-ledger.json' > /tmp/expected-files
+          git diff --name-only | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20: register D013 Support Admin authority defect'
+          commit="$(git rev-parse HEAD)"
+          echo "P20_D013_LEDGER_COMMIT=${commit}"
+          git push origin HEAD:develop/p20-whole-product-verification
