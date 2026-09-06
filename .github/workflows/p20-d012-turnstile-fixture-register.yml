@@ -47,19 +47,20 @@ jobs:
           assert workflow_text.count(old_secret) == 1
           workflow_text = workflow_text.replace(old_secret, new_secret, 1)
 
-          marker = '''      - name: Set up Go from repository contract
-'''
-          preflight = '''      - name: Require isolated Turnstile CI test secret
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then
-            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2
-            exit 1
-          fi
-          test "$GOJET_TEST_AUTH_ENABLED" = '0'
-
-'''
+          marker = '      - name: Set up Go from repository contract\n'
+          preflight = '\n'.join([
+              '      - name: Require isolated Turnstile CI test secret',
+              '        shell: bash',
+              '        run: |',
+              '          set -euo pipefail',
+              '          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then',
+              "            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2",
+              '            exit 1',
+              '          fi',
+              "          test \"$GOJET_TEST_AUTH_ENABLED\" = '0'",
+              '',
+              '',
+          ])
           assert workflow_text.count(marker) == 1
           workflow_text = workflow_text.replace(marker, preflight + marker, 1)
           assert old_secret not in workflow_text
