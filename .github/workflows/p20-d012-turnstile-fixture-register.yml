@@ -1,3 +1,4 @@
+# CI-only registration trigger; never merge to main.
 name: P20 D012 Turnstile Fixture Register
 
 on:
