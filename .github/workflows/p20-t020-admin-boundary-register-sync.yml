@@ -39,6 +39,9 @@ jobs:
           lines = block.splitlines()
           assert lines
           script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          gofmt_guard = 'gofmt -d scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go | tee /tmp/t020-admin-boundary-gofmt.diff'
+          assert script.count(gofmt_guard) == 1
+          script = script.replace(gofmt_guard, 'gofmt -w scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go\n' + gofmt_guard, 1)
           Path('/tmp/p20-t020-admin-boundary-register.sh').write_text(script, encoding='utf-8')
           PY
           git fetch origin develop/p20-whole-product-verification
