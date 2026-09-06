@@ -52,23 +52,25 @@ jobs:
           new_secret = "      GOJET_TURNSTILE_SECRET: 1x0000000000000000000000000000000AA\n"
           assert text.count(old_secret) == 1
           text = text.replace(old_secret, new_secret, 1)
-          old_preflight = '''      - name: Require isolated Turnstile CI test secret
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then
-            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2
-            exit 1
-          fi
-          test "$GOJET_TEST_AUTH_ENABLED" = '0'
-'''
-          new_preflight = '''      - name: Require official isolated Turnstile CI test credential
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GOJET_TURNSTILE_SECRET" = '1x0000000000000000000000000000000AA'
-          test "$GOJET_TEST_AUTH_ENABLED" = '0'
-'''
+          old_preflight = '\n'.join([
+              '      - name: Require isolated Turnstile CI test secret',
+              '        shell: bash',
+              '        run: |',
+              '          set -euo pipefail',
+              '          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then',
+              "            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2",
+              '            exit 1',
+              '          fi',
+              '          test "$GOJET_TEST_AUTH_ENABLED" = \'0\'',
+          ]) + '\n'
+          new_preflight = '\n'.join([
+              '      - name: Require official isolated Turnstile CI test credential',
+              '        shell: bash',
+              '        run: |',
+              '          set -euo pipefail',
+              '          test "$GOJET_TURNSTILE_SECRET" = \'1x0000000000000000000000000000000AA\'',
+              '          test "$GOJET_TEST_AUTH_ENABLED" = \'0\'',
+          ]) + '\n'
           assert text.count(old_preflight) == 1
           text = text.replace(old_preflight, new_preflight, 1)
           workflow.write_text(text, encoding='utf-8')
