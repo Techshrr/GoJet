@@ -233,13 +233,91 @@ func main() {
 		return
 	}
 
-	// Discovery intentionally stops here. If requester create succeeds, T020 must
-	// still prove requester reply, real P17 Admin reply/permission authority,
-	// durable mailworker SMTP delivery and attachment ClamAV fail-closed behavior
-	// in one correlated timeline before the frozen case may report PASS.
+	ticketID := nestedString(created.Body, "ticket", "id")
 	result.Details["ticket_create_identity_bound"] = nestedString(created.Body, "ticket", "workspace_id") == workspaceID
-	result.Details["ticket_id_present"] = nestedString(created.Body, "ticket", "id") != ""
-	fail("T020 discovery reached support-ticket create; extend through requester reply, real Admin reply, mailworker and attachment safety before claiming PASS")
+	result.Details["ticket_id_present"] = ticketID != ""
+	if result.Details["ticket_create_identity_bound"] != true || ticketID == "" {
+		fail("T020 requester ticket create did not preserve correlated Workspace identity")
+		return
+	}
+
+	// P15 CSRF is single-use across Account and Workspace/Support unsafe routes.
+	// Obtain a fresh token from the same authenticated customer session before
+	// proving requester reply continuity.
+	replyCSRF, _, err := issueCSRF(ctx, apiBase, cookieHeader, userID)
+	if err != nil {
+		fail("T020 could not renew real customer CSRF authority for requester reply")
+		return
+	}
+	requesterRepliesBefore, err := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='requester_reply' AND actor_id=?`, ticketID, userID)
+	if err != nil {
+		fail("T020 could not inspect requester reply durable state")
+		return
+	}
+	requesterCorrelation := "p20-t020-requester-reply-" + suffix
+	requesterReply, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/support/tickets/"+ticketID+"/replies", map[string]any{
+		"message": "P20 T020 real requester follow-up.",
+	}, mergeHeaders(unsafeHeaders(cookieHeader, origin, replyCSRF, requesterCorrelation), map[string]string{
+		"Idempotency-Key": requesterCorrelation,
+	}))
+	if err != nil {
+		fail("T020 real requester reply request failed")
+		return
+	}
+	requesterRepliesAfter, _ := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='requester_reply' AND actor_id=?`, ticketID, userID)
+	result.Details["requester_reply_http_status"] = requesterReply.Status
+	result.Details["requester_reply_error_code"] = nestedErrorCode(requesterReply.Body)
+	result.Details["requester_reply_row_delta"] = requesterRepliesAfter - requesterRepliesBefore
+	if requesterReply.Status != http.StatusCreated || requesterRepliesAfter-requesterRepliesBefore != 1 {
+		fail("real authenticated requester session could not persist the correlated Support reply")
+		return
+	}
+	result.Details["requester_reply_persisted"] = true
+
+	// Establish independent P17 administrator authority on the same real MySQL
+	// and Redis state, then prove that the production Admin HTTP surface accepts
+	// that session before attempting the P14 Support Admin reply boundary.
+	adminAuthority, err := establishRealP17AdminAuthority(ctx, apiBase, suffix)
+	if err != nil {
+		result.Details["p17_admin_authority_error"] = err.Error()
+		fail("T020 could not establish real P17 Admin session/permission authority")
+		return
+	}
+	result.Details["p17_admin_session_authenticated"] = true
+	result.Details["p17_tickets_manage"] = true
+	result.Details["p17_mail_manage"] = true
+	result.Details["p17_admin_id_present"] = adminAuthority.AdministratorID != ""
+
+	adminRepliesBefore, err := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='support_reply'`, ticketID)
+	if err != nil {
+		fail("T020 could not inspect pre-Admin-reply durable state")
+		return
+	}
+	adminCorrelation := "p20-t020-admin-reply-" + suffix
+	adminReply, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/admin/support/tickets/"+ticketID+"/replies", map[string]any{
+		"kind":    "support_reply",
+		"message": "P20 T020 real administrator reply.",
+	}, mergeHeaders(adminUnsafeHeaders(adminAuthority, adminCorrelation), map[string]string{
+		"Idempotency-Key": adminCorrelation,
+	}))
+	if err != nil {
+		fail("T020 real P17 Admin Support reply request failed")
+		return
+	}
+	adminRepliesAfter, _ := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='support_reply'`, ticketID)
+	result.Details["admin_reply_http_status"] = adminReply.Status
+	result.Details["admin_reply_error_code"] = nestedErrorCode(adminReply.Body)
+	result.Details["admin_reply_row_delta"] = adminRepliesAfter - adminRepliesBefore
+	if adminReply.Status != http.StatusCreated || adminRepliesAfter-adminRepliesBefore != 1 {
+		result.Details["admin_reply_failed_without_write"] = adminRepliesAfter == adminRepliesBefore
+		fail("real P17 Admin authority is not accepted by the Support Admin reply surface")
+		return
+	}
+	result.Details["admin_reply_persisted"] = true
+
+	// Discovery remains fail-closed until the same correlated ticket also proves
+	// mailworker/SMTP delivery and attachment malware enforcement.
+	fail("T020 discovery reached real Admin reply; extend through mailworker and attachment safety before claiming PASS")
 }
 
 func readEvidence(path string) (predecessorEvidence, error) {
