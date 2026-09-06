@@ -3,7 +3,28 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D012",
+      "severity": "P1",
+      "title": "Support requester API rejects real authenticated session authority",
+      "case": "P20-T020",
+      "issue": 93,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "1f10c5ca47d9192ca1d109b2f3351081bbe02b0f",
+      "discovery_workflow_run": 33981169847,
+      "discovery_workflow_job": 101346528919,
+      "discovery_artifact_id": 9974019175,
+      "discovery_artifact_digest": "sha256:ed04147cb3fd79e6bd0f97907b3641e541b0347f625ab3109926224385c37399",
+      "failure": "real authenticated session is not accepted as Support API requester authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T019, same-head P14 Support predecessor authority, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable active Support ticket row delta 0 and Support message row delta 0"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -590,7 +611,6 @@
       "verification_artifact_id": 9748353645,
       "verification_artifact_digest": "sha256:af8699a482d4c317ec78469aa8ac08b3bbadab493e29baf4755b4fdd6d550df3",
       "supporting_contract_workflow_run": 33365342166,
-      "supporting_contract_workflow_job": 99404725038,
       "supporting_contract_artifact_id": 9748127531,
       "supporting_contract_artifact_digest": "sha256:c2c79094b0497f4e530336a791325ba2355ec3f17eed560f23c5d8a8e2cd2cca",
       "supporting_p11_contract_workflow_run": 33362225532,
@@ -776,5 +796,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D011 are closed. P20-T019 formal authority is established on b8d403cf626c44193403ba3e440ef3a4d1465cb8. P20-T020 remains locked until the D011 closure head re-establishes same-head P20-T019 Formal, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required all zero; issue #90 remains open until that closure authority is recorded."
+  "note": "P20-D001 through P20-D011 are closed. P20-D012 is an open P1 release blocker discovered by exact-head P20-T020 live Support continuity on 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f. P20-T021 remains forbidden until D012 is remediated, formally verified and closed with same-head P20 Contract and Candidate Freeze coherence."
 }
