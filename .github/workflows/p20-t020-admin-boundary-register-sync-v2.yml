@@ -1,4 +1,5 @@
 name: P20 T020 Admin Boundary Harness Sync V2
+# synchronized after workflow registration
 
 on:
   pull_request:
