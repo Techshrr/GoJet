@@ -8,28 +8,36 @@ on:
       - '.github/workflows/p20-d012-ledger-register.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   stage-ledger:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp/p20-d012-ledger-register
+          path: stage
+          fetch-depth: 0
+
       - name: Checkout exact P20 integration head
         uses: actions/checkout@v4
         with:
           ref: 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f
+          path: repo
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Generate D012 ledger registration artifact
+      - name: Generate and validate D012 ledger registration
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = '1f10c5ca47d9192ca1d109b2f3351081bbe02b0f'
+          test "$(git -C repo rev-parse HEAD)" = '1f10c5ca47d9192ca1d109b2f3351081bbe02b0f'
           python3 - <<'PY'
           import json
           from pathlib import Path
-          path=Path('artifacts/v10/P20/defect-ledger.json')
+          path=Path('repo/artifacts/v10/P20/defect-ledger.json')
           data=json.loads(path.read_text(encoding='utf-8'))
           assert data['schema']=='gojet.p20-defect-ledger.v1'
           assert data['node']=='P20'
@@ -52,17 +60,19 @@ jobs:
           data['note']='P20-D001 through P20-D011 are closed. P20-D012 is an open P1 release blocker discovered by exact-head P20-T020 Support requester continuity on 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f. P20-T021 remains forbidden until D012 is remediated, formally verified and closed with same-head P20 Contract and Candidate Freeze coherence.'
           path.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           PY
-          python3 -m json.tool artifacts/v10/P20/defect-ledger.json >/dev/null
-          git diff --check
-          test "$(git diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
-          mkdir -p /tmp/d012-ledger
-          cp artifacts/v10/P20/defect-ledger.json /tmp/d012-ledger/defect-ledger.json
-          git diff -- artifacts/v10/P20/defect-ledger.json > /tmp/d012-ledger/defect-ledger.patch
+          python3 -m json.tool repo/artifacts/v10/P20/defect-ledger.json >/dev/null
+          git -C repo diff --check
+          test "$(git -C repo diff --name-only)" = 'artifacts/v10/P20/defect-ledger.json'
+          mkdir -p stage/staging
+          cp repo/artifacts/v10/P20/defect-ledger.json stage/staging/defect-ledger.json.generated
 
-      - name: Upload D012 ledger artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: p20-d012-ledger-registration
-          path: /tmp/d012-ledger/
-          if-no-files-found: error
-          retention-days: 7
+      - name: Persist identical validated ledger blob on temporary branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C stage config user.name 'Ethan H.'
+          git -C stage config user.email '118724895+Techshrr@users.noreply.github.com'
+          git -C stage add staging/defect-ledger.json.generated
+          git -C stage diff --cached --check
+          git -C stage commit -m 'P20 D012: stage validated defect ledger blob'
+          git -C stage push origin HEAD:tmp/p20-d012-ledger-register
