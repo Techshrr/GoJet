@@ -213,7 +213,7 @@ func main() {
 		"category":        "general",
 		"subject":         "P20 T020 real support ticket",
 		"message":         "P20 T020 correlated requester lifecycle probe.",
-		"turnstile_token": "p20-t020-ci-protected-submission",
+		"turnstile_token": "XXXX.DUMMY.TOKEN.XXXX",
 	}, mergeHeaders(unsafeHeaders(cookieHeader, origin, csrf, "p20-t020-create-"+suffix), map[string]string{
 		"Idempotency-Key": "p20-t020-create-" + suffix,
 	}))
