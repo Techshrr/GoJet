@@ -1,0 +1,75 @@
+name: P20 T020 Full Lifecycle Stage
+
+on:
+  push:
+    branches:
+      - chore/p20-t020-full-lifecycle-stage
+    paths:
+      - '.github/workflows/p20-t020-full-lifecycle-stage.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-t020-full-lifecycle-stage
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Stage full T020 mail and attachment lifecycle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout staging source
+        uses: actions/checkout@v4
+        with:
+          ref: chore/p20-t020-full-lifecycle-stage
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded full-lifecycle harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin develop/p20-t020-full-lifecycle-harness
+          git checkout --detach origin/develop/p20-t020-full-lifecycle-harness
+          test "$(git rev-parse HEAD)" = '60cac306440255c55388b11d92aebd997eec4a82'
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/p20/t020_probe/main.go')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('\t"encoding/json"\n', '\t"encoding/json"\n\t"errors"\n', 1)
+          text = text.replace('\t"net/http"\n', '\t"net"\n\t"net/http"\n', 1)
+          text = text.replace('\t"os"\n', '\t"os"\n\t"os/exec"\n', 1)
+
+          old = '''\tresult.Details["admin_reply_persisted"] = true\n\n\t// Discovery remains fail-closed until the same correlated ticket also proves\n\t// mailworker/SMTP delivery and attachment malware enforcement.\n\tfail("T020 discovery reached real Admin reply; extend through mailworker and attachment safety before claiming PASS")\n}\n\nfunc readEvidence'''
+          new = '''\tresult.Details["admin_reply_persisted"] = true\n\tadminMessageID := nestedString(adminReply.Body, "message", "id")\n\tresult.Details["admin_reply_message_id_present"] = adminMessageID != ""\n\tif adminMessageID == "" {\n\t\tfail("T020 real Admin reply did not expose its durable message identity")\n\t\treturn\n\t}\n\n\tif err := proveT020MailAndAttachment(ctx, db, ticketID, adminMessageID, suffix, &result); err != nil {\n\t\tresult.Details["full_lifecycle_error"] = err.Error()\n\t\tfail("T020 real Support lifecycle did not preserve mail/attachment authority")\n\t\treturn\n\t}\n\tresult.Details["t020_full_lifecycle_proven"] = true\n\tfinish()\n}\n\nfunc proveT020MailAndAttachment(ctx context.Context, db *sql.DB, ticketID, adminMessageID, suffix string, result *probe) error {\n\tif db == nil || result == nil || strings.TrimSpace(ticketID) == "" || strings.TrimSpace(adminMessageID) == "" {\n\t\treturn fmt.Errorf("invalid T020 lifecycle authority")\n\t}\n\n\tvar mailJobID, mailStatus string\n\terr := db.QueryRowContext(ctx, `\nSELECT id,status FROM mail_jobs\nWHERE template_key='support-ticket-reply' AND resource_type='ticket_message' AND resource_id=?\nORDER BY created_at DESC,id DESC LIMIT 1`, adminMessageID).Scan(&mailJobID, &mailStatus)\n\tif err != nil || strings.TrimSpace(mailJobID) == "" {\n\t\treturn fmt.Errorf("Admin reply mail job correlation missing: %w", err)\n\t}\n\tresult.Details["admin_reply_mail_job_bound"] = true\n\tresult.Details["admin_reply_mail_job_id_present"] = true\n\tresult.Details["admin_reply_mail_initial_status"] = mailStatus\n\n\tsmtpCmd, smtpLog, err := startT020SMTPSink(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer stopT020Process(smtpCmd, smtpLog)\n\n\tmailCmd, mailLog, err := startT020Mailworker(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer stopT020Process(mailCmd, mailLog)\n\n\tmailStatus, err = waitT020MailStatus(ctx, db, mailJobID, "sent", 25*time.Second)\n\tif err != nil {\n\t\treturn err\n\t}\n\tresult.Details["admin_reply_mail_final_status"] = mailStatus\n\tresult.Details["native_mailworker"] = true\n\n\tvar attemptStatus string\n\tif err := db.QueryRowContext(ctx, `SELECT status FROM mail_attempts WHERE mail_job_id=? ORDER BY attempt_number DESC LIMIT 1`, mailJobID).Scan(&attemptStatus); err != nil || attemptStatus != "sent" {\n\t\treturn fmt.Errorf("Admin reply mail attempt not durably sent: status=%q err=%v", attemptStatus, err)\n\t}\n\tresult.Details["admin_reply_mail_attempt_status"] = attemptStatus\n\n\tsmtpStatePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_STATE"))\n\tvar smtpState map[string]any\n\tif smtpStatePath == "" || readJSON(smtpStatePath, &smtpState) != nil {\n\t\treturn fmt.Errorf("T020 SMTP sink state unavailable")\n\t}\n\tdeliveries := numericInt(smtpState["deliveries"])\n\tmessageDigest := strings.TrimSpace(stringValue(smtpState["last_message_sha256"]))\n\tif deliveries < 1 || len(messageDigest) != 64 {\n\t\treturn fmt.Errorf("T020 SMTP evidence incomplete deliveries=%d digest_length=%d", deliveries, len(messageDigest))\n\t}\n\tresult.Details["smtp_deliveries"] = deliveries\n\tresult.Details["smtp_message_sha256_length"] = len(messageDigest)\n\tresult.Details["real_smtp_delivery"] = true\n\n\tproducerPath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_PRODUCER"))\n\tif producerPath == "" {\n\t\treturn fmt.Errorf("P14 attachment producer path missing")\n\t}\n\teicarPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-eicar-"+suffix+".txt")\n\tif err := os.MkdirAll(filepath.Dir(eicarPath), 0o755); err != nil {\n\t\treturn err\n\t}\n\teicar := []byte("X5O!P%@AP[4\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*\\n")\n\tif err := os.WriteFile(eicarPath, eicar, 0o600); err != nil {\n\t\treturn err\n\t}\n\tdefer os.Remove(eicarPath)\n\n\tintakeRC, intake, err := runT020Producer(ctx, producerPath, "attachment-intake", ticketID, adminMessageID, eicarPath, "t020-eicar.txt", "text/plain")\n\tif err != nil || intakeRC != 0 {\n\t\treturn fmt.Errorf("T020 EICAR attachment intake failed rc=%d err=%v", intakeRC, err)\n\t}\n\tattachmentID := nestedString(intake, "attachment", "id")\n\tif attachmentID == "" {\n\t\treturn fmt.Errorf("T020 EICAR attachment identity missing")\n\t}\n\tresult.Details["attachment_id_present"] = true\n\n\tscanRC, scan, err := runT020Producer(ctx, producerPath, "attachment-scan", attachmentID)\n\tif err != nil || scanRC != 0 || nestedString(scan, "attachment", "scan_status") != "infected" {\n\t\treturn fmt.Errorf("T020 EICAR scan did not persist infected rc=%d err=%v", scanRC, err)\n\t}\n\tvar durableScan string\n\tif err := db.QueryRowContext(ctx, `SELECT scan_status FROM support_ticket_attachments WHERE id=? AND ticket_id=? AND message_id=?`, attachmentID, ticketID, adminMessageID).Scan(&durableScan); err != nil || durableScan != "infected" {\n\t\treturn fmt.Errorf("T020 infected attachment durable linkage mismatch status=%q err=%v", durableScan, err)\n\t}\n\tresult.Details["attachment_bound_to_admin_reply"] = true\n\tresult.Details["attachment_scan_status"] = durableScan\n\tresult.Details["real_clamav_infected"] = true\n\n\tdownloadRC, download, err := runT020Producer(ctx, producerPath, "attachment-download-check", attachmentID)\n\tif err != nil {\n\t\treturn err\n\t}\n\tallowed, _ := download["allowed"].(bool)\n\tif downloadRC == 0 || allowed {\n\t\treturn fmt.Errorf("T020 infected attachment was downloadable rc=%d allowed=%v", downloadRC, allowed)\n\t}\n\tresult.Details["infected_attachment_download_blocked"] = true\n\treturn nil\n}\n\nfunc startT020SMTPSink(ctx context.Context) (*exec.Cmd, *os.File, error) {\n\tstatePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_STATE"))\n\tmodePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_MODE"))\n\taddr := strings.TrimSpace(os.Getenv("GOJET_SMTP_ADDR"))\n\tif statePath == "" || modePath == "" || addr == "" {\n\t\treturn nil, nil, fmt.Errorf("T020 SMTP fixture configuration missing")\n\t}\n\thost, port, err := net.SplitHostPort(addr)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\t_ = os.Remove(statePath)\n\tif err := os.WriteFile(modePath, []byte("success\\n"), 0o644); err != nil {\n\t\treturn nil, nil, err\n\t}\n\tlogPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-smtp.log")\n\tif err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {\n\t\treturn nil, nil, err\n\t}\n\tlog, err := os.Create(logPath)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tcmd := exec.CommandContext(ctx, "python3", "scripts/p14/smtp_sink.py", "--host", host, "--port", port, "--state", statePath, "--mode-file", modePath)\n\tcmd.Stdout = log\n\tcmd.Stderr = log\n\tif err := cmd.Start(); err != nil {\n\t\tlog.Close()\n\t\treturn nil, nil, err\n\t}\n\tdeadline := time.Now().Add(10 * time.Second)\n\tfor time.Now().Before(deadline) {\n\t\tconn, dialErr := net.DialTimeout("tcp", addr, 500*time.Millisecond)\n\t\tif dialErr == nil {\n\t\t\t_ = conn.SetReadDeadline(time.Now().Add(time.Second))\n\t\t\tbuf := make([]byte, 256)\n\t\t\tn, _ := conn.Read(buf)\n\t\t\t_ = conn.Close()\n\t\t\tif strings.HasPrefix(string(buf[:n]), "220 ") {\n\t\t\t\treturn cmd, log, nil\n\t\t\t}\n\t\t}\n\t\ttime.Sleep(200 * time.Millisecond)\n\t}\n\tstopT020Process(cmd, log)\n\treturn nil, nil, fmt.Errorf("T020 SMTP sink did not become ready")\n}\n\nfunc startT020Mailworker(ctx context.Context) (*exec.Cmd, *os.File, error) {\n\tpath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_MAILWORKER"))\n\tif path == "" {\n\t\treturn nil, nil, fmt.Errorf("T020 mailworker path missing")\n\t}\n\tlogPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-mailworker.log")\n\tlog, err := os.Create(logPath)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tcmd := exec.CommandContext(ctx, path)\n\tcmd.Env = os.Environ()\n\tcmd.Stdout = log\n\tcmd.Stderr = log\n\tif err := cmd.Start(); err != nil {\n\t\tlog.Close()\n\t\treturn nil, nil, err\n\t}\n\treturn cmd, log, nil\n}\n\nfunc stopT020Process(cmd *exec.Cmd, log *os.File) {\n\tif cmd != nil && cmd.Process != nil {\n\t\t_ = cmd.Process.Kill()\n\t\t_ = cmd.Wait()\n\t}\n\tif log != nil {\n\t\t_ = log.Close()\n\t}\n}\n\nfunc waitT020MailStatus(ctx context.Context, db *sql.DB, jobID, wanted string, timeout time.Duration) (string, error) {\n\tdeadline := time.Now().Add(timeout)\n\tlast := ""\n\tfor time.Now().Before(deadline) {\n\t\tif err := db.QueryRowContext(ctx, `SELECT status FROM mail_jobs WHERE id=?`, jobID).Scan(&last); err == nil {\n\t\t\tif last == wanted {\n\t\t\t\treturn last, nil\n\t\t\t}\n\t\t\tif last == "failed" {\n\t\t\t\treturn last, fmt.Errorf("mail job failed before %s", wanted)\n\t\t\t}\n\t\t}\n\t\tselect {\n\t\tcase <-ctx.Done():\n\t\t\treturn last, ctx.Err()\n\t\tcase <-time.After(250 * time.Millisecond):\n\t\t}\n\t}\n\treturn last, fmt.Errorf("mail job did not reach %s; last=%s", wanted, last)\n}\n\nfunc runT020Producer(ctx context.Context, path string, args ...string) (int, map[string]any, error) {\n\tcmd := exec.CommandContext(ctx, path, args...)\n\tcmd.Env = os.Environ()\n\traw, err := cmd.CombinedOutput()\n\texitCode := 0\n\tif err != nil {\n\t\tvar exitErr *exec.ExitError\n\t\tif !errors.As(err, &exitErr) {\n\t\t\treturn -1, nil, err\n\t\t}\n\t\texitCode = exitErr.ExitCode()\n\t}\n\tlines := bytes.Split(bytes.TrimSpace(raw), []byte("\\n"))\n\tif len(lines) == 0 || len(lines[len(lines)-1]) == 0 {\n\t\treturn exitCode, nil, fmt.Errorf("producer emitted no JSON")\n\t}\n\tdata := map[string]any{}\n\tif err := json.Unmarshal(lines[len(lines)-1], &data); err != nil {\n\t\treturn exitCode, nil, fmt.Errorf("producer JSON decode: %w", err)\n\t}\n\treturn exitCode, data, nil\n}\n\nfunc numericInt(value any) int {\n\tswitch typed := value.(type) {\n\tcase float64:\n\t\treturn int(typed)\n\tcase int:\n\t\treturn typed\n\tcase json.Number:\n\t\tparsed, _ := typed.Int64()\n\t\treturn int(parsed)\n\tdefault:\n\t\treturn 0\n\t}\n}\n\nfunc readEvidence'''
+          if old not in text:
+              raise SystemExit('frozen T020 discovery tail not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          gofmt -w scripts/p20/t020_probe/main.go
+          gofmt -d scripts/p20/t020_probe/main.go | tee /tmp/t020-full-gofmt.diff
+          test ! -s /tmp/t020-full-gofmt.diff
+          go test ./scripts/p20/t020_probe ./internal/support ./services/platformapi/cmd/server
+          go test ./...
+          python3 scripts/p20/validate_contract.py > /tmp/t020-full-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/t020-full-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+          test "$(git diff --name-only)" = 'scripts/p20/t020_probe/main.go'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/p20/t020_probe/main.go
+          git commit -m 'P20 T020: prove mail and attachment lifecycle'
+          commit="$(git rev-parse HEAD)"
+          echo "P20_T020_FULL_LIFECYCLE_COMMIT=${commit}"
+          git push origin HEAD:develop/p20-t020-full-lifecycle-harness
