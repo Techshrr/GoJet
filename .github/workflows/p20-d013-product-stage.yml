@@ -1,0 +1,485 @@
+name: P20 D013 Product Stage
+
+on:
+  push:
+    branches:
+      - chore/p20-d013-product-stage
+    paths:
+      - '.github/workflows/p20-d013-product-stage.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d013-product-stage
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Stage D013 Support Admin authority composition
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout staging source
+        uses: actions/checkout@v4
+        with:
+          ref: chore/p20-d013-product-stage
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded D013 product remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin develop/p20-d013-support-admin-authority
+          git checkout --detach origin/develop/p20-d013-support-admin-authority
+          test "$(git rev-parse HEAD)" = '60cac306440255c55388b11d92aebd997eec4a82'
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/platformapi/cmd/server/admin_access.go')
+          text = path.read_text(encoding='utf-8')
+          start = text.index('func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {')
+          marker = '\tapi, err := adminaccess.NewHTTPAPI(service)\n'
+          end = text.index(marker, start)
+          replacement = r'''func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, bool, error) {
+	if os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") != "1" {
+		return nil, false, nil
+	}
+	if db == nil || redisClient == nil {
+		return nil, false, adminaccess.ErrInvalid
+	}
+	keyID := strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_ID"))
+	keyHex := strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_HEX"))
+	key, err := hex.DecodeString(keyHex)
+	if err != nil || len(key) != 32 {
+		return nil, false, adminaccess.ErrInvalid
+	}
+	cipher, err := adminaccess.NewSecretCipher(keyID, key)
+	if err != nil {
+		return nil, false, err
+	}
+	rawOrigins := strings.TrimSpace(os.Getenv("GOJET_ADMIN_ALLOWED_ORIGIN"))
+	origins := make([]string, 0, 2)
+	for _, raw := range strings.Split(rawOrigins, ",") {
+		if value := strings.TrimSpace(raw); value != "" {
+			origins = append(origins, value)
+		}
+	}
+	if len(origins) == 0 {
+		return nil, false, adminaccess.ErrInvalid
+	}
+	sessionTTL := 8 * time.Hour
+	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_SESSION_TTL")); raw != "" {
+		parsed, e := time.ParseDuration(raw)
+		if e != nil {
+			return nil, false, adminaccess.ErrInvalid
+		}
+		sessionTTL = parsed
+	}
+	loginLimit := int64(10)
+	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_LOGIN_RATE_LIMIT")); raw != "" {
+		parsed, e := strconv.ParseInt(raw, 10, 64)
+		if e != nil || parsed < 1 || parsed > 1000 {
+			return nil, false, adminaccess.ErrInvalid
+		}
+		loginLimit = parsed
+	}
+	loginWindow := 5 * time.Minute
+	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_LOGIN_RATE_WINDOW")); raw != "" {
+		parsed, e := time.ParseDuration(raw)
+		if e != nil || parsed < time.Minute || parsed > time.Hour {
+			return nil, false, adminaccess.ErrInvalid
+		}
+		loginWindow = parsed
+	}
+	limiter, err := adminaccess.NewRedisLoginLimiter(redisClient, "admin:login:", loginLimit, loginWindow)
+	if err != nil {
+		return nil, false, err
+	}
+	service, err := adminaccess.NewService(db, limiter, cipher, sessionTTL, origins)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := adminaccess.VerifyDomainEntitlementSchema(context.Background(), db); err != nil {
+		return nil, false, err
+	}
+	if err := adminaccess.VerifyPlatformGovernanceSchema(context.Background(), db); err != nil {
+		return nil, false, err
+	}
+	return service, true, nil
+}
+
+func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {
+	service, enabled, err := buildAdminAccessService(db, redisClient)
+	if err != nil || !enabled {
+		return nil, enabled, err
+	}
+'''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/platformapi/cmd/server/support.go')
+          text = path.read_text(encoding='utf-8')
+          start_marker = '\t// P17 owns the administrator/permission lifecycle. P14 only consumes the\n'
+          end_marker = '\n\trequesterHandler := requesterAPI.Handler()\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = r'''	// P17 owns the administrator identity/session/permission lifecycle. P14
+	// consumes only the tickets.manage and mail.manage decisions. Test mode keeps
+	// the predecessor server-owned actors; production composes the real P17
+	// session, Origin/CSRF and PermissionCatalog authority without trusting any
+	// client-supplied role or permission header.
+	var adminPrincipalResolver support.PrincipalResolver = supportPrincipalResolver{testAuth: testAuth}
+	var ticketAdminPermissions support.AdminPermissionResolver
+	var mailAdminPermissions support.AdminPermissionResolver
+	if testAuth {
+		if os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED") == "1" {
+			actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR"))
+			if actorID == "" {
+				return nil, false, support.ErrAuthenticationUnavailable
+			}
+			ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
+		}
+		if os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ENABLED") == "1" {
+			actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR"))
+			if actorID == "" {
+				return nil, false, support.ErrAuthenticationUnavailable
+			}
+			mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
+		}
+	} else {
+		adminAuthority, enabled, authorityErr := buildSupportAdminAuthority(db, redisClient)
+		if authorityErr != nil {
+			return nil, false, authorityErr
+		}
+		if enabled {
+			adminPrincipalResolver = adminAuthority
+			ticketAdminPermissions = adminAuthority
+			mailAdminPermissions = adminAuthority
+		}
+	}
+
+	adminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, adminPrincipalResolver, ticketAdminPermissions, workspaceStore)
+	if err != nil {
+		return nil, false, err
+	}
+	adminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, adminPrincipalResolver, mailAdminPermissions)
+	if err != nil {
+		return nil, false, err
+	}
+'''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          cat > services/platformapi/cmd/server/support_admin_auth.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"database/sql"
+          	"errors"
+          	"net/http"
+          	"strings"
+          	"time"
+
+          	adminaccess "github.com/Techshrr/GoJet/internal/admin"
+          	"github.com/Techshrr/GoJet/internal/support"
+          	"github.com/redis/go-redis/v9"
+          )
+
+          type supportAdminAuthorityContextKey struct{}
+
+          // supportAdminAuthority adapts the established P17 administrator
+          // session/permission boundary to P14 Support Admin contracts. The
+          // authenticated P17 principal is carried only in the current request
+          // context so permission checks cannot leak or be reused across requests.
+          type supportAdminAuthority struct {
+          	authenticate   func(context.Context, string, time.Time) (adminaccess.Principal, error)
+          	validateOrigin func(string) bool
+          	validateCSRF   func(adminaccess.Principal, string) bool
+          	now            func() time.Time
+          }
+
+          func buildSupportAdminAuthority(db *sql.DB, redisClient *redis.Client) (*supportAdminAuthority, bool, error) {
+          	service, enabled, err := buildAdminAccessService(db, redisClient)
+          	if err != nil || !enabled {
+          		return nil, enabled, err
+          	}
+          	return newSupportAdminAuthority(service), true, nil
+          }
+
+          func newSupportAdminAuthority(service *adminaccess.Service) *supportAdminAuthority {
+          	if service == nil {
+          		return nil
+          	}
+          	return &supportAdminAuthority{
+          		authenticate:   service.Authenticate,
+          		validateOrigin: service.ValidateOrigin,
+          		validateCSRF:   service.ValidateCSRF,
+          		now:            func() time.Time { return time.Now().UTC() },
+          	}
+          }
+
+          func (a *supportAdminAuthority) ResolvePrincipal(req *http.Request) (support.RequestPrincipal, error) {
+          	if a == nil || a.authenticate == nil || a.validateOrigin == nil || a.validateCSRF == nil || a.now == nil || req == nil {
+          		return support.RequestPrincipal{}, support.ErrAuthenticationUnavailable
+          	}
+          	cookie, err := req.Cookie(adminaccess.AdminSessionCookie)
+          	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+          		return support.RequestPrincipal{}, support.ErrAuthenticationRequired
+          	}
+          	principal, err := a.authenticate(req.Context(), cookie.Value, a.now())
+          	if err != nil {
+          		return support.RequestPrincipal{}, supportAdminAuthorityError(err)
+          	}
+          	if supportAdminUnsafeMethod(req.Method) {
+          		if !a.validateOrigin(req.Header.Get("Origin")) || !a.validateCSRF(principal, req.Header.Get("X-CSRF-Token")) {
+          			return support.RequestPrincipal{}, support.ErrAuthenticationRequired
+          		}
+          	}
+          	adminID := strings.TrimSpace(principal.Administrator.ID)
+          	email := strings.TrimSpace(principal.Administrator.Email)
+          	if adminID == "" || email == "" {
+          		return support.RequestPrincipal{}, support.ErrAuthenticationUnavailable
+          	}
+          	*req = *req.WithContext(context.WithValue(req.Context(), supportAdminAuthorityContextKey{}, principal))
+          	return support.RequestPrincipal{
+          		UserID:      adminID,
+          		Email:       email,
+          		DisplayName: strings.TrimSpace(principal.Administrator.DisplayName),
+          	}, nil
+          }
+
+          func (a *supportAdminAuthority) HasPermission(ctx context.Context, principal support.RequestPrincipal, permission string) (bool, error) {
+          	if a == nil || ctx == nil {
+          		return false, support.ErrAuthenticationUnavailable
+          	}
+          	authority, ok := ctx.Value(supportAdminAuthorityContextKey{}).(adminaccess.Principal)
+          	if !ok || strings.TrimSpace(authority.Administrator.ID) == "" || authority.Administrator.ID != strings.TrimSpace(principal.UserID) {
+          		return false, support.ErrAuthenticationUnavailable
+          	}
+          	switch permission {
+          	case support.TicketsManagePermission:
+          		return authority.Has(adminaccess.PermissionTicketsManage), nil
+          	case support.MailManagePermission:
+          		return authority.Has(adminaccess.PermissionMailManage), nil
+          	default:
+          		return false, nil
+          	}
+          }
+
+          func supportAdminUnsafeMethod(method string) bool {
+          	switch strings.ToUpper(strings.TrimSpace(method)) {
+          	case http.MethodGet, http.MethodHead, http.MethodOptions:
+          		return false
+          	default:
+          		return true
+          	}
+          }
+
+          func supportAdminAuthorityError(err error) error {
+          	switch {
+          	case errors.Is(err, adminaccess.ErrUnauthorized),
+          		errors.Is(err, adminaccess.ErrForbidden),
+          		errors.Is(err, adminaccess.ErrLocked),
+          		errors.Is(err, adminaccess.ErrMFARequired),
+          		errors.Is(err, adminaccess.ErrMFAInvalid):
+          		return support.ErrAuthenticationRequired
+          	default:
+          		return support.ErrAuthenticationUnavailable
+          	}
+          }
+          EOF
+
+          cat > services/platformapi/cmd/server/support_admin_auth_test.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"errors"
+          	"net/http"
+          	"testing"
+          	"time"
+
+          	adminaccess "github.com/Techshrr/GoJet/internal/admin"
+          	"github.com/Techshrr/GoJet/internal/support"
+          )
+
+          func testSupportAdminAuthority(principal adminaccess.Principal) *supportAdminAuthority {
+          	return &supportAdminAuthority{
+          		authenticate: func(context.Context, string, time.Time) (adminaccess.Principal, error) {
+          			return principal, nil
+          		},
+          		validateOrigin: func(origin string) bool { return origin == "https://admin.example.test" },
+          		validateCSRF:   func(adminaccess.Principal, string) bool { return true },
+          		now:            func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+          	}
+          }
+
+          func TestSupportAdminAuthorityMapsP17PrincipalAndPermissions(t *testing.T) {
+          	p17 := adminaccess.Principal{
+          		Administrator: adminaccess.Administrator{ID: "adm_real", Email: "admin@example.test", DisplayName: "Real Admin"},
+          		Permissions: map[string]struct{}{
+          			adminaccess.PermissionTicketsManage: {},
+          			adminaccess.PermissionMailManage:    {},
+          		},
+          	}
+          	authority := testSupportAdminAuthority(p17)
+          	req, _ := http.NewRequest(http.MethodPost, "http://localhost/api/admin/support/tickets/t1/replies", nil)
+          	req.AddCookie(&http.Cookie{Name: adminaccess.AdminSessionCookie, Value: "gas_real"})
+          	req.Header.Set("Origin", "https://admin.example.test")
+          	req.Header.Set("X-CSRF-Token", "csrf")
+
+          	principal, err := authority.ResolvePrincipal(req)
+          	if err != nil {
+          		t.Fatalf("ResolvePrincipal() error = %v", err)
+          	}
+          	if principal.UserID != "adm_real" || principal.Email != "admin@example.test" || principal.DisplayName != "Real Admin" {
+          		t.Fatalf("unexpected Support principal: %#v", principal)
+          	}
+          	for _, permission := range []string{support.TicketsManagePermission, support.MailManagePermission} {
+          		allowed, err := authority.HasPermission(req.Context(), principal, permission)
+          		if err != nil || !allowed {
+          			t.Fatalf("HasPermission(%q) = %v, %v; want true, nil", permission, allowed, err)
+          		}
+          	}
+          }
+
+          func TestSupportAdminAuthorityDeniesMissingPermission(t *testing.T) {
+          	p17 := adminaccess.Principal{
+          		Administrator: adminaccess.Administrator{ID: "adm_real", Email: "admin@example.test"},
+          		Permissions:   map[string]struct{}{adminaccess.PermissionTicketsManage: {}},
+          	}
+          	authority := testSupportAdminAuthority(p17)
+          	req, _ := http.NewRequest(http.MethodGet, "http://localhost/api/admin/mail/queue", nil)
+          	req.AddCookie(&http.Cookie{Name: adminaccess.AdminSessionCookie, Value: "gas_real"})
+          	principal, err := authority.ResolvePrincipal(req)
+          	if err != nil {
+          		t.Fatalf("ResolvePrincipal() error = %v", err)
+          	}
+          	allowed, err := authority.HasPermission(req.Context(), principal, support.MailManagePermission)
+          	if err != nil || allowed {
+          		t.Fatalf("HasPermission(mail.manage) = %v, %v; want false, nil", allowed, err)
+          	}
+          }
+
+          func TestSupportAdminAuthorityRequiresP17Cookie(t *testing.T) {
+          	authority := testSupportAdminAuthority(adminaccess.Principal{})
+          	req, _ := http.NewRequest(http.MethodGet, "http://localhost/api/admin/support/tickets", nil)
+          	_, err := authority.ResolvePrincipal(req)
+          	if !errors.Is(err, support.ErrAuthenticationRequired) {
+          		t.Fatalf("ResolvePrincipal() error = %v, want authentication required", err)
+          	}
+          }
+
+          func TestSupportAdminAuthorityEnforcesOriginAndCSRFOnUnsafeRequest(t *testing.T) {
+          	p17 := adminaccess.Principal{Administrator: adminaccess.Administrator{ID: "adm_real", Email: "admin@example.test"}}
+          	authority := testSupportAdminAuthority(p17)
+          	authority.validateCSRF = func(adminaccess.Principal, string) bool { return false }
+          	req, _ := http.NewRequest(http.MethodPost, "http://localhost/api/admin/support/tickets/t1/replies", nil)
+          	req.AddCookie(&http.Cookie{Name: adminaccess.AdminSessionCookie, Value: "gas_real"})
+          	req.Header.Set("Origin", "https://admin.example.test")
+          	req.Header.Set("X-CSRF-Token", "bad")
+          	_, err := authority.ResolvePrincipal(req)
+          	if !errors.Is(err, support.ErrAuthenticationRequired) {
+          		t.Fatalf("ResolvePrincipal() CSRF error = %v, want authentication required", err)
+          	}
+
+          	authority.validateCSRF = func(adminaccess.Principal, string) bool { return true }
+          	req.Header.Set("Origin", "https://wrong.example.test")
+          	_, err = authority.ResolvePrincipal(req)
+          	if !errors.Is(err, support.ErrAuthenticationRequired) {
+          		t.Fatalf("ResolvePrincipal() Origin error = %v, want authentication required", err)
+          	}
+          }
+
+          func TestSupportAdminAuthorityMapsP17AuthenticationFailures(t *testing.T) {
+          	tests := []struct {
+          		name string
+          		err  error
+          		want error
+          	}{
+          		{name: "unauthorized", err: adminaccess.ErrUnauthorized, want: support.ErrAuthenticationRequired},
+          		{name: "forbidden", err: adminaccess.ErrForbidden, want: support.ErrAuthenticationRequired},
+          		{name: "dependency", err: errors.New("db unavailable"), want: support.ErrAuthenticationUnavailable},
+          	}
+          	for _, tt := range tests {
+          		t.Run(tt.name, func(t *testing.T) {
+          			authority := testSupportAdminAuthority(adminaccess.Principal{})
+          			authority.authenticate = func(context.Context, string, time.Time) (adminaccess.Principal, error) {
+          				return adminaccess.Principal{}, tt.err
+          			}
+          			req, _ := http.NewRequest(http.MethodGet, "http://localhost/api/admin/support/tickets", nil)
+          			req.AddCookie(&http.Cookie{Name: adminaccess.AdminSessionCookie, Value: "gas_real"})
+          			_, err := authority.ResolvePrincipal(req)
+          			if !errors.Is(err, tt.want) {
+          				t.Fatalf("ResolvePrincipal() error = %v, want %v", err, tt.want)
+          			}
+          		})
+          	}
+          }
+
+          func TestSupportAdminAuthorityDoesNotReusePermissionAcrossRequests(t *testing.T) {
+          	authority := testSupportAdminAuthority(adminaccess.Principal{})
+          	principal := support.RequestPrincipal{UserID: "adm_real", Email: "admin@example.test"}
+          	allowed, err := authority.HasPermission(context.Background(), principal, support.TicketsManagePermission)
+          	if allowed || !errors.Is(err, support.ErrAuthenticationUnavailable) {
+          		t.Fatalf("HasPermission() = %v, %v; want false, auth unavailable", allowed, err)
+          	}
+          }
+          EOF
+
+          gofmt -w \
+            services/platformapi/cmd/server/admin_access.go \
+            services/platformapi/cmd/server/support.go \
+            services/platformapi/cmd/server/support_admin_auth.go \
+            services/platformapi/cmd/server/support_admin_auth_test.go
+
+          gofmt -d \
+            services/platformapi/cmd/server/admin_access.go \
+            services/platformapi/cmd/server/support.go \
+            services/platformapi/cmd/server/support_admin_auth.go \
+            services/platformapi/cmd/server/support_admin_auth_test.go | tee /tmp/d013-gofmt.diff
+          test ! -s /tmp/d013-gofmt.diff
+
+          go test ./internal/admin ./internal/support ./services/platformapi/cmd/server
+          go test ./...
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d013-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d013-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+          ! grep -q 'X-GoJet-Test-' services/platformapi/cmd/server/support_admin_auth.go
+
+          cat > /tmp/expected-files <<'EOF'
+          services/platformapi/cmd/server/admin_access.go
+          services/platformapi/cmd/server/support.go
+          services/platformapi/cmd/server/support_admin_auth.go
+          services/platformapi/cmd/server/support_admin_auth_test.go
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          git add -N services/platformapi/cmd/server/support_admin_auth.go services/platformapi/cmd/server/support_admin_auth_test.go
+          git diff --name-only | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            services/platformapi/cmd/server/admin_access.go \
+            services/platformapi/cmd/server/support.go \
+            services/platformapi/cmd/server/support_admin_auth.go \
+            services/platformapi/cmd/server/support_admin_auth_test.go
+          git commit -m 'P20 D013: compose P17 Admin authority into Support'
+          commit="$(git rev-parse HEAD)"
+          echo "P20_D013_PRODUCT_COMMIT=${commit}"
+          git push origin HEAD:develop/p20-d013-support-admin-authority
