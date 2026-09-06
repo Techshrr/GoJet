@@ -23,6 +23,26 @@
       "discovery_artifact_id": 9974019175,
       "discovery_artifact_digest": "sha256:ed04147cb3fd79e6bd0f97907b3641e541b0347f625ab3109926224385c37399",
       "failure": "real authenticated session is not accepted as Support API requester authority; HTTP 503 auth_dependency_unavailable after exact-head P20-T009 through formal P20-T019, same-head P14 Support predecessor authority, real P15 session/CSRF authority and owner Workspace membership all succeeded; durable active Support ticket row delta 0 and Support message row delta 0"
+    },
+    {
+      "id": "P20-D013",
+      "severity": "P1",
+      "title": "Support Admin reply rejects real P17 Admin permission authority",
+      "case": "P20-T020",
+      "issue": 98,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "53d75de6ea085400d5e3d602e89d56f1d7aaab96",
+      "discovery_workflow_run": 34046109241,
+      "discovery_workflow_job": 101521327184,
+      "discovery_artifact_id": 9993439681,
+      "discovery_artifact_digest": "sha256:51973c18fd468bf90ec3eb94daed16fa3fd33086f2f0453b8178bd548a831714",
+      "failure": "real P17 Admin session and tickets.manage/mail.manage authority are valid, but Support Admin reply returns HTTP 503 admin_permission_unavailable with zero durable Admin-reply writes after the same exact-head T020 requester ticket create and requester reply both persist successfully"
     }
   ],
   "closed": [
@@ -797,5 +817,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D011 are closed. P20-D012 is an open P1 release blocker discovered by exact-head P20-T020 live Support continuity on 1f10c5ca47d9192ca1d109b2f3351081bbe02b0f. P20-T021 remains forbidden until D012 is remediated, formally verified and closed with same-head P20 Contract and Candidate Freeze coherence."
+  "note": "P20-D001 through P20-D011 are closed. P20-D012 and P20-D013 are open P1 release blockers in P20-T020. Exact-head 53d75de6ea085400d5e3d602e89d56f1d7aaab96 proves the D012 requester-session remediation through durable ticket create and requester reply, then discovers D013 at the independent P17 Admin permission-composition boundary. P20-T021 remains forbidden until both open blockers are formally remediated and closed."
 }
