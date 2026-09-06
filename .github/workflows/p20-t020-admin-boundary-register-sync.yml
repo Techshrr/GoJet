@@ -37,8 +37,8 @@ jobs:
           assert source.count(marker) == 1
           block = source.split(marker, 1)[1]
           lines = block.splitlines()
-          assert lines and all((not line) or line.startswith('          ') for line in lines)
-          script = '\n'.join(line[10:] if line else '' for line in lines) + '\n'
+          assert lines
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
           Path('/tmp/p20-t020-admin-boundary-register.sh').write_text(script, encoding='utf-8')
           PY
           git fetch origin develop/p20-whole-product-verification
