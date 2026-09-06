@@ -120,13 +120,21 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		return nil, false, err
 	}
 
-	principalResolver := supportPrincipalResolver{testAuth: testAuth}
+	var requesterPrincipalResolver support.PrincipalResolver
+	if testAuth {
+		requesterPrincipalResolver = supportPrincipalResolver{testAuth: true}
+	} else {
+		requesterPrincipalResolver, err = buildSupportSessionPrincipalResolver(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+	}
 	requesterAPI, err := support.NewAPI(
 		auditedRequesterStore,
 		workspaceStore,
 		auditedDomainProjector,
 		workspaceStore,
-		principalResolver,
+		requesterPrincipalResolver,
 		verifier,
 		guard,
 		guard,
@@ -148,7 +156,8 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		}
 		ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
 	}
-	adminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, principalResolver, ticketAdminPermissions, workspaceStore)
+	adminPrincipalResolver := supportPrincipalResolver{testAuth: testAuth}
+	adminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, adminPrincipalResolver, ticketAdminPermissions, workspaceStore)
 	if err != nil {
 		return nil, false, err
 	}
@@ -161,7 +170,7 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		}
 		mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
 	}
-	adminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, principalResolver, mailAdminPermissions)
+	adminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, adminPrincipalResolver, mailAdminPermissions)
 	if err != nil {
 		return nil, false, err
 	}
