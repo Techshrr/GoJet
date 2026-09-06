@@ -1,0 +1,107 @@
+name: P20 D012 Turnstile Fixture Register
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p20-d012-turnstile-fixture-register.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d012-turnstile-fixture-register
+  cancel-in-progress: false
+
+jobs:
+  register:
+    name: Register T020 Turnstile CI fixture
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration base with push authority
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded two-file CI harness change
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_base='ad8835ebdd62d6cdc941ee1089d978c1a45bad29'
+          test "$(git rev-parse HEAD)" = "$expected_base"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/p20-p0-support.yml')
+          probe = Path('scripts/p20/t020_probe/main.go')
+
+          workflow_text = workflow.read_text(encoding='utf-8')
+          old_secret = '      GOJET_TURNSTILE_SECRET: p20-t020-ci-placeholder-not-a-production-secret'
+          secret_expr = '$' + '{{ secrets.P20_TURNSTILE_TEST_SECRET }}'
+          new_secret = '      GOJET_TURNSTILE_SECRET: ' + secret_expr
+          assert workflow_text.count(old_secret) == 1
+          workflow_text = workflow_text.replace(old_secret, new_secret, 1)
+
+          marker = '''      - name: Set up Go from repository contract
+'''
+          preflight = '''      - name: Require isolated Turnstile CI test secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then
+            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2
+            exit 1
+          fi
+          test "$GOJET_TEST_AUTH_ENABLED" = '0'
+
+'''
+          assert workflow_text.count(marker) == 1
+          workflow_text = workflow_text.replace(marker, preflight + marker, 1)
+          assert old_secret not in workflow_text
+          assert new_secret in workflow_text
+          workflow.write_text(workflow_text, encoding='utf-8')
+
+          probe_text = probe.read_text(encoding='utf-8')
+          old_token = '"turnstile_token": "p20-t020-ci-protected-submission",'
+          new_token = '"turnstile_token": "XXXX.DUMMY.TOKEN.XXXX",'
+          assert probe_text.count(old_token) == 1
+          probe_text = probe_text.replace(old_token, new_token, 1)
+          assert old_token not in probe_text
+          assert new_token in probe_text
+          probe.write_text(probe_text, encoding='utf-8')
+          PY
+
+          gofmt -d scripts/p20/t020_probe/main.go | tee /tmp/t020-fixture-gofmt.diff
+          test ! -s /tmp/t020-fixture-gofmt.diff
+          git diff --check
+
+          git diff --name-only | sort > /tmp/actual-files
+          cat > /tmp/expected-files <<'EOF'
+          .github/workflows/p20-p0-support.yml
+          scripts/p20/t020_probe/main.go
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          diff -u /tmp/expected-files /tmp/actual-files
+
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/p20-p0-support.yml').read_text(encoding='utf-8')
+          probe = Path('scripts/p20/t020_probe/main.go').read_text(encoding='utf-8')
+          secret_expr = '$' + '{{ secrets.P20_TURNSTILE_TEST_SECRET }}'
+          assert 'GOJET_TURNSTILE_SECRET: ' + secret_expr in workflow
+          assert 'p20-t020-ci-placeholder-not-a-production-secret' not in workflow
+          assert "if [ -z \"${GOJET_TURNSTILE_SECRET:-}\" ]; then" in workflow
+          assert 'GOJET_TEST_AUTH_ENABLED' in workflow
+          assert '"turnstile_token": "XXXX.DUMMY.TOKEN.XXXX",' in probe
+          assert 'p20-t020-ci-protected-submission' not in probe
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/p20-p0-support.yml scripts/p20/t020_probe/main.go
+          git commit -m 'P20 T020: bind isolated Turnstile CI fixture'
+          git push origin HEAD:develop/p20-whole-product-verification
