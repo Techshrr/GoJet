@@ -1,9 +1,9 @@
 name: P20 T020 Admin Boundary Harness Sync
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - chore/p20-t020-admin-boundary-register
     paths:
       - '.github/workflows/p20-t020-admin-boundary-register-sync.yml'
 
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout staging source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: chore/p20-t020-admin-boundary-register
           fetch-depth: 0
           persist-credentials: true
 
