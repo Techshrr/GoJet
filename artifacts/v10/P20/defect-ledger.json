@@ -611,6 +611,7 @@
       "verification_artifact_id": 9748353645,
       "verification_artifact_digest": "sha256:af8699a482d4c317ec78469aa8ac08b3bbadab493e29baf4755b4fdd6d550df3",
       "supporting_contract_workflow_run": 33365342166,
+      "supporting_contract_workflow_job": 99404725038,
       "supporting_contract_artifact_id": 9748127531,
       "supporting_contract_artifact_digest": "sha256:c2c79094b0497f4e530336a791325ba2355ec3f17eed560f23c5d8a8e2cd2cca",
       "supporting_p11_contract_workflow_run": 33362225532,
