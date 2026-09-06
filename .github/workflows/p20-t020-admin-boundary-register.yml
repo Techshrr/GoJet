@@ -1,0 +1,286 @@
+name: P20 T020 Admin Boundary Harness Register
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p20-t020-admin-boundary-register.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-t020-admin-boundary-register
+  cancel-in-progress: false
+
+jobs:
+  register:
+    name: Register T020 real P17 Admin boundary harness
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact P20 integration base with push authority
+        uses: actions/checkout@v4
+        with:
+          ref: develop/p20-whole-product-verification
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded T020 harness extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_base='21656d2ae9494f7e42ba8fc7a69981ea09eeb8f9'
+          test "$(git rev-parse HEAD)" = "$expected_base"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/p20-p0-support.yml')
+          probe = Path('scripts/p20/t020_probe/main.go')
+          helper = Path('scripts/p20/t020_probe/admin_authority.go')
+
+          workflow_text = workflow.read_text(encoding='utf-8')
+          marker = "      GOJET_TEST_AUTH_ENABLED: '0'\n"
+          admin_env = """      GOJET_ADMIN_ACCESS_ENABLED: '1'
+      GOJET_ADMIN_TOTP_KEY_ID: p17-fixture-key-v1
+      GOJET_ADMIN_TOTP_KEY_HEX: 6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d
+      GOJET_ADMIN_ALLOWED_ORIGIN: https://admin.p17.test
+"""
+          assert workflow_text.count(marker) == 1
+          assert 'GOJET_ADMIN_ACCESS_ENABLED:' not in workflow_text
+          workflow_text = workflow_text.replace(marker, marker + admin_env, 1)
+          workflow.write_text(workflow_text, encoding='utf-8')
+
+          probe_text = probe.read_text(encoding='utf-8')
+          old = '''\t// Discovery intentionally stops here. If requester create succeeds, T020 must
+\t// still prove requester reply, real P17 Admin reply/permission authority,
+\t// durable mailworker SMTP delivery and attachment ClamAV fail-closed behavior
+\t// in one correlated timeline before the frozen case may report PASS.
+\tresult.Details["ticket_create_identity_bound"] = nestedString(created.Body, "ticket", "workspace_id") == workspaceID
+\tresult.Details["ticket_id_present"] = nestedString(created.Body, "ticket", "id") != ""
+\tfail("T020 discovery reached support-ticket create; extend through requester reply, real Admin reply, mailworker and attachment safety before claiming PASS")
+'''
+          new = '''\tticketID := nestedString(created.Body, "ticket", "id")
+\tresult.Details["ticket_create_identity_bound"] = nestedString(created.Body, "ticket", "workspace_id") == workspaceID
+\tresult.Details["ticket_id_present"] = ticketID != ""
+\tif result.Details["ticket_create_identity_bound"] != true || ticketID == "" {
+\t\tfail("T020 requester ticket create did not preserve correlated Workspace identity")
+\t\treturn
+\t}
+
+\t// P15 CSRF is single-use across Account and Workspace/Support unsafe routes.
+\t// Obtain a fresh token from the same authenticated customer session before
+\t// proving requester reply continuity.
+\treplyCSRF, _, err := issueCSRF(ctx, apiBase, cookieHeader, userID)
+\tif err != nil {
+\t\tfail("T020 could not renew real customer CSRF authority for requester reply")
+\t\treturn
+\t}
+\trequesterRepliesBefore, err := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='requester_reply' AND actor_id=?`, ticketID, userID)
+\tif err != nil {
+\t\tfail("T020 could not inspect requester reply durable state")
+\t\treturn
+\t}
+\trequesterCorrelation := "p20-t020-requester-reply-" + suffix
+\trequesterReply, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/support/tickets/"+ticketID+"/replies", map[string]any{
+\t\t"message": "P20 T020 real requester follow-up.",
+\t}, mergeHeaders(unsafeHeaders(cookieHeader, origin, replyCSRF, requesterCorrelation), map[string]string{
+\t\t"Idempotency-Key": requesterCorrelation,
+\t}))
+\tif err != nil {
+\t\tfail("T020 real requester reply request failed")
+\t\treturn
+\t}
+\trequesterRepliesAfter, _ := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='requester_reply' AND actor_id=?`, ticketID, userID)
+\tresult.Details["requester_reply_http_status"] = requesterReply.Status
+\tresult.Details["requester_reply_error_code"] = nestedErrorCode(requesterReply.Body)
+\tresult.Details["requester_reply_row_delta"] = requesterRepliesAfter - requesterRepliesBefore
+\tif requesterReply.Status != http.StatusCreated || requesterRepliesAfter-requesterRepliesBefore != 1 {
+\t\tfail("real authenticated requester session could not persist the correlated Support reply")
+\t\treturn
+\t}
+\tresult.Details["requester_reply_persisted"] = true
+
+\t// Establish independent P17 administrator authority on the same real MySQL
+\t// and Redis state, then prove that the production Admin HTTP surface accepts
+\t// that session before attempting the P14 Support Admin reply boundary.
+\tadminAuthority, err := establishRealP17AdminAuthority(ctx, apiBase, suffix)
+\tif err != nil {
+\t\tresult.Details["p17_admin_authority_error"] = err.Error()
+\t\tfail("T020 could not establish real P17 Admin session/permission authority")
+\t\treturn
+\t}
+\tresult.Details["p17_admin_session_authenticated"] = true
+\tresult.Details["p17_tickets_manage"] = true
+\tresult.Details["p17_mail_manage"] = true
+\tresult.Details["p17_admin_id_present"] = adminAuthority.AdministratorID != ""
+
+\tadminRepliesBefore, err := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='support_reply'`, ticketID)
+\tif err != nil {
+\t\tfail("T020 could not inspect pre-Admin-reply durable state")
+\t\treturn
+\t}
+\tadminCorrelation := "p20-t020-admin-reply-" + suffix
+\tadminReply, err := requestJSON(ctx, apiBase, http.MethodPost, "/api/admin/support/tickets/"+ticketID+"/replies", map[string]any{
+\t\t"kind":    "support_reply",
+\t\t"message": "P20 T020 real administrator reply.",
+\t}, mergeHeaders(adminUnsafeHeaders(adminAuthority, adminCorrelation), map[string]string{
+\t\t"Idempotency-Key": adminCorrelation,
+\t}))
+\tif err != nil {
+\t\tfail("T020 real P17 Admin Support reply request failed")
+\t\treturn
+\t}
+\tadminRepliesAfter, _ := scalarInt(ctx, db, `SELECT COUNT(*) FROM support_ticket_messages WHERE ticket_id=? AND kind='support_reply'`, ticketID)
+\tresult.Details["admin_reply_http_status"] = adminReply.Status
+\tresult.Details["admin_reply_error_code"] = nestedErrorCode(adminReply.Body)
+\tresult.Details["admin_reply_row_delta"] = adminRepliesAfter - adminRepliesBefore
+\tif adminReply.Status != http.StatusCreated || adminRepliesAfter-adminRepliesBefore != 1 {
+\t\tresult.Details["admin_reply_failed_without_write"] = adminRepliesAfter == adminRepliesBefore
+\t\tfail("real P17 Admin authority is not accepted by the Support Admin reply surface")
+\t\treturn
+\t}
+\tresult.Details["admin_reply_persisted"] = true
+
+\t// Discovery remains fail-closed until the same correlated ticket also proves
+\t// mailworker/SMTP delivery and attachment malware enforcement.
+\tfail("T020 discovery reached real Admin reply; extend through mailworker and attachment safety before claiming PASS")
+'''
+          assert probe_text.count(old) == 1
+          probe_text = probe_text.replace(old, new, 1)
+          probe.write_text(probe_text, encoding='utf-8')
+
+          helper.write_text(r'''package main
+
+import (
+    "context"
+    "fmt"
+    "net/http"
+    "strings"
+    "time"
+
+    adminaccess "github.com/Techshrr/GoJet/internal/admin"
+    adminfixture "github.com/Techshrr/GoJet/scripts/p17/adminfixture"
+)
+
+type p17AdminAuthority struct {
+    CookieHeader    string
+    CSRFToken       string
+    Origin          string
+    AdministratorID string
+}
+
+func establishRealP17AdminAuthority(ctx context.Context, apiBase, suffix string) (p17AdminAuthority, error) {
+    runtime, err := adminfixture.Open()
+    if err != nil {
+        return p17AdminAuthority{}, err
+    }
+    defer runtime.Close()
+
+    service, err := adminfixture.NewService(runtime, "p20-t020-"+suffix, 20)
+    if err != nil {
+        return p17AdminAuthority{}, err
+    }
+    now := time.Now().UTC()
+    email := "p20-t020-admin-" + suffix + "@example.test"
+    password := "P20-T020-" + suffix + "!AdminFixture"
+    administrator, err := adminfixture.Bootstrap(ctx, service, email, password, []string{
+        adminaccess.PermissionTicketsManage,
+        adminaccess.PermissionMailManage,
+    }, now)
+    if err != nil {
+        return p17AdminAuthority{}, err
+    }
+    principal, session, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, email, password, now.Add(time.Second))
+    if err != nil {
+        return p17AdminAuthority{}, err
+    }
+    if principal.Administrator.ID != administrator.ID || !principal.Has(adminaccess.PermissionTicketsManage) || !principal.Has(adminaccess.PermissionMailManage) {
+        return p17AdminAuthority{}, fmt.Errorf("P17 administrator permission principal mismatch")
+    }
+
+    cookieHeader := "gojet_admin_session=" + session.Token
+    current, err := requestRaw(ctx, apiBase, http.MethodGet, "/api/admin/auth/session", nil, map[string]string{"Cookie": cookieHeader})
+    if err != nil {
+        return p17AdminAuthority{}, err
+    }
+    if current.Status != http.StatusOK {
+        return p17AdminAuthority{}, fmt.Errorf("production P17 Admin session status=%d", current.Status)
+    }
+    administratorID := nestedString(current.Body, "administrator", "id")
+    csrf := stringValue(current.Body["csrf_token"])
+    if administratorID != administrator.ID || csrf == "" {
+        return p17AdminAuthority{}, fmt.Errorf("production P17 Admin session identity/CSRF mismatch")
+    }
+    rawPermissions, ok := current.Body["permissions"].([]any)
+    if !ok {
+        return p17AdminAuthority{}, fmt.Errorf("production P17 Admin permission list missing")
+    }
+    seen := map[string]bool{}
+    for _, item := range rawPermissions {
+        if value, ok := item.(string); ok {
+            seen[strings.TrimSpace(value)] = true
+        }
+    }
+    if !seen[adminaccess.PermissionTicketsManage] || !seen[adminaccess.PermissionMailManage] {
+        return p17AdminAuthority{}, fmt.Errorf("production P17 Admin required permissions missing")
+    }
+    return p17AdminAuthority{
+        CookieHeader:    cookieHeader,
+        CSRFToken:       csrf,
+        Origin:          adminfixture.AllowedOrigin,
+        AdministratorID: administratorID,
+    }, nil
+}
+
+func adminUnsafeHeaders(authority p17AdminAuthority, correlation string) map[string]string {
+    return map[string]string{
+        "Cookie":           authority.CookieHeader,
+        "Origin":           authority.Origin,
+        "X-CSRF-Token":     authority.CSRFToken,
+        "X-Request-ID":     correlation,
+        "X-Correlation-ID": correlation,
+    }
+}
+''', encoding='utf-8')
+          PY
+
+          gofmt -d scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go | tee /tmp/t020-admin-boundary-gofmt.diff
+          test ! -s /tmp/t020-admin-boundary-gofmt.diff
+          go test ./scripts/p20/t020_probe ./scripts/p17/adminfixture ./internal/admin ./internal/support ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+          git diff --check
+
+          git diff --name-only | sort > /tmp/actual-files
+          cat > /tmp/expected-files <<'EOF'
+          .github/workflows/p20-p0-support.yml
+          scripts/p20/t020_probe/admin_authority.go
+          scripts/p20/t020_probe/main.go
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          diff -u /tmp/expected-files /tmp/actual-files
+
+          grep -Fq "GOJET_ADMIN_ACCESS_ENABLED: '1'" .github/workflows/p20-p0-support.yml
+          grep -Fq "GOJET_TEST_AUTH_ENABLED: '0'" .github/workflows/p20-p0-support.yml
+          grep -Fq 'establishRealP17AdminAuthority' scripts/p20/t020_probe/main.go
+          grep -Fq 'PermissionTicketsManage' scripts/p20/t020_probe/admin_authority.go
+          grep -Fq 'PermissionMailManage' scripts/p20/t020_probe/admin_authority.go
+          if grep -R -Fq 'X-GoJet-Test-' scripts/p20/t020_probe; then
+            echo 'T020 production authority harness must not use test identity headers' >&2
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/p20-p0-support.yml scripts/p20/t020_probe/main.go scripts/p20/t020_probe/admin_authority.go
+          git commit -m 'P20 T020: extend through real Admin authority boundary'
+          candidate="$(git rev-parse HEAD)"
+          echo "P20_T020_HARNESS_COMMIT=${candidate}"
+          git push origin HEAD:develop/p20-whole-product-verification
