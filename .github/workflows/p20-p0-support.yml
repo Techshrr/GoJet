@@ -140,7 +140,7 @@ jobs:
       GOJET_BIO_ENABLED: '1'
       GOJET_BIO_WORKSPACE_QUOTA: '20'
       GOJET_SUPPORT_ENABLED: '1'
-      GOJET_TURNSTILE_SECRET: p20-t020-ci-placeholder-not-a-production-secret
+      GOJET_TURNSTILE_SECRET: ${{ secrets.P20_TURNSTILE_TEST_SECRET }}
       GOJET_SUPPORT_RATE_LIMIT: '20'
       GOJET_SUPPORT_RATE_WINDOW: 5m
       GOJET_SUPPORT_TURNSTILE_REPLAY_TTL: 10m
@@ -195,6 +195,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Require isolated Turnstile CI test secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GOJET_TURNSTILE_SECRET:-}" ]; then
+            echo 'P20_TURNSTILE_TEST_SECRET repository secret is required for production-mode T020 Siteverify authority' >&2
+            exit 1
+          fi
+          test "$GOJET_TEST_AUTH_ENABLED" = '0'
 
       - name: Set up Go from repository contract
         uses: actions/setup-go@v5
