@@ -5,10 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -314,10 +317,261 @@ func main() {
 		return
 	}
 	result.Details["admin_reply_persisted"] = true
+	adminMessageID := nestedString(adminReply.Body, "message", "id")
+	result.Details["admin_reply_message_id_present"] = adminMessageID != ""
+	if adminMessageID == "" {
+		fail("T020 real Admin reply did not expose its durable message identity")
+		return
+	}
 
-	// Discovery remains fail-closed until the same correlated ticket also proves
-	// mailworker/SMTP delivery and attachment malware enforcement.
-	fail("T020 discovery reached real Admin reply; extend through mailworker and attachment safety before claiming PASS")
+	if err := proveT020MailAndAttachment(ctx, db, ticketID, adminMessageID, suffix, &result); err != nil {
+		result.Details["full_lifecycle_error"] = err.Error()
+		fail("T020 real Support lifecycle did not preserve mail/attachment authority")
+		return
+	}
+	result.Details["t020_full_lifecycle_proven"] = true
+	finish()
+}
+
+func proveT020MailAndAttachment(ctx context.Context, db *sql.DB, ticketID, adminMessageID, suffix string, result *probe) error {
+	if db == nil || result == nil || strings.TrimSpace(ticketID) == "" || strings.TrimSpace(adminMessageID) == "" {
+		return fmt.Errorf("invalid T020 lifecycle authority")
+	}
+
+	var mailJobID, mailStatus string
+	err := db.QueryRowContext(ctx, `
+SELECT id,status FROM mail_jobs
+WHERE template_key='support-ticket-reply' AND resource_type='ticket_message' AND resource_id=?
+ORDER BY created_at DESC,id DESC LIMIT 1`, adminMessageID).Scan(&mailJobID, &mailStatus)
+	if err != nil || strings.TrimSpace(mailJobID) == "" {
+		return fmt.Errorf("Admin reply mail job correlation missing: %w", err)
+	}
+	result.Details["admin_reply_mail_job_bound"] = true
+	result.Details["admin_reply_mail_job_id_present"] = true
+	result.Details["admin_reply_mail_initial_status"] = mailStatus
+
+	smtpCmd, smtpLog, err := startT020SMTPSink(ctx)
+	if err != nil {
+		return err
+	}
+	defer stopT020Process(smtpCmd, smtpLog)
+
+	mailCmd, mailLog, err := startT020Mailworker(ctx)
+	if err != nil {
+		return err
+	}
+	defer stopT020Process(mailCmd, mailLog)
+
+	mailStatus, err = waitT020MailStatus(ctx, db, mailJobID, "sent", 25*time.Second)
+	if err != nil {
+		return err
+	}
+	result.Details["admin_reply_mail_final_status"] = mailStatus
+	result.Details["native_mailworker"] = true
+
+	var attemptStatus string
+	if err := db.QueryRowContext(ctx, `SELECT status FROM mail_attempts WHERE mail_job_id=? ORDER BY attempt_number DESC LIMIT 1`, mailJobID).Scan(&attemptStatus); err != nil || attemptStatus != "sent" {
+		return fmt.Errorf("Admin reply mail attempt not durably sent: status=%q err=%v", attemptStatus, err)
+	}
+	result.Details["admin_reply_mail_attempt_status"] = attemptStatus
+
+	smtpStatePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_STATE"))
+	var smtpState map[string]any
+	if smtpStatePath == "" || readJSON(smtpStatePath, &smtpState) != nil {
+		return fmt.Errorf("T020 SMTP sink state unavailable")
+	}
+	deliveries := numericInt(smtpState["deliveries"])
+	messageDigest := strings.TrimSpace(stringValue(smtpState["last_message_sha256"]))
+	if deliveries < 1 || len(messageDigest) != 64 {
+		return fmt.Errorf("T020 SMTP evidence incomplete deliveries=%d digest_length=%d", deliveries, len(messageDigest))
+	}
+	result.Details["smtp_deliveries"] = deliveries
+	result.Details["smtp_message_sha256_length"] = len(messageDigest)
+	result.Details["real_smtp_delivery"] = true
+
+	producerPath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_PRODUCER"))
+	if producerPath == "" {
+		return fmt.Errorf("P14 attachment producer path missing")
+	}
+	eicarPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-eicar-"+suffix+".txt")
+	if err := os.MkdirAll(filepath.Dir(eicarPath), 0o755); err != nil {
+		return err
+	}
+	eicar := []byte("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*\n")
+	if err := os.WriteFile(eicarPath, eicar, 0o600); err != nil {
+		return err
+	}
+	defer os.Remove(eicarPath)
+
+	intakeRC, intake, err := runT020Producer(ctx, producerPath, "attachment-intake", ticketID, adminMessageID, eicarPath, "t020-eicar.txt", "text/plain")
+	if err != nil || intakeRC != 0 {
+		return fmt.Errorf("T020 EICAR attachment intake failed rc=%d err=%v", intakeRC, err)
+	}
+	attachmentID := nestedString(intake, "attachment", "id")
+	if attachmentID == "" {
+		return fmt.Errorf("T020 EICAR attachment identity missing")
+	}
+	result.Details["attachment_id_present"] = true
+
+	scanRC, scan, err := runT020Producer(ctx, producerPath, "attachment-scan", attachmentID)
+	if err != nil || scanRC != 0 || nestedString(scan, "attachment", "scan_status") != "infected" {
+		return fmt.Errorf("T020 EICAR scan did not persist infected rc=%d err=%v", scanRC, err)
+	}
+	var durableScan string
+	if err := db.QueryRowContext(ctx, `SELECT scan_status FROM support_ticket_attachments WHERE id=? AND ticket_id=? AND message_id=?`, attachmentID, ticketID, adminMessageID).Scan(&durableScan); err != nil || durableScan != "infected" {
+		return fmt.Errorf("T020 infected attachment durable linkage mismatch status=%q err=%v", durableScan, err)
+	}
+	result.Details["attachment_bound_to_admin_reply"] = true
+	result.Details["attachment_scan_status"] = durableScan
+	result.Details["real_clamav_infected"] = true
+
+	downloadRC, download, err := runT020Producer(ctx, producerPath, "attachment-download-check", attachmentID)
+	if err != nil {
+		return err
+	}
+	allowed, _ := download["allowed"].(bool)
+	if downloadRC == 0 || allowed {
+		return fmt.Errorf("T020 infected attachment was downloadable rc=%d allowed=%v", downloadRC, allowed)
+	}
+	result.Details["infected_attachment_download_blocked"] = true
+	return nil
+}
+
+func startT020SMTPSink(ctx context.Context) (*exec.Cmd, *os.File, error) {
+	statePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_STATE"))
+	modePath := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_SMTP_MODE"))
+	addr := strings.TrimSpace(os.Getenv("GOJET_SMTP_ADDR"))
+	if statePath == "" || modePath == "" || addr == "" {
+		return nil, nil, fmt.Errorf("T020 SMTP fixture configuration missing")
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, nil, err
+	}
+	_ = os.Remove(statePath)
+	if err := os.WriteFile(modePath, []byte("success\n"), 0o644); err != nil {
+		return nil, nil, err
+	}
+	logPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-smtp.log")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		return nil, nil, err
+	}
+	log, err := os.Create(logPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.CommandContext(ctx, "python3", "scripts/p14/smtp_sink.py", "--host", host, "--port", port, "--state", statePath, "--mode-file", modePath)
+	cmd.Stdout = log
+	cmd.Stderr = log
+	if err := cmd.Start(); err != nil {
+		log.Close()
+		return nil, nil, err
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, dialErr := net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if dialErr == nil {
+			_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+			buf := make([]byte, 256)
+			n, _ := conn.Read(buf)
+			_ = conn.Close()
+			if strings.HasPrefix(string(buf[:n]), "220 ") {
+				return cmd, log, nil
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	stopT020Process(cmd, log)
+	return nil, nil, fmt.Errorf("T020 SMTP sink did not become ready")
+}
+
+func startT020Mailworker(ctx context.Context) (*exec.Cmd, *os.File, error) {
+	path := strings.TrimSpace(os.Getenv("GOJET_TEST_P14_MAILWORKER"))
+	if path == "" {
+		return nil, nil, fmt.Errorf("T020 mailworker path missing")
+	}
+	logPath := filepath.Join(os.TempDir(), "gojet-p20", "t020-mailworker.log")
+	log, err := os.Create(logPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.CommandContext(ctx, path)
+	cmd.Env = os.Environ()
+	cmd.Stdout = log
+	cmd.Stderr = log
+	if err := cmd.Start(); err != nil {
+		log.Close()
+		return nil, nil, err
+	}
+	return cmd, log, nil
+}
+
+func stopT020Process(cmd *exec.Cmd, log *os.File) {
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
+	if log != nil {
+		_ = log.Close()
+	}
+}
+
+func waitT020MailStatus(ctx context.Context, db *sql.DB, jobID, wanted string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	last := ""
+	for time.Now().Before(deadline) {
+		if err := db.QueryRowContext(ctx, `SELECT status FROM mail_jobs WHERE id=?`, jobID).Scan(&last); err == nil {
+			if last == wanted {
+				return last, nil
+			}
+			if last == "failed" {
+				return last, fmt.Errorf("mail job failed before %s", wanted)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return last, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return last, fmt.Errorf("mail job did not reach %s; last=%s", wanted, last)
+}
+
+func runT020Producer(ctx context.Context, path string, args ...string) (int, map[string]any, error) {
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Env = os.Environ()
+	raw, err := cmd.CombinedOutput()
+	exitCode := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return -1, nil, err
+		}
+		exitCode = exitErr.ExitCode()
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	if len(lines) == 0 || len(lines[len(lines)-1]) == 0 {
+		return exitCode, nil, fmt.Errorf("producer emitted no JSON")
+	}
+	data := map[string]any{}
+	if err := json.Unmarshal(lines[len(lines)-1], &data); err != nil {
+		return exitCode, nil, fmt.Errorf("producer JSON decode: %w", err)
+	}
+	return exitCode, data, nil
+}
+
+func numericInt(value any) int {
+	switch typed := value.(type) {
+	case float64:
+		return int(typed)
+	case int:
+		return typed
+	case json.Number:
+		parsed, _ := typed.Int64()
+		return int(parsed)
+	default:
+		return 0
+	}
 }
 
 func readEvidence(path string) (predecessorEvidence, error) {
