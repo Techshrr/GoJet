@@ -3,7 +3,7 @@ name: P20 D015 Billing Session Regression
 on:
   pull_request:
     branches:
-      - main
+      - fix/p20-d015-billing-session-authority
     paths:
       - 'scripts/p20/d015_billing_session_regression.py'
       - '.github/workflows/p20-d015-billing-session-regression.yml'
@@ -63,11 +63,8 @@ jobs:
       GOJET_TEST_AUTH_ENABLED: '0'
       GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
       GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
-      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
       GOJET_AUTH_GRANT_KEY_ID: p20-d015-regression-grant-v1
-      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
       GOJET_OAUTH_KEY_ID: p20-d015-regression-oauth-v1
-      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
 
     steps:
       - name: Checkout exact D015 authority head
@@ -76,6 +73,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Prepare ephemeral CI crypto material
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GOJET_AUTH_CSRF_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOJET_AUTH_GRANT_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOJET_OAUTH_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Set up Go from repository contract
         uses: actions/setup-go@v5
