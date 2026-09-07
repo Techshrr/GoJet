@@ -14,22 +14,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {
+func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, *adminaccess.SecretCipher, bool, error) {
 	if os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") != "1" {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	if db == nil || redisClient == nil {
-		return nil, false, adminaccess.ErrInvalid
+		return nil, nil, false, adminaccess.ErrInvalid
 	}
 	keyID := strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_ID"))
 	keyHex := strings.TrimSpace(os.Getenv("GOJET_ADMIN_TOTP_KEY_HEX"))
 	key, err := hex.DecodeString(keyHex)
 	if err != nil || len(key) != 32 {
-		return nil, false, adminaccess.ErrInvalid
+		return nil, nil, false, adminaccess.ErrInvalid
 	}
 	cipher, err := adminaccess.NewSecretCipher(keyID, key)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	rawOrigins := strings.TrimSpace(os.Getenv("GOJET_ADMIN_ALLOWED_ORIGIN"))
 	origins := make([]string, 0, 2)
@@ -39,13 +39,13 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 		}
 	}
 	if len(origins) == 0 {
-		return nil, false, adminaccess.ErrInvalid
+		return nil, nil, false, adminaccess.ErrInvalid
 	}
 	sessionTTL := 8 * time.Hour
 	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_SESSION_TTL")); raw != "" {
 		parsed, e := time.ParseDuration(raw)
 		if e != nil {
-			return nil, false, adminaccess.ErrInvalid
+			return nil, nil, false, adminaccess.ErrInvalid
 		}
 		sessionTTL = parsed
 	}
@@ -53,7 +53,7 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_LOGIN_RATE_LIMIT")); raw != "" {
 		parsed, e := strconv.ParseInt(raw, 10, 64)
 		if e != nil || parsed < 1 || parsed > 1000 {
-			return nil, false, adminaccess.ErrInvalid
+			return nil, nil, false, adminaccess.ErrInvalid
 		}
 		loginLimit = parsed
 	}
@@ -61,23 +61,31 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 	if raw := strings.TrimSpace(os.Getenv("GOJET_ADMIN_LOGIN_RATE_WINDOW")); raw != "" {
 		parsed, e := time.ParseDuration(raw)
 		if e != nil || parsed < time.Minute || parsed > time.Hour {
-			return nil, false, adminaccess.ErrInvalid
+			return nil, nil, false, adminaccess.ErrInvalid
 		}
 		loginWindow = parsed
 	}
 	limiter, err := adminaccess.NewRedisLoginLimiter(redisClient, "admin:login:", loginLimit, loginWindow)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	service, err := adminaccess.NewService(db, limiter, cipher, sessionTTL, origins)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	if err := adminaccess.VerifyDomainEntitlementSchema(context.Background(), db); err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	if err := adminaccess.VerifyPlatformGovernanceSchema(context.Background(), db); err != nil {
-		return nil, false, err
+		return nil, nil, false, err
+	}
+	return service, cipher, true, nil
+}
+
+func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {
+	service, cipher, enabled, err := buildAdminAccessService(db, redisClient)
+	if err != nil || !enabled {
+		return nil, enabled, err
 	}
 	api, err := adminaccess.NewHTTPAPI(service)
 	if err != nil {

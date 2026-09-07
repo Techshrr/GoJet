@@ -3,8 +3,8 @@ import { defineConfig } from 'vite';
 
 const apiTarget = process.env.GOJET_PLATFORMAPI_PROXY?.trim() || 'http://127.0.0.1:8081';
 const proxy = {
-  '/api': { target: apiTarget, changeOrigin: false },
-  '/f/': { target: apiTarget, changeOrigin: false },
+  '/api': { target: apiTarget, changeOrigin: false, xfwd: true },
+  '/f/': { target: apiTarget, changeOrigin: false, xfwd: true },
 };
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
 

@@ -10,13 +10,20 @@ import (
 	"time"
 )
 
+type PrincipalResolver func(*http.Request) (Principal, error)
+
 type API struct {
-	store           *Store
-	testAuthEnabled bool
+	store             *Store
+	testAuthEnabled   bool
+	principalResolver PrincipalResolver
 }
 
 func NewAPI(store *Store, testAuthEnabled bool) *API {
 	return &API{store: store, testAuthEnabled: testAuthEnabled}
+}
+
+func NewAPIWithPrincipalResolver(store *Store, resolver PrincipalResolver) *API {
+	return &API{store: store, principalResolver: resolver}
 }
 
 func (a *API) Handler() http.Handler {
@@ -72,6 +79,28 @@ func workspaceSecurityHeaders(next http.Handler) http.Handler {
 }
 
 func (a *API) principal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	if a.principalResolver != nil {
+		p, err := a.principalResolver(r)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAuthenticationRequired):
+				writeWorkspaceError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrForbidden):
+				writeWorkspaceError(w, r, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			default:
+				writeWorkspaceError(w, r, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			}
+			return Principal{}, false
+		}
+		p.UserID = strings.TrimSpace(p.UserID)
+		p.Email = normalizeEmail(p.Email)
+		p.DisplayName = strings.TrimSpace(p.DisplayName)
+		if p.UserID == "" || p.Email == "" {
+			writeWorkspaceError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			return Principal{}, false
+		}
+		return p, true
+	}
 	if !a.testAuthEnabled {
 		writeWorkspaceError(w, r, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
 		return Principal{}, false

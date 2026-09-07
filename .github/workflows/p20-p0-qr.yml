@@ -1,0 +1,262 @@
+name: P20 P0 QR Timeline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/p20/p0_timeline.py'
+      - 'scripts/p20/t010_runner/**'
+      - 'scripts/p20/t011_runner/**'
+      - 'scripts/p20/t012_runner/**'
+      - 'scripts/p20/t013_runner/**'
+      - 'scripts/p20/t014_case.py'
+      - 'scripts/p20/t014_probe/**'
+      - 'scripts/p20/t015_probe/**'
+      - 'scripts/p20/common.py'
+      - 'scripts/p20/validate_contract.py'
+      - 'services/platformapi/cmd/server/**'
+      - 'services/redirectengine/cmd/server/**'
+      - 'services/analyticsworker/**'
+      - 'services/analyticsreconciler/**'
+      - 'internal/auth/**'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'internal/qr/**'
+      - 'internal/domains/**'
+      - 'internal/support/**'
+      - 'internal/securetoken/**'
+      - 'migrations/**'
+      - 'artifacts/v10/P20/test-plan.json'
+      - 'artifacts/v10/P20/defect-ledger.json'
+      - '.github/workflows/p20-p0-qr.yml'
+      - '.github/workflows/p20-candidate-freeze.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-p0-qr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t009-t015-probe:
+    name: P20-T009/T015 real QR continuity probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_P20_API_BASE: http://127.0.0.1:18081
+      GOJET_REDIRECTENGINE_ADDR: 127.0.0.1:18080
+      GOJET_P20_REDIRECT_BASE: http://127.0.0.1:18080
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_QR_WORKSPACE_QUOTA: '10'
+      GOJET_TEST_ROUTING_HEADERS: '0'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_RATE_LIMIT: '6'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_AUTH_GRANT_KEY_ID: p20-t009-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p20-t009-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_P20_ANALYTICS_WORKER_BIN: /tmp/gojet-p20-analyticsworker
+      GOJET_P20_ANALYTICS_RECONCILER_BIN: /tmp/gojet-p20-analyticsreconciler
+      GOJET_P20_T014_PROBE_OUT: artifacts/v10/P20/runtime/t014/probe.json
+      GOJET_P20_T015_PROBE_OUT: artifacts/v10/P20/runtime/t015/probe.json
+
+    steps:
+      - name: Checkout exact P20 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify runtime and independent QR decoder clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools zbar-tools librsvg2-bin
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+          zbarimg --version
+          rsvg-convert --version
+
+      - name: Verify T015 probe source and frozen contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/validate_contract.py
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go scripts/p20/t015_probe/main.go | tee /tmp/p20-t015-probe-gofmt.diff
+          test ! -s /tmp/p20-t015-probe-gofmt.diff
+          go test ./internal/auth ./internal/workspace ./internal/links ./internal/analytics ./internal/qr ./internal/domains ./internal/support ./services/platformapi/cmd/server ./services/redirectengine/cmd/server ./services/analyticsworker/cmd/worker ./services/analyticsreconciler/cmd/reconciler ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner ./scripts/p20/t013_runner ./scripts/p20/t014_probe ./scripts/p20/t015_probe
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through exact candidate head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build and start exact-head native services
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/t009 artifacts/v10/P20/runtime/t013 artifacts/v10/P20/runtime/t014 artifacts/v10/P20/runtime/t015
+          go build -trimpath -o /tmp/gojet-p20-platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p20-redirectengine ./services/redirectengine/cmd/server
+          go build -trimpath -o /tmp/gojet-p20-analyticsworker ./services/analyticsworker/cmd/worker
+          go build -trimpath -o /tmp/gojet-p20-analyticsreconciler ./services/analyticsreconciler/cmd/reconciler
+          sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+          sha256sum /tmp/gojet-p20-redirectengine > artifacts/v10/P20/runtime/t013/native-redirectengine.sha256
+          sha256sum /tmp/gojet-p20-analyticsworker /tmp/gojet-p20-analyticsreconciler > artifacts/v10/P20/runtime/t014/native-analytics.sha256
+          /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t009/platformapi.pid
+          /tmp/gojet-p20-redirectengine > artifacts/v10/P20/runtime/t013/redirectengine.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t013/redirectengine.pid
+          platform_ready=0
+          redirect_ready=0
+          for attempt in $(seq 1 60); do
+            platform_status="$(curl -sS -o /tmp/p20-me.json -w '%{http_code}' http://127.0.0.1:18081/api/me || true)"
+            redirect_status="$(curl -sS -o /tmp/p20-redirect-health -w '%{http_code}' http://127.0.0.1:18080/healthz || true)"
+            [ "$platform_status" = 401 ] && platform_ready=1
+            [ "$redirect_status" = 204 ] && redirect_ready=1
+            if [ "$platform_ready" = 1 ] && [ "$redirect_ready" = 1 ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat artifacts/v10/P20/runtime/t009/platformapi.log || true
+          cat artifacts/v10/P20/runtime/t013/redirectengine.log || true
+          exit 1
+
+      - name: Run frozen P20-T009 through P20-T013 in order
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in P20-T009 P20-T010 P20-T011 P20-T012 P20-T013; do
+            echo "Running ${case}"
+            python3 scripts/p20/p0_timeline.py --case "$case"
+          done
+
+      - name: Run frozen P20-T014 exact-head analytics case
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/t014_case.py
+
+      - name: Run exact-head P20-T015 live QR continuity probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          export P20_EXACT_HEAD="$(git rev-parse HEAD)"
+          go run ./scripts/p20/t015_probe
+
+      - name: Capture T015 authoritative runtime state
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v10/P20/runtime/t015
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,source_link_id,label,created_by,deleted_at IS NULL FROM qr_codes ORDER BY id" > artifacts/v10/P20/runtime/t015/mysql-qr-codes.tsv 2>/dev/null
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,qr_id,actor_id,action,result,request_correlation_id FROM qr_audit_events ORDER BY id" > artifacts/v10/P20/runtime/t015/mysql-qr-audit.tsv 2>/dev/null
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,hostname,code,status,risk_fingerprint FROM links ORDER BY id" > artifacts/v10/P20/runtime/t015/mysql-links.tsv 2>/dev/null
+          redis-cli -h 127.0.0.1 -p 6379 --raw KEYS 'risk:link:*' > artifacts/v10/P20/runtime/t015/redis-risk-keys.txt 2>&1
+          true
+
+      - name: Stop exact-head native services
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          for pidfile in artifacts/v10/P20/runtime/t009/platformapi.pid artifacts/v10/P20/runtime/t013/redirectengine.pid; do
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+            fi
+          done
+          true
+
+      - name: Upload exact-head T015 live probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t015-live-qr-probe-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/p0/P20-T009.json
+            artifacts/v10/P20/p0/P20-T010.json
+            artifacts/v10/P20/p0/P20-T011.json
+            artifacts/v10/P20/p0/P20-T012.json
+            artifacts/v10/P20/p0/P20-T013.json
+            artifacts/v10/P20/p0/P20-T014.json
+            artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+            artifacts/v10/P20/runtime/t009/platformapi.log
+            artifacts/v10/P20/runtime/t013/native-redirectengine.sha256
+            artifacts/v10/P20/runtime/t013/redirectengine.log
+            artifacts/v10/P20/runtime/t014/
+            artifacts/v10/P20/runtime/t015/

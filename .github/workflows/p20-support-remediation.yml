@@ -1,0 +1,71 @@
+name: P20 Support Remediation Guard
+
+on:
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+    paths:
+      - 'services/platformapi/cmd/server/support.go'
+      - 'services/platformapi/cmd/server/support_session_auth.go'
+      - 'services/platformapi/cmd/server/support_session_auth_test.go'
+      - '.github/workflows/p20-support-remediation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact remediation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Enforce D012 scoped diff
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" | sort > /tmp/actual-files
+          cat > /tmp/allowed-files <<'EOF'
+          .github/workflows/p20-support-remediation.yml
+          services/platformapi/cmd/server/support.go
+          services/platformapi/cmd/server/support_session_auth.go
+          services/platformapi/cmd/server/support_session_auth_test.go
+          EOF
+          sort -o /tmp/allowed-files /tmp/allowed-files
+          diff -u /tmp/allowed-files /tmp/actual-files
+
+      - name: Verify production requester authority boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -d \
+            services/platformapi/cmd/server/support.go \
+            services/platformapi/cmd/server/support_session_auth.go \
+            services/platformapi/cmd/server/support_session_auth_test.go | tee /tmp/d012-gofmt.diff
+          test ! -s /tmp/d012-gofmt.diff
+          go test ./services/platformapi/cmd/server ./internal/support ./internal/workspace ./internal/auth
+          go test ./...
+          grep -F 'buildSupportSessionPrincipalResolver(db, redisClient)' services/platformapi/cmd/server/support.go
+          grep -F 'requesterPrincipalResolver = supportPrincipalResolver{testAuth: true}' services/platformapi/cmd/server/support.go
+          grep -F 'adminPrincipalResolver := supportPrincipalResolver{testAuth: testAuth}' services/platformapi/cmd/server/support.go
+          grep -F 'workspaceAuthority, err := buildWorkspaceSessionAuthority(db, redisClient)' services/platformapi/cmd/server/support_session_auth.go
+          if grep -E 'X-GoJet-Test-(Actor|Email|Display-Name)' services/platformapi/cmd/server/support_session_auth.go; then
+            echo 'production Support session resolver must not trust test identity headers' >&2
+            exit 1
+          fi
