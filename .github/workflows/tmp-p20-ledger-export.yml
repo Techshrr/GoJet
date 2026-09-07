@@ -1,0 +1,34 @@
+name: TEMP P20 Defect Ledger Export
+
+on:
+  push:
+    branches:
+      - tmp/p20-t020-ledger-export
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact export head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify source ledger exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f artifacts/v10/P20/defect-ledger.json
+          python3 -m json.tool artifacts/v10/P20/defect-ledger.json >/dev/null
+          sha256sum artifacts/v10/P20/defect-ledger.json
+      - name: Upload immutable ledger snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-defect-ledger-preclosure-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 1
+          path: artifacts/v10/P20/defect-ledger.json
