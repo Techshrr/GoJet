@@ -99,7 +99,22 @@ jobs:
           mapfile -t final_files < <(git diff --name-only "$base" HEAD)
           test "${#final_files[@]}" -eq 1
           test "${final_files[0]}" = 'artifacts/v10/P20/defect-ledger.json'
-          python3 scripts/p20/defect_cases.py
+
+          set +e
+          python3 scripts/p20/defect_cases.py > /tmp/p20-d016-defect-cases.json
+          defect_rc=$?
+          set -e
+          test "$defect_rc" -ne 0
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-defect-cases.json',encoding='utf-8'))
+          assert data['status']=='FAIL',data
+          assert data['details']['p0_open']==0,data
+          assert data['details']['p1_open']==2,data
+          assert data['details']['decision_required']==0,data
+          assert data['errors']==["open P1 defects: ['P20-D015', 'P20-D016']"],data
+          PY
+
           python3 scripts/p20/validate_contract.py > /tmp/p20-d016-contract.json
           python3 - <<'PY'
           import json
