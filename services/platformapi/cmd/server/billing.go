@@ -12,6 +12,7 @@ import (
 
 	"github.com/Techshrr/GoJet/internal/billing"
 	"github.com/Techshrr/GoJet/internal/workspace"
+	"github.com/redis/go-redis/v9"
 )
 
 type billingPrincipalResolver struct {
@@ -97,13 +98,22 @@ func (v deterministicBillingCallbackVerifier) VerifyAndNormalize(req *http.Reque
 	}, nil
 }
 
-func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_BILLING_ENABLED") != "1" {
 		return nil, false, nil
 	}
 	store := billing.NewStore(db)
 	membershipStore := workspace.NewStore(db)
-	principalResolver := billingPrincipalResolver{testAuth: testAuth}
+	var principalResolver billing.PrincipalResolver
+	if testAuth {
+		principalResolver = billingPrincipalResolver{testAuth: true}
+	} else {
+		sessionResolver, err := buildBillingSessionPrincipalResolver(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		principalResolver = sessionResolver
+	}
 	membershipResolver := billingMembershipResolver{store: membershipStore}
 	var callbackVerifier billing.CallbackRequestVerifier
 	if testAuth && os.Getenv("GOJET_TEST_BILLING_CALLBACKS_ENABLED") == "1" {
