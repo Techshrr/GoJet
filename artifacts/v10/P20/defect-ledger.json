@@ -24,6 +24,27 @@
       "discovery_artifact_digest": "sha256:9c72a57362a69c7290234b1a5461629e0a988d7e179cc1c3d18db7e6b224ba86",
       "failure": "real authenticated P15 owner session is rejected by Billing order mutation with HTTP 503 auth_dependency_unavailable and zero durable orders/invoices/transactions/billing-grant writes",
       "disposition": "OPEN — P20-T021/P20-T022+ blocked pending bounded production session-authority remediation and formal merged-head closure"
+    },
+    {
+      "id": "P20-D016",
+      "severity": "P1",
+      "title": "Billing production provider callback verifier is unavailable",
+      "case": "P20-T021",
+      "issue": 114,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "b18070e479a77c116944a014ba2b21d2c9bf8295",
+      "discovery_workflow_run": 34152626763,
+      "discovery_workflow_job": 101837877479,
+      "discovery_artifact_id": 10029982068,
+      "discovery_artifact_digest": "sha256:4624724c5cc03f200be06eaa93ca964c91c1b444612426da7263db8d6b53bb02",
+      "failure": "real P15 owner can create one pending Billing order and open invoice after D015 remediation, but production provider callback returns HTTP 503 callback_verifier_unavailable with zero callback-event/transaction/billing-grant settlement writes and leaves order/invoice pending/open",
+      "disposition": "OPEN — P20-T021/P20-T022+ blocked pending bounded production provider-callback verifier remediation and formal merged-head closure"
     }
   ],
   "closed": [
@@ -982,5 +1003,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D014 are formally closed. P20-D015 is the sole open P1 blocker discovered by exact-head T021 machine evidence; P20-T021 cannot pass and P20-T022+ are forbidden until D015 remediation is merged and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0."
+  "note": "P20-D001 through P20-D014 are formally closed. P20-D015 and P20-D016 are open P1 blockers in the frozen P20-T021 Billing workflow: D015 customer-session composition is product-remediated but remains open until formal T021 closure, while D016 records the next fail-fast production callback-verifier boundary. P20-T021 cannot pass and P20-T022+ are forbidden until all T021 blockers are remediated and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0."
 }
