@@ -1,0 +1,107 @@
+name: P20 D015 Ledger Registration
+
+on:
+  push:
+    branches:
+      - chore/p20-d015-ledger-register
+    paths:
+      - '.github/workflows/p20-d015-ledger-register.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-d015-ledger-register
+  cancel-in-progress: false
+
+jobs:
+  register:
+    name: Register canonical P20-D015 ledger row
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact registration head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Require legal T020 closure ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          closure_head='833ea73faecc25324ef3f52ce7a791426de09fa3'
+          git merge-base --is-ancestor "$closure_head" HEAD
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract.json', encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+      - name: Append only canonical D015 discovery evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path=Path('artifacts/v10/P20/defect-ledger.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data['schema']=='gojet.p20-defect-ledger.v1', data
+          assert data['node']=='P20' and data['status']=='ACTIVE', data
+          assert data.get('open')==[], data.get('open')
+          closed=data.get('closed')
+          assert isinstance(closed,list) and len(closed)==14, len(closed) if isinstance(closed,list) else None
+          assert [row.get('id') for row in closed]==[f'P20-D{i:03d}' for i in range(1,15)], [row.get('id') for row in closed]
+
+          data['open']=[{
+            'id':'P20-D015',
+            'severity':'P1',
+            'title':'Billing workspace API rejects real authenticated session authority',
+            'case':'P20-T021',
+            'issue':108,
+            'release_blocking':True,
+            'gate_hard_failure':True,
+            'affected_gates':['G3','G6','G10'],
+            'discovered_head':'0da068fa0da426f1600463a6381ad707669135e4',
+            'discovery_workflow_run':34139295158,
+            'discovery_workflow_job':101797403174,
+            'discovery_artifact_id':10025310145,
+            'discovery_artifact_digest':'sha256:9c72a57362a69c7290234b1a5461629e0a988d7e179cc1c3d18db7e6b224ba86',
+            'failure':'real authenticated P15 owner session is rejected by Billing order mutation with HTTP 503 auth_dependency_unavailable and zero durable orders/invoices/transactions/billing-grant writes',
+            'disposition':'OPEN — P20-T021/P20-T022+ blocked pending bounded production session-authority remediation and formal merged-head closure'
+          }]
+          data['note']='P20-D001 through P20-D014 are formally closed. P20-D015 is the sole open P1 blocker discovered by exact-head T021 machine evidence; P20-T021 cannot pass and P20-T022+ are forbidden until D015 remediation is merged and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0.'
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+          PY
+
+      - name: Validate exact ledger mutation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json', encoding='utf-8'))
+          assert [row['id'] for row in data['open']]==['P20-D015'], data['open']
+          row=data['open'][0]
+          assert row['severity']=='P1' and row['release_blocking'] is True and row['gate_hard_failure'] is True, row
+          assert row['issue']==108 and row['case']=='P20-T021', row
+          assert len(data['closed'])==14, len(data['closed'])
+          assert data.get('decision_required',[])==[], data.get('decision_required')
+          PY
+          changed="$(git diff --name-only)"
+          test "$changed" = 'artifacts/v10/P20/defect-ledger.json'
+
+      - name: Commit registered ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git commit -m 'P20 D015: register Billing session-authority blocker'
+          git push origin HEAD:chore/p20-d015-ledger-register
