@@ -1,0 +1,23 @@
+name: TEMP P20 Defect Ledger Closure Commit
+
+on:
+  push:
+    branches:
+      - tmp/p20-t020-ledger-export
+    paths:
+      - .github/workflows/tmp-p20-ledger-closure-commit.yml
+
+permissions:
+  contents: write
+
+jobs:
+  close-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated temporary branch
+        uses: actions/checkout@v4
+
+      - name: Commit exact validated closure ledger to integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/tmp_p20_ledger_closure_commit.py
