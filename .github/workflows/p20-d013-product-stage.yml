@@ -40,45 +40,23 @@ jobs:
           ], text=True)
           marker = "      - name: Apply bounded D013 product remediation\n        shell: bash\n        run: |\n"
           assert source.count(marker) == 1
-          block = source.split(marker, 1)[1]
-          lines = block.splitlines()
-          assert lines
-          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          script = source.split(marker, 1)[1]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in script.splitlines()) + '\n'
 
-          gofmt_marker = 'gofmt -w \\\n  services/platformapi/cmd/server/admin_access.go'
-          assert script.count(gofmt_marker) == 1
-          correction = r'''python3 - <<'FIX'
-from pathlib import Path
+          old_sig = 'func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, bool, error) {'
+          new_sig = 'func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, *adminaccess.SecretCipher, bool, error) {'
+          start = script.index(old_sig)
+          end = script.index('func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client)', start)
+          helper = script[start:end]
+          helper = helper.replace(old_sig, new_sig, 1)
+          helper = helper.replace('return nil, false,', 'return nil, nil, false,')
+          helper = helper.replace('return service, true, nil', 'return service, cipher, true, nil', 1)
+          script = script[:start] + helper + script[end:]
 
-admin = Path('services/platformapi/cmd/server/admin_access.go')
-text = admin.read_text(encoding='utf-8')
-text = text.replace(
-    'func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, bool, error) {',
-    'func buildAdminAccessService(db *sql.DB, redisClient *redis.Client) (*adminaccess.Service, *adminaccess.SecretCipher, bool, error) {',
-    1,
-)
-text = text.replace('return nil, false, nil', 'return nil, nil, false, nil', 1)
-text = text.replace('return nil, false, adminaccess.ErrInvalid', 'return nil, nil, false, adminaccess.ErrInvalid')
-text = text.replace('return nil, false, err', 'return nil, nil, false, err')
-text = text.replace('return service, true, nil', 'return service, cipher, true, nil', 1)
-text = text.replace(
-    'service, enabled, err := buildAdminAccessService(db, redisClient)',
-    'service, cipher, enabled, err := buildAdminAccessService(db, redisClient)',
-    1,
-)
-admin.write_text(text, encoding='utf-8')
+          old_call = 'service, enabled, err := buildAdminAccessService(db, redisClient)'
+          script = script.replace(old_call, 'service, cipher, enabled, err := buildAdminAccessService(db, redisClient)', 1)
+          script = script.replace(old_call, 'service, _, enabled, err := buildAdminAccessService(db, redisClient)', 1)
 
-support = Path('services/platformapi/cmd/server/support_admin_auth.go')
-text = support.read_text(encoding='utf-8')
-text = text.replace(
-    'service, enabled, err := buildAdminAccessService(db, redisClient)',
-    'service, _, enabled, err := buildAdminAccessService(db, redisClient)',
-    1,
-)
-support.write_text(text, encoding='utf-8')
-FIX
-'''
-          script = script.replace(gofmt_marker, correction + gofmt_marker, 1)
           Path('/tmp/p20-d013-product-stage.sh').write_text(script, encoding='utf-8')
           PY
           bash /tmp/p20-d013-product-stage.sh
