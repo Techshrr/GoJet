@@ -143,32 +143,44 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		return nil, false, err
 	}
 
-	// P17 owns the administrator/permission lifecycle. P14 only consumes the
-	// tickets.manage and mail.manage boundaries. Production receives no
-	// synthetic permission resolver, so both Admin surfaces fail closed until
-	// P17 is wired. CI may explicitly opt server-owned actors into each boundary;
-	// no client-supplied role or permission header is authoritative.
+	// P17 owns the administrator identity/session/permission lifecycle. P14
+	// consumes only the tickets.manage and mail.manage decisions. Test mode keeps
+	// the predecessor server-owned actors; production composes the real P17
+	// session, Origin/CSRF and PermissionCatalog authority without trusting any
+	// client-supplied role or permission header.
+	var adminPrincipalResolver support.PrincipalResolver = supportPrincipalResolver{testAuth: testAuth}
 	var ticketAdminPermissions support.AdminPermissionResolver
-	if testAuth && os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED") == "1" {
-		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR"))
-		if actorID == "" {
-			return nil, false, support.ErrAuthenticationUnavailable
+	var mailAdminPermissions support.AdminPermissionResolver
+	if testAuth {
+		if os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ENABLED") == "1" {
+			actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_TICKETS_ADMIN_ACTOR"))
+			if actorID == "" {
+				return nil, false, support.ErrAuthenticationUnavailable
+			}
+			ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
 		}
-		ticketAdminPermissions = supportTestTicketAdminPermissionResolver{actorID: actorID}
+		if os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ENABLED") == "1" {
+			actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR"))
+			if actorID == "" {
+				return nil, false, support.ErrAuthenticationUnavailable
+			}
+			mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
+		}
+	} else {
+		adminAuthority, enabled, authorityErr := buildSupportAdminAuthority(db, redisClient)
+		if authorityErr != nil {
+			return nil, false, authorityErr
+		}
+		if enabled {
+			adminPrincipalResolver = adminAuthority
+			ticketAdminPermissions = adminAuthority
+			mailAdminPermissions = adminAuthority
+		}
 	}
-	adminPrincipalResolver := supportPrincipalResolver{testAuth: testAuth}
+
 	adminAPI, err := support.NewAdminAPI(auditedAdminTicketStore, adminPrincipalResolver, ticketAdminPermissions, workspaceStore)
 	if err != nil {
 		return nil, false, err
-	}
-
-	var mailAdminPermissions support.AdminPermissionResolver
-	if testAuth && os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ENABLED") == "1" {
-		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_SUPPORT_MAIL_ADMIN_ACTOR"))
-		if actorID == "" {
-			return nil, false, support.ErrAuthenticationUnavailable
-		}
-		mailAdminPermissions = supportTestMailAdminPermissionResolver{actorID: actorID}
 	}
 	adminMailAPI, err := support.NewAdminMailAPI(auditedAdminMailStore, adminPrincipalResolver, mailAdminPermissions)
 	if err != nil {
