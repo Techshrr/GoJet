@@ -147,7 +147,7 @@ func main() {
 		logger.Error("configure Workspace organization", "error", err)
 		os.Exit(1)
 	}
-	billingHandler, billingEnabled, err := buildBillingHandler(db, testAuth)
+	billingHandler, billingEnabled, err := buildBillingHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Billing, Payments and Entitlements", "error", err)
 		os.Exit(1)
