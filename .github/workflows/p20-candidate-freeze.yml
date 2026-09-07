@@ -1,0 +1,202 @@
+name: P20 Candidate and Traceability Freeze
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'migrations/**'
+      - 'deploy/**'
+      - 'contracts/**'
+      - 'specifications/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/p20/**'
+      - 'artifacts/v10/P20/**'
+      - '.github/workflows/p20-candidate-freeze.yml'
+      - '.github/workflows/p20-p0-auth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    name: P20 T001-T008 candidate, traceability and evidence freeze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact P20 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Node from repository contract
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Activate frozen pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+
+      - name: Verify frozen P20 contract descendant
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m py_compile \
+            scripts/p20/common.py \
+            scripts/p20/validate_contract.py \
+            scripts/p20/candidate_cases.py \
+            scripts/p20/traceability_cases.py \
+            scripts/p20/schema_cases.py \
+            scripts/p20/build_cases.py \
+            scripts/p20/authority_cases.py \
+            scripts/p20/evidence_index.py \
+            scripts/p20/defect_cases.py
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p20-contract.json',encoding='utf-8'))
+          assert data['node']=='P20' and data['status']=='PASS' and data['errors']==[], data
+          assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['case_range']=='P20-T001..P20-T049', data
+          assert data['review_phase']=='pending', data
+          assert data['mode']=='verification-guard' and data['implementation_authorized'] is True, data
+          assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
+          PY
+
+      - name: Prove exact-head Go baseline
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: Install and typecheck exact frontend workspace
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm -r --if-present typecheck
+
+      - name: Run P20 T001-T004 candidate and traceability cases
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/candidate_cases.py
+          python3 scripts/p20/traceability_cases.py
+          python3 scripts/p20/schema_cases.py
+
+      - name: Build frontend twice and snapshot byte inventories
+        run: |
+          set -euo pipefail
+          cat > /tmp/p20-build-snapshot.py <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          root=Path.cwd()
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          files={}
+          for app in ['admin','docs','site','workspace']:
+              dist=root/'frontend/apps'/app/'dist'
+              if not dist.is_dir():
+                  raise SystemExit(f'missing dist for {app}')
+              for path in sorted(p for p in dist.rglob('*') if p.is_file()):
+                  files[path.relative_to(root).as_posix()]='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
+          Path(sys.argv[1]).write_text(json.dumps({'implementation_commit':head,'files':files},indent=2,sort_keys=True)+'\n')
+          PY
+          rm -rf frontend/apps/admin/dist frontend/apps/docs/dist frontend/apps/site/dist frontend/apps/workspace/dist
+          pnpm -r --if-present build
+          python3 /tmp/p20-build-snapshot.py /tmp/p20-build-one.json
+          rm -rf frontend/apps/admin/dist frontend/apps/docs/dist frontend/apps/site/dist frontend/apps/workspace/dist
+          pnpm -r --if-present build
+          python3 /tmp/p20-build-snapshot.py /tmp/p20-build-two.json
+          P20_BUILD_ONE=/tmp/p20-build-one.json P20_BUILD_TWO=/tmp/p20-build-two.json python3 scripts/p20/build_cases.py
+
+      - name: Run P20 T006 live integrated-authority binding
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/authority_cases.py
+
+      - name: Run P20 T008 defect and decision ledger
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/defect_cases.py
+
+      - name: Run P20 T007 candidate evidence index last
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/evidence_index.py
+
+      - name: Verify P20 T001-T008 exact-head PASS
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('artifacts/v10/P20')
+          mapping={
+            'P20-T001':root/'candidate/P20-T001.json',
+            'P20-T002':root/'traceability/P20-T002.json',
+            'P20-T003':root/'traceability/P20-T003.json',
+            'P20-T004':root/'schema/P20-T004.json',
+            'P20-T005':root/'build/P20-T005.json',
+            'P20-T006':root/'authority/P20-T006.json',
+            'P20-T007':root/'evidence/P20-T007.json',
+            'P20-T008':root/'defects/P20-T008.json',
+          }
+          for cid,path in mapping.items():
+              data=json.loads(path.read_text(encoding='utf-8'))
+              assert (data.get('case') or data.get('case_id'))==cid, (cid,data)
+              assert data['status']=='PASS' and data['errors']==[], data
+              assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
+          PY
+
+      - name: Record exact-head candidate authority
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/candidate-authority
+          printf '%s\n' "$EXACT_HEAD" > artifacts/v10/P20/candidate-authority/implementation_commit.txt
+          git rev-parse HEAD:artifacts/v10/P20/test-plan.json > artifacts/v10/P20/candidate-authority/test_plan_blob.txt
+          git rev-parse HEAD:artifacts/v10/P20/review.md > artifacts/v10/P20/candidate-authority/review_blob.txt
+          sha256sum artifacts/v10/P20/schema/schema-catalog.json > artifacts/v10/P20/candidate-authority/schema_catalog.sha256
+          sha256sum artifacts/v10/P20/build/frontend-build-inventory.json > artifacts/v10/P20/candidate-authority/frontend_build.sha256
+          sha256sum artifacts/v10/P20/evidence/candidate-evidence-index.json > artifacts/v10/P20/candidate-authority/evidence_index.sha256
+          sha256sum artifacts/v10/P20/defect-ledger.json > artifacts/v10/P20/candidate-authority/defect_ledger.sha256
+
+      - name: Upload P20 T001-T008 exact-head evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-candidate-${{ env.EXACT_HEAD }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/candidate/
+            artifacts/v10/P20/traceability/
+            artifacts/v10/P20/schema/
+            artifacts/v10/P20/build/
+            artifacts/v10/P20/authority/
+            artifacts/v10/P20/evidence/
+            artifacts/v10/P20/defects/
+            artifacts/v10/P20/candidate-authority/
+            artifacts/v10/P20/defect-ledger.json

@@ -1,6 +1,7 @@
 package files
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ type API struct {
 	storage          *NativeStorage
 	policy           *TypePolicy
 	testAuthEnabled  bool
+	actorResolver    ActorResolver
 	maxUploadBytes   int64
 	publicAuthSecret []byte
 }
@@ -47,6 +49,16 @@ func NewAPI(store *ResourceStore, storage *NativeStorage, policy *TypePolicy, te
 	}, nil
 }
 
+func NewAPIWithActorResolver(store *ResourceStore, storage *NativeStorage, policy *TypePolicy, resolver ActorResolver, maxUploadBytes int64, publicAuthSecret []byte) (*API, error) {
+	if store == nil || storage == nil || policy == nil || resolver == nil || maxUploadBytes <= 0 || len(publicAuthSecret) < 32 {
+		return nil, ErrInvalidInput
+	}
+	return &API{
+		store: store, storage: storage, policy: policy, actorResolver: resolver,
+		maxUploadBytes: maxUploadBytes, publicAuthSecret: append([]byte(nil), publicAuthSecret...),
+	}, nil
+}
+
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/files", a.list)
@@ -75,6 +87,37 @@ func fileSecurityHeaders(next http.Handler) http.Handler {
 }
 
 func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (actorContext, bool) {
+	if a.actorResolver != nil {
+		actor, err := a.actorResolver(r, strings.TrimSpace(workspaceID))
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAuthenticationRequired):
+				writeFileAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrForbidden):
+				writeFileAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			default:
+				writeFileAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			}
+			return actorContext{}, false
+		}
+		actorID := strings.TrimSpace(actor.ActorID)
+		role := strings.ToLower(strings.TrimSpace(actor.Role))
+		if actorID == "" || strings.TrimSpace(workspaceID) == "" {
+			writeFileAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			return actorContext{}, false
+		}
+		if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+			writeFileAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			return actorContext{}, false
+		}
+		if mutation && role == "viewer" {
+			writeFileAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+			return actorContext{}, false
+		}
+		return actorContext{ActorID: actorID, Role: role}, true
+	}
+
+	// Preserve the predecessor P09 test-only adapter for its isolated tests.
 	if !a.testAuthEnabled {
 		writeFileAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
 		return actorContext{}, false

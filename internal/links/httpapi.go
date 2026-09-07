@@ -14,6 +14,7 @@ import (
 type API struct {
 	store           *MySQLStore
 	testAuthEnabled bool
+	actorResolver   ActorResolver
 }
 
 type actorContext struct {
@@ -66,6 +67,10 @@ func NewAPI(store *MySQLStore, testAuthEnabled bool) *API {
 	return &API{store: store, testAuthEnabled: testAuthEnabled}
 }
 
+func NewAPIWithActorResolver(store *MySQLStore, resolver ActorResolver) *API {
+	return &API{store: store, actorResolver: resolver}
+}
+
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
@@ -97,8 +102,37 @@ func (a *API) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (actorContext, bool) {
-	// P05 cannot pretend P12/P15 are implemented. The only current adapter is
-	// explicitly test-only and must be enabled by the process environment.
+	if a.actorResolver != nil {
+		actor, err := a.actorResolver(r, strings.TrimSpace(workspaceID))
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAuthenticationRequired):
+				writeAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrForbidden):
+				writeAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			default:
+				writeAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			}
+			return actorContext{}, false
+		}
+		actorID := strings.TrimSpace(actor.ActorID)
+		role := strings.ToLower(strings.TrimSpace(actor.Role))
+		if actorID == "" || strings.TrimSpace(workspaceID) == "" {
+			writeAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			return actorContext{}, false
+		}
+		if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+			writeAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			return actorContext{}, false
+		}
+		if mutation && role == "viewer" {
+			writeAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+			return actorContext{}, false
+		}
+		return actorContext{ActorID: actorID, Role: role}, true
+	}
+
+	// Preserve the predecessor P05 test-only adapter for its isolated tests.
 	if !a.testAuthEnabled {
 		writeAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
 		return actorContext{}, false
