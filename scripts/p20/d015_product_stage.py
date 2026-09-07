@@ -201,7 +201,8 @@ func TestBillingSessionPrincipalResolverRejectsIncompleteAuthority(t *testing.T)
     ]
     subprocess.run(["gofmt", "-w", *targets], check=True)
     subprocess.run(["git", "diff", "--check"], check=True)
-    changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+    status = subprocess.check_output(["git", "status", "--porcelain=v1"], text=True).splitlines()
+    changed = [line[3:] for line in status if len(line) >= 4]
     require(sorted(changed) == sorted(targets), f"unexpected product working-tree boundary: {changed}")
 
     final_billing = billing_path.read_text(encoding="utf-8")
