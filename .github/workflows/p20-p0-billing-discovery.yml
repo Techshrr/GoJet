@@ -1,0 +1,189 @@
+name: P20 T021 Billing Discovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/p20/t021_discovery.py'
+      - '.github/workflows/p20-p0-billing-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-t021-discovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t021-discovery:
+    name: P20-T021 real Billing discovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_P20_API_BASE: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_RATE_LIMIT: '6'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_AUTH_GRANT_KEY_ID: p20-t021-discovery-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p20-t021-discovery-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+
+    steps:
+      - name: Checkout T021 discovery head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Prove legal T021 unlock and frozen contract ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          closure_head='833ea73faecc25324ef3f52ce7a791426de09fa3'
+          git merge-base --is-ancestor "$closure_head" HEAD
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t021_discovery.py scripts/p20/validate_contract.py
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go | tee /tmp/p20-t021-discovery-gofmt.diff
+          test ! -s /tmp/p20-t021-discovery-gofmt.diff
+          go test ./internal/auth ./internal/workspace ./internal/billing ./services/platformapi/cmd/server ./scripts/p20/t010_runner ./scripts/p20/t011_runner
+          python3 scripts/p20/validate_contract.py > /tmp/p20-t021-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-t021-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build and start exact-head platform API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/t021-discovery
+          go build -trimpath -o /tmp/gojet-p20-t021-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-t021-platformapi > artifacts/v10/P20/runtime/t021-discovery/native-platformapi.sha256
+          /tmp/gojet-p20-t021-platformapi > artifacts/v10/P20/runtime/t021-discovery/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t021-discovery/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" = 40 ]; then
+              cat artifacts/v10/P20/runtime/t021-discovery/platformapi.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Establish real P15 owner predecessor identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/p0_timeline.py --case P20-T009
+          python3 scripts/p20/p0_timeline.py --case P20-T010
+          python3 scripts/p20/p0_timeline.py --case P20-T011
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          data=json.load(open('artifacts/v10/P20/p0/P20-T011.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['implementation_commit']==head and data['errors']==[],data
+          assert data['details']['workspace_role']=='owner',data
+          PY
+
+      - name: Run P20-T021 Billing discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/t021_discovery.py
+
+      - name: Stop exact-head platform API
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/v10/P20/runtime/t021-discovery/platformapi.pid ]; then
+            kill "$(cat artifacts/v10/P20/runtime/t021-discovery/platformapi.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload P20-T021 discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-t021-discovery-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/p0/P20-T009.json
+            artifacts/v10/P20/p0/P20-T010.json
+            artifacts/v10/P20/p0/P20-T011.json
+            artifacts/v10/P20/runtime/t021-discovery/
