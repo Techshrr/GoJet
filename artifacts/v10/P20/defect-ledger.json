@@ -43,6 +43,26 @@
       "discovery_artifact_id": 9993439681,
       "discovery_artifact_digest": "sha256:51973c18fd468bf90ec3eb94daed16fa3fd33086f2f0453b8178bd548a831714",
       "failure": "real P17 Admin session and tickets.manage/mail.manage authority are valid, but Support Admin reply returns HTTP 503 admin_permission_unavailable with zero durable Admin-reply writes after the same exact-head T020 requester ticket create and requester reply both persist successfully"
+    },
+    {
+      "id": "P20-D014",
+      "severity": "P1",
+      "title": "Support reply mail job fails template rendering on real mailworker",
+      "case": "P20-T020",
+      "issue": 102,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "18fe63753d92ae0e7a779fde25b710ab5684e8c1",
+      "discovery_workflow_run": 34089402230,
+      "discovery_workflow_job": 101639665417,
+      "discovery_artifact_id": 10006624524,
+      "discovery_artifact_digest": "sha256:796a4eee35e30c15332e00053676379b8677013e710fc896591299e29f6e6ec0",
+      "failure": "real Support Admin reply persists and queues the correlated support-ticket-reply mail job, but one real mailworker attempt terminates before SMTP with durable last_error_code=template_invalid because ticket_message delivery values include status outside the immutable v1 template allowlist"
     }
   ],
   "closed": [
@@ -255,7 +275,7 @@
       "supporting_contract_workflow_job": 99222701199,
       "supporting_contract_artifact_id": 9728276201,
       "supporting_contract_artifact_digest": "sha256:96850247f68afd094e6b5ef7d88704b960bdcd80a2d96b3ba130b9c21603510f",
-      "resolution": "Native platformapi composes the real P15 server-side session and unsafe-method Origin/one-time-CSRF authority into the P05 Links actor boundary, resolves the authoritative Workspace membership role server-side, rejects test-header substitution in production, preserves viewer read-only behavior, and retains the predecessor P05 test-auth adapter without changing Link persistence/version/audit/fingerprint/risk semantics.",
+      "resolution": "Native platformapi composes the real P15 server-side session and authoritative P12 Workspace membership into the P05 Links actor boundary, resolves the authoritative Workspace membership role server-side, rejects test-header substitution in production, preserves viewer read-only behavior, and retains the predecessor P05 test-auth adapter without changing Link persistence/version/audit/fingerprint/risk semantics.",
       "verified_outcome": {
         "t009_status": "PASS",
         "t010_status": "PASS",
@@ -636,7 +656,7 @@
       "supporting_contract_artifact_digest": "sha256:c2c79094b0497f4e530336a791325ba2355ec3f17eed560f23c5d8a8e2cd2cca",
       "supporting_p11_contract_workflow_run": 33362225532,
       "supporting_p11_contract_artifact_id": 9747290906,
-      "supporting_p11_contract_artifact_digest": "sha256:30bab61034a55e4f91d8d38c8a7a7a9427f301c232f20f4591263bf08efcfd81",
+      "supporting_p11_contract_artifact_digest": "sha256:30bab61034a55e4f91d8d38c8a7a7a9427f301c232f20f4591263bf08ecfd81",
       "supporting_p11_browser_workflow_run": 33362225383,
       "supporting_p11_browser_artifact_id": 9747204357,
       "supporting_p11_browser_artifact_digest": "sha256:8904e3d0be389ab9ac3c8984fd09f448455ddd3a294a3418b6153bf8b717f387",
@@ -817,5 +837,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D011 are closed. P20-D012 and P20-D013 are open P1 release blockers in P20-T020. Exact-head 53d75de6ea085400d5e3d602e89d56f1d7aaab96 proves the D012 requester-session remediation through durable ticket create and requester reply, then discovers D013 at the independent P17 Admin permission-composition boundary. P20-T021 remains forbidden until both open blockers are formally remediated and closed."
+  "note": "P20-D001 through P20-D011 are closed. P20-D012, P20-D013 and P20-D014 are open P1 release blockers in P20-T020. Exact-head 18fe63753d92ae0e7a779fde25b710ab5684e8c1 proves the D012 requester-session and D013 Admin-authority remediations through durable requester/Admin Support writes, then discovers D014 at the correlated support-ticket-reply real mailworker template-rendering boundary with durable template_invalid before SMTP. P20-T021 remains forbidden until all three open blockers are formally remediated and closed."
 }
