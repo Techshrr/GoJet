@@ -1,0 +1,505 @@
+name: P20 D016 WeChat Callback Authority
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-wechat-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-wechat-callback-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-wechat-callback-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wechat-callback-authority:
+    name: P20-D016 WeChat production callback authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+      GOJET_BILLING_STRIPE_ENABLED: '0'
+      GOJET_BILLING_WECHAT_ENABLED: '1'
+      GOJET_BILLING_WECHAT_APPID: wx-gojet-ci
+      GOJET_BILLING_WECHAT_MCHID: '1900000109'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_RATE_LIMIT: '6'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_AUTH_GRANT_KEY_ID: p20-d016-wechat-grant-v1
+      GOJET_OAUTH_KEY_ID: p20-d016-wechat-oauth-v1
+
+    steps:
+      - name: Checkout exact WeChat authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare masked ephemeral CI cryptographic material
+        shell: bash
+        run: |
+          set -euo pipefail
+          mask_env() {
+            local name="$1"
+            local value="$2"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+          mask_env GOJET_AUTH_CSRF_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_AUTH_GRANT_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_OAUTH_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_BILLING_WECHAT_API_V3_KEY "$(openssl rand -hex 16)"
+
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/wechat-platform-private.pem >/dev/null 2>&1
+          openssl pkey -in /tmp/wechat-platform-private.pem -pubout -out /tmp/wechat-platform-public.pem >/dev/null 2>&1
+          chmod 600 /tmp/wechat-platform-private.pem
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pem=Path('/tmp/wechat-platform-public.pem').read_text(encoding='utf-8')
+          Path('/tmp/wechat-platform-keys.json').write_text(
+              json.dumps({'WECHAT-CI-SERIAL-001':pem},separators=(',',':')),
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Prove exact-head lineage and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head='bab3244593c135ad6ced41836b56c0eca021d3ae'
+          git merge-base --is-ancestor "$product_head" HEAD
+          mapfile -t delta < <(git diff --name-only "$product_head" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-d016-wechat-callback-authority.yml'
+
+          test "$(go env GOVERSION)" = 'go1.26.5'
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+
+          gofmt -d \
+            internal/billing/provider_intents.go \
+            internal/billing/provider_intents_test.go \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_stripe.go \
+            services/platformapi/cmd/server/billing_stripe_test.go \
+            services/platformapi/cmd/server/billing_wechat.go \
+            services/platformapi/cmd/server/billing_wechat_test.go \
+            | tee /tmp/p20-d016-wechat-gofmt.diff
+          test ! -s /tmp/p20-d016-wechat-gofmt.diff
+
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-wechat-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-wechat-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations 000001 through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          mapfile -t migrations < <(printf '%s\n' migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql | sort)
+          test "${#migrations[@]}" -eq 30
+          test "${migrations[29]}" = 'migrations/000030_billing_provider_intents.sql'
+          for migration in "${migrations[@]}"; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          test "$(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'billing_provider_intents'")" = 'billing_provider_intents'
+
+      - name: Seed server-authoritative WeChat billing fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          INSERT INTO workspaces (id,name,status,version,created_by)
+          VALUES ('ws_wechat_ci','WeChat CI','active',1,'ci-owner');
+
+          INSERT INTO workspace_memberships (workspace_id,user_id,email,display_name,role)
+          VALUES ('ws_wechat_ci','ci-owner','ci-owner@example.test','CI Owner','owner');
+
+          INSERT INTO billing_plans (id,code,name,status,currency,amount_minor,billing_period,version)
+          VALUES (900002,'wechat-ci','WeChat CI','active','CNY',1234,'monthly',1);
+
+          INSERT INTO billing_plan_entitlements (plan_id,capability,limit_value,unit,source_version)
+          VALUES (900002,'custom_domains',4,'count',1);
+
+          INSERT INTO billing_orders
+          (id,workspace_id,plan_id,kind,currency,amount_minor,status,idempotency_key_hash)
+          VALUES
+          ('ord_wechat_ci','ws_wechat_ci',900002,'new','CNY',1234,'pending',UNHEX(SHA2('wechat-ci-order-idempotency',256)));
+
+          INSERT INTO billing_invoices
+          (id,workspace_id,order_id,currency,amount_minor,status,issued_at)
+          VALUES
+          ('inv_wechat_ci','ws_wechat_ci','ord_wechat_ci','CNY',1234,'open',UTC_TIMESTAMP(6));
+
+          INSERT INTO billing_provider_intents
+          (id,workspace_id,order_id,provider,merchant_reference,provider_reference,settlement_asset_kind,settlement_asset,settlement_amount_units,settlement_scale,status,expires_at)
+          VALUES
+          ('pint_wechat_ci','ws_wechat_ci','ord_wechat_ci','wechat','gj_wechat_ci',NULL,'fiat','CNY',1234,NULL,'active',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 1 DAY));
+          SQL
+
+      - name: Build and start exact-head production-mode platform API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-wechat
+          go build -trimpath -o /tmp/gojet-p20-d016-wechat-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-wechat-platformapi > artifacts/v10/P20/runtime/d016-wechat/native-platformapi.sha256
+          GOJET_BILLING_WECHAT_PLATFORM_KEYS_JSON="$(cat /tmp/wechat-platform-keys.json)" \
+            /tmp/gojet-p20-d016-wechat-platformapi > /tmp/p20-d016-wechat-platformapi.log 2>&1 &
+          echo $! > /tmp/p20-d016-wechat-platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" = 40 ]; then
+              sed "s/${GOJET_BILLING_WECHAT_API_V3_KEY}/[REDACTED]/g" /tmp/p20-d016-wechat-platformapi.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Build ephemeral WeChat signed callback fixture generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wechat-fixture.go <<'GO'
+          package main
+
+          import (
+            "crypto"
+            "crypto/aes"
+            "crypto/cipher"
+            "crypto/rand"
+            "crypto/rsa"
+            "crypto/sha256"
+            "crypto/x509"
+            "encoding/base64"
+            "encoding/json"
+            "encoding/pem"
+            "fmt"
+            "os"
+            "strconv"
+            "time"
+          )
+
+          func must(err error) {
+            if err != nil { panic(err) }
+          }
+
+          func main() {
+            if len(os.Args) != 6 {
+              panic("usage: fixture EVENT_ID EVENT_TYPE AMOUNT TIMESTAMP_OFFSET_SECONDS PREFIX")
+            }
+            eventID := os.Args[1]
+            eventType := os.Args[2]
+            amount, err := strconv.ParseInt(os.Args[3], 10, 64); must(err)
+            offset, err := strconv.ParseInt(os.Args[4], 10, 64); must(err)
+            prefix := os.Args[5]
+            apiKey := []byte(os.Getenv("GOJET_BILLING_WECHAT_API_V3_KEY"))
+            if len(apiKey) != 32 { panic("bad api key length") }
+
+            keyPEM, err := os.ReadFile("/tmp/wechat-platform-private.pem"); must(err)
+            block, _ := pem.Decode(keyPEM)
+            if block == nil { panic("missing private key") }
+            parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes); must(err)
+            privateKey, ok := parsed.(*rsa.PrivateKey)
+            if !ok { panic("not RSA") }
+
+            eventTime := time.Now().UTC().Truncate(time.Second)
+            transaction := map[string]any{
+              "appid": os.Getenv("GOJET_BILLING_WECHAT_APPID"),
+              "mchid": os.Getenv("GOJET_BILLING_WECHAT_MCHID"),
+              "out_trade_no": "gj_wechat_ci",
+              "transaction_id": "420000000000000002",
+              "trade_state": "SUCCESS",
+              "success_time": eventTime.Format(time.RFC3339),
+              "amount": map[string]any{"total": amount, "currency": "CNY"},
+            }
+            plaintext, err := json.Marshal(transaction); must(err)
+            blockCipher, err := aes.NewCipher(apiKey); must(err)
+            gcm, err := cipher.NewGCM(blockCipher); must(err)
+            resourceNonce := []byte("0123456789ab")
+            associatedData := []byte("transaction")
+            ciphertext := gcm.Seal(nil, resourceNonce, plaintext, associatedData)
+            envelope := map[string]any{
+              "id": eventID,
+              "create_time": eventTime.Format(time.RFC3339Nano),
+              "resource_type": "encrypt-resource",
+              "event_type": eventType,
+              "summary": "gojet-ci",
+              "resource": map[string]any{
+                "algorithm": "AEAD_AES_256_GCM",
+                "ciphertext": base64.StdEncoding.EncodeToString(ciphertext),
+                "associated_data": string(associatedData),
+                "nonce": string(resourceNonce),
+                "original_type": "transaction",
+              },
+            }
+            raw, err := json.Marshal(envelope); must(err)
+            timestamp := time.Now().UTC().Add(time.Duration(offset)*time.Second).Unix()
+            headerNonce := "gojet-ci-nonce"
+            signed := fmt.Sprintf("%d\n%s\n%s\n", timestamp, headerNonce, raw)
+            digest := sha256.Sum256([]byte(signed))
+            signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, digest[:]); must(err)
+            must(os.WriteFile(prefix+".json", raw, 0600))
+            headers := fmt.Sprintf("WECHAT_TS=%d\nWECHAT_NONCE=%s\nWECHAT_SIGNATURE=%s\n", timestamp, headerNonce, base64.StdEncoding.EncodeToString(signature))
+            must(os.WriteFile(prefix+".env", []byte(headers), 0600))
+          }
+          GO
+          go build -trimpath -o /tmp/wechat-fixture /tmp/wechat-fixture.go
+
+      - name: Exercise signed WeChat callback through real HTTP and MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint='http://127.0.0.1:18081/api/payments/callbacks/wechat'
+
+          request() {
+            local prefix="$1"
+            local serial="$2"
+            # shellcheck disable=SC1090
+            source "${prefix}.env"
+            curl -sS -o "${prefix}.response" -w '%{http_code}' \
+              -X POST "$endpoint" \
+              -H 'Content-Type: application/json' \
+              -H "Wechatpay-Timestamp: ${WECHAT_TS}" \
+              -H "Wechatpay-Nonce: ${WECHAT_NONCE}" \
+              -H "Wechatpay-Serial: ${serial}" \
+              -H "Wechatpay-Signature: ${WECHAT_SIGNATURE}" \
+              -H 'Wechatpay-Signature-Type: WECHATPAY2-SHA256-RSA2048' \
+              --data-binary "@${prefix}.json"
+          }
+
+          /tmp/wechat-fixture EVT-WECHAT-CI-PAID TRANSACTION.SUCCESS 1234 0 /tmp/wechat-paid
+          paid_status="$(request /tmp/wechat-paid WECHAT-CI-SERIAL-001)"
+          test "$paid_status" = '204'
+          test ! -s /tmp/wechat-paid.response
+
+          duplicate_status="$(request /tmp/wechat-paid WECHAT-CI-SERIAL-001)"
+          test "$duplicate_status" = '204'
+          test ! -s /tmp/wechat-paid.response
+
+          /tmp/wechat-fixture EVT-WECHAT-CI-IGNORED REFUND.SUCCESS 1234 0 /tmp/wechat-ignored
+          ignored_status="$(request /tmp/wechat-ignored WECHAT-CI-SERIAL-001)"
+          test "$ignored_status" = '204'
+          test ! -s /tmp/wechat-ignored.response
+
+          /tmp/wechat-fixture EVT-WECHAT-CI-BAD-AMOUNT TRANSACTION.SUCCESS 9999 0 /tmp/wechat-bad-amount
+          bad_amount_status="$(request /tmp/wechat-bad-amount WECHAT-CI-SERIAL-001)"
+          test "$bad_amount_status" = '401'
+
+          /tmp/wechat-fixture EVT-WECHAT-CI-STALE TRANSACTION.SUCCESS 1234 -360 /tmp/wechat-stale
+          stale_status="$(request /tmp/wechat-stale WECHAT-CI-SERIAL-001)"
+          test "$stale_status" = '401'
+
+          unknown_serial_status="$(request /tmp/wechat-paid WECHAT-CI-SERIAL-UNKNOWN)"
+          test "$unknown_serial_status" = '401'
+
+          cp /tmp/wechat-paid.json /tmp/wechat-tampered.json
+          cp /tmp/wechat-paid.env /tmp/wechat-tampered.env
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/wechat-tampered.json')
+          raw=p.read_text(encoding='utf-8')
+          changed=raw.replace('gojet-ci','gojet-cj',1)
+          assert changed != raw
+          p.write_text(changed,encoding='utf-8')
+          PY
+          tampered_status="$(request /tmp/wechat-tampered WECHAT-CI-SERIAL-001)"
+          test "$tampered_status" = '401'
+
+          python3 - <<PY
+          import json
+          json.dump({
+            'paid_status':int('$paid_status'),
+            'duplicate_status':int('$duplicate_status'),
+            'ignored_status':int('$ignored_status'),
+            'bad_amount_status':int('$bad_amount_status'),
+            'stale_status':int('$stale_status'),
+            'unknown_serial_status':int('$unknown_serial_status'),
+            'tampered_status':int('$tampered_status'),
+          },open('/tmp/p20-d016-wechat-http.json','w',encoding='utf-8'),sort_keys=True)
+          PY
+
+      - name: Prove durable settlement, idempotency and entitlement safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysqlq() {
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "$1"
+          }
+
+          test "$(mysqlq "SELECT status FROM billing_orders WHERE id='ord_wechat_ci'")" = 'paid'
+          test "$(mysqlq "SELECT CONCAT(status,':',paid_at IS NOT NULL) FROM billing_invoices WHERE id='inv_wechat_ci'")" = 'paid:1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='wechat' AND provider_transaction_id='420000000000000002' AND order_id='ord_wechat_ci' AND currency='CNY' AND amount_minor=1234 AND status='paid'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='wechat'")" = '1'
+          test "$(mysqlq "SELECT CONCAT(provider_event_id,':',status) FROM payment_callback_events WHERE provider='wechat'")" = 'EVT-WECHAT-CI-PAID:processed'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_subscriptions WHERE workspace_id='ws_wechat_ci' AND plan_id=900002 AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM entitlement_grants WHERE workspace_id='ws_wechat_ci' AND capability='custom_domains' AND source_type='billing' AND limit_value=4 AND revoked_at IS NULL")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM custom_domain_entitlement_sources WHERE workspace_id='ws_wechat_ci' AND source='plan' AND source_key='p13:billing' AND status='active' AND domain_limit=4")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_notifications WHERE workspace_id='ws_wechat_ci' AND category='billing' AND event_key='payment_succeeded' AND resource_id='ord_wechat_ci'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_provider_intents WHERE id='pint_wechat_ci' AND provider='wechat' AND merchant_reference='gj_wechat_ci' AND provider_reference IS NULL AND settlement_asset_kind='fiat' AND settlement_asset='CNY' AND settlement_amount_units=1234 AND settlement_scale IS NULL AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_orders WHERE id='ord_wechat_ci' AND status='refunded'")" = '0'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='wechat' AND status='refunded'")" = '0'
+
+          cp /tmp/p20-d016-wechat-contract.json artifacts/v10/P20/runtime/d016-wechat/contract.json
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          http=json.load(open('/tmp/p20-d016-wechat-http.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          evidence={
+              'schema':'gojet.p20-d016-wechat-authority.v1',
+              'node':'P20',
+              'case':'P20-D016-WECHAT',
+              'status':'PASS',
+              'implementation_commit':head,
+              'product_head':'bab3244593c135ad6ced41836b56c0eca021d3ae',
+              'provider':'wechat',
+              'production_mode':True,
+              'formal_p20_t021_claim':False,
+              'raw_body_recorded':False,
+              'signature_recorded':False,
+              'secret_material_recorded':False,
+              'private_key_recorded':False,
+              'live_callback':http,
+              'durable':{
+                  'order_status':'paid',
+                  'invoice_status':'paid',
+                  'transaction_count':1,
+                  'callback_event_count':1,
+                  'active_subscription_count':1,
+                  'active_billing_entitlement_count':1,
+                  'active_domain_plan_source_count':1,
+                  'payment_notification_count':1,
+                  'active_provider_intent_count':1,
+                  'refunded_order_count':0,
+                  'refunded_transaction_count':0,
+              },
+              'errors':[],
+          }
+          Path('artifacts/v10/P20/runtime/d016-wechat/authority.json').write_text(
+              json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8'
+          )
+          PY
+
+      - name: Enforce secret-safe authority artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='artifacts/v10/P20/runtime/d016-wechat'
+          if grep -R -n -F "$GOJET_BILLING_WECHAT_API_V3_KEY" "$evidence"; then
+            echo 'WeChat APIv3 key found in evidence'
+            exit 1
+          fi
+          if grep -R -n -E 'BEGIN (RSA )?PRIVATE KEY|Wechatpay-Signature|"ciphertext"|WECHAT_SIGNATURE=' "$evidence"; then
+            echo 'secret-like WeChat callback material found in evidence'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/runtime/d016-wechat/authority.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['formal_p20_t021_claim'] is False,data
+          assert data['production_mode'] is True,data
+          assert data['raw_body_recorded'] is False,data
+          assert data['signature_recorded'] is False,data
+          assert data['secret_material_recorded'] is False,data
+          assert data['private_key_recorded'] is False,data
+          PY
+
+      - name: Stop exact-head platform API
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/p20-d016-wechat-platformapi.pid ]; then
+            kill "$(cat /tmp/p20-d016-wechat-platformapi.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload WeChat authority evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-wechat-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/v10/P20/runtime/d016-wechat/authority.json
+            artifacts/v10/P20/runtime/d016-wechat/contract.json
+            artifacts/v10/P20/runtime/d016-wechat/native-platformapi.sha256
+          if-no-files-found: error
+          retention-days: 30
