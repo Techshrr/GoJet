@@ -1,0 +1,139 @@
+name: P20 D016 Callback Contract Exact-Head
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-callback-dispatch-contract
+    paths:
+      - '.github/workflows/p20-d016-callback-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-callback-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head:
+    name: P20-D016 callback contract exact-head authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Prove lineage and CI-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          seam_head='bd6e351dca9fa2017d416ff94b0513ff119eb172'
+          epay_product_head='499b531b62052e1881aff5dcce512585a2348e70'
+          integration_head='1d5f93670dc1c1d31069d01fe3a223e7881e0481'
+          legal_t020_head='833ea73faecc25324ef3f52ce7a791426de09fa3'
+          frozen_contract='050fd7052d71ff77858b153abcbc466a1243af2f'
+
+          git merge-base --is-ancestor "$integration_head" "$epay_product_head"
+          git merge-base --is-ancestor "$epay_product_head" "$seam_head"
+          git merge-base --is-ancestor "$legal_t020_head" HEAD
+          git merge-base --is-ancestor "$frozen_contract" HEAD
+          git merge-base --is-ancestor "$seam_head" HEAD
+
+          mapfile -t delta < <(git diff --name-only "$seam_head" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-d016-callback-contract.yml'
+
+      - name: Check formatting and focused Billing compilation/tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-callback-contract
+          gofmt -d \
+            internal/billing/httpapi.go \
+            internal/billing/httpapi_test.go \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_epay.go \
+            services/platformapi/cmd/server/billing_epay_test.go \
+            | tee artifacts/v10/P20/runtime/d016-callback-contract/gofmt.diff
+          test ! -s artifacts/v10/P20/runtime/d016-callback-contract/gofmt.diff
+          go test ./internal/billing ./services/platformapi/cmd/server
+
+      - name: Preserve frozen P20 Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/validate_contract.py > artifacts/v10/P20/runtime/d016-callback-contract/contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/runtime/d016-callback-contract/contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Verify canonical blocker state stays fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          p1=sorted(row['id'] for row in data['open'] if row.get('severity')=='P1')
+          dr=sorted(row['id'] for row in data['decision_required'] if row.get('status')=='OPEN')
+          assert p1 == ['P20-D015','P20-D016'],p1
+          assert dr == ['P20-DR001'],dr
+          PY
+
+      - name: Record bounded seam authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          root=Path('artifacts/v10/P20/runtime/d016-callback-contract')
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          evidence={
+              'schema':'gojet.p20-d016-callback-contract.v1',
+              'case':'P20-D016-CALLBACK-CONTRACT',
+              'status':'PASS',
+              'errors':[],
+              'implementation_commit':head,
+              'product_seam_commit':'bd6e351dca9fa2017d416ff94b0513ff119eb172',
+              'epay_product_parent':'499b531b62052e1881aff5dcce512585a2348e70',
+              'p20_integration_ancestor':'1d5f93670dc1c1d31069d01fe3a223e7881e0481',
+              'contract_authority':'050fd7052d71ff77858b153abcbc466a1243af2f',
+              'formal_p20_t021_claim':False,
+              'secret_material_recorded':False,
+              'scope':[
+                  'authenticated ignored callback requires provider-owned success ACK',
+                  'authenticated ignored callback performs zero Billing store mutation',
+                  'provider success ACK is validated before durable settlement',
+                  'existing deterministic/test generic JSON ACK remains compatible',
+                  'P13 ApplyAuthenticatedCallback state machine unchanged',
+              ],
+          }
+          (root/'regression.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Upload exact-head callback contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-callback-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: artifacts/v10/P20/runtime/d016-callback-contract/
