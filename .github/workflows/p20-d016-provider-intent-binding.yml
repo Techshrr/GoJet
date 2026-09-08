@@ -1,0 +1,201 @@
+name: P20 D016 Provider Intent Binding Exact-Head
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-provider-intent-binding
+    paths:
+      - '.github/workflows/p20-d016-provider-intent-binding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-provider-intent-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head:
+    name: P20-D016 provider intent exact-head authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?parseTime=true&charset=utf8mb4
+
+    steps:
+      - name: Checkout exact authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Prove exact lineage and bounded deltas
+        shell: bash
+        run: |
+          set -euo pipefail
+          integration_head='1d5f93670dc1c1d31069d01fe3a223e7881e0481'
+          epay_parent='499b531b62052e1881aff5dcce512585a2348e70'
+          callback_seam='bd6e351dca9fa2017d416ff94b0513ff119eb172'
+          product_head='11da749821ca2ac06eef1109b6b78de86aa034ab'
+          frozen_contract='050fd7052d71ff77858b153abcbc466a1243af2f'
+          git merge-base --is-ancestor "$integration_head" HEAD
+          git merge-base --is-ancestor "$epay_parent" HEAD
+          git merge-base --is-ancestor "$callback_seam" HEAD
+          git merge-base --is-ancestor "$frozen_contract" HEAD
+          git merge-base --is-ancestor "$product_head" HEAD
+          mapfile -t product_delta < <(git diff --name-only "$callback_seam" "$product_head" | sort)
+          test "${#product_delta[@]}" -eq 3
+          test "${product_delta[0]}" = 'internal/billing/provider_intents.go'
+          test "${product_delta[1]}" = 'internal/billing/provider_intents_test.go'
+          test "${product_delta[2]}" = 'migrations/000030_billing_provider_intents.sql'
+          mapfile -t authority_delta < <(git diff --name-only "$product_head" HEAD | sort)
+          test "${#authority_delta[@]}" -eq 1
+          test "${authority_delta[0]}" = '.github/workflows/p20-d016-provider-intent-binding.yml'
+          test "$(git diff --name-only "$callback_seam" "$product_head" -- migrations/000009_billing_payments_entitlements.sql | wc -l)" -eq 0
+
+      - name: Check formatting and focused compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -d internal/billing/provider_intents.go internal/billing/provider_intents_test.go | tee /tmp/provider-intent-gofmt.diff
+          test ! -s /tmp/provider-intent-gofmt.diff
+          GOJET_TEST_MYSQL_DSN='' go test ./internal/billing
+          go test ./services/platformapi/cmd/server
+
+      - name: Preserve frozen P20 Contract and blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
+          python3 - <<'PY'
+          import json
+          contract=json.load(open('/tmp/p20-contract.json',encoding='utf-8'))
+          assert contract['status']=='PASS', contract
+          assert contract['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', contract
+          assert contract['frozen_contract_preserved'] is True, contract
+          ledger=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          p1=sorted(row['id'] for row in ledger['open'] if row.get('severity')=='P1')
+          dr=sorted(row['id'] for row in ledger['decision_required'] if row.get('status')=='OPEN')
+          assert p1 == ['P20-D015','P20-D016'], p1
+          assert dr == ['P20-DR001'], dr
+          PY
+
+      - name: Apply immutable migrations through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          count=0
+          last=''
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+            count=$((count+1))
+            last="$(basename "$migration")"
+          done
+          test "$count" -eq 30
+          test "$last" = '000030_billing_provider_intents.sql'
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test -Nse "SHOW TABLES LIKE 'billing_provider_intents'" | grep -qx billing_provider_intents
+
+      - name: Run real MySQL provider-intent lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/billing -run '^TestProviderIntent' -count=1 -v
+
+      - name: Verify secret-safe schema boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          columns="$(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_test -Nse "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='billing_provider_intents'")"
+          for forbidden in secret signature raw_body payer private_key browser_return; do
+            if grep -qi "$forbidden" <<<"$columns"; then
+              echo "forbidden provider-intent column: $forbidden"
+              exit 1
+            fi
+          done
+          grep -q "ProviderStripe, ProviderWeChat, ProviderPayPal" internal/billing/provider_intents.go
+          if grep -q "case ProviderCrypto" internal/billing/provider_intents.go; then
+            echo 'crypto creation authority unexpectedly enabled'
+            exit 1
+          fi
+
+      - name: Record bounded authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-provider-intent
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          evidence={
+            'schema':'gojet.p20-d016-provider-intent-binding.v1',
+            'case':'P20-D016-PROVIDER-INTENT-BINDING',
+            'status':'PASS',
+            'errors':[],
+            'implementation_commit':head,
+            'product_head':'11da749821ca2ac06eef1109b6b78de86aa034ab',
+            'callback_seam_parent':'bd6e351dca9fa2017d416ff94b0513ff119eb172',
+            'epay_parent':'499b531b62052e1881aff5dcce512585a2348e70',
+            'formal_p20_t021_claim':False,
+            'secret_material_recorded':False,
+            'scope':{
+              'immutable_000009_preserved':True,
+              'forward_migration_000030_applied':True,
+              'server_created_merchant_reference':True,
+              'single_live_attempt_per_order':True,
+              'provider_reference_bind_once':True,
+              'canceled_and_expired_fail_closed':True,
+              'current_creation_providers':['paypal','stripe','wechat'],
+              'crypto_creation_enabled':False,
+              'billing_money_unchanged':True,
+            },
+          }
+          json.dump(evidence,open('artifacts/v10/P20/runtime/d016-provider-intent/regression.json','w',encoding='utf-8'),indent=2,sort_keys=True)
+          PY
+          cp /tmp/p20-contract.json artifacts/v10/P20/runtime/d016-provider-intent/contract.json
+
+      - name: Upload provider-intent evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-provider-intent-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: artifacts/v10/P20/runtime/d016-provider-intent/
