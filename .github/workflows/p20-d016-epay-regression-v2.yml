@@ -1,0 +1,227 @@
+name: P20 D016 Epay Exact-Head Regression V2
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-epay-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-epay-regression-v2.yml'
+      - 'scripts/p20/d016_epay_live_regression.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-epay-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head:
+    name: P20-D016 exact-head production Epay authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_P20_API_BASE: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_RATE_LIMIT: '6'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_GRANT_KEY_ID: p20-d016-epay-v2-grant-v1
+      GOJET_OAUTH_KEY_ID: p20-d016-epay-v2-oauth-v1
+      GOJET_BILLING_EPAY_ENABLED: '1'
+      GOJET_BILLING_EPAY_PID: '1001'
+
+    steps:
+      - name: Checkout exact authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare ephemeral production-path credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GOJET_AUTH_CSRF_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOJET_AUTH_GRANT_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOJET_OAUTH_KEY_HEX=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOJET_BILLING_EPAY_KEY=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Prove exact product lineage, bounded delta and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head='499b531b62052e1881aff5dcce512585a2348e70'
+          integration_head='1d5f93670dc1c1d31069d01fe3a223e7881e0481'
+          legal_t020_head='833ea73faecc25324ef3f52ce7a791426de09fa3'
+          frozen_contract='050fd7052d71ff77858b153abcbc466a1243af2f'
+          git merge-base --is-ancestor "$integration_head" "$product_head"
+          git merge-base --is-ancestor "$legal_t020_head" HEAD
+          git merge-base --is-ancestor "$frozen_contract" HEAD
+          git merge-base --is-ancestor "$product_head" HEAD
+          mapfile -t delta < <(git diff --name-only "$product_head" HEAD | sort)
+          test "${#delta[@]}" -eq 2
+          test "${delta[0]}" = '.github/workflows/p20-d016-epay-regression-v2.yml'
+          test "${delta[1]}" = 'scripts/p20/d016_epay_live_regression.py'
+          test "$GOJET_TEST_AUTH_ENABLED" = '0'
+          test "$GOJET_TEST_BILLING_CALLBACKS_ENABLED" = '0'
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/d016_epay_live_regression.py scripts/p20/validate_contract.py
+          gofmt -d \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_epay.go \
+            services/platformapi/cmd/server/billing_epay_test.go \
+            | tee /tmp/p20-d016-epay-v2-gofmt.diff
+          test ! -s /tmp/p20-d016-epay-v2-gofmt.diff
+          go test ./internal/billing ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-epay-v2-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-epay-v2-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Verify canonical blocker state remains fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          p1=sorted(row['id'] for row in data['open'] if row.get('severity')=='P1')
+          dr=sorted(row['id'] for row in data['decision_required'] if row.get('status')=='OPEN')
+          assert p1 == ['P20-D015','P20-D016'],p1
+          assert dr == ['P20-DR001'],dr
+          PY
+
+      - name: Apply immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build and start exact-head production-mode platform API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-epay-v2
+          go build -trimpath -o /tmp/gojet-p20-d016-epay-v2-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-epay-v2-platformapi > artifacts/v10/P20/runtime/d016-epay-v2/native-platformapi.sha256
+          /tmp/gojet-p20-d016-epay-v2-platformapi > artifacts/v10/P20/runtime/d016-epay-v2/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/d016-epay-v2/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" = 40 ]; then
+              cat artifacts/v10/P20/runtime/d016-epay-v2/platformapi.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Establish real P15 owner predecessor identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/p0_timeline.py --case P20-T009
+          python3 scripts/p20/p0_timeline.py --case P20-T010
+          python3 scripts/p20/p0_timeline.py --case P20-T011
+          python3 - <<'PY'
+          import json,subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          data=json.load(open('artifacts/v10/P20/p0/P20-T011.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['implementation_commit']==head and data['errors']==[],data
+          assert data['details']['workspace_role']=='owner',data
+          PY
+
+      - name: Run production-mode Epay live regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/d016_epay_live_regression.py
+
+      - name: Stop exact-head platform API
+        if: always()
+        shell: bash
+        run: |
+          if [ -f artifacts/v10/P20/runtime/d016-epay-v2/platformapi.pid ]; then
+            kill "$(cat artifacts/v10/P20/runtime/d016-epay-v2/platformapi.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload exact-head Epay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-epay-v2-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/p0/P20-T009.json
+            artifacts/v10/P20/p0/P20-T010.json
+            artifacts/v10/P20/p0/P20-T011.json
+            artifacts/v10/P20/runtime/d016-epay/
+            artifacts/v10/P20/runtime/d016-epay-v2/
