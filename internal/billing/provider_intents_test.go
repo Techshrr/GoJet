@@ -102,11 +102,11 @@ VALUES (?,?,'active','USD',2100,'one_time',1,?,?)`, planCode, "Provider Intent P
 
 	store := NewStore(db)
 	order, created, err := store.CreateOrder(ctx, CreateOrderInput{
-		WorkspaceID: workspaceID,
-		PlanID: uint64(planID64),
-		Kind: OrderNew,
+		WorkspaceID:    workspaceID,
+		PlanID:         uint64(planID64),
+		Kind:           OrderNew,
 		IdempotencyKey: "provider-intent-" + suffix,
-		Now: now,
+		Now:            now,
 	})
 	if err != nil || !created {
 		t.Fatalf("create order created=%v err=%v", created, err)
@@ -115,10 +115,10 @@ VALUES (?,?,'active','USD',2100,'one_time',1,?,?)`, planCode, "Provider Intent P
 	expires := now.Add(30 * time.Minute)
 	intent, created, err := store.CreateProviderIntent(ctx, CreateProviderIntentInput{
 		WorkspaceID: workspaceID,
-		OrderID: order.ID,
-		Provider: ProviderStripe,
-		ExpiresAt: &expires,
-		Now: now,
+		OrderID:     order.ID,
+		Provider:    ProviderStripe,
+		ExpiresAt:   &expires,
+		Now:         now,
 	})
 	if err != nil || !created {
 		t.Fatalf("create intent created=%v err=%v", created, err)
@@ -178,7 +178,7 @@ VALUES (?,?,'active','USD',2100,'one_time',1,?,?)`, planCode, "Provider Intent P
 
 	paypalExpiry := now.Add(10 * time.Minute)
 	paypalIntent, created, err := store.CreateProviderIntent(ctx, CreateProviderIntentInput{
-		WorkspaceID: workspaceID, OrderID: order.ID, Provider: ProviderPayPal, ExpiresAt: &paypalExpiry, Now: now.Add(9*time.Second),
+		WorkspaceID: workspaceID, OrderID: order.ID, Provider: ProviderPayPal, ExpiresAt: &paypalExpiry, Now: now.Add(9 * time.Second),
 	})
 	if err != nil || !created || paypalIntent.Provider != ProviderPayPal {
 		t.Fatalf("paypal intent created=%v intent=%+v err=%v", created, paypalIntent, err)
