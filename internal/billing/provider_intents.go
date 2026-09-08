@@ -138,7 +138,6 @@ VALUES (?,?,?,?,?,NULL,'fiat',?,?,NULL,'active',?,NULL,?,?)`,
 // once. Rebinding an intent to a different provider object is forbidden.
 func (s *Store) BindProviderReference(ctx context.Context, input BindProviderReferenceInput) (ProviderIntent, bool, error) {
 	input.IntentID = strings.TrimSpace(input.IntentID)
-	input.ProviderReference = strings.TrimSpace(input.ProviderReference)
 	if s == nil || s.db == nil || input.IntentID == "" || !providerIntentCreationEnabled(input.Provider) || !validProviderReference(input.ProviderReference) || input.Now.IsZero() {
 		return ProviderIntent{}, false, ErrInvalidInput
 	}
@@ -181,7 +180,6 @@ WHERE id=? AND status='active' AND provider_reference IS NULL`, input.ProviderRe
 }
 
 func (s *Store) ResolveProviderIntentByProviderReference(ctx context.Context, provider Provider, providerReference string, now time.Time) (ProviderIntent, error) {
-	providerReference = strings.TrimSpace(providerReference)
 	if s == nil || s.db == nil || !providerIntentCreationEnabled(provider) || !validProviderReference(providerReference) || now.IsZero() {
 		return ProviderIntent{}, ErrInvalidInput
 	}
@@ -196,7 +194,6 @@ func (s *Store) ResolveProviderIntentByProviderReference(ctx context.Context, pr
 }
 
 func (s *Store) ResolveProviderIntentByMerchantReference(ctx context.Context, provider Provider, merchantReference string, now time.Time) (ProviderIntent, error) {
-	merchantReference = strings.TrimSpace(merchantReference)
 	if s == nil || s.db == nil || !providerIntentCreationEnabled(provider) || !validProviderReference(merchantReference) || now.IsZero() {
 		return ProviderIntent{}, ErrInvalidInput
 	}
@@ -261,7 +258,7 @@ func providerIntentCreationEnabled(provider Provider) bool {
 }
 
 func validProviderReference(value string) bool {
-	return providerReferencePattern.MatchString(strings.TrimSpace(value))
+	return providerReferencePattern.MatchString(value)
 }
 
 func providerIntentUsable(intent ProviderIntent, now time.Time) bool {
