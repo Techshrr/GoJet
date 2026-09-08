@@ -1,0 +1,75 @@
+name: P20 D016 Epay Callback Regression
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-epay-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-epay-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-epay-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  epay-callback:
+    name: P20-D016 production Epay callback slice
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact Epay authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Prove bounded CI-only delta and frozen contract ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head='5818c34a684d866563f344ab54847ce4e1b6b79f'
+          frozen_contract='050fd7052d71ff77858b153abcbc466a1243af2f'
+          git merge-base --is-ancestor "$frozen_contract" HEAD
+          git merge-base --is-ancestor "$product_head" HEAD
+          mapfile -t delta < <(git diff --name-only "$product_head" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-d016-epay-regression.yml'
+
+      - name: Verify formatting and focused Billing/platformapi tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt -d \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_epay.go \
+            services/platformapi/cmd/server/billing_epay_test.go \
+            | tee /tmp/p20-d016-epay-gofmt.diff
+          test ! -s /tmp/p20-d016-epay-gofmt.diff
+          go test ./internal/billing ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p20-d016-platformapi ./services/platformapi/cmd/server
+          test -x /tmp/gojet-p20-d016-platformapi
+
+      - name: Verify frozen P20 contract is preserved
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
