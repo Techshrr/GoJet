@@ -159,20 +159,20 @@ VALUES (?,?,'active','USD',2100,'one_time',1,?,?)`, planCode, "Provider Intent P
 		t.Fatalf("provider reference rebind should conflict, err=%v", err)
 	}
 
-	byProvider, err := store.ResolveProviderIntentByProviderReference(ctx, ProviderStripe, bound.ProviderReference, now.Add(6 * time.Second))
+	byProvider, err := store.ResolveProviderIntentByProviderReference(ctx, ProviderStripe, bound.ProviderReference, now.Add(6*time.Second))
 	if err != nil || byProvider.ID != intent.ID {
 		t.Fatalf("provider resolution intent=%+v err=%v", byProvider, err)
 	}
-	byMerchant, err := store.ResolveProviderIntentByMerchantReference(ctx, ProviderStripe, intent.MerchantReference, now.Add(6 * time.Second))
+	byMerchant, err := store.ResolveProviderIntentByMerchantReference(ctx, ProviderStripe, intent.MerchantReference, now.Add(6*time.Second))
 	if err != nil || byMerchant.ID != intent.ID {
 		t.Fatalf("merchant resolution intent=%+v err=%v", byMerchant, err)
 	}
 
-	canceled, changed, err := store.CancelProviderIntent(ctx, workspaceID, intent.ID, now.Add(7 * time.Second))
+	canceled, changed, err := store.CancelProviderIntent(ctx, workspaceID, intent.ID, now.Add(7*time.Second))
 	if err != nil || !changed || canceled.Status != ProviderIntentCanceled || canceled.CanceledAt == nil {
 		t.Fatalf("cancel changed=%v intent=%+v err=%v", changed, canceled, err)
 	}
-	if _, err := store.ResolveProviderIntentByProviderReference(ctx, ProviderStripe, bound.ProviderReference, now.Add(8 * time.Second)); !errors.Is(err, ErrConflict) {
+	if _, err := store.ResolveProviderIntentByProviderReference(ctx, ProviderStripe, bound.ProviderReference, now.Add(8*time.Second)); !errors.Is(err, ErrConflict) {
 		t.Fatalf("canceled intent should fail closed, err=%v", err)
 	}
 
