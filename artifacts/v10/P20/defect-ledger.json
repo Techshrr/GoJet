@@ -995,7 +995,29 @@
       "closed_at": "2026-09-07T14:57:54Z"
     }
   ],
-  "decision_required": [],
+  "decision_required": [
+    {
+      "id": "P20-DR001",
+      "title": "Production payment callback protocol authority",
+      "case": "P20-T021",
+      "issue": 116,
+      "blocking_defect": "P20-D016",
+      "release_blocking": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "status": "OPEN",
+      "opened_at": "2026-09-07T19:42:35Z",
+      "decision": "Freeze provider-specific production callback/settlement protocol, normalization, ACK and server-side configuration authority before P20-D016 remediation can complete.",
+      "known_authority": {
+        "epay": "Rainbow Epay / 彩虹易支付; V1-compatible GET notify + MD5 production slice proven but not merged",
+        "crypto": "USDT TRC20 on TRON; safe order/payment-intent correlation and settlement authority remain unresolved"
+      },
+      "disposition": "OPEN — P20-D016/P20-T021 blocked until #116 is fully resolved, remaining production provider authority is frozen, bounded remediation is complete, and formal same-head closure proves decision_required=0."
+    }
+  ],
   "rules": {
     "p0_open_max": 0,
     "p1_open_max": 0,
@@ -1003,5 +1025,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D014 are formally closed. P20-D015 and P20-D016 are open P1 blockers in the frozen P20-T021 Billing workflow: D015 customer-session composition is product-remediated but remains open until formal T021 closure, while D016 records the next fail-fast production callback-verifier boundary. P20-T021 cannot pass and P20-T022+ are forbidden until all T021 blockers are remediated and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0."
+  "note": "P20-D001 through P20-D014 are formally closed. P20-D015 and P20-D016 remain open P1 blockers in P20-T021. P20-DR001 (#116) is an explicit release-blocking DECISION REQUIRED for incomplete production payment-provider protocol/configuration authority; the Rainbow Epay slice has separate exact-head pre-merge authority but does not resolve D016/DR001 globally. P20-T021 cannot pass and P20-T022+ are forbidden until all T021 blockers are remediated and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0."
 }
