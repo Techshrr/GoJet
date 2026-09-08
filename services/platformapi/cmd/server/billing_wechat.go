@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rsa"
@@ -23,9 +24,9 @@ import (
 )
 
 const (
-	wechatSignatureTolerance          = 300 * time.Second
+	wechatSignatureTolerance         = 300 * time.Second
 	maxWeChatPlatformKeysConfigBytes = 256 << 10
-	wechatSignatureTypeRSA2048        = "WECHATPAY2-SHA256-RSA2048"
+	wechatSignatureTypeRSA2048       = "WECHATPAY2-SHA256-RSA2048"
 )
 
 type wechatProviderIntentResolver interface {
@@ -42,11 +43,11 @@ type wechatCallbackVerifier struct {
 }
 
 type wechatCallbackEnvelope struct {
-	ID           string                 `json:"id"`
-	CreateTime   string                 `json:"create_time"`
-	ResourceType string                 `json:"resource_type"`
-	EventType    string                 `json:"event_type"`
-	Summary      string                 `json:"summary"`
+	ID           string                  `json:"id"`
+	CreateTime   string                  `json:"create_time"`
+	ResourceType string                  `json:"resource_type"`
+	EventType    string                  `json:"event_type"`
+	Summary      string                  `json:"summary"`
 	Resource     wechatEncryptedResource `json:"resource"`
 }
 
@@ -234,12 +235,8 @@ func verifyWeChatSignature(raw []byte, timestampRaw, nonce, signature, serial st
 	}
 	message := timestampRaw + "\n" + nonce + "\n" + string(raw) + "\n"
 	digest := sha256.Sum256([]byte(message))
-	return rsa.VerifyPKCS1v15(publicKey, cryptoHashSHA256, digest[:], decodedSignature) == nil
+	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, digest[:], decodedSignature) == nil
 }
-
-// cryptoHashSHA256 is kept as a package constant so the verifier's exact
-// SHA-256/RSA PKCS#1 v1.5 protocol is explicit at the call site.
-const cryptoHashSHA256 = 5 // crypto.SHA256
 
 func decryptWeChatResource(resource wechatEncryptedResource, apiV3Key []byte) ([]byte, error) {
 	if resource.Algorithm != "AEAD_AES_256_GCM" || len(apiV3Key) != 32 || resource.Nonce == "" || resource.Ciphertext == "" {
