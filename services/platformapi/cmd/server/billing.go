@@ -129,6 +129,11 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	}
 	var productionEpayCallback http.Handler
 	if !testAuth {
+		dispatcher, err := buildProductionBillingCallbackDispatcher(store)
+		if err != nil {
+			return nil, false, err
+		}
+		callbackVerifier = dispatcher
 		handler, err := buildProductionEpayCallbackHandler(store)
 		if err != nil {
 			return nil, false, err
