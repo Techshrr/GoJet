@@ -127,6 +127,14 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		}
 		callbackVerifier = deterministicBillingCallbackVerifier{verifier: billing.DeterministicTestVerifier{Secrets: secrets}}
 	}
+	var productionEpayCallback http.Handler
+	if !testAuth {
+		handler, err := buildProductionEpayCallbackHandler(store)
+		if err != nil {
+			return nil, false, err
+		}
+		productionEpayCallback = handler
+	}
 	api := billing.NewAPI(
 		store,
 		principalResolver,
@@ -146,6 +154,9 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	}
 	combined := http.NewServeMux()
 	combined.Handle("GET /api/workspaces/{workspaceId}/billing", billing.NewWorkspaceBillingSummaryHandler(store, principalResolver, membershipResolver))
+	if productionEpayCallback != nil {
+		combined.Handle("GET /api/payments/callbacks/epay", productionEpayCallback)
+	}
 	combined.Handle("/", api.Handler())
 	return combined, true, nil
 }
@@ -170,6 +181,7 @@ func mountBillingRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/admin/fx",
 		"PUT /api/admin/fx/{base}/{quote}",
 		"POST /api/admin/fx/{base}/{quote}/provider-error",
+		"GET /api/payments/callbacks/epay",
 		"POST /api/payments/callbacks/{provider}",
 	}
 	for _, pattern := range patterns {
