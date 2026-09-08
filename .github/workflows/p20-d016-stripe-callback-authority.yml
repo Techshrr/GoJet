@@ -1,0 +1,394 @@
+name: P20 D016 Stripe Callback Authority
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-stripe-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-stripe-callback-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-stripe-callback-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stripe-callback-authority:
+    name: P20-D016 Stripe production callback authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+      GOJET_BILLING_STRIPE_ENABLED: '1'
+      GOJET_BILLING_STRIPE_LIVEMODE: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_RATE_LIMIT: '6'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_AUTH_GRANT_KEY_ID: p20-d016-stripe-grant-v1
+      GOJET_OAUTH_KEY_ID: p20-d016-stripe-oauth-v1
+
+    steps:
+      - name: Checkout exact Stripe authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare masked ephemeral CI cryptographic material
+        shell: bash
+        run: |
+          set -euo pipefail
+          mask_env() {
+            local name="$1"
+            local value="$2"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+          mask_env GOJET_AUTH_CSRF_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_AUTH_GRANT_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_OAUTH_KEY_HEX "$(openssl rand -hex 32)"
+          mask_env GOJET_BILLING_STRIPE_WEBHOOK_SECRET "whsec_$(openssl rand -hex 32)"
+          mask_env GOJET_BILLING_STRIPE_SECRET_KEY "sk_ci_$(openssl rand -hex 32)"
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Prove exact-head lineage and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head='afd8d055ff937fdce10ebf9ffcd8138e3440fa1d'
+          git merge-base --is-ancestor "$product_head" HEAD
+          mapfile -t delta < <(git diff --name-only "$product_head" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-d016-stripe-callback-authority.yml'
+
+          test "$(go env GOVERSION)" = 'go1.26.5'
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+
+          gofmt -d \
+            internal/billing/provider_intents.go \
+            internal/billing/provider_intents_test.go \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_stripe.go \
+            services/platformapi/cmd/server/billing_stripe_test.go \
+            | tee /tmp/p20-d016-stripe-gofmt.diff
+          test ! -s /tmp/p20-d016-stripe-gofmt.diff
+
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-stripe-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-stripe-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations 000001 through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          mapfile -t migrations < <(printf '%s\n' migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql | sort)
+          test "${#migrations[@]}" -eq 30
+          test "${migrations[29]}" = 'migrations/000030_billing_provider_intents.sql'
+          for migration in "${migrations[@]}"; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          test "$(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'billing_provider_intents'")" = 'billing_provider_intents'
+
+      - name: Seed server-authoritative Stripe billing fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          INSERT INTO workspaces (id,name,status,version,created_by)
+          VALUES ('ws_stripe_ci','Stripe CI','active',1,'ci-owner');
+
+          INSERT INTO workspace_memberships (workspace_id,user_id,email,display_name,role)
+          VALUES ('ws_stripe_ci','ci-owner','ci-owner@example.test','CI Owner','owner');
+
+          INSERT INTO billing_plans (id,code,name,status,currency,amount_minor,billing_period,version)
+          VALUES (900001,'stripe-ci','Stripe CI','active','USD',1234,'monthly',1);
+
+          INSERT INTO billing_plan_entitlements (plan_id,capability,limit_value,unit,source_version)
+          VALUES (900001,'custom_domains',3,'count',1);
+
+          INSERT INTO billing_orders
+          (id,workspace_id,plan_id,kind,currency,amount_minor,status,idempotency_key_hash)
+          VALUES
+          ('ord_stripe_ci','ws_stripe_ci',900001,'new','USD',1234,'pending',UNHEX(SHA2('stripe-ci-order-idempotency',256)));
+
+          INSERT INTO billing_invoices
+          (id,workspace_id,order_id,currency,amount_minor,status,issued_at)
+          VALUES
+          ('inv_stripe_ci','ws_stripe_ci','ord_stripe_ci','USD',1234,'open',UTC_TIMESTAMP(6));
+
+          INSERT INTO billing_provider_intents
+          (id,workspace_id,order_id,provider,merchant_reference,provider_reference,settlement_asset_kind,settlement_asset,settlement_amount_units,settlement_scale,status,expires_at)
+          VALUES
+          ('pint_stripe_ci','ws_stripe_ci','ord_stripe_ci','stripe','gj_stripe_ci','pi_stripe_ci','fiat','USD',1234,NULL,'active',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 1 DAY));
+          SQL
+
+      - name: Build and start exact-head production-mode platform API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-stripe
+          go build -trimpath -o /tmp/gojet-p20-d016-stripe-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-stripe-platformapi > artifacts/v10/P20/runtime/d016-stripe/native-platformapi.sha256
+          /tmp/gojet-p20-d016-stripe-platformapi > /tmp/p20-d016-stripe-platformapi.log 2>&1 &
+          echo $! > /tmp/p20-d016-stripe-platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" = 40 ]; then
+              sed -E 's/(whsec_|sk_ci_)[A-Za-z0-9._:-]+/[REDACTED]/g' /tmp/p20-d016-stripe-platformapi.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Exercise signed Stripe callback through real HTTP and MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          base='http://127.0.0.1:18081/api/payments/callbacks/stripe'
+          secret=os.environ['GOJET_BILLING_STRIPE_WEBHOOK_SECRET'].encode()
+          created=int(time.time())
+
+          def payload(event_id,event_type,amount=1234,currency='usd'):
+              value={
+                  'id':event_id,
+                  'object':'event',
+                  'type':event_type,
+                  'livemode':False,
+                  'created':created,
+                  'data':{'object':{
+                      'id':'pi_stripe_ci',
+                      'object':'payment_intent',
+                      'amount':amount,
+                      'currency':currency,
+                      'status':'succeeded',
+                  }},
+              }
+              return json.dumps(value,separators=(',',':'),sort_keys=False).encode()
+
+          def signed_post(raw,timestamp):
+              signed=str(timestamp).encode()+b'.'+raw
+              sig=hmac.new(secret,signed,hashlib.sha256).hexdigest()
+              req=urllib.request.Request(base,data=raw,method='POST',headers={
+                  'Content-Type':'application/json',
+                  'Stripe-Signature':f't={timestamp},v1={sig}',
+              })
+              try:
+                  with urllib.request.urlopen(req,timeout=10) as resp:
+                      return resp.status,resp.read()
+              except urllib.error.HTTPError as exc:
+                  return exc.code,exc.read()
+
+          paid=payload('evt_stripe_ci_paid','payment_intent.succeeded')
+          status_paid,body_paid=signed_post(paid,int(time.time()))
+          assert status_paid==200 and body_paid==b'',(status_paid,len(body_paid))
+
+          status_duplicate,body_duplicate=signed_post(paid,int(time.time()))
+          assert status_duplicate==200 and body_duplicate==b'',(status_duplicate,len(body_duplicate))
+
+          ignored=payload('evt_stripe_ci_ignored','charge.refunded')
+          status_ignored,body_ignored=signed_post(ignored,int(time.time()))
+          assert status_ignored==200 and body_ignored==b'',(status_ignored,len(body_ignored))
+
+          bad_amount=payload('evt_stripe_ci_bad_amount','payment_intent.succeeded',amount=9999)
+          status_bad_amount,_=signed_post(bad_amount,int(time.time()))
+          assert status_bad_amount==401,status_bad_amount
+
+          stale=payload('evt_stripe_ci_stale','payment_intent.succeeded')
+          status_stale,_=signed_post(stale,int(time.time())-360)
+          assert status_stale==401,status_stale
+
+          with open('/tmp/p20-d016-stripe-http.json','w',encoding='utf-8') as f:
+              json.dump({
+                  'paid_status':status_paid,
+                  'duplicate_status':status_duplicate,
+                  'ignored_status':status_ignored,
+                  'bad_amount_status':status_bad_amount,
+                  'stale_status':status_stale,
+              },f,sort_keys=True)
+          PY
+
+      - name: Prove durable settlement, idempotency and entitlement safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysqlq() {
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "$1"
+          }
+
+          test "$(mysqlq "SELECT status FROM billing_orders WHERE id='ord_stripe_ci'")" = 'paid'
+          test "$(mysqlq "SELECT CONCAT(status,':',paid_at IS NOT NULL) FROM billing_invoices WHERE id='inv_stripe_ci'")" = 'paid:1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='stripe' AND provider_transaction_id='pi_stripe_ci' AND order_id='ord_stripe_ci' AND currency='USD' AND amount_minor=1234 AND status='paid'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='stripe'")" = '1'
+          test "$(mysqlq "SELECT CONCAT(provider_event_id,':',status) FROM payment_callback_events WHERE provider='stripe'")" = 'evt_stripe_ci_paid:processed'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_subscriptions WHERE workspace_id='ws_stripe_ci' AND plan_id=900001 AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM entitlement_grants WHERE workspace_id='ws_stripe_ci' AND capability='custom_domains' AND source_type='billing' AND limit_value=3 AND revoked_at IS NULL")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM custom_domain_entitlement_sources WHERE workspace_id='ws_stripe_ci' AND source='plan' AND source_key='p13:billing' AND status='active' AND domain_limit=3")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_notifications WHERE workspace_id='ws_stripe_ci' AND category='billing' AND event_key='payment_succeeded' AND resource_id='ord_stripe_ci'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_provider_intents WHERE id='pint_stripe_ci' AND provider='stripe' AND provider_reference='pi_stripe_ci' AND settlement_asset_kind='fiat' AND settlement_asset='USD' AND settlement_amount_units=1234 AND settlement_scale IS NULL AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_orders WHERE id='ord_stripe_ci' AND status='refunded'")" = '0'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='stripe' AND status='refunded'")" = '0'
+
+          cp /tmp/p20-d016-stripe-contract.json artifacts/v10/P20/runtime/d016-stripe/contract.json
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          http=json.load(open('/tmp/p20-d016-stripe-http.json',encoding='utf-8'))
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          evidence={
+              'schema':'gojet.p20-d016-stripe-authority.v1',
+              'node':'P20',
+              'case':'P20-D016-STRIPE',
+              'status':'PASS',
+              'implementation_commit':head,
+              'product_head':'afd8d055ff937fdce10ebf9ffcd8138e3440fa1d',
+              'provider':'stripe',
+              'production_mode':True,
+              'formal_p20_t021_claim':False,
+              'raw_body_recorded':False,
+              'signature_recorded':False,
+              'secret_material_recorded':False,
+              'live_callback':http,
+              'durable':{
+                  'order_status':'paid',
+                  'invoice_status':'paid',
+                  'transaction_count':1,
+                  'callback_event_count':1,
+                  'active_subscription_count':1,
+                  'active_billing_entitlement_count':1,
+                  'active_domain_plan_source_count':1,
+                  'payment_notification_count':1,
+                  'active_provider_intent_count':1,
+                  'refunded_order_count':0,
+                  'refunded_transaction_count':0,
+              },
+              'errors':[],
+          }
+          path=Path('artifacts/v10/P20/runtime/d016-stripe/authority.json')
+          path.write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Enforce secret-safe authority artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='artifacts/v10/P20/runtime/d016-stripe'
+          if grep -R -n -E 'whsec_|sk_ci_|Stripe-Signature|v1=[0-9a-fA-F]{64}' "$evidence"; then
+            echo 'secret-like Stripe material found in evidence'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/runtime/d016-stripe/authority.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['formal_p20_t021_claim'] is False,data
+          assert data['production_mode'] is True,data
+          assert data['raw_body_recorded'] is False,data
+          assert data['signature_recorded'] is False,data
+          assert data['secret_material_recorded'] is False,data
+          PY
+
+      - name: Stop exact-head platform API
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/p20-d016-stripe-platformapi.pid ]; then
+            kill "$(cat /tmp/p20-d016-stripe-platformapi.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload Stripe authority evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-stripe-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/runtime/d016-stripe/authority.json
+            artifacts/v10/P20/runtime/d016-stripe/contract.json
+            artifacts/v10/P20/runtime/d016-stripe/native-platformapi.sha256
