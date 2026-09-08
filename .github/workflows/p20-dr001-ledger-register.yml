@@ -1,0 +1,134 @@
+name: P20 DR001 Ledger Registration
+
+on:
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+    paths:
+      - '.github/workflows/p20-dr001-ledger-register.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p20-dr001-ledger-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  register:
+    name: Register P20-DR001 as canonical decision blocker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact governance head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Prove governance-only staging boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='775c24bd2ab4e0f81c8db4437b53843d824ea35e'
+          git merge-base --is-ancestor "$base" HEAD
+          mapfile -t delta < <(git diff --name-only "$base" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-dr001-ledger-register.yml'
+
+      - name: Register decision in canonical ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data.get('schema') == 'gojet.p20-defect-ledger.v1', data.get('schema')
+          rows = data.setdefault('decision_required', [])
+          assert not any(row.get('id') == 'P20-DR001' for row in rows), rows
+          rows.append({
+              'id': 'P20-DR001',
+              'title': 'Production payment callback protocol authority',
+              'case': 'P20-T021',
+              'issue': 116,
+              'blocking_defect': 'P20-D016',
+              'release_blocking': True,
+              'affected_gates': ['G3', 'G6', 'G10'],
+              'status': 'OPEN',
+              'opened_at': '2026-09-07T19:42:35Z',
+              'decision': 'Freeze provider-specific production callback/settlement protocol, normalization, ACK and server-side configuration authority before P20-D016 remediation can complete.',
+              'known_authority': {
+                  'epay': 'Rainbow Epay / 彩虹易支付; V1-compatible GET notify + MD5 production slice proven but not merged',
+                  'crypto': 'USDT TRC20 on TRON; safe order/payment-intent correlation and settlement authority remain unresolved'
+              },
+              'disposition': 'OPEN — P20-D016/P20-T021 blocked until #116 is fully resolved, remaining production provider authority is frozen, bounded remediation is complete, and formal same-head closure proves decision_required=0.'
+          })
+          data['note'] = (
+              'P20-D001 through P20-D014 are formally closed. P20-D015 and P20-D016 remain open P1 blockers in P20-T021. '
+              'P20-DR001 (#116) is an explicit release-blocking DECISION REQUIRED for incomplete production payment-provider protocol/configuration authority; '
+              'the Rainbow Epay slice has separate exact-head pre-merge authority but does not resolve D016/DR001 globally. '
+              'P20-T021 cannot pass and P20-T022+ are forbidden until all T021 blockers are remediated and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0.'
+          )
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate canonical blocker state and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/defect-ledger.json',encoding='utf-8'))
+          p1=sorted(row['id'] for row in data['open'] if row.get('severity')=='P1')
+          dr=[row for row in data['decision_required'] if row.get('status')=='OPEN']
+          assert p1 == ['P20-D015','P20-D016'], p1
+          assert len(dr) == 1 and dr[0]['id'] == 'P20-DR001' and dr[0]['issue'] == 116, dr
+          assert dr[0]['blocking_defect'] == 'P20-D016', dr[0]
+          assert data['rules']['p1_open_max'] == 0 and data['rules']['decision_required_max'] == 0, data['rules']
+          PY
+
+          set +e
+          python3 scripts/p20/defect_cases.py > /tmp/p20-dr001-defects.json
+          defect_rc=$?
+          set -e
+          test "$defect_rc" -ne 0
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-dr001-defects.json',encoding='utf-8'))
+          assert data['status']=='FAIL', data
+          details=data.get('details',{})
+          assert details.get('p1_open') == 2, data
+          assert details.get('decision_required') == 1, data
+          blockers=set(details.get('blockers',[]))
+          assert {'P20-D015','P20-D016','P20-DR001'}.issubset(blockers), data
+          PY
+
+          python3 scripts/p20/validate_contract.py > /tmp/p20-dr001-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-dr001-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+      - name: Self-clean and commit ledger-only governance state
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='775c24bd2ab4e0f81c8db4437b53843d824ea35e'
+          rm .github/workflows/p20-dr001-ledger-register.yml
+          git config user.name 'Ethan H.'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json .github/workflows/p20-dr001-ledger-register.yml
+          git commit -m 'P20 DR001: register production payment protocol decision blocker'
+          mapfile -t final_delta < <(git diff --name-only "$base" HEAD | sort)
+          test "${#final_delta[@]}" -eq 1
+          test "${final_delta[0]}" = 'artifacts/v10/P20/defect-ledger.json'
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
