@@ -25,7 +25,7 @@ const (
 	tronGridSolidifiedReceiptPath = "/walletsolidity/gettransactioninfobyid"
 	tronUSDTContractLogAddress    = "a614f803b6fd780986a42c78ec9c7f77e6ded13c"
 	tronTransferTopic             = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-	cryptoUSDTAsset               = "USDT_TRC20"
+	cryptoUSDTAsset               = "USDTTRC20"
 	cryptoUSDTScale               = uint8(6)
 	maxTronReceiptResponseBytes   = 2 << 20
 )
