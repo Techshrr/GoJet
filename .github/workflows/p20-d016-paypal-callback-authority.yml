@@ -1,0 +1,324 @@
+name: P20 D016 PayPal Callback Authority
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-paypal-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-paypal-callback-authority.yml'
+      - 'services/platformapi/cmd/server/billing_paypal_authority_test.go'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-paypal-callback-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  paypal-callback-authority:
+    name: P20-D016 PayPal payment-side callback authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      P20_D016_PRODUCT_HEAD: ${{ github.event.pull_request.base.sha }}
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - name: Checkout exact PayPal authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare masked ephemeral PayPal fixture credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mask_env() {
+            local name="$1"
+            local value="$2"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+          mask_env P20_PAYPAL_CLIENT_ID "p20-paypal-ci-$(openssl rand -hex 8)"
+          mask_env P20_PAYPAL_CLIENT_SECRET "$(openssl rand -hex 32)"
+          printf '%s=%s\n' P20_PAYPAL_WEBHOOK_ID 'WH-P20-PAYPAL-CI-001' >> "$GITHUB_ENV"
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Prove exact-head lineage, formatting, tests and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$P20_D016_PRODUCT_HEAD"
+          test "$P20_D016_PRODUCT_HEAD" = 'a0a82c522e5ca3dfeb185a781a4b2898ca5ebe82'
+          git merge-base --is-ancestor "$P20_D016_PRODUCT_HEAD" HEAD
+          mapfile -t delta < <(git diff --name-only "$P20_D016_PRODUCT_HEAD" HEAD | sort)
+          test "${#delta[@]}" -eq 2
+          test "${delta[0]}" = '.github/workflows/p20-d016-paypal-callback-authority.yml'
+          test "${delta[1]}" = 'services/platformapi/cmd/server/billing_paypal_authority_test.go'
+
+          test "$(go env GOVERSION)" = 'go1.26.5'
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+
+          gofmt -d \
+            internal/billing/provider_intents.go \
+            internal/billing/provider_intents_test.go \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_stripe.go \
+            services/platformapi/cmd/server/billing_stripe_test.go \
+            services/platformapi/cmd/server/billing_wechat.go \
+            services/platformapi/cmd/server/billing_wechat_test.go \
+            services/platformapi/cmd/server/billing_paypal.go \
+            services/platformapi/cmd/server/billing_paypal_test.go \
+            services/platformapi/cmd/server/billing_paypal_authority_test.go \
+            | tee /tmp/p20-d016-paypal-gofmt.diff
+          test ! -s /tmp/p20-d016-paypal-gofmt.diff
+
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-paypal-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-paypal-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations 000001 through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          mapfile -t migrations < <(printf '%s\n' migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql | sort)
+          test "${#migrations[@]}" -eq 30
+          test "${migrations[29]}" = 'migrations/000030_billing_provider_intents.sql'
+          for migration in "${migrations[@]}"; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          test "$(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'billing_provider_intents'")" = 'billing_provider_intents'
+
+      - name: Seed server-authoritative PayPal billing fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          INSERT INTO workspaces (id,name,status,version,created_by)
+          VALUES ('ws_paypal_ci','PayPal CI','active',1,'ci-owner');
+
+          INSERT INTO workspace_memberships (workspace_id,user_id,email,display_name,role)
+          VALUES ('ws_paypal_ci','ci-owner','ci-owner@example.test','CI Owner','owner');
+
+          INSERT INTO billing_plans (id,code,name,status,currency,amount_minor,billing_period,version)
+          VALUES (900003,'paypal-ci','PayPal CI','active','USD',1234,'monthly',1);
+
+          INSERT INTO billing_plan_entitlements (plan_id,capability,limit_value,unit,source_version)
+          VALUES (900003,'custom_domains',5,'count',1);
+
+          INSERT INTO billing_orders
+          (id,workspace_id,plan_id,kind,currency,amount_minor,status,idempotency_key_hash)
+          VALUES
+          ('ord_paypal_ci','ws_paypal_ci',900003,'new','USD',1234,'pending',UNHEX(SHA2('paypal-ci-order-idempotency',256)));
+
+          INSERT INTO billing_invoices
+          (id,workspace_id,order_id,currency,amount_minor,status,issued_at)
+          VALUES
+          ('inv_paypal_ci','ws_paypal_ci','ord_paypal_ci','USD',1234,'open',UTC_TIMESTAMP(6));
+
+          INSERT INTO billing_provider_intents
+          (id,workspace_id,order_id,provider,merchant_reference,provider_reference,settlement_asset_kind,settlement_asset,settlement_amount_units,settlement_scale,status,expires_at)
+          VALUES
+          ('pint_paypal_ci','ws_paypal_ci','ord_paypal_ci','paypal','gj_paypal_ci','5O190127TN364715T','fiat','USD',1234,NULL,'active',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 1 DAY));
+          SQL
+
+      - name: Build exact-head production server and exercise PayPal authority runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-paypal
+          go build -trimpath -o /tmp/gojet-p20-d016-paypal-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-paypal-platformapi > artifacts/v10/P20/runtime/d016-paypal/native-platformapi.sha256
+
+          export GOJET_BILLING_PAYPAL_ENABLED=1
+          export GOJET_BILLING_PAYPAL_ENV=sandbox
+          export GOJET_BILLING_PAYPAL_CLIENT_ID="$P20_PAYPAL_CLIENT_ID"
+          export GOJET_BILLING_PAYPAL_CLIENT_SECRET="$P20_PAYPAL_CLIENT_SECRET"
+          export GOJET_BILLING_PAYPAL_WEBHOOK_ID="$P20_PAYPAL_WEBHOOK_ID"
+          export GOJET_P20_D016_PAYPAL_AUTHORITY=1
+          export GOJET_P20_D016_PAYPAL_RUNTIME_JSON=/tmp/p20-d016-paypal-runtime.json
+
+          go test -count=1 -run '^TestP20D016PayPalCallbackAuthority$' -v ./services/platformapi/cmd/server
+          test -s /tmp/p20-d016-paypal-runtime.json
+          cp /tmp/p20-d016-paypal-runtime.json artifacts/v10/P20/runtime/d016-paypal/runtime.json
+
+      - name: Independently prove durable settlement and refund-ignore safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysqlq() {
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "$1"
+          }
+
+          test "$(mysqlq "SELECT status FROM billing_orders WHERE id='ord_paypal_ci'")" = 'paid'
+          test "$(mysqlq "SELECT CONCAT(status,':',paid_at IS NOT NULL) FROM billing_invoices WHERE id='inv_paypal_ci'")" = 'paid:1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='paypal' AND provider_transaction_id='CAPTURE-PAYPAL-CI-001' AND order_id='ord_paypal_ci' AND currency='USD' AND amount_minor=1234 AND status='paid'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='paypal' AND provider_event_id='WH-P20-PAYPAL-CI-PAID' AND status='processed'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='paypal'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_subscriptions WHERE workspace_id='ws_paypal_ci' AND plan_id=900003 AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM entitlement_grants WHERE workspace_id='ws_paypal_ci' AND capability='custom_domains' AND source_type='billing' AND limit_value=5 AND revoked_at IS NULL")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM custom_domain_entitlement_sources WHERE workspace_id='ws_paypal_ci' AND source='plan' AND source_key='p13:billing' AND status='active' AND domain_limit=5")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_notifications WHERE workspace_id='ws_paypal_ci' AND category='billing' AND event_key='payment_succeeded' AND resource_id='ord_paypal_ci'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_provider_intents WHERE id='pint_paypal_ci' AND provider='paypal' AND provider_reference='5O190127TN364715T' AND settlement_asset_kind='fiat' AND settlement_asset='USD' AND settlement_amount_units=1234 AND settlement_scale IS NULL AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_orders WHERE id='ord_paypal_ci' AND status='refunded'")" = '0'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='paypal' AND status='refunded'")" = '0'
+
+      - name: Build bounded PayPal authority evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/p20-d016-paypal-contract.json artifacts/v10/P20/runtime/d016-paypal/contract.json
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          runtime=json.load(open('artifacts/v10/P20/runtime/d016-paypal/runtime.json',encoding='utf-8'))
+          assert runtime['paid_status']==200,runtime
+          assert runtime['duplicate_status']==200,runtime
+          assert runtime['refund_ignored_status']==200,runtime
+          assert runtime['bad_amount_status']==401,runtime
+          assert runtime['verification_failure_status']==401,runtime
+          assert runtime['oauth_calls']==5 and runtime['verification_calls']==5,runtime
+          assert runtime['fixed_api_origin']=='https://api-m.sandbox.paypal.com',runtime
+          assert runtime['production_builder'] is True,runtime
+          assert runtime['live_paypal_network'] is False,runtime
+          assert runtime['provider_postback_fixture'] is True,runtime
+          durable=runtime['durable']
+          assert durable['order_status']=='paid' and durable['invoice_status']=='paid',durable
+          assert durable['invoice_paid_at_present'] is True,durable
+          for key in (
+              'transaction_count','callback_event_count','active_subscription_count',
+              'active_entitlement_count','active_domain_source_count',
+              'payment_notification_count','active_provider_intent_count',
+          ):
+              assert durable[key]==1,(key,durable)
+          for key in ('refunded_order_count','refunded_transaction_count','non_paid_callback_event_count'):
+              assert durable[key]==0,(key,durable)
+
+          evidence={
+              'schema':'gojet.p20-d016-paypal-authority.v1',
+              'node':'P20',
+              'case':'P20-D016-PAYPAL',
+              'status':'PASS',
+              'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'product_head':os.environ['P20_D016_PRODUCT_HEAD'],
+              'provider':'paypal',
+              'payment_side_only':True,
+              'production_callback_builder':True,
+              'production_server_build':True,
+              'fixed_paypal_environment':'sandbox',
+              'fixed_paypal_api_origin':'https://api-m.sandbox.paypal.com',
+              'live_paypal_network':False,
+              'provider_postback_fixture':True,
+              'test_auth_enabled':False,
+              'deterministic_test_callback_verifier_enabled':False,
+              'formal_p20_t021_claim':False,
+              'refund_settlement_authorized':False,
+              'raw_webhook_recorded':False,
+              'oauth_secret_recorded':False,
+              'access_token_recorded':False,
+              'runtime':runtime,
+              'errors':[],
+          }
+          Path('artifacts/v10/P20/runtime/d016-paypal/authority.json').write_text(
+              json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8'
+          )
+          PY
+
+      - name: Enforce secret-safe PayPal authority artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='artifacts/v10/P20/runtime/d016-paypal'
+          if grep -R -n -F "$P20_PAYPAL_CLIENT_SECRET" "$evidence"; then
+            echo 'PayPal client secret found in evidence'
+            exit 1
+          fi
+          if grep -R -n -E 'p20-paypal-ci-access-token|Authorization:?[[:space:]]*Bearer|"webhook_event"|PayPal-Transmission-Sig|client_secret' "$evidence"; then
+            echo 'secret/raw PayPal callback material found in evidence'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/runtime/d016-paypal/authority.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['formal_p20_t021_claim'] is False,data
+          assert data['payment_side_only'] is True,data
+          assert data['refund_settlement_authorized'] is False,data
+          assert data['live_paypal_network'] is False,data
+          assert data['provider_postback_fixture'] is True,data
+          assert data['raw_webhook_recorded'] is False,data
+          assert data['oauth_secret_recorded'] is False,data
+          assert data['access_token_recorded'] is False,data
+          PY
+
+      - name: Upload PayPal authority evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-paypal-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/v10/P20/runtime/d016-paypal/authority.json
+            artifacts/v10/P20/runtime/d016-paypal/runtime.json
+            artifacts/v10/P20/runtime/d016-paypal/contract.json
+            artifacts/v10/P20/runtime/d016-paypal/native-platformapi.sha256
+          if-no-files-found: error
+          retention-days: 30
