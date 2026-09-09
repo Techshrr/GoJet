@@ -287,7 +287,11 @@ func TestPayPalBindingAndMoneyFailuresFailClosed(t *testing.T) {
 		{name: "lower currency", currency: "usd", value: "12.34", intent: paypalIntentForTest(), calls: 0, want: billing.ErrCallbackUnauthorized},
 		{name: "bound amount", currency: "USD", value: "12.34", intent: func() billing.ProviderIntent { v := paypalIntentForTest(); v.SettlementAmountUnits = 9999; return v }(), calls: 1, want: billing.ErrCallbackUnauthorized},
 		{name: "bound currency", currency: "USD", value: "12.34", intent: func() billing.ProviderIntent { v := paypalIntentForTest(); v.SettlementAsset = "EUR"; return v }(), calls: 1, want: billing.ErrCallbackUnauthorized},
-		{name: "bound provider", currency: "USD", value: "12.34", intent: func() billing.ProviderIntent { v := paypalIntentForTest(); v.Provider = billing.ProviderStripe; return v }(), calls: 1, want: billing.ErrCallbackUnauthorized},
+		{name: "bound provider", currency: "USD", value: "12.34", intent: func() billing.ProviderIntent {
+			v := paypalIntentForTest()
+			v.Provider = billing.ProviderStripe
+			return v
+		}(), calls: 1, want: billing.ErrCallbackUnauthorized},
 		{name: "missing binding", currency: "USD", value: "12.34", storeErr: billing.ErrNotFound, calls: 1, want: billing.ErrCallbackUnauthorized},
 		{name: "expired binding", currency: "USD", value: "12.34", storeErr: billing.ErrConflict, calls: 1, want: billing.ErrCallbackUnauthorized},
 		{name: "db unavailable", currency: "USD", value: "12.34", storeErr: errors.New("db unavailable"), calls: 1, want: billing.ErrCallbackUnavailable},
