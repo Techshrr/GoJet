@@ -139,6 +139,9 @@ jobs:
           INSERT INTO workspaces (id,name,status,version,created_by)
           VALUES ('ws_alipay_ci','Alipay CI','active',1,'ci-owner');
 
+          INSERT INTO workspace_memberships (workspace_id,user_id,email,display_name,role)
+          VALUES ('ws_alipay_ci','ci-owner','ci-owner@example.test','CI Owner','owner');
+
           INSERT INTO billing_plans (id,code,name,status,currency,amount_minor,billing_period,version)
           VALUES (900004,'alipay-ci','Alipay CI','active','CNY',1234,'monthly',1);
 
