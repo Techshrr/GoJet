@@ -169,6 +169,18 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 			productionDispatcher.adapters[billing.ProviderAlipay] = alipayVerifier
 			dispatcher = productionDispatcher
 		}
+		cryptoVerifier, enabled, err := buildProductionCryptoCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderCrypto] = cryptoVerifier
+			dispatcher = productionDispatcher
+		}
 		callbackVerifier = dispatcher
 		handler, err := buildProductionEpayCallbackHandler(store)
 		if err != nil {
