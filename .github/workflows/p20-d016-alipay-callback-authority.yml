@@ -1,0 +1,286 @@
+name: P20 D016 Alipay Callback Authority
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-alipay-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-alipay-callback-authority.yml'
+      - 'services/platformapi/cmd/server/billing_alipay_authority_test.go'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-alipay-callback-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  alipay-callback-authority:
+    name: P20-D016 Alipay payment-side callback authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      P20_D016_PRODUCT_HEAD: ${{ github.event.pull_request.base.sha }}
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '0'
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - name: Checkout exact Alipay authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native database client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Prove exact-head lineage, formatting, tests and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$P20_D016_PRODUCT_HEAD"
+          test "$P20_D016_PRODUCT_HEAD" = '8559ffdca0bb7d7e210aa19c552768efec610cbd'
+          git merge-base --is-ancestor "$P20_D016_PRODUCT_HEAD" HEAD
+          mapfile -t delta < <(git diff --name-only "$P20_D016_PRODUCT_HEAD" HEAD | sort)
+          test "${#delta[@]}" -eq 2
+          test "${delta[0]}" = '.github/workflows/p20-d016-alipay-callback-authority.yml'
+          test "${delta[1]}" = 'services/platformapi/cmd/server/billing_alipay_authority_test.go'
+
+          test "$(go env GOVERSION)" = 'go1.26.5'
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+
+          gofmt -d \
+            internal/billing/provider_intents.go \
+            internal/billing/provider_intents_test.go \
+            services/platformapi/cmd/server/billing.go \
+            services/platformapi/cmd/server/billing_stripe.go \
+            services/platformapi/cmd/server/billing_stripe_test.go \
+            services/platformapi/cmd/server/billing_wechat.go \
+            services/platformapi/cmd/server/billing_wechat_test.go \
+            services/platformapi/cmd/server/billing_paypal.go \
+            services/platformapi/cmd/server/billing_paypal_test.go \
+            services/platformapi/cmd/server/billing_alipay.go \
+            services/platformapi/cmd/server/billing_alipay_test.go \
+            services/platformapi/cmd/server/billing_alipay_authority_test.go \
+            | tee /tmp/p20-d016-alipay-gofmt.diff
+          test ! -s /tmp/p20-d016-alipay-gofmt.diff
+
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-alipay-contract.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-d016-alipay-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations 000001 through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          mapfile -t migrations < <(printf '%s\n' migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql | sort)
+          test "${#migrations[@]}" -eq 30
+          test "${migrations[29]}" = 'migrations/000030_billing_provider_intents.sql'
+          for migration in "${migrations[@]}"; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Seed server-authoritative Alipay billing fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test <<'SQL'
+          INSERT INTO workspaces (id,name,status,version,created_by)
+          VALUES ('ws_alipay_ci','Alipay CI','active',1,'ci-owner');
+
+          INSERT INTO billing_plans (id,code,name,status,currency,amount_minor,billing_period,version)
+          VALUES (900004,'alipay-ci','Alipay CI','active','CNY',1234,'monthly',1);
+
+          INSERT INTO billing_plan_entitlements (plan_id,capability,limit_value,unit,source_version)
+          VALUES (900004,'custom_domains',5,'count',1);
+
+          INSERT INTO billing_orders
+          (id,workspace_id,plan_id,kind,currency,amount_minor,status,idempotency_key_hash)
+          VALUES
+          ('ord_alipay_ci','ws_alipay_ci',900004,'new','CNY',1234,'pending',UNHEX(SHA2('alipay-ci-order-idempotency',256)));
+
+          INSERT INTO billing_invoices
+          (id,workspace_id,order_id,currency,amount_minor,status,issued_at)
+          VALUES
+          ('inv_alipay_ci','ws_alipay_ci','ord_alipay_ci','CNY',1234,'open',UTC_TIMESTAMP(6));
+          SQL
+
+      - name: Build exact-head production server and exercise Alipay authority runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-alipay
+          go build -trimpath -o /tmp/gojet-p20-d016-alipay-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-alipay-platformapi > artifacts/v10/P20/runtime/d016-alipay/native-platformapi.sha256
+
+          export GOJET_P20_D016_ALIPAY_AUTHORITY=1
+          export GOJET_P20_D016_ALIPAY_RUNTIME_JSON=/tmp/p20-d016-alipay-runtime.json
+          go test -count=1 -run '^TestP20D016AlipayCallbackAuthority$' -v ./services/platformapi/cmd/server
+          test -s /tmp/p20-d016-alipay-runtime.json
+          cp /tmp/p20-d016-alipay-runtime.json artifacts/v10/P20/runtime/d016-alipay/runtime.json
+
+      - name: Independently prove durable settlement and refund-ignore safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysqlq() {
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "$1"
+          }
+          test "$(mysqlq "SELECT status FROM billing_orders WHERE id='ord_alipay_ci'")" = 'paid'
+          test "$(mysqlq "SELECT CONCAT(status,':',paid_at IS NOT NULL) FROM billing_invoices WHERE id='inv_alipay_ci'")" = 'paid:1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='alipay' AND provider_transaction_id='2026090922001400010000000001' AND order_id='ord_alipay_ci' AND currency='CNY' AND amount_minor=1234 AND status='paid'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='alipay' AND status='processed'")" = '2'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_subscriptions WHERE workspace_id='ws_alipay_ci' AND plan_id=900004 AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM entitlement_grants WHERE workspace_id='ws_alipay_ci' AND capability='custom_domains' AND source_type='billing' AND limit_value=5 AND revoked_at IS NULL")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM custom_domain_entitlement_sources WHERE workspace_id='ws_alipay_ci' AND source='plan' AND source_key='p13:billing' AND status='active' AND domain_limit=5")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM workspace_notifications WHERE workspace_id='ws_alipay_ci' AND category='billing' AND event_key='payment_succeeded' AND resource_id='ord_alipay_ci'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_provider_intents WHERE provider='alipay' AND order_id='ord_alipay_ci' AND settlement_asset_kind='fiat' AND settlement_asset='CNY' AND settlement_amount_units=1234 AND settlement_scale IS NULL AND status='active'")" = '1'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_orders WHERE id='ord_alipay_ci' AND status='refunded'")" = '0'
+          test "$(mysqlq "SELECT COUNT(*) FROM billing_transactions WHERE provider='alipay' AND status='refunded'")" = '0'
+
+      - name: Build bounded Alipay authority evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/p20-d016-alipay-contract.json artifacts/v10/P20/runtime/d016-alipay/contract.json
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          runtime=json.load(open('artifacts/v10/P20/runtime/d016-alipay/runtime.json',encoding='utf-8'))
+          assert runtime['paid_status']==200,runtime
+          assert runtime['duplicate_status']==200,runtime
+          assert runtime['finished_status']==200,runtime
+          assert runtime['refund_ignored_status']==200,runtime
+          assert runtime['bad_amount_status']==401,runtime
+          assert runtime['bad_signature_status']==401,runtime
+          assert runtime['production_builder'] is True,runtime
+          assert runtime['provider_intent_created'] is True,runtime
+          assert runtime['live_alipay_network'] is False,runtime
+          assert runtime['rsa2_signature_fixture'] is True,runtime
+          durable=runtime['durable']
+          assert durable['order_status']=='paid' and durable['invoice_status']=='paid',durable
+          assert durable['invoice_paid_at_present'] is True,durable
+          for key in ('transaction_count','active_subscription_count','active_entitlement_count','active_domain_source_count','payment_notification_count','active_provider_intent_count'):
+              assert durable[key]==1,(key,durable)
+          assert durable['callback_event_count']==2,durable
+          assert durable['paid_event_count']==2,durable
+          assert durable['refunded_order_count']==0,durable
+          assert durable['refunded_transaction_count']==0,durable
+          evidence={
+              'schema':'gojet.p20-d016-alipay-authority.v1',
+              'node':'P20',
+              'case':'P20-D016-ALIPAY',
+              'status':'PASS',
+              'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'product_head':os.environ['P20_D016_PRODUCT_HEAD'],
+              'provider':'alipay',
+              'payment_side_only':True,
+              'product_api':'alipay.trade.page.pay',
+              'production_callback_builder':True,
+              'production_server_build':True,
+              'live_alipay_network':False,
+              'rsa2_signature_fixture':True,
+              'test_auth_enabled':False,
+              'deterministic_test_callback_verifier_enabled':False,
+              'formal_p20_t021_claim':False,
+              'refund_settlement_authorized':False,
+              'raw_callback_recorded':False,
+              'signature_recorded':False,
+              'private_key_recorded':False,
+              'public_key_recorded':False,
+              'runtime':runtime,
+              'errors':[],
+          }
+          Path('artifacts/v10/P20/runtime/d016-alipay/authority.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Enforce secret-safe Alipay authority artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence='artifacts/v10/P20/runtime/d016-alipay'
+          if grep -R -n -E 'BEGIN (RSA )?PRIVATE KEY|BEGIN PUBLIC KEY|"sign"|notify_id=.*&|application/x-www-form-urlencoded' "$evidence"; then
+            echo 'raw/signing Alipay material found in evidence'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          data=json.load(open('artifacts/v10/P20/runtime/d016-alipay/authority.json',encoding='utf-8'))
+          assert data['status']=='PASS' and data['errors']==[],data
+          assert data['payment_side_only'] is True,data
+          assert data['formal_p20_t021_claim'] is False,data
+          assert data['refund_settlement_authorized'] is False,data
+          assert data['live_alipay_network'] is False,data
+          assert data['rsa2_signature_fixture'] is True,data
+          assert data['raw_callback_recorded'] is False,data
+          assert data['signature_recorded'] is False,data
+          assert data['private_key_recorded'] is False,data
+          assert data['public_key_recorded'] is False,data
+          PY
+
+      - name: Upload Alipay authority evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-alipay-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/v10/P20/runtime/d016-alipay/authority.json
+            artifacts/v10/P20/runtime/d016-alipay/runtime.json
+            artifacts/v10/P20/runtime/d016-alipay/contract.json
+            artifacts/v10/P20/runtime/d016-alipay/native-platformapi.sha256
+          if-no-files-found: error
+          retention-days: 30
