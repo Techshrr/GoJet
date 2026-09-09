@@ -51,9 +51,13 @@ func TestWorkspaceSessionAuthorityRejectsMissingRevokedAndExpiredSessions(t *tes
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := &workspaceSessionAuthority{
-				authenticate: func(context.Context, *http.Request, time.Time) (authn.Session, error) { return authn.Session{}, authErr },
+				authenticate: func(context.Context, *http.Request, time.Time) (authn.Session, error) {
+					return authn.Session{}, authErr
+				},
 				getUser: func(context.Context, string) (authn.User, error) { return authn.User{}, errors.New("must not run") },
-				authorizeUnsafe: func(context.Context, *http.Request, authn.Session, time.Time) error { return errors.New("must not run") },
+				authorizeUnsafe: func(context.Context, *http.Request, authn.Session, time.Time) error {
+					return errors.New("must not run")
+				},
 			}
 			_, err := a.resolve(httptest.NewRequest(http.MethodGet, "/api/workspaces", nil))
 			if !errors.Is(err, workspace.ErrAuthenticationRequired) {
@@ -67,9 +71,9 @@ func TestWorkspaceSessionAuthorityRequiresOriginAndOneTimeCSRFOnUnsafeMethods(t 
 	t.Parallel()
 	verified := time.Now().UTC()
 	for name, authorityErr := range map[string]error{
-		"bad-origin": authn.ErrForbidden,
+		"bad-origin":    authn.ErrForbidden,
 		"replayed-csrf": authn.ErrReplay,
-		"expired-csrf": authn.ErrExpired,
+		"expired-csrf":  authn.ErrExpired,
 	} {
 		t.Run(name, func(t *testing.T) {
 			unsafeCalled := false
@@ -99,7 +103,7 @@ func TestWorkspaceSessionAuthorityRequiresOriginAndOneTimeCSRFOnUnsafeMethods(t 
 func TestWorkspaceSessionAuthorityRejectsInactiveOrUnverifiedUser(t *testing.T) {
 	t.Parallel()
 	for name, user := range map[string]authn.User{
-		"disabled": {ID: "usr_real", Email: "real@example.test", Status: authn.UserStatusDisabled},
+		"disabled":   {ID: "usr_real", Email: "real@example.test", Status: authn.UserStatusDisabled},
 		"unverified": {ID: "usr_real", Email: "real@example.test", Status: authn.UserStatusActive},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -107,7 +111,7 @@ func TestWorkspaceSessionAuthorityRejectsInactiveOrUnverifiedUser(t *testing.T) 
 				authenticate: func(context.Context, *http.Request, time.Time) (authn.Session, error) {
 					return authn.Session{ID: "ses_test", UserID: "usr_real", Status: authn.SessionStatusActive, ExpiresAt: time.Now().UTC().Add(time.Hour)}, nil
 				},
-				getUser: func(context.Context, string) (authn.User, error) { return user, nil },
+				getUser:         func(context.Context, string) (authn.User, error) { return user, nil },
 				authorizeUnsafe: func(context.Context, *http.Request, authn.Session, time.Time) error { return nil },
 			}
 			_, err := a.resolve(httptest.NewRequest(http.MethodGet, "/api/workspaces", nil))
