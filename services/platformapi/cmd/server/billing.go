@@ -145,6 +145,18 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 			productionDispatcher.adapters[billing.ProviderWeChat] = wechatVerifier
 			dispatcher = productionDispatcher
 		}
+		paypalVerifier, enabled, err := buildProductionPayPalCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderPayPal] = paypalVerifier
+			dispatcher = productionDispatcher
+		}
 		callbackVerifier = dispatcher
 		handler, err := buildProductionEpayCallbackHandler(store)
 		if err != nil {
