@@ -250,7 +250,7 @@ WHERE id=? AND status='active'`, now, now, intentID); err != nil {
 
 func providerIntentCreationEnabled(provider Provider) bool {
 	switch provider {
-	case ProviderStripe, ProviderWeChat, ProviderPayPal:
+	case ProviderAlipay, ProviderStripe, ProviderWeChat, ProviderPayPal:
 		return true
 	default:
 		return false
