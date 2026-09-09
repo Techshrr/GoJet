@@ -104,7 +104,7 @@ VALUES (?,?,'active','USD',1234,'one_time',1,?,?)`, planCode, "Crypto Provider I
 	if _, err := db.ExecContext(ctx, `
 INSERT INTO billing_provider_intents
 (id,workspace_id,order_id,provider,merchant_reference,provider_reference,settlement_asset_kind,settlement_asset,settlement_amount_units,settlement_scale,status,expires_at,created_at,updated_at)
-VALUES (?,?,?,'crypto',?,?,'token','USDT_TRC20',12340000,6,'active',?,?,?)`,
+VALUES (?,?,?,'crypto',?,?,'token','USDTTRC20',12340000,6,'active',?,?,?)`,
 		intentID, workspaceID, order.ID, merchantReference, providerReference, expires, now, now); err != nil {
 		t.Fatal(err)
 	}
