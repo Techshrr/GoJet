@@ -13,12 +13,12 @@ import (
 )
 
 func TestProviderIntentCreationProviderBoundary(t *testing.T) {
-	for _, provider := range []Provider{ProviderStripe, ProviderWeChat, ProviderPayPal} {
+	for _, provider := range []Provider{ProviderAlipay, ProviderStripe, ProviderWeChat, ProviderPayPal} {
 		if !providerIntentCreationEnabled(provider) {
 			t.Fatalf("provider %q should be enabled for frozen payment-side intent creation", provider)
 		}
 	}
-	for _, provider := range []Provider{ProviderAlipay, ProviderEpay, ProviderCrypto, Provider("unknown")} {
+	for _, provider := range []Provider{ProviderEpay, ProviderCrypto, Provider("unknown")} {
 		if providerIntentCreationEnabled(provider) {
 			t.Fatalf("provider %q unexpectedly enabled", provider)
 		}
