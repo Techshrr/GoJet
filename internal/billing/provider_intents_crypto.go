@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	cryptoSettlementAsset = "USDT_TRC20"
+	cryptoSettlementAsset = "USDTTRC20"
 	cryptoSettlementScale = uint8(6)
 )
 
