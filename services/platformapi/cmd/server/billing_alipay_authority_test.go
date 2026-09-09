@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	p20AlipayOrderID       = "ord_alipay_ci"
-	p20AlipayPaidNotifyID  = "notify_alipay_ci_paid"
+	p20AlipayOrderID        = "ord_alipay_ci"
+	p20AlipayPaidNotifyID   = "notify_alipay_ci_paid"
 	p20AlipayFinishNotifyID = "notify_alipay_ci_finished"
-	p20AlipayTradeNo       = "2026090922001400010000000001"
-	p20AlipayAppID         = "2026000000000001"
-	p20AlipaySellerID      = "2088000000000001"
+	p20AlipayTradeNo        = "2026090922001400010000000001"
+	p20AlipayAppID          = "2026000000000001"
+	p20AlipaySellerID       = "2088000000000001"
 )
 
 type p20AlipayRuntimeEvidence struct {
@@ -265,18 +265,18 @@ func p20AlipayDurableEvidence(t *testing.T, db *sql.DB, intentID string) map[str
 		t.Fatalf("callback/refund counts=%v", counts)
 	}
 	return map[string]any{
-		"order_status":                orderStatus,
-		"invoice_status":              invoiceStatus,
-		"invoice_paid_at_present":     paidAt,
-		"transaction_count":           counts["transaction_count"],
-		"callback_event_count":        counts["callback_event_count"],
-		"paid_event_count":            counts["paid_event_count"],
-		"active_subscription_count":   counts["active_subscription_count"],
-		"active_entitlement_count":    counts["active_entitlement_count"],
-		"active_domain_source_count":  counts["active_domain_source_count"],
-		"payment_notification_count":  counts["payment_notification_count"],
+		"order_status":                 orderStatus,
+		"invoice_status":               invoiceStatus,
+		"invoice_paid_at_present":      paidAt,
+		"transaction_count":            counts["transaction_count"],
+		"callback_event_count":         counts["callback_event_count"],
+		"paid_event_count":             counts["paid_event_count"],
+		"active_subscription_count":    counts["active_subscription_count"],
+		"active_entitlement_count":     counts["active_entitlement_count"],
+		"active_domain_source_count":   counts["active_domain_source_count"],
+		"payment_notification_count":   counts["payment_notification_count"],
 		"active_provider_intent_count": counts["active_provider_intent_count"],
-		"refunded_order_count":        counts["refunded_order_count"],
-		"refunded_transaction_count":  counts["refunded_transaction_count"],
+		"refunded_order_count":         counts["refunded_order_count"],
+		"refunded_transaction_count":   counts["refunded_transaction_count"],
 	}
 }
