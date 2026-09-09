@@ -95,9 +95,9 @@ func TestAuthRateRequestSkipsNonFrozenRoutes(t *testing.T) {
 func TestRetryAfterSecondsRoundsUpAndNeverReturnsZero(t *testing.T) {
 	t.Parallel()
 	cases := map[time.Duration]int64{
-		0:                        1,
-		500 * time.Millisecond:   1,
-		time.Second:              1,
+		0:                             1,
+		500 * time.Millisecond:        1,
+		time.Second:                   1,
 		time.Second + time.Nanosecond: 2,
 	}
 	for input, want := range cases {
