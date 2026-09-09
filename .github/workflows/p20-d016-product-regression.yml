@@ -1,0 +1,434 @@
+name: P20 D016 Aggregate Product Regression
+
+on:
+  pull_request:
+    branches:
+      - fix/p20-d016-crypto-callback-authority
+    paths:
+      - '.github/workflows/p20-d016-product-regression.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-d016-product-regression-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  P20_D016_INTEGRATION_BASE: 1d5f93670dc1c1d31069d01fe3a223e7881e0481
+  P20_D016_PRODUCT_HEAD: 2ad0d37afc2d4a2d1e55eb97278a0e9e47e25b5f
+  P20_FROZEN_CONTRACT: 050fd7052d71ff77858b153abcbc466a1243af2f
+
+jobs:
+  product-stack:
+    name: P20-D016 final product-stack authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - name: Checkout exact aggregate authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client
+          mysql --version
+
+      - name: Prove exact product lineage and bounded 20-file stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event.pull_request.base.sha }}" = "$P20_D016_PRODUCT_HEAD"
+          git merge-base --is-ancestor "$P20_D016_INTEGRATION_BASE" "$P20_D016_PRODUCT_HEAD"
+          git merge-base --is-ancestor "$P20_D016_PRODUCT_HEAD" HEAD
+          test "$(git merge-base "$P20_D016_INTEGRATION_BASE" "$P20_D016_PRODUCT_HEAD")" = "$P20_D016_INTEGRATION_BASE"
+          mapfile -t authority_delta < <(git diff --name-only "$P20_D016_PRODUCT_HEAD" HEAD | sort)
+          test "${#authority_delta[@]}" -eq 1
+          test "${authority_delta[0]}" = '.github/workflows/p20-d016-product-regression.yml'
+          python3 - <<'PY'
+          import os, subprocess
+          expected = sorted([
+              'internal/billing/httpapi.go',
+              'internal/billing/httpapi_test.go',
+              'internal/billing/provider_intents.go',
+              'internal/billing/provider_intents_crypto.go',
+              'internal/billing/provider_intents_crypto_test.go',
+              'internal/billing/provider_intents_test.go',
+              'migrations/000030_billing_provider_intents.sql',
+              'services/platformapi/cmd/server/billing.go',
+              'services/platformapi/cmd/server/billing_alipay.go',
+              'services/platformapi/cmd/server/billing_alipay_test.go',
+              'services/platformapi/cmd/server/billing_crypto.go',
+              'services/platformapi/cmd/server/billing_crypto_test.go',
+              'services/platformapi/cmd/server/billing_epay.go',
+              'services/platformapi/cmd/server/billing_epay_test.go',
+              'services/platformapi/cmd/server/billing_paypal.go',
+              'services/platformapi/cmd/server/billing_paypal_test.go',
+              'services/platformapi/cmd/server/billing_stripe.go',
+              'services/platformapi/cmd/server/billing_stripe_test.go',
+              'services/platformapi/cmd/server/billing_wechat.go',
+              'services/platformapi/cmd/server/billing_wechat_test.go',
+          ])
+          actual = sorted(subprocess.check_output([
+              'git','diff','--name-only',os.environ['P20_D016_INTEGRATION_BASE'],os.environ['P20_D016_PRODUCT_HEAD']
+          ], text=True).splitlines())
+          assert actual == expected, {'actual': actual, 'expected': expected}
+          assert not any(p.startswith('.github/') or p.startswith('artifacts/') for p in actual), actual
+          print('D016 product stack boundary PASS: 20 files')
+          PY
+
+      - name: Prove Go, formatting, tests, vet and frozen Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOVERSION)" = 'go1.26.5'
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+          gofmt -d internal/billing/*.go services/platformapi/cmd/server/billing*.go | tee /tmp/p20-d016-product-gofmt.diff
+          test ! -s /tmp/p20-d016-product-gofmt.diff
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-product-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p20-d016-product-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']==os.environ['P20_FROZEN_CONTRACT'], data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+
+      - name: Apply immutable migrations 000001 through 000030
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then break; fi
+            if [ "$attempt" = 60 ]; then exit 1; fi
+            sleep 1
+          done
+          mapfile -t migrations < <(printf '%s\n' migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql | sort)
+          test "${#migrations[@]}" -eq 30
+          test "${migrations[29]}" = 'migrations/000030_billing_provider_intents.sql'
+          for migration in "${migrations[@]}"; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+          test "$(mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SHOW TABLES LIKE 'billing_provider_intents'")" = 'billing_provider_intents'
+
+      - name: Build exact-head production platformapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/d016-premerge
+          go build -trimpath -o /tmp/gojet-p20-d016-platformapi ./services/platformapi/cmd/server
+          sha256sum /tmp/gojet-p20-d016-platformapi > artifacts/v10/P20/runtime/d016-premerge/native-platformapi.sha256
+          cp /tmp/p20-d016-product-contract.json artifacts/v10/P20/runtime/d016-premerge/contract.json
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          evidence = {
+              'schema':'gojet.p20-d016-premerge-product.v1',
+              'status':'PASS',
+              'errors':[],
+              'integration_base':os.environ['P20_D016_INTEGRATION_BASE'],
+              'product_head':os.environ['P20_D016_PRODUCT_HEAD'],
+              'authority_head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'product_file_count':20,
+              'immutable_migration_count':30,
+              'frozen_contract':os.environ['P20_FROZEN_CONTRACT'],
+              'signed_p13_predecessor_required':True,
+              'formal_p20_t021_claim':False,
+              'merge_authoritative':False,
+          }
+          Path('artifacts/v10/P20/runtime/d016-premerge/product-stack.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Upload aggregate product-stack evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-product-stack-${{ github.event.pull_request.head.sha }}
+          path: artifacts/v10/P20/runtime/d016-premerge/
+          if-no-files-found: error
+          retention-days: 30
+
+  p13-predecessor:
+    name: P20-D016 exact-head P13-T001..T020 predecessor authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_TEST_AUTH_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_BILLING_ENABLED: '1'
+      GOJET_TEST_BILLING_CALLBACKS_ENABLED: '1'
+      GOJET_TEST_BILLING_ADMIN_ENABLED: '1'
+      GOJET_TEST_BILLING_ADMIN_ACTOR: p13-admin
+      GOJET_TEST_BILLING_ADMIN_EMAIL: p13-admin@example.test
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+      GOJET_TEST_P13_PRODUCER: /tmp/gojet-p13-producer
+    steps:
+      - name: Checkout exact aggregate authority head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare masked ephemeral P13 callback credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(openssl rand -hex 24)"
+          echo "::add-mask::$secret"
+          echo "GOJET_TEST_BILLING_CALLBACK_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MySQL and Redis clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify exact lineage, P13 drivers and frozen Contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          legal_t020_head='833ea73faecc25324ef3f52ce7a791426de09fa3'
+          git merge-base --is-ancestor "$legal_t020_head" HEAD
+          git merge-base --is-ancestor "$P20_D016_INTEGRATION_BASE" "$P20_D016_PRODUCT_HEAD"
+          git merge-base --is-ancestor "$P20_D016_PRODUCT_HEAD" HEAD
+          mapfile -t delta < <(git diff --name-only "$P20_D016_PRODUCT_HEAD" HEAD | sort)
+          test "${#delta[@]}" -eq 1
+          test "${delta[0]}" = '.github/workflows/p20-d016-product-regression.yml'
+          mkdir -p artifacts/v10/P13/{api,rbac,security,entitlement,audit,runtime,results}
+          go mod verify
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+          cmp -s go.mod /tmp/go.mod.before
+          cmp -s go.sum /tmp/go.sum.before
+          python3 -m py_compile scripts/p13/*.py scripts/p20/validate_contract.py
+          gofmt -d internal/billing/*.go services/platformapi/cmd/server/billing*.go scripts/p13/*.go | tee /tmp/p20-d016-p13-gofmt.diff
+          test ! -s /tmp/p20-d016-p13-gofmt.diff
+          go test ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          go vet ./internal/billing ./internal/domains ./internal/workspace ./services/platformapi/cmd/server
+          python3 scripts/p20/validate_contract.py > /tmp/p20-d016-p13-contract.json
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/p20-d016-p13-contract.json',encoding='utf-8'))
+          assert data['status']=='PASS', data
+          assert data['contract_authority']==os.environ['P20_FROZEN_CONTRACT'], data
+          assert data['frozen_contract_preserved'] is True, data
+          PY
+          go build -trimpath -o /tmp/gojet-p13-platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p13-producer ./scripts/p13/producer.go
+          sha256sum /tmp/gojet-p13-platformapi > artifacts/v10/P13/runtime/native-platformapi.sha256
+          sha256sum /tmp/gojet-p13-producer > artifacts/v10/P13/runtime/internal-producer.sha256
+
+      - name: Apply signed P05 through P13 immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then break; fi
+            if [ "$attempt" = 60 ]; then exit 1; fi
+            sleep 1
+          done
+          for migration in \
+            migrations/000001_links_vertical_slice.sql \
+            migrations/000002_custom_domains.sql \
+            migrations/000003_analytics.sql \
+            migrations/000004_qr.sql \
+            migrations/000005_files.sql \
+            migrations/000006_text.sql \
+            migrations/000007_bio.sql \
+            migrations/000008_workspace_organization.sql \
+            migrations/000009_billing_payments_entitlements.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Start native exact-head P13 platformapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gojet-p13-platformapi > artifacts/v10/P13/runtime/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P13/runtime/platformapi.pid
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat artifacts/v10/P13/runtime/platformapi.log || true
+          exit 1
+
+      - name: Run signed P13-T001 through P13-T020 semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          for number in $(seq -w 1 20); do
+            GITHUB_SHA="$exact_head" python3 scripts/p13/integration.py --case "P13-T0${number}"
+          done
+
+      - name: Verify exact-head P13 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          head=os.environ['EXACT_HEAD']
+          root=Path('artifacts/v10/P13')
+          entitlement={3,10,11,12,14,15,16,17,18}
+          rbac={4}
+          security={7,8}
+          audit={19}
+          errors=[]
+          for number in range(1,21):
+              cid=f'P13-T{number:03d}'
+              directory='entitlement' if number in entitlement else ('rbac' if number in rbac else ('security' if number in security else ('audit' if number in audit else 'api')))
+              path=root/directory/f'{cid}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data=json.loads(path.read_text(encoding='utf-8'))
+              if data.get('case_id')!=cid: errors.append(f'{cid} case_id mismatch')
+              if data.get('implementation_commit')!=head: errors.append(f'{cid} implementation_commit mismatch')
+              if data.get('status')!='PASS': errors.append(f"{cid} status={data.get('status')}")
+              if data.get('errors')!=[]: errors.append(f"{cid} errors={data.get('errors')}")
+          if errors: raise SystemExit('\n'.join(errors))
+          print(f'P13-T001..T020 PASS on {head}')
+          PY
+
+      - name: Capture bounded predecessor result
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/p20-d016-p13-contract.json artifacts/v10/P13/runtime/p20-d016-contract.json
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          result={
+              'schema':'gojet.p20-d016-p13-predecessor.v1',
+              'status':'PASS',
+              'errors':[],
+              'product_head':os.environ['P20_D016_PRODUCT_HEAD'],
+              'authority_head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+              'cases':'P13-T001..P13-T020',
+              'real_mysql':True,
+              'real_redis':True,
+              'native_platformapi':True,
+              'deterministic_p13_callback_fixture':True,
+              'formal_p20_t021_claim':False,
+              'merge_authoritative':False,
+          }
+          Path('artifacts/v10/P13/runtime/p20-d016-predecessor.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+
+      - name: Verify predecessor evidence is secret-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -F "$GOJET_TEST_BILLING_CALLBACK_SECRET" artifacts/v10/P13 --exclude='*.sha256'; then
+            echo 'ephemeral callback credential found in P13 evidence'
+            exit 1
+          fi
+          if grep -R -F 'X-GoJet-Test-Callback-Signature' artifacts/v10/P13; then
+            echo 'callback signature header name found in P13 evidence'
+            exit 1
+          fi
+          if grep -R -E '[A-Za-z0-9._%+-]+@example\.test' artifacts/v10/P13; then
+            echo 'test email/PII found in P13 evidence'
+            exit 1
+          fi
+
+      - name: Stop native P13 service
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          kill "$(cat artifacts/v10/P13/runtime/platformapi.pid 2>/dev/null)" 2>/dev/null || true
+          true
+
+      - name: Upload exact-head P13 predecessor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-d016-p13-predecessor-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/v10/P13/api/P13-T0*.json
+            artifacts/v10/P13/rbac/P13-T004.json
+            artifacts/v10/P13/security/P13-T007.json
+            artifacts/v10/P13/security/P13-T008.json
+            artifacts/v10/P13/entitlement/P13-T0*.json
+            artifacts/v10/P13/audit/P13-T019.json
+            artifacts/v10/P13/runtime/
+          if-no-files-found: error
+          retention-days: 30
