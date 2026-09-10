@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import http.client
+import http.client as http_client
 import json
 import os
 import subprocess
@@ -88,7 +88,7 @@ def scalar(sql: str) -> str:
 
 def http(method: str, path: str, raw: bytes | None = None, headers: dict[str, str] | None = None):
     base = urlsplit(os.environ.get("GOJET_P20_API_BASE", "http://127.0.0.1:18081"))
-    conn = http.client.HTTPConnection(base.hostname, base.port or 80, timeout=20)
+    conn = http_client.HTTPConnection(base.hostname, base.port or 80, timeout=20)
     merged = {"Accept": "application/json"}
     if raw is not None:
         merged["Content-Type"] = "application/json"
