@@ -3,50 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D015",
-      "severity": "P1",
-      "title": "Billing workspace API rejects real authenticated session authority",
-      "case": "P20-T021",
-      "issue": 108,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "0da068fa0da426f1600463a6381ad707669135e4",
-      "discovery_workflow_run": 34139295158,
-      "discovery_workflow_job": 101797403174,
-      "discovery_artifact_id": 10025310145,
-      "discovery_artifact_digest": "sha256:9c72a57362a69c7290234b1a5461629e0a988d7e179cc1c3d18db7e6b224ba86",
-      "failure": "real authenticated P15 owner session is rejected by Billing order mutation with HTTP 503 auth_dependency_unavailable and zero durable orders/invoices/transactions/billing-grant writes",
-      "disposition": "OPEN — P20-T021/P20-T022+ blocked pending bounded production session-authority remediation and formal merged-head closure"
-    },
-    {
-      "id": "P20-D016",
-      "severity": "P1",
-      "title": "Billing production provider callback verifier is unavailable",
-      "case": "P20-T021",
-      "issue": 114,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "b18070e479a77c116944a014ba2b21d2c9bf8295",
-      "discovery_workflow_run": 34152626763,
-      "discovery_workflow_job": 101837877479,
-      "discovery_artifact_id": 10029982068,
-      "discovery_artifact_digest": "sha256:4624724c5cc03f200be06eaa93ca964c91c1b444612426da7263db8d6b53bb02",
-      "failure": "real P15 owner can create one pending Billing order and open invoice after D015 remediation, but production provider callback returns HTTP 503 callback_verifier_unavailable with zero callback-event/transaction/billing-grant settlement writes and leaves order/invoice pending/open",
-      "disposition": "OPEN — P20-T021/P20-T022+ blocked pending bounded production provider-callback verifier remediation and formal merged-head closure"
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -993,31 +950,147 @@
         "secret_material_recorded": false
       },
       "closed_at": "2026-09-07T14:57:54Z"
-    }
-  ],
-  "decision_required": [
+    },
     {
-      "id": "P20-DR001",
-      "title": "Production payment callback protocol authority",
+      "id": "P20-D015",
+      "severity": "P1",
+      "title": "Billing workspace API rejects real authenticated session authority",
       "case": "P20-T021",
-      "issue": 116,
-      "blocking_defect": "P20-D016",
+      "issue": 108,
       "release_blocking": true,
+      "gate_hard_failure": true,
       "affected_gates": [
         "G3",
         "G6",
         "G10"
       ],
-      "status": "OPEN",
-      "opened_at": "2026-09-07T19:42:35Z",
-      "decision": "Freeze provider-specific production callback/settlement protocol, normalization, ACK and server-side configuration authority before P20-D016 remediation can complete.",
-      "known_authority": {
-        "epay": "Rainbow Epay / 彩虹易支付; V1-compatible GET notify + MD5 production slice proven but not merged",
-        "crypto": "USDT TRC20 on TRON; safe order/payment-intent correlation and settlement authority remain unresolved"
+      "discovered_head": "0da068fa0da426f1600463a6381ad707669135e4",
+      "discovery_workflow_run": 34139295158,
+      "discovery_workflow_job": 101797403174,
+      "discovery_artifact_id": 10025310145,
+      "discovery_artifact_digest": "sha256:9c72a57362a69c7290234b1a5461629e0a988d7e179cc1c3d18db7e6b224ba86",
+      "failure": "real authenticated P15 owner session is rejected by Billing order mutation with HTTP 503 auth_dependency_unavailable and zero durable orders/invoices/transactions/billing-grant writes",
+      "remediation_pr": 109,
+      "remediation_merge_commit": "a71c3741ab0c12dd79ece54c518bf5a5d1e27953",
+      "verification_head": "7b891daeb223e8208cb1e509c8fe8332269768aa",
+      "verification_workflow_run": 34511460646,
+      "verification_workflow_job": 102986350018,
+      "verification_artifact_id": 10166328412,
+      "verification_artifact_digest": "sha256:20389afa0815b7613b2b43aa6eb8abb7498dd88e443eb27cf1b3e57eca7c4819",
+      "supporting_contract_workflow_run": 34511460507,
+      "supporting_contract_workflow_job": 102986348834,
+      "supporting_p13_contract_workflow_run": 34511459801,
+      "supporting_p13_contract_workflow_job": 102986347701,
+      "supporting_candidate_preclosure_workflow_run": 34511458765,
+      "supporting_candidate_preclosure_workflow_job": 102986343928,
+      "supporting_candidate_preclosure_p0_open": 0,
+      "supporting_candidate_preclosure_p1_open": 2,
+      "supporting_candidate_preclosure_decision_required": 1,
+      "supporting_candidate_preclosure_blockers": [
+        "P20-D015",
+        "P20-D016",
+        "P20-DR001"
+      ],
+      "formalization_pr": 146,
+      "resolution": "Native platformapi composes the established real P15 server-side customer session, Origin/one-time-CSRF authority and authoritative Workspace membership into Billing customer routes while production ignores X-GoJet-Test-* principal substitution; the unchanged Billing store then creates the correlated pending order/open invoice through real customer authority.",
+      "verified_outcome": {
+        "t021_status": "PASS",
+        "login_http_status": 200,
+        "me_http_status": 200,
+        "real_session_authenticated": true,
+        "csrf_authority_issued": true,
+        "workspace_role": "owner",
+        "order_http_status": 201,
+        "order_row_delta": 1,
+        "invoice_row_delta": 1,
+        "transaction_delta_before_callback": 0,
+        "billing_grant_delta_before_callback": 0,
+        "production_billing": true,
+        "mock_authority": false,
+        "test_header_authority": false,
+        "secret_material_recorded": false
       },
-      "disposition": "OPEN — P20-D016/P20-T021 blocked until #116 is fully resolved, remaining production provider authority is frozen, bounded remediation is complete, and formal same-head closure proves decision_required=0."
+      "closed_at": "2026-09-10T18:27:15Z"
+    },
+    {
+      "id": "P20-D016",
+      "severity": "P1",
+      "title": "Billing production provider callback verifier is unavailable",
+      "case": "P20-T021",
+      "issue": 114,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "b18070e479a77c116944a014ba2b21d2c9bf8295",
+      "discovery_workflow_run": 34152626763,
+      "discovery_workflow_job": 101837877479,
+      "discovery_artifact_id": 10029982068,
+      "discovery_artifact_digest": "sha256:4624724c5cc03f200be06eaa93ca964c91c1b444612426da7263db8d6b53bb02",
+      "failure": "real P15 owner can create one pending Billing order and open invoice after D015 remediation, but production provider callback returns HTTP 503 callback_verifier_unavailable with zero callback-event/transaction/billing-grant settlement writes and leaves order/invoice pending/open",
+      "remediation_pr": 145,
+      "remediation_merge_commit": "e39d184a5384eea35548e3dd8943b14b28ddc08d",
+      "decision_required_issue": 116,
+      "decision_required_resolved_at": "2026-09-09T16:50:52Z",
+      "verification_head": "7b891daeb223e8208cb1e509c8fe8332269768aa",
+      "verification_workflow_run": 34511460646,
+      "verification_workflow_job": 102986350018,
+      "verification_artifact_id": 10166328412,
+      "verification_artifact_digest": "sha256:20389afa0815b7613b2b43aa6eb8abb7498dd88e443eb27cf1b3e57eca7c4819",
+      "supporting_contract_workflow_run": 34511460507,
+      "supporting_contract_workflow_job": 102986348834,
+      "supporting_p13_contract_workflow_run": 34511459801,
+      "supporting_p13_contract_workflow_job": 102986347701,
+      "supporting_candidate_preclosure_workflow_run": 34511458765,
+      "supporting_candidate_preclosure_workflow_job": 102986343928,
+      "supporting_candidate_preclosure_p0_open": 0,
+      "supporting_candidate_preclosure_p1_open": 2,
+      "supporting_candidate_preclosure_decision_required": 1,
+      "supporting_candidate_preclosure_blockers": [
+        "P20-D015",
+        "P20-D016",
+        "P20-DR001"
+      ],
+      "formalization_pr": 146,
+      "resolution": "The complete repository-authoritative six-provider payment-side callback/verification remediation defined through resolved P20-DR001 is present on the legal P20 integration ancestry. Formal T021 proves production-mode provider authentication, server-created intent correlation, idempotent settlement, entitlement/domain-safety projection and fail-closed browser/unsigned/bad-amount behavior without changing the inherited P13 settlement state machine.",
+      "verified_outcome": {
+        "t021_status": "PASS",
+        "formal_p20_t021_claim": true,
+        "production_callback_verifier": true,
+        "provider": "stripe",
+        "provider_intent_bound": true,
+        "browser_return_http_status": 404,
+        "browser_return_settlement_authority": false,
+        "unsigned_callback_http_status": 401,
+        "paid_callback_http_status": 200,
+        "paid_callback_empty_body": true,
+        "transaction_count": 1,
+        "callback_event_count": 1,
+        "active_subscription_count": 1,
+        "active_billing_entitlement_count": 1,
+        "active_domain_plan_source_count": 1,
+        "payment_notification_count": 1,
+        "duplicate_idempotent": true,
+        "refund_settlement_authorized": false,
+        "refunded_order_count": 0,
+        "refunded_transaction_count": 0,
+        "bad_amount_http_status": 401,
+        "money_immutable": true,
+        "domain_state_unchanged_by_settlement": true,
+        "raw_callback_recorded": false,
+        "signature_recorded": false,
+        "mock_authority": false,
+        "test_header_authority": false,
+        "secret_material_recorded": false,
+        "next_case": "P20-T022"
+      },
+      "closed_at": "2026-09-10T18:27:15Z"
     }
   ],
+  "decision_required": [],
   "rules": {
     "p0_open_max": 0,
     "p1_open_max": 0,
@@ -1025,5 +1098,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D014 are formally closed. P20-D015 and P20-D016 remain open P1 blockers in P20-T021. P20-DR001 (#116) is an explicit release-blocking DECISION REQUIRED for incomplete production payment-provider protocol/configuration authority; the Rainbow Epay slice has separate exact-head pre-merge authority but does not resolve D016/DR001 globally. P20-T021 cannot pass and P20-T022+ are forbidden until all T021 blockers are remediated and formal same-head T021, P20 Contract and Candidate Freeze closure coherence prove P0/P1/decision_required = 0/0/0."
+  "note": "P20-D001 through P20-D016 are formally closed. P20-DR001 (#116) is resolved and removed from the active decision-required set. Exact-head formal P20-T021 authority is established at 7b891daeb223e8208cb1e509c8fe8332269768aa with P20 Contract and P13 Contract PASS; this ledger-only closure head must still prove same-head formal T021, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required = 0/0/0 before P20-T022 execution is authorized."
 }
