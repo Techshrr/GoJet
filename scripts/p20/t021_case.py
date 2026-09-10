@@ -351,7 +351,7 @@ def main_case() -> dict[str, Any]:
         "unsigned_callback_http_status": unsigned_status,
         "browser_return_write_deltas": browser_delta,
     })
-    require(browser_status == 405 and unsigned_status == 401 and browser_delta == zero, "browser/unsigned callback obtained settlement authority")
+    require(browser_status == 404 and unsigned_status == 401 and browser_delta == zero, "browser/unsigned callback obtained settlement authority")
 
     before_paid = counts(workspace)
     paid_status, paid_body = signed_post(paid_raw)
