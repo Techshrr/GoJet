@@ -1,0 +1,153 @@
+name: TMP P20 T021 Ledger Materialize
+
+on:
+  push:
+    branches:
+      - 'tmp/p20-t021-ledger-materialize'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout helper branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize byte-stable T021 closure ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('artifacts/v10/P20/defect-ledger.json')
+          ledger = json.loads(path.read_text(encoding='utf-8'))
+          rows = {row['id']: row for row in ledger['open']}
+          assert set(rows) == {'P20-D015', 'P20-D016'}, rows.keys()
+          assert [row['id'] for row in ledger['closed']] == [f'P20-D{i:03d}' for i in range(1, 15)]
+          assert [row['id'] for row in ledger['decision_required']] == ['P20-DR001']
+
+          common = {
+              'verification_head': '7b891daeb223e8208cb1e509c8fe8332269768aa',
+              'verification_workflow_run': 34511460646,
+              'verification_workflow_job': 102986350018,
+              'verification_artifact_id': 10166328412,
+              'verification_artifact_digest': 'sha256:20389afa0815b7613b2b43aa6eb8abb7498dd88e443eb27cf1b3e57eca7c4819',
+              'supporting_contract_workflow_run': 34511460507,
+              'supporting_contract_workflow_job': 102986348834,
+              'supporting_p13_contract_workflow_run': 34511459801,
+              'supporting_p13_contract_workflow_job': 102986347701,
+              'supporting_candidate_preclosure_workflow_run': 34511458765,
+              'supporting_candidate_preclosure_workflow_job': 102986343928,
+              'supporting_candidate_preclosure_p0_open': 0,
+              'supporting_candidate_preclosure_p1_open': 2,
+              'supporting_candidate_preclosure_decision_required': 1,
+              'supporting_candidate_preclosure_blockers': ['P20-D015', 'P20-D016', 'P20-DR001'],
+              'formalization_pr': 146,
+          }
+
+          d015 = rows['P20-D015']
+          d015.pop('disposition', None)
+          d015.update({
+              'remediation_pr': 109,
+              'remediation_merge_commit': 'a71c3741ab0c12dd79ece54c518bf5a5d1e27953',
+              **common,
+              'resolution': 'Native platformapi composes the established real P15 server-side customer session, Origin/one-time-CSRF authority and authoritative Workspace membership into Billing customer routes while production ignores X-GoJet-Test-* principal substitution; the unchanged Billing store then creates the correlated pending order/open invoice through real customer authority.',
+              'verified_outcome': {
+                  't021_status': 'PASS',
+                  'login_http_status': 200,
+                  'me_http_status': 200,
+                  'real_session_authenticated': True,
+                  'csrf_authority_issued': True,
+                  'workspace_role': 'owner',
+                  'order_http_status': 201,
+                  'order_row_delta': 1,
+                  'invoice_row_delta': 1,
+                  'transaction_delta_before_callback': 0,
+                  'billing_grant_delta_before_callback': 0,
+                  'production_billing': True,
+                  'mock_authority': False,
+                  'test_header_authority': False,
+                  'secret_material_recorded': False,
+              },
+              'closed_at': '2026-09-10T18:27:15Z',
+          })
+
+          d016 = rows['P20-D016']
+          d016.pop('disposition', None)
+          d016.update({
+              'remediation_pr': 145,
+              'remediation_merge_commit': 'e39d184a5384eea35548e3dd8943b14b28ddc08d',
+              'decision_required_issue': 116,
+              'decision_required_resolved_at': '2026-09-09T16:50:52Z',
+              **common,
+              'resolution': 'The complete repository-authoritative six-provider payment-side callback/verification remediation defined through resolved P20-DR001 is present on the legal P20 integration ancestry. Formal T021 proves production-mode provider authentication, server-created intent correlation, idempotent settlement, entitlement/domain-safety projection and fail-closed browser/unsigned/bad-amount behavior without changing the inherited P13 settlement state machine.',
+              'verified_outcome': {
+                  't021_status': 'PASS',
+                  'formal_p20_t021_claim': True,
+                  'production_callback_verifier': True,
+                  'provider': 'stripe',
+                  'provider_intent_bound': True,
+                  'browser_return_http_status': 404,
+                  'browser_return_settlement_authority': False,
+                  'unsigned_callback_http_status': 401,
+                  'paid_callback_http_status': 200,
+                  'paid_callback_empty_body': True,
+                  'transaction_count': 1,
+                  'callback_event_count': 1,
+                  'active_subscription_count': 1,
+                  'active_billing_entitlement_count': 1,
+                  'active_domain_plan_source_count': 1,
+                  'payment_notification_count': 1,
+                  'duplicate_idempotent': True,
+                  'refund_settlement_authorized': False,
+                  'refunded_order_count': 0,
+                  'refunded_transaction_count': 0,
+                  'bad_amount_http_status': 401,
+                  'money_immutable': True,
+                  'domain_state_unchanged_by_settlement': True,
+                  'raw_callback_recorded': False,
+                  'signature_recorded': False,
+                  'mock_authority': False,
+                  'test_header_authority': False,
+                  'secret_material_recorded': False,
+                  'next_case': 'P20-T022',
+              },
+              'closed_at': '2026-09-10T18:27:15Z',
+          })
+
+          ledger['open'] = []
+          ledger['closed'].extend([d015, d016])
+          ledger['decision_required'] = []
+          ledger['note'] = 'P20-D001 through P20-D016 are formally closed. P20-DR001 (#116) is resolved and removed from the active decision-required set. Exact-head formal P20-T021 authority is established at 7b891daeb223e8208cb1e509c8fe8332269768aa with P20 Contract and P13 Contract PASS; this ledger-only closure head must still prove same-head formal T021, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required = 0/0/0 before P20-T022 execution is authorized.'
+          path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p=Path('artifacts/v10/P20/defect-ledger.json')
+          b=p.read_bytes()
+          sha=hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
+          print('ledger-bytes', len(b))
+          print('ledger-git-blob', sha)
+          assert sha == '755112d9d339a2dd0ffabd41bf5be99ba7907e48', sha
+          PY
+
+      - name: Commit materialized blob then remove helper workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/v10/P20/defect-ledger.json
+          git rm .github/workflows/tmp-p20-t021-ledger-materialize.yml
+          git commit -m 'tmp: materialize exact P20 T021 closure ledger'
+          git push origin HEAD:${{ github.ref_name }}
