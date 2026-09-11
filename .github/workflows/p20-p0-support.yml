@@ -27,6 +27,7 @@ on:
       - 'scripts/p20/t020_probe/**'
       - 'scripts/p20/t021_case.py'
       - 'scripts/p20/t022_case.py'
+      - 'scripts/p20/t023_case.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
       - 'scripts/p09/integration*.py'
@@ -76,7 +77,7 @@ concurrency:
 
 jobs:
   t009-t021-live:
-    name: P20-T009/T022 real correlated live timeline
+    name: P20-T009/T023 real correlated live timeline
     runs-on: ubuntu-24.04
     timeout-minutes: 130
     services:
@@ -121,6 +122,7 @@ jobs:
       GOJET_BILLING_ENABLED: '1'
       GOJET_BILLING_STRIPE_ENABLED: '1'
       GOJET_BILLING_STRIPE_LIVEMODE: '0'
+      GOJET_P20_ADMIN_HANDOFF: /tmp/gojet-p20-admin-handoff.json
       GOJET_ADMIN_ACCESS_ENABLED: '1'
       GOJET_ADMIN_TOTP_KEY_ID: p17-fixture-key-v1
       GOJET_ADMIN_TOTP_KEY_HEX: 6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d
@@ -252,7 +254,7 @@ jobs:
           set -euo pipefail
           python3 scripts/p20/test_ci_workflow_pagination.py
           go mod verify
-          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/t015_case.py scripts/p20/t016_case.py scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/t020_case.py scripts/p20/t021_case.py scripts/p20/t022_case.py scripts/p20/validate_contract.py scripts/p06/integration.py scripts/p17/integration.py scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py scripts/p11/integration_common.py scripts/p11/integration.py scripts/p11/seo.py scripts/p11/validate_contract.py scripts/p13/*.py
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/t015_case.py scripts/p20/t016_case.py scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/t020_case.py scripts/p20/t021_case.py scripts/p20/t022_case.py scripts/p20/t023_case.py scripts/p20/validate_contract.py scripts/p06/integration.py scripts/p17/integration.py scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py scripts/p11/integration_common.py scripts/p11/integration.py scripts/p11/seo.py scripts/p11/validate_contract.py scripts/p13/*.py
           gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go scripts/p20/t015_probe/main.go scripts/p20/t016_probe/main.go scripts/p20/t017_probe/main.go scripts/p20/t018_probe/main.go scripts/p20/t019_probe/main.go scripts/p20/t019_formal_probe/main.go scripts/p20/t020_probe/main.go | tee /tmp/p20-t022-gofmt.diff
           test ! -s /tmp/p20-t022-gofmt.diff
           go test ./internal/auth ./internal/workspace ./internal/links ./internal/analytics ./internal/qr ./internal/files ./internal/text ./internal/bio ./internal/domains ./internal/support ./internal/billing ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/redirectengine/cmd/server ./services/analyticsworker/cmd/worker ./services/analyticsreconciler/cmd/reconciler ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner ./scripts/p20/t013_runner ./scripts/p20/t014_probe ./scripts/p20/t015_probe ./scripts/p20/t016_probe ./scripts/p20/t017_probe ./scripts/p20/t018_probe ./scripts/p20/t019_probe ./scripts/p20/t019_formal_probe ./scripts/p20/t020_probe
@@ -745,6 +747,31 @@ jobs:
           assert data['details']['next_case']=='P20-T023',data
           PY
 
+      - name: Run formal exact-head P20-T023 Admin case
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/t023_case.py
+          python3 - <<'PYCODE'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          data=json.load(open('artifacts/v10/P20/p0/P20-T023.json',encoding='utf-8'))
+          assert data['implementation_commit']==head
+          assert data['status']=='PASS' and data['errors']==[]
+          for field in ('formal_p20_t023_claim','t022_evidence_bound','t016_real_file_bound','real_admin_login','real_totp_confirmation','quarantine_persisted','replay_idempotent','audit_actor_reason_correlated','audit_append_only','audit_secret_safe'):
+              assert data['details'][field] is True,field
+          assert data['details']['audit_write_delta']==1
+          assert data['details']['scan_write_delta']==1
+          assert data['details']['secret_material_recorded'] is False
+          assert data['details']['mock_authority'] is False
+          assert data['details']['test_header_authority'] is False
+          assert data['details']['next_case']=='P20-T024'
+          PYCODE
+          if grep -E 'gojet_admin_session=|csrf_token|@example\.test|"password"|"secret"' artifacts/v10/P20/p0/P20-T023.json; then
+            echo 'unsafe material in T023 evidence'
+            exit 1
+          fi
+
       - name: Capture T020 through T022 authoritative runtime state
         if: always()
         shell: bash
@@ -829,6 +856,7 @@ jobs:
         shell: bash
         run: |
           set +e
+          rm -f /tmp/gojet-p20-admin-handoff.json
           for pidfile in artifacts/v10/P20/runtime/t018/test-auth-platformapi.pid artifacts/v10/P20/runtime/t009/platformapi.pid artifacts/v10/P20/runtime/t013/redirectengine.pid artifacts/v10/P20/runtime/t016/clamd.pid; do
             if [ -f "$pidfile" ]; then
               kill "$(cat "$pidfile")" 2>/dev/null || true
@@ -836,11 +864,11 @@ jobs:
           done
           true
 
-      - name: Upload exact-head T022 formal evidence
+      - name: Upload exact-head T023 formal evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p20-t022-formal-notification-${{ github.event.pull_request.head.sha || github.sha }}
+          name: p20-t023-formal-admin-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -882,6 +910,7 @@ jobs:
             artifacts/v10/P20/p0/P20-T020.json
             artifacts/v10/P20/p0/P20-T021.json
             artifacts/v10/P20/p0/P20-T022.json
+            artifacts/v10/P20/p0/P20-T023.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
             artifacts/v10/P14/security/

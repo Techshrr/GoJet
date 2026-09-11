@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -32,10 +34,18 @@ func establishRealP17AdminAuthority(ctx context.Context, apiBase, suffix string)
 	now := time.Now().UTC()
 	email := "p20-t020-admin-" + suffix + "@example.test"
 	password := "P20-T020-" + suffix + "!AdminFixture"
-	administrator, err := adminfixture.Bootstrap(ctx, service, email, password, []string{
+	permissions := []string{
 		adminaccess.PermissionTicketsManage,
 		adminaccess.PermissionMailManage,
-	}, now)
+	}
+	handoff := os.Getenv("GOJET_P20_ADMIN_HANDOFF")
+	if handoff != "" {
+		if handoff != "/tmp/gojet-p20-admin-handoff.json" {
+			return p17AdminAuthority{}, fmt.Errorf("invalid T023 fixture handoff path")
+		}
+		permissions = append(permissions, adminaccess.PermissionAdminsManage)
+	}
+	administrator, err := adminfixture.Bootstrap(ctx, service, email, password, permissions, now)
 	if err != nil {
 		return p17AdminAuthority{}, err
 	}
@@ -73,12 +83,22 @@ func establishRealP17AdminAuthority(ctx context.Context, apiBase, suffix string)
 	if !seen[adminaccess.PermissionTicketsManage] || !seen[adminaccess.PermissionMailManage] {
 		return p17AdminAuthority{}, fmt.Errorf("production P17 Admin required permissions missing")
 	}
-	return p17AdminAuthority{
+	authority := p17AdminAuthority{
 		CookieHeader:    cookieHeader,
 		CSRFToken:       csrf,
 		Origin:          adminfixture.AllowedOrigin,
 		AdministratorID: administratorID,
-	}, nil
+	}
+	if handoff != "" {
+		raw, err := json.Marshal(map[string]string{"cookie_header": cookieHeader, "administrator_id": administratorID})
+		if err != nil {
+			return p17AdminAuthority{}, err
+		}
+		if err := os.WriteFile(handoff, raw, 0600); err != nil {
+			return p17AdminAuthority{}, err
+		}
+	}
+	return authority, nil
 }
 
 func adminUnsafeHeaders(authority p17AdminAuthority, correlation string) map[string]string {
