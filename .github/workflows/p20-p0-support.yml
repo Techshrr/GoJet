@@ -250,6 +250,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/p20/test_ci_workflow_pagination.py
           go mod verify
           python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/t015_case.py scripts/p20/t016_case.py scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/t020_case.py scripts/p20/t021_case.py scripts/p20/t022_case.py scripts/p20/validate_contract.py scripts/p06/integration.py scripts/p17/integration.py scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py scripts/p11/integration_common.py scripts/p11/integration.py scripts/p11/seo.py scripts/p11/validate_contract.py scripts/p13/*.py
           gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go scripts/p20/t015_probe/main.go scripts/p20/t016_probe/main.go scripts/p20/t017_probe/main.go scripts/p20/t018_probe/main.go scripts/p20/t019_probe/main.go scripts/p20/t019_formal_probe/main.go scripts/p20/t020_probe/main.go | tee /tmp/p20-t022-gofmt.diff
