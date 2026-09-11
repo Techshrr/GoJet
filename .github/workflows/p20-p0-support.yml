@@ -26,6 +26,7 @@ on:
       - 'scripts/p20/t020_case.py'
       - 'scripts/p20/t020_probe/**'
       - 'scripts/p20/t021_case.py'
+      - 'scripts/p20/t022_case.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
       - 'scripts/p09/integration*.py'
@@ -75,7 +76,7 @@ concurrency:
 
 jobs:
   t009-t021-live:
-    name: P20-T009/T021 real correlated live timeline
+    name: P20-T009/T022 real correlated live timeline
     runs-on: ubuntu-24.04
     timeout-minutes: 130
     services:
@@ -245,14 +246,14 @@ jobs:
           zbarimg --version
           rsvg-convert --version
 
-      - name: Verify T021 source and frozen contract boundary
+      - name: Verify T022 source and frozen contract boundary
         shell: bash
         run: |
           set -euo pipefail
           go mod verify
-          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/t015_case.py scripts/p20/t016_case.py scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/t020_case.py scripts/p20/t021_case.py scripts/p20/validate_contract.py scripts/p06/integration.py scripts/p17/integration.py scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py scripts/p11/integration_common.py scripts/p11/integration.py scripts/p11/seo.py scripts/p11/validate_contract.py scripts/p13/*.py
-          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go scripts/p20/t015_probe/main.go scripts/p20/t016_probe/main.go scripts/p20/t017_probe/main.go scripts/p20/t018_probe/main.go scripts/p20/t019_probe/main.go scripts/p20/t019_formal_probe/main.go scripts/p20/t020_probe/main.go | tee /tmp/p20-t021-gofmt.diff
-          test ! -s /tmp/p20-t021-gofmt.diff
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/t014_case.py scripts/p20/t015_case.py scripts/p20/t016_case.py scripts/p20/t017_case.py scripts/p20/t018_case.py scripts/p20/t019_case.py scripts/p20/t020_case.py scripts/p20/t021_case.py scripts/p20/t022_case.py scripts/p20/validate_contract.py scripts/p06/integration.py scripts/p17/integration.py scripts/p09/integration*.py scripts/p09/clamd_fault_server.py scripts/p10/integration_common.py scripts/p10/integration.py scripts/p10/seo.py scripts/p10/validate_contract.py scripts/p11/integration_common.py scripts/p11/integration.py scripts/p11/seo.py scripts/p11/validate_contract.py scripts/p13/*.py
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go scripts/p20/t014_probe/main.go scripts/p20/t015_probe/main.go scripts/p20/t016_probe/main.go scripts/p20/t017_probe/main.go scripts/p20/t018_probe/main.go scripts/p20/t019_probe/main.go scripts/p20/t019_formal_probe/main.go scripts/p20/t020_probe/main.go | tee /tmp/p20-t022-gofmt.diff
+          test ! -s /tmp/p20-t022-gofmt.diff
           go test ./internal/auth ./internal/workspace ./internal/links ./internal/analytics ./internal/qr ./internal/files ./internal/text ./internal/bio ./internal/domains ./internal/support ./internal/billing ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/redirectengine/cmd/server ./services/analyticsworker/cmd/worker ./services/analyticsreconciler/cmd/reconciler ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner ./scripts/p20/t013_runner ./scripts/p20/t014_probe ./scripts/p20/t015_probe ./scripts/p20/t016_probe ./scripts/p20/t017_probe ./scripts/p20/t018_probe ./scripts/p20/t019_probe ./scripts/p20/t019_formal_probe ./scripts/p20/t020_probe
           python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
           python3 - <<'PY'
@@ -286,7 +287,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/gojet-p20 /tmp/gojet-p20/p14-attachments artifacts/v10/P20/runtime/t016 artifacts/v10/P20/runtime/t017 artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t020 artifacts/v10/P20/runtime/t021 artifacts/v10/P09/clamav artifacts/v10/P11/api artifacts/v10/P11/headers artifacts/v10/P11/sitemap artifacts/v10/P14/runtime artifacts/v10/P14/results
+          mkdir -p /tmp/gojet-p20 /tmp/gojet-p20/p14-attachments artifacts/v10/P20/runtime/t016 artifacts/v10/P20/runtime/t017 artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t020 artifacts/v10/P20/runtime/t021 artifacts/v10/P20/runtime/t022 artifacts/v10/P09/clamav artifacts/v10/P11/api artifacts/v10/P11/headers artifacts/v10/P11/sitemap artifacts/v10/P14/runtime artifacts/v10/P14/results
           sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket 2>/dev/null || true
           refreshed=0
           for attempt in 1 2 3; do
@@ -338,7 +339,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/v10/P20/runtime/t009 artifacts/v10/P20/runtime/t013 artifacts/v10/P20/runtime/t014 artifacts/v10/P20/runtime/t015 artifacts/v10/P20/runtime/t016 artifacts/v10/P20/runtime/t017 artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019 artifacts/v10/P20/runtime/t021
+          mkdir -p artifacts/v10/P20/runtime/t009 artifacts/v10/P20/runtime/t013 artifacts/v10/P20/runtime/t014 artifacts/v10/P20/runtime/t015 artifacts/v10/P20/runtime/t016 artifacts/v10/P20/runtime/t017 artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019 artifacts/v10/P20/runtime/t021 artifacts/v10/P20/runtime/t022
           go build -trimpath -o /tmp/gojet-p20-platformapi ./services/platformapi/cmd/server
           go build -trimpath -o /tmp/gojet-p20-fileworker ./services/platformapi/cmd/fileworker
           go build -trimpath -o /tmp/gojet-p20-redirectengine ./services/redirectengine/cmd/server
@@ -354,6 +355,7 @@ jobs:
           sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t018/native-platformapi.sha256
           sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t019/native-platformapi.sha256
           sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t021/native-platformapi.sha256
+          sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t022/native-platformapi.sha256
 
       - name: Prove exact-head P09 scanner, P11 Bio and P13 FX predecessor authority
         shell: bash
@@ -660,7 +662,7 @@ jobs:
           assert data['details']['next_case']=='P20-T021',data
           PY
 
-      - name: Prepare masked T009 login fixture for formal T021
+      - name: Prepare masked T009 login fixture for formal T021/T022
         shell: bash
         run: |
           set -euo pipefail
@@ -711,12 +713,43 @@ jobs:
           assert data['details']['next_case']=='P20-T022',data
           PY
 
-      - name: Capture T020 and T021 authoritative runtime state
+      - name: Run formal exact-head P20-T022 Notification case
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/t022_case.py
+          python3 - <<'PY'
+          import json, subprocess
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          data=json.load(open('artifacts/v10/P20/p0/P20-T022.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['implementation_commit']==head,data
+          assert data['errors']==[],data
+          assert data['details']['formal_p20_t022_claim'] is True,data
+          assert data['details']['server_side_notification_producer'] is True,data
+          assert data['details']['notification_count']==1,data
+          assert data['details']['duplicate_notification_write_delta']==0,data
+          assert data['details']['deep_link_authorized'] is True,data
+          assert data['details']['read_state_persisted'] is True,data
+          assert data['details']['unread_state_persisted'] is True,data
+          assert data['details']['recipient_scoped'] is True,data
+          assert data['details']['sensitive_data_redacted'] is True,data
+          assert data['details']['provider_identifiers_absent'] is True,data
+          assert data['details']['user_pii_absent'] is True,data
+          assert data['details']['billing_audit_authority_present'] is True,data
+          assert data['details']['support_mail_authority_preserved'] is True,data
+          assert data['details']['mock_authority'] is False,data
+          assert data['details']['test_header_authority'] is False,data
+          assert data['details']['secret_material_recorded'] is False,data
+          assert data['details']['next_case']=='P20-T023',data
+          PY
+
+      - name: Capture T020 through T022 authoritative runtime state
         if: always()
         shell: bash
         run: |
           set +e
-          mkdir -p artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019 artifacts/v10/P20/runtime/t020 artifacts/v10/P20/runtime/t021
+          mkdir -p artifacts/v10/P20/runtime/t018 artifacts/v10/P20/runtime/t019 artifacts/v10/P20/runtime/t020 artifacts/v10/P20/runtime/t021 artifacts/v10/P20/runtime/t022
           export MYSQL_PWD=root
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,slug,title,status,version,created_by,created_at,updated_at,published_at,deleted_at FROM bio_pages ORDER BY id" > artifacts/v10/P20/runtime/t018/mysql-bio-pages.tsv 2> artifacts/v10/P20/runtime/t018/mysql-bio-pages.err
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,bio_page_id,position,label,destination_url,destination_fingerprint,risk_status,risk_checked_at FROM bio_links ORDER BY id" > artifacts/v10/P20/runtime/t018/mysql-bio-links.tsv 2> artifacts/v10/P20/runtime/t018/mysql-bio-links.err
@@ -740,6 +773,9 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,source,source_key,status,domain_limit FROM custom_domain_entitlement_sources ORDER BY id" > artifacts/v10/P20/runtime/t021/mysql-domain-entitlement-sources.tsv 2> artifacts/v10/P20/runtime/t021/mysql-domain-entitlement-sources.err
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,category,event_key,resource_id FROM workspace_notifications ORDER BY created_at,id" > artifacts/v10/P20/runtime/t021/mysql-workspace-notifications.tsv 2> artifacts/v10/P20/runtime/t021/mysql-workspace-notifications.err
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,hostname_ascii,routing_state,ownership_status,ingress_dns_status,https_status,risk_status FROM custom_domains ORDER BY id" > artifacts/v10/P20/runtime/t021/mysql-domains-after-settlement.tsv 2> artifacts/v10/P20/runtime/t021/mysql-domains-after-settlement.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,recipient_user_id,category,event_key,title,summary,COALESCE(deep_link,''),resource_type,resource_id,read_at IS NOT NULL FROM workspace_notifications WHERE category='billing' AND event_key='payment_succeeded' ORDER BY id" > artifacts/v10/P20/runtime/t022/mysql-payment-notifications.tsv 2> artifacts/v10/P20/runtime/t022/mysql-payment-notifications.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,workspace_id,actor_id,action,resource_type,resource_id,result FROM billing_audit_events WHERE action='payment.callback.process' ORDER BY id" > artifacts/v10/P20/runtime/t022/mysql-billing-audit.tsv 2> artifacts/v10/P20/runtime/t022/mysql-billing-audit.err
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT id,template_key,resource_type,status,attempt_count,last_error_code FROM mail_jobs WHERE template_key='support-ticket-reply' ORDER BY created_at,id" > artifacts/v10/P20/runtime/t022/mysql-support-mail-authority.tsv 2> artifacts/v10/P20/runtime/t022/mysql-support-mail-authority.err
           true
 
       - name: Enforce secret-safe formal T021 evidence
@@ -763,6 +799,30 @@ jobs:
           assert data['details']['secret_material_recorded'] is False,data
           PY
 
+      - name: Enforce secret-safe formal T022 evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'whsec_|sk_ci_|Stripe-Signature|v1=[0-9a-fA-F]{64}|@example\.test' artifacts/v10/P20/p0/P20-T022.json artifacts/v10/P20/runtime/t022; then
+            echo 'secret/provider/user-PII-like material found in formal T022 evidence'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('artifacts/v10/P20/p0/P20-T022.json')
+          if not path.is_file():
+              raise SystemExit('formal T022 evidence missing')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['errors']==[],data
+          assert data['details']['formal_p20_t022_claim'] is True,data
+          assert data['details']['provider_identifiers_recorded'] is False,data
+          assert data['details']['user_pii_recorded'] is False,data
+          assert data['details']['secret_material_recorded'] is False,data
+          PY
+
       - name: Stop exact-head native services
         if: always()
         shell: bash
@@ -775,11 +835,11 @@ jobs:
           done
           true
 
-      - name: Upload exact-head T021 formal evidence
+      - name: Upload exact-head T022 formal evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p20-t021-formal-billing-${{ github.event.pull_request.head.sha || github.sha }}
+          name: p20-t022-formal-notification-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -820,6 +880,7 @@ jobs:
             artifacts/v10/P20/p0/P20-T019.json
             artifacts/v10/P20/p0/P20-T020.json
             artifacts/v10/P20/p0/P20-T021.json
+            artifacts/v10/P20/p0/P20-T022.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
             artifacts/v10/P14/security/
@@ -838,3 +899,4 @@ jobs:
             artifacts/v10/P20/runtime/t019/
             artifacts/v10/P20/runtime/t020/
             artifacts/v10/P20/runtime/t021/
+            artifacts/v10/P20/runtime/t022/
