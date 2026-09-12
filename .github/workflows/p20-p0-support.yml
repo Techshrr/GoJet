@@ -28,6 +28,7 @@ on:
       - 'scripts/p20/t021_case.py'
       - 'scripts/p20/t022_case.py'
       - 'scripts/p20/t023_case.py'
+      - 'scripts/p20/t024_availability.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
       - 'scripts/p09/integration*.py'
@@ -77,7 +78,7 @@ concurrency:
 
 jobs:
   t009-t021-live:
-    name: P20-T009/T023 real correlated live timeline
+    name: P20-T009/T024 production availability timeline
     runs-on: ubuntu-24.04
     timeout-minutes: 130
     services:
@@ -772,6 +773,23 @@ jobs:
             exit 1
           fi
 
+      - name: Verify D017 production-session management regression (partial T024)
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/p20/t024_availability.py
+          python3 scripts/p20/t024_availability.py
+          python3 - <<'PYCODE'
+          import json, subprocess
+          d=json.load(open('artifacts/v10/P20/integration/P20-T024.json'))
+          assert d['implementation_commit']==subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert d['status']=='PASS' and d['errors']==[]
+          assert d['details']['management_regression_passed'] is True
+          assert d['details']['api_keys_http_status']==d['details']['webhooks_http_status']==200
+          assert d['details']['correlated_audit_count']==3
+          assert d['details']['formal_p20_t024_claim'] is False
+          assert d['details']['next_case_unlocked'] is False
+          PYCODE
+
       - name: Capture T020 through T022 authoritative runtime state
         if: always()
         shell: bash
@@ -864,11 +882,11 @@ jobs:
           done
           true
 
-      - name: Upload exact-head T023 formal evidence
+      - name: Upload exact-head T024 availability evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p20-t023-formal-admin-${{ github.event.pull_request.head.sha || github.sha }}
+          name: p20-t024-availability-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -911,6 +929,7 @@ jobs:
             artifacts/v10/P20/p0/P20-T021.json
             artifacts/v10/P20/p0/P20-T022.json
             artifacts/v10/P20/p0/P20-T023.json
+            artifacts/v10/P20/integration/P20-T024.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
             artifacts/v10/P14/security/
