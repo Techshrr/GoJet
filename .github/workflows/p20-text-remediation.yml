@@ -1,0 +1,117 @@
+name: P20 Text Remediation Guard
+
+on:
+  push:
+    branches:
+      - develop/p20-d009-text-session-authority
+    paths:
+      - 'internal/text/**'
+      - 'services/platformapi/cmd/server/text*.go'
+      - 'services/platformapi/cmd/server/main.go'
+      - 'services/platformapi/cmd/server/workspace_session_auth.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/p10/validate_contract.py'
+      - 'scripts/p20/validate_contract.py'
+      - 'artifacts/v10/P10/**'
+      - 'artifacts/v10/P20/test-plan.json'
+      - '.github/workflows/p20-text-remediation.yml'
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+    paths:
+      - 'internal/text/**'
+      - 'services/platformapi/cmd/server/text*.go'
+      - 'services/platformapi/cmd/server/main.go'
+      - 'services/platformapi/cmd/server/workspace_session_auth.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/p10/validate_contract.py'
+      - 'scripts/p20/validate_contract.py'
+      - 'artifacts/v10/P10/**'
+      - 'artifacts/v10/P20/test-plan.json'
+      - '.github/workflows/p20-text-remediation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-text-remediation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Text authority compile and unit guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact remediation head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify remediation formatting and dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          gofmt -d \
+            internal/text/actor_resolver.go \
+            internal/text/actor_resolver_test.go \
+            internal/text/httpapi.go \
+            services/platformapi/cmd/server/text.go \
+            services/platformapi/cmd/server/text_session_auth.go \
+            services/platformapi/cmd/server/text_session_auth_test.go \
+            services/platformapi/cmd/server/main.go \
+            | tee /tmp/p20-text-remediation-gofmt.diff
+          test ! -s /tmp/p20-text-remediation-gofmt.diff
+
+      - name: Run scoped native unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/text ./services/platformapi/cmd/server
+          go vet ./internal/text ./services/platformapi/cmd/server
+
+      - name: Preserve frozen P10 and P20 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p10/validate_contract.py > /tmp/p20-text-remediation-p10-contract.json
+          python3 scripts/p20/validate_contract.py > /tmp/p20-text-remediation-p20-contract.json
+          python3 - <<'PY'
+          import json
+          p10=json.load(open('/tmp/p20-text-remediation-p10-contract.json', encoding='utf-8'))
+          p20=json.load(open('/tmp/p20-text-remediation-p20-contract.json', encoding='utf-8'))
+          assert p10['status'] == 'PASS', p10
+          assert p20['status'] == 'PASS', p20
+          assert p20['contract_authority'] == '050fd7052d71ff77858b153abcbc466a1243af2f', p20
+          assert p20['frozen_contract_preserved'] is True, p20
+          PY
+
+      - name: Record exact remediation head
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p20-text-remediation-evidence
+          git rev-parse HEAD > /tmp/p20-text-remediation-evidence/implementation_commit.txt
+          cp /tmp/p20-text-remediation-p10-contract.json /tmp/p20-text-remediation-evidence/p10-contract.json 2>/dev/null || true
+          cp /tmp/p20-text-remediation-p20-contract.json /tmp/p20-text-remediation-evidence/p20-contract.json 2>/dev/null || true
+
+      - name: Upload remediation guard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-text-remediation-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/p20-text-remediation-evidence
+          if-no-files-found: error
+          retention-days: 14

@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/Techshrr/GoJet/internal/files"
+	"github.com/redis/go-redis/v9"
 )
 
-func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+func buildFilesHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_FILES_ENABLED") != "1" {
 		return nil, false, nil
 	}
@@ -59,7 +60,16 @@ func buildFilesHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file store: %w", err)
 	}
-	api, err := files.NewAPI(store, storage, policy, testAuth, maxUpload, []byte(publicAuthSecret))
+	var api *files.API
+	if testAuth {
+		api, err = files.NewAPI(store, storage, policy, true, maxUpload, []byte(publicAuthSecret))
+	} else {
+		authority, authorityErr := buildFilesSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			return nil, false, fmt.Errorf("configure Files authentication authority: %w", authorityErr)
+		}
+		api, err = files.NewAPIWithActorResolver(store, storage, policy, authority.resolve, maxUpload, []byte(publicAuthSecret))
+	}
 	if err != nil {
 		return nil, false, fmt.Errorf("configure file API: %w", err)
 	}

@@ -77,6 +77,16 @@ func (s *RegistrationService) Register(ctx context.Context, input RegistrationIn
 	tokenHash := securetoken.Hash(verificationCode)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	expiresAt := now.Add(EmailVerificationTTL)
+	user := User{
+		ID:              userID,
+		Email:           email,
+		EmailNormalized: normalized,
+		DisplayName:     displayName,
+		Status:          UserStatusPendingVerification,
+		Version:         1,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
 
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -124,21 +134,16 @@ VALUES ('public','',?,'auth.registration.created','auth_one_time_grant',?,'succe
 		return RegistrationResult{}, err
 	}
 
+	if err := runRegistrationTxHook(ctx, tx, user, correlationID); err != nil {
+		return RegistrationResult{}, err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return RegistrationResult{}, err
 	}
 
 	return RegistrationResult{
-		User: User{
-			ID:              userID,
-			Email:           email,
-			EmailNormalized: normalized,
-			DisplayName:     displayName,
-			Status:          UserStatusPendingVerification,
-			Version:         1,
-			CreatedAt:       now,
-			UpdatedAt:       now,
-		},
+		User: user,
 		Grant: VerificationGrant{
 			ID:              grantID,
 			UserID:          userID,
