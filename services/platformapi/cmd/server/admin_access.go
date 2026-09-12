@@ -113,6 +113,22 @@ func buildAdminAccessHandler(db *sql.DB, redisClient *redis.Client) (http.Handle
 		return nil, false, err
 	}
 
+	if !testAuthEnabled && os.Getenv("GOJET_AUTH_ENABLED") == "1" {
+		authority, err := buildWorkspaceSessionAuthority(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		resolve := developerSessionActor(authority.resolve)
+		apiKeyAPI, err = adminaccess.NewWorkspaceAPIKeyHTTPAPIWithActorResolver(apiKeyAuthority, resolve)
+		if err != nil {
+			return nil, false, err
+		}
+		webhookAPI, err = adminaccess.NewWorkspaceWebhookHTTPAPIWithActorResolver(webhookAuthority, resolve)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
 	combined := http.NewServeMux()
 	combined.Handle("/", api.Handler())
 	domainEntitlementHandler := api.DomainEntitlementHandler()
