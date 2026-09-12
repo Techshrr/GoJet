@@ -1,5 +1,6 @@
 """Offline regression for closure discovery; no dispatch or live credentials."""
 import ast
+from datetime import datetime
 import unittest
 import urllib.parse
 from pathlib import Path
@@ -57,6 +58,37 @@ class WorkflowDiscoveryTests(unittest.TestCase):
             for payload in ({}, {"workflow_runs": None}, {"workflow_runs": [{}] * 100}):
                 with self.subTest(phase=phase, payload_type=type(payload.get("workflow_runs"))), self.assertRaises((KeyError, RuntimeError)):
                     load_discovery(phase, lambda url: payload)()
+
+
+class CurrentAttemptArtifactTests(unittest.TestCase):
+    def select(self, artifacts, boundary="2026-09-12T11:22:31Z"):
+        path = ROOT / "scripts/p15/coherence_ci.py"
+        tree = ast.parse(path.read_text())
+        function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "artifact_for")
+        namespace = {"datetime": datetime, "REPOSITORY": "owner/repo",
+                     "api_get": lambda url: {"artifacts": artifacts}}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), "exec"), namespace)
+        return namespace["artifact_for"](1, "exact", "contract", created_after=boundary)
+
+    def row(self, identity, created):
+        return {"id": identity, "name": "contract", "created_at": created,
+                "digest": "sha256:fixture", "size_in_bytes": 12}
+
+    def test_previous_attempt_is_not_current_authority(self):
+        old = self.row(1, "2026-09-12T11:00:39Z")
+        current = self.row(2, "2026-09-12T11:23:00Z")
+        self.assertIsNone(self.select([old]))
+        self.assertEqual(self.select([old, current])["id"], 2)
+        self.assertEqual(self.select([current, old])["id"], 2)
+
+    def test_duplicates_in_current_attempt_remain_ambiguous(self):
+        self.assertIsNone(self.select([self.row(2, "2026-09-12T11:23:00Z"),
+                                      self.row(3, "2026-09-12T11:23:01Z")]))
+
+    def test_missing_or_naive_timestamps_fail_closed(self):
+        for stamp in ("invalid", "2026-09-12T11:23:00"):
+            with self.subTest(stamp=stamp), self.assertRaises((ValueError, RuntimeError)):
+                self.select([self.row(2, stamp)])
 
 
 if __name__ == "__main__":
