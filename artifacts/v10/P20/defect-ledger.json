@@ -3,29 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D017",
-      "severity": "P1",
-      "title": "Production Workspace developer management lacks P15 session binding",
-      "case": "P20-T024",
-      "issue": 158,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "01045bfc43cadb3249fc4813f96237f778a17b35",
-      "discovery_workflow_run": 34676733216,
-      "discovery_workflow_job": 103507802852,
-      "discovery_artifact_id": 10294160167,
-      "discovery_artifact_digest": "sha256:baba64938d29fb79462c4fc6324922a2c1a752b397f92c438c138ef94c5bd2e4",
-      "failure": "Real P15 login and correlated identity succeed but production API-key and webhook list routes both return HTTP 503 auth_dependency_unavailable.",
-      "remediation_pr": 156
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1110,6 +1088,67 @@
         "next_case": "P20-T022"
       },
       "closed_at": "2026-09-10T18:27:15Z"
+    },
+    {
+      "id": "P20-D017",
+      "severity": "P1",
+      "title": "Production Workspace developer management lacks P15 session binding",
+      "case": "P20-T024",
+      "issue": 158,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "01045bfc43cadb3249fc4813f96237f778a17b35",
+      "discovery_workflow_run": 34676733216,
+      "discovery_workflow_job": 103507802852,
+      "discovery_artifact_id": 10294160167,
+      "discovery_artifact_digest": "sha256:baba64938d29fb79462c4fc6324922a2c1a752b397f92c438c138ef94c5bd2e4",
+      "failure": "Real P15 login and correlated identity succeed but production API-key and webhook list routes both return HTTP 503 auth_dependency_unavailable.",
+      "remediation_pr": 156,
+      "remediation_merge_commit": "8b52faef1be951a7f78b896b4734d5ceffdce22a",
+      "verification_head": "0c091dc807d63d1fcebd59ae166248723bef35a5",
+      "verification_workflow_run": 34685024191,
+      "verification_workflow_job": 103530411639,
+      "verification_artifact_id": 10295785799,
+      "verification_artifact_digest": "sha256:3ccc51d1ca61da1078f5e4a0c5c1ebfefa738473eef5d0322af9e20e6213a7d5",
+      "supporting_contract_workflow_run": 34685024671,
+      "supporting_p17_api_key_workflow_run": 34685024193,
+      "supporting_p17_webhook_workflow_run": 34685024141,
+      "supporting_p15_coherence_workflow_run": 34685024143,
+      "supporting_p15_coherence_workflow_job": 103530411132,
+      "resolution": "Production Workspace API-key and webhook management resolve the existing P15 active verified customer session and shared Origin/one-time-CSRF authority. P17 membership and lifecycle semantics are preserved. This closes management authentication availability only; full T024 remains pending.",
+      "verified_outcome": {
+        "api_key_create_http_status": 201,
+        "api_key_final_status": "revoked",
+        "api_key_revocation_http_status": 200,
+        "api_key_rotation_http_status": 200,
+        "api_keys_auth_dependency_unavailable": false,
+        "api_keys_http_status": 200,
+        "audit_secret_safe": true,
+        "availability_only": true,
+        "correlated_audit_count": 3,
+        "cross_surface_csrf_replay_http_status": 403,
+        "csrf_replay_http_status": 403,
+        "formal_p20_t024_claim": false,
+        "management_regression_passed": true,
+        "missing_csrf_http_status": 403,
+        "mock_authority": false,
+        "next_case_unlocked": false,
+        "outbound_delivery_attempted": false,
+        "real_p15_session": true,
+        "secret_material_recorded": false,
+        "secret_once_verified": true,
+        "t023_evidence_bound": true,
+        "test_header_authority": false,
+        "unauthenticated_http_status": 401,
+        "webhooks_auth_dependency_unavailable": false,
+        "webhooks_http_status": 200
+      },
+      "closed_at": "2026-09-12T09:59:04Z"
     }
   ],
   "decision_required": [],
@@ -1120,5 +1159,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "T023 closed at 26ae1a1ba558d5a2590b065692144271cd24b3b3. T024 live availability identified P20-D017; remediation and full formal T024 proof remain pending. T025+ forbidden."
+  "note": "P20-D001 through P20-D017 have verified remediation. D017 was integrated by PR #156 at 8b52faef1be951a7f78b896b4734d5ceffdce22a using digest-verified management regression at 0c091dc807d63d1fcebd59ae166248723bef35a5. This ledger-only closure candidate must pass same-head T009-T023 plus D017 management regression, P20 Contract, Candidate Freeze and applicable predecessor authority before promotion. Full T024 remains pending; T025+ forbidden."
 }
