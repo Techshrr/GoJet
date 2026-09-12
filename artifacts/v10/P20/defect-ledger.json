@@ -3,7 +3,29 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D017",
+      "severity": "P1",
+      "title": "Production Workspace developer management lacks P15 session binding",
+      "case": "P20-T024",
+      "issue": 158,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "01045bfc43cadb3249fc4813f96237f778a17b35",
+      "discovery_workflow_run": 34676733216,
+      "discovery_workflow_job": 103507802852,
+      "discovery_artifact_id": 10294160167,
+      "discovery_artifact_digest": "sha256:baba64938d29fb79462c4fc6324922a2c1a752b397f92c438c138ef94c5bd2e4",
+      "failure": "Real P15 login and correlated identity succeed but production API-key and webhook list routes both return HTTP 503 auth_dependency_unavailable.",
+      "remediation_pr": 156
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -1098,5 +1120,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D016 are formally closed. P20-DR001 (#116) is resolved and removed from the active decision-required set. Exact-head formal P20-T021 authority is established at 7b891daeb223e8208cb1e509c8fe8332269768aa with P20 Contract and P13 Contract PASS; this ledger-only closure head must still prove same-head formal T021, P20 Contract and Candidate Freeze coherence with P0/P1/decision_required = 0/0/0 before P20-T022 execution is authorized."
+  "note": "T023 closed at 26ae1a1ba558d5a2590b065692144271cd24b3b3. T024 live availability identified P20-D017; remediation and full formal T024 proof remain pending. T025+ forbidden."
 }

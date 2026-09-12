@@ -72,6 +72,20 @@ def api_get(url: str) -> dict:
         return json.load(response)
 
 
+def exact_producer_runs() -> list[dict]:
+    runs = []
+    for page in range(1, 11):
+        query = urllib.parse.urlencode({"head_sha": HEAD, "event": "pull_request", "per_page": 100, "page": page})
+        payload = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}")
+        batch = payload["workflow_runs"]
+        if not isinstance(batch, list):
+            raise RuntimeError("invalid exact-head producer listing")
+        runs.extend(batch)
+        if len(batch) < 100:
+            return runs
+    raise RuntimeError("exact-head producer listing reached the 1,000-result cap")
+
+
 def artifact_for(run_id: int, mode: str, locator: str) -> dict | None:
     data = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{run_id}/artifacts?per_page=100")
     artifacts = [item for item in data.get("artifacts", []) if not item.get("expired")]
@@ -99,8 +113,7 @@ def bind_producers() -> dict:
 
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, "exact", contract_name)
-        query = urllib.parse.urlencode({"head_sha": HEAD, "event": "pull_request", "per_page": 100})
-        runs = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}").get("workflow_runs", [])
+        runs = exact_producer_runs()
         latest: dict[str, dict] = {}
         for run in runs:
             name = run.get("name")
