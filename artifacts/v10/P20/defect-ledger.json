@@ -3,7 +3,25 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D018",
+      "severity": "P1",
+      "title": "API-key lifecycle has no production Links consumer",
+      "case": "P20-T024",
+      "issue": 160,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "654edf1baaa91dbc25231f1bb48361da7af053f8",
+      "failure": "Source audit: WorkspaceAPIKeyAuthority.Authenticate is called only by P17 case runners; production Links requests resolve cookie sessions only. Runtime verification of the bounded repair is pending.",
+      "discovery_kind": "source-audit"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -1159,5 +1177,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "P20-D001 through P20-D017 have verified remediation. D017 was integrated by PR #156 at 8b52faef1be951a7f78b896b4734d5ceffdce22a using digest-verified management regression at 0c091dc807d63d1fcebd59ae166248723bef35a5. This ledger-only closure candidate must pass same-head T009-T023 plus D017 management regression, P20 Contract, Candidate Freeze and applicable predecessor authority before promotion. Full T024 remains pending; T025+ forbidden."
+  "note": "D001-D017 closed. D018 production API-key consumption is under bounded repair; no PASS claimed until real same-head verification. Full T024 including webhook production remains pending; T025+ forbidden."
 }

@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	ErrRateLimited               = errors.New("links API key rate limit exceeded")
 	ErrAuthenticationRequired    = errors.New("links authentication required")
 	ErrForbidden                 = errors.New("links workspace access forbidden")
 	ErrAuthenticationUnavailable = errors.New("links authentication dependency unavailable")

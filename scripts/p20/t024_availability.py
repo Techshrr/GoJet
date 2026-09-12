@@ -11,7 +11,7 @@ def verify_management(workspace, user, auth_headers):
     """Exercise ordinary key management without delivering to external hosts."""
     origin = os.environ.get('GOJET_AUTH_ALLOWED_ORIGIN', 'http://localhost:4185')
     path = f'/api/workspaces/{workspace}/api-keys'
-    payload = {'name': 'P20 D017 regression', 'scopes': ['links.read'], 'rate_limit_per_minute': 10}
+    payload = {'name': 'P20 D017 regression', 'scopes': ['links:read'], 'rate_limit_per_minute': 10}
 
     def check(value):
         if not value:
@@ -34,7 +34,13 @@ def verify_management(workspace, user, auth_headers):
     check(status == 201)
     key = created['key']; secret = created['secret']; key_id = key['id']
     check(bool(secret) and key['workspace_id'] == workspace and key['created_by'] == user
-          and key['scopes'] == ['links.read'])
+          and key['scopes'] == ['links:read'])
+    def key_read(value):
+        status, _, _ = http_json('GET', f'/api/workspaces/{workspace}/links',
+                                 headers={'Authorization': 'Bearer ' + value})
+        return status
+
+    check(key_read(secret) == 200)
     count = lambda: int(scalar(f'SELECT COUNT(*) FROM workspace_api_keys WHERE workspace_id={q(workspace)}'))
     before = count()
     status, _, _ = http_json('POST', path, payload, once)
@@ -48,8 +54,10 @@ def verify_management(workspace, user, auth_headers):
     status, _, rotated = http_json('POST', path + '/' + key_id + '/rotate', {}, csrf_headers())
     check(status == 200 and rotated['key']['id'] == key_id and rotated['secret'] != secret)
     new_secret = rotated['secret']
+    check(key_read(secret) == 401 and key_read(new_secret) == 200)
     status, _, revoked = http_json('POST', path + '/' + key_id + '/revoke', {}, csrf_headers())
     check(status == 200 and revoked['key']['status'] == 'revoked')
+    check(key_read(new_secret) == 401)
     status, _, page = http_json('GET', path, headers=auth_headers)
     check(status == 200 and secret not in json.dumps(page) and new_secret not in json.dumps(page))
     audit = mysql('SELECT action,actor_id,result,metadata_json FROM workspace_audit_events '
@@ -59,7 +67,9 @@ def verify_management(workspace, user, auth_headers):
     check(len(rows) == 3 and all(user in row and '\tsuccess\t' in row for row in rows))
     check(secret not in audit and new_secret not in audit)
     check(scalar(f'SELECT status FROM workspace_api_keys WHERE id={q(key_id)} AND workspace_id={q(workspace)}') == 'revoked')
-    return {'management_regression_passed': True, 'api_key_create_http_status': 201,
+    return {'api_key_consumer_passed': True, 'api_key_read_http_status': 200,
+            'rotated_old_key_http_status': 401, 'rotated_new_key_http_status': 200,
+            'revoked_key_http_status': 401, 'management_regression_passed': True, 'api_key_create_http_status': 201,
             'api_key_rotation_http_status': 200, 'api_key_revocation_http_status': 200,
             'unauthenticated_http_status': 401, 'missing_csrf_http_status': 403,
             'csrf_replay_http_status': 403, 'cross_surface_csrf_replay_http_status': 403,

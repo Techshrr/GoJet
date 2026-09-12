@@ -36,6 +36,7 @@ func TestProductionActorResolverErrorMapping(t *testing.T) {
 		want int
 	}{
 		{name: "authentication required", err: ErrAuthenticationRequired, want: http.StatusUnauthorized},
+		{name: "rate limited", err: ErrRateLimited, want: http.StatusTooManyRequests},
 		{name: "forbidden", err: ErrForbidden, want: http.StatusForbidden},
 		{name: "unavailable", err: ErrAuthenticationUnavailable, want: http.StatusServiceUnavailable},
 		{name: "unknown fails unavailable", err: errors.New("backend failure"), want: http.StatusServiceUnavailable},

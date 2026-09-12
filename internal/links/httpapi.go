@@ -108,6 +108,8 @@ func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID s
 			switch {
 			case errors.Is(err, ErrAuthenticationRequired):
 				writeAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrRateLimited):
+				writeAPIError(w, http.StatusTooManyRequests, "rate_limited", "API key rate limit exceeded.")
 			case errors.Is(err, ErrForbidden):
 				writeAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
 			default:
