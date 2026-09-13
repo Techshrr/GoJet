@@ -1,0 +1,21 @@
+name: P20 Receiver Connectivity
+on:
+  push:
+    branches: [develop/p20-t024-receiver-preparation]
+    paths:
+      - scripts/p20/receiver_connectivity.py
+      - .github/workflows/p20-receiver-connectivity.yml
+permissions:
+  contents: read
+jobs:
+  receiver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify authenticated storage and cleanup (not formal T024)
+        env:
+          P20_WEBHOOK_RECEIVER_TOKEN: ${{ secrets.P20_WEBHOOK_RECEIVER_TOKEN }}
+        run: python3 scripts/p20/receiver_connectivity.py
