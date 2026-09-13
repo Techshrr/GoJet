@@ -17,7 +17,19 @@ return 1
 """
 
 
+def native_url():
+    return os.environ.get('REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_REDIS_URL', '')
+
+
 def redis_command(command):
+    if native_url():
+        import redis
+        if not native_url().startswith(('redis://', 'rediss://')):
+            raise ValueError('invalid Redis URL')
+        with redis.Redis.from_url(native_url(), decode_responses=True,
+                                  socket_connect_timeout=5, socket_timeout=5) as client:
+            result = client.execute_command(*command)
+            return 'PONG' if command == ['PING'] and result is True else result
     url = os.environ['UPSTASH_REDIS_REST_URL'].rstrip('/')
     if not url.startswith('https://'):
         raise ValueError('HTTPS storage required')
@@ -32,13 +44,15 @@ def redis_command(command):
 
 
 def dispatch(method, path, headers, body, command=redis_command):
-    required = ('P20_RECEIVER_CONTROL_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN')
-    configured = all(os.environ.get(name) for name in required)
+    storage_present = bool(native_url() or (os.environ.get('UPSTASH_REDIS_REST_URL')
+                                           and os.environ.get('UPSTASH_REDIS_REST_TOKEN')))
+    configured = bool(os.environ.get('P20_RECEIVER_CONTROL_TOKEN')) and storage_present
     if path == '/healthz' and method == 'GET':
         checks = {
             'variables_present': configured,
             'control_token_length_valid': len(os.environ.get('P20_RECEIVER_CONTROL_TOKEN', '')) >= 32,
-            'redis_https_url_valid': os.environ.get('UPSTASH_REDIS_REST_URL', '').startswith('https://'),
+            'redis_url_valid': (native_url().startswith(('redis://', 'rediss://')) if native_url()
+                                else os.environ.get('UPSTASH_REDIS_REST_URL', '').startswith('https://')),
         }
         valid_configuration = all(checks.values())
         checks['redis_ping_passed'] = False

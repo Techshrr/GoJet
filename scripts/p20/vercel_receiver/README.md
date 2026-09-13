@@ -3,6 +3,13 @@
 Authorized test hostname: `test.gojet.cc`. GoJet production stays on Linux.
 This directory is external test infrastructure only.
 
+Standard Redis integrations are also supported: use `REDIS_URL` or the existing
+integration-generated `UPSTASH_REDIS_REST_REDIS_URL` (`redis://` or `rediss://`).
+These take precedence over the optional Upstash REST configuration below and do
+not require a REST token. Keep `P20_RECEIVER_CONTROL_TOKEN`. Deploy the included
+`requirements.txt` at the deployment root. `/healthz` checks URL format, control
+token length and real Redis PING; it is not formal delivery evidence.
+
 Deployment file mapping (do not deploy the entire repository):
 
 - `api/index.py` from this directory

@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 spec = importlib.util.spec_from_file_location('vercel_receiver_entry', Path(__file__).parent / 'vercel_receiver/api/index.py')
 entry = importlib.util.module_from_spec(spec)
@@ -11,6 +11,20 @@ spec.loader.exec_module(entry)
 
 
 class VercelReceiverTests(unittest.TestCase):
+    def test_native_integration_url_without_rest_token(self):
+        env = {'P20_RECEIVER_CONTROL_TOKEN': 'x' * 32,
+               'UPSTASH_REDIS_REST_REDIS_URL': 'rediss://test.invalid:6379'}
+        module = MagicMock()
+        client = module.Redis.from_url.return_value.__enter__.return_value
+        client.execute_command.return_value = True
+        with patch.dict(os.environ, env, clear=True), patch.dict('sys.modules', {'redis': module}):
+            status, report = entry.dispatch('GET', '/healthz', {}, b'')
+            self.assertEqual(status, 200)
+            self.assertTrue(report['checks']['redis_ping_passed'])
+            client.execute_command.assert_called_once_with('PING')
+            client.execute_command.return_value = 1
+            self.assertEqual(entry.redis_command(['EVAL', entry.CAS, 1, 'key', '', '{}']), 1)
+
     def test_health_fails_closed_without_exposing_dependency_details(self):
         env = {'P20_RECEIVER_CONTROL_TOKEN': 'x' * 32,
                'UPSTASH_REDIS_REST_URL': 'https://unused.example.test',
