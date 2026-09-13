@@ -58,6 +58,10 @@ def verify_producer(workspace, auth_headers):
     check(envelope['data'] == {'link_id': link_id, 'version': int(link['version'])}
           and envelope['workspace_id'] == workspace)
     check(created['secret'] not in raw)
+    # Queue-only evidence must never leave a non-test recipient active when
+    # subsequent verification starts the real operationsmonitor.
+    status, _, disabled = http_json('POST', path + '/' + webhook_id + '/disable', {}, headers())
+    check(status == 200 and disabled['webhook']['status'] == 'disabled')
     return {'webhook_producer_passed': True, 'real_link_http_create': True,
             'committed_link_audit_bound': True, 'producer_duplicate_idempotent': True,
             'webhook_queue_count': 1, 'webhook_payload_minimal': True,

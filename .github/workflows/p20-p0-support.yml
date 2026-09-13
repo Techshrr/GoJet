@@ -29,6 +29,7 @@ on:
       - 'scripts/p20/t022_case.py'
       - 'scripts/p20/t023_case.py'
       - 'scripts/p20/t024_availability.py'
+      - 'scripts/p20/t024_outbound.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
       - 'scripts/p09/integration*.py'
@@ -774,8 +775,11 @@ jobs:
           fi
 
       - name: Verify D017 production-session management regression (partial T024)
+        env:
+          P20_WEBHOOK_RECEIVER_TOKEN: ${{ secrets.P20_WEBHOOK_RECEIVER_TOKEN }}
         run: |
           set -euo pipefail
+          go build -o /tmp/gojet-p20-operationsmonitor ./services/platformapi/cmd/operationsmonitor
           python3 -m py_compile scripts/p20/t024_availability.py
           python3 scripts/p20/t024_availability.py
           python3 - <<'PYCODE'
@@ -784,6 +788,7 @@ jobs:
           assert d['implementation_commit']==subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           assert d['status']=='PASS' and d['errors']==[]
           assert d['details']['management_regression_passed'] is True
+          assert d['details']['webhook_outbound_passed'] is True
           assert d['details']['api_keys_http_status']==d['details']['webhooks_http_status']==200
           assert d['details']['correlated_audit_count']==3
           assert d['details']['formal_p20_t024_claim'] is False
