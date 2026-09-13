@@ -5,6 +5,7 @@ import os
 
 from common import emit, fail_if_errors
 from t024_producer import verify_producer
+from t024_key_lifecycle import verify_key_lifecycle
 from t022_case import HEAD, http_json, predecessor, session_cookie, scalar, mysql, q
 
 
@@ -122,6 +123,7 @@ def run_case():
         if not errors:
             details.update(verify_management(workspace, user, auth_headers))
             details.update(verify_producer(workspace, auth_headers))
+            details.update(verify_key_lifecycle(workspace, auth_headers))
     except Exception as exc:
         errors.append('T024 availability gate error: ' + type(exc).__name__)
     return emit('P20-T024', 'integration', 'Production-session developer API availability (partial)', errors, details)
