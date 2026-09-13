@@ -6,6 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
+
+	adminaccess "github.com/Techshrr/GoJet/internal/admin"
+	authn "github.com/Techshrr/GoJet/internal/auth"
 
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/workspace"
@@ -13,6 +17,8 @@ import (
 )
 
 type linksSessionAuthority struct {
+	authenticateKey  func(context.Context, string, string, time.Time) (adminaccess.WorkspaceAPIKey, error)
+	getKeyUser       func(context.Context, string) (authn.User, error)
 	resolvePrincipal func(*http.Request) (workspace.Principal, error)
 	lookupRole       func(context.Context, string, string) (string, error)
 }
@@ -25,7 +31,13 @@ func buildLinksSessionAuthority(db *sql.DB, redisClient *redis.Client) (*linksSe
 	if err != nil {
 		return nil, err
 	}
+	keyAuthority, err := adminaccess.NewWorkspaceAPIKeyAuthority(db, redisClient)
+	if err != nil {
+		return nil, err
+	}
 	return &linksSessionAuthority{
+		authenticateKey:  keyAuthority.Authenticate,
+		getKeyUser:       authn.NewStore(db).GetUserByID,
 		resolvePrincipal: workspaceAuthority.resolve,
 		lookupRole: func(ctx context.Context, workspaceID, userID string) (string, error) {
 			var role string
@@ -45,6 +57,10 @@ func (a *linksSessionAuthority) resolve(request *http.Request, workspaceID strin
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return links.Actor{}, links.ErrForbidden
+	}
+
+	if len(request.Header.Values("Authorization")) > 0 {
+		return a.resolveAPIKey(request, workspaceID)
 	}
 
 	principal, err := a.resolvePrincipal(request)
