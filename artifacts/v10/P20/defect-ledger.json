@@ -3,25 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D018",
-      "severity": "P1",
-      "title": "API-key lifecycle has no production Links consumer",
-      "case": "P20-T024",
-      "issue": 160,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "654edf1baaa91dbc25231f1bb48361da7af053f8",
-      "failure": "Source audit: WorkspaceAPIKeyAuthority.Authenticate is called only by P17 case runners; production Links requests resolve cookie sessions only. Runtime verification of the bounded repair is pending.",
-      "discovery_kind": "source-audit"
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1167,6 +1149,70 @@
         "webhooks_http_status": 200
       },
       "closed_at": "2026-09-12T09:59:04Z"
+    },
+    {
+      "id": "P20-D018",
+      "severity": "P1",
+      "title": "API-key lifecycle has no production Links consumer",
+      "case": "P20-T024",
+      "issue": 160,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "654edf1baaa91dbc25231f1bb48361da7af053f8",
+      "failure": "Source audit: WorkspaceAPIKeyAuthority.Authenticate is called only by P17 case runners; production Links requests resolve cookie sessions only. Runtime verification of the bounded repair is pending.",
+      "discovery_kind": "source-audit",
+      "remediation_pr": 161,
+      "remediation_merge_commit": "79156da52650b57532be41a6521bfbcb47be0fc6",
+      "verification_head": "d3467db50c6dc27eabff2f971a3e60fb400e3e9d",
+      "verification_workflow_run": 34713741369,
+      "verification_workflow_job": 103607034784,
+      "verification_artifact_id": 10303972555,
+      "verification_artifact_digest": "sha256:4d0dae45a1807652a611a3526d2409439c1c72fb55fc51d738402604fad54d64",
+      "supporting_contract_workflow_run": 34713741412,
+      "supporting_p17_api_key_workflow_run": 34713741393,
+      "supporting_p17_webhook_workflow_run": 34713741935,
+      "supporting_p15_coherence_workflow_job": 103607037500,
+      "resolution": "Existing production Links routes consume P17 API-key authority with scope, current membership and active verified creator checks. Real key-only HTTP consumption, rotation and revocation passed. This closes missing consumer wiring only; full T024 remains pending.",
+      "verified_outcome": {
+        "api_key_consumer_passed": true,
+        "api_key_create_http_status": 201,
+        "api_key_final_status": "revoked",
+        "api_key_read_http_status": 200,
+        "api_key_revocation_http_status": 200,
+        "api_key_rotation_http_status": 200,
+        "api_keys_auth_dependency_unavailable": false,
+        "api_keys_http_status": 200,
+        "audit_secret_safe": true,
+        "availability_only": true,
+        "correlated_audit_count": 3,
+        "cross_surface_csrf_replay_http_status": 403,
+        "csrf_replay_http_status": 403,
+        "formal_p20_t024_claim": false,
+        "management_regression_passed": true,
+        "missing_csrf_http_status": 403,
+        "mock_authority": false,
+        "next_case_unlocked": false,
+        "outbound_delivery_attempted": false,
+        "real_p15_session": true,
+        "revoked_key_http_status": 401,
+        "rotated_new_key_http_status": 200,
+        "rotated_old_key_http_status": 401,
+        "secret_material_recorded": false,
+        "secret_once_verified": true,
+        "t023_evidence_bound": true,
+        "test_header_authority": false,
+        "unauthenticated_http_status": 401,
+        "user_id": "usr_Nt5vqU8Y6Fiv6T6WBD6e5kMQ",
+        "webhooks_auth_dependency_unavailable": false,
+        "webhooks_http_status": 200,
+        "workspace_id": "ws_G9pon1Zc-aZPoHAkj0sj9--9"
+      },
+      "closed_at": "2026-09-13T05:11:44.608896+00:00"
     }
   ],
   "decision_required": [],
@@ -1177,5 +1223,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D017 closed. D018 production API-key consumption is under bounded repair; no PASS claimed until real same-head verification. Full T024 including webhook production remains pending; T025+ forbidden."
+  "note": "D001-D018 have verified bounded remediation. D018 integration is 79156da52650b57532be41a6521bfbcb47be0fc6. This ledger-only closure candidate requires new same-head P20 real timeline, Contract, Candidate Freeze and applicable P05/P15/P17 gates before promotion and issue closure. Full T024, including webhook event production/delivery and remaining lifecycle proof, remains pending; T025+ forbidden."
 }
