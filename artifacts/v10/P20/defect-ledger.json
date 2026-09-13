@@ -3,7 +3,25 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D019",
+      "severity": "P1",
+      "title": "Outbound webhook worker lacks a production event source",
+      "case": "P20-T024",
+      "issue": 164,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "786a5dc9da1664dce32401b1cb3f46ce0aa7c1fb",
+      "discovery_kind": "source-audit",
+      "failure": "QueueDelivery has no production caller; operationsmonitor only consumes existing deliveries. Committed Links mutation audit records are not reconciled into subscribed deliveries."
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -1223,5 +1241,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D018 have verified bounded remediation. D018 integration is 79156da52650b57532be41a6521bfbcb47be0fc6. This ledger-only closure candidate requires new same-head P20 real timeline, Contract, Candidate Freeze and applicable P05/P15/P17 gates before promotion and issue closure. Full T024, including webhook event production/delivery and remaining lifecycle proof, remains pending; T025+ forbidden."
+  "note": "D001-D018 closed. D019 production webhook event source under repair; real event-to-queue verification pending. Full T024 delivery/receiver and remaining lifecycle evidence pending; T025+ forbidden."
 }
