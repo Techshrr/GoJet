@@ -35,7 +35,20 @@ def dispatch(method, path, headers, body, command=redis_command):
     required = ('P20_RECEIVER_CONTROL_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN')
     configured = all(os.environ.get(name) for name in required)
     if path == '/healthz' and method == 'GET':
-        return (200 if configured else 503), {'configured': configured, 'formal_p20_t024_claim': False}
+        checks = {
+            'variables_present': configured,
+            'control_token_length_valid': len(os.environ.get('P20_RECEIVER_CONTROL_TOKEN', '')) >= 32,
+            'redis_https_url_valid': os.environ.get('UPSTASH_REDIS_REST_URL', '').startswith('https://'),
+        }
+        valid_configuration = all(checks.values())
+        checks['redis_ping_passed'] = False
+        if valid_configuration:
+            try:
+                checks['redis_ping_passed'] = command(['PING']) == 'PONG'
+            except Exception:
+                pass  # Never expose dependency exception text or credentials.
+        return (200 if all(checks.values()) else 503), {
+            'configured': configured, 'checks': checks, 'formal_p20_t024_claim': False}
     if not configured:
         return 503, {'error': 'receiver_not_configured'}
     token = os.environ['P20_RECEIVER_CONTROL_TOKEN']

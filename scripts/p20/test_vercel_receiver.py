@@ -11,6 +11,24 @@ spec.loader.exec_module(entry)
 
 
 class VercelReceiverTests(unittest.TestCase):
+    def test_health_fails_closed_without_exposing_dependency_details(self):
+        env = {'P20_RECEIVER_CONTROL_TOKEN': 'x' * 32,
+               'UPSTASH_REDIS_REST_URL': 'https://unused.example.test',
+               'UPSTASH_REDIS_REST_TOKEN': 'private-test-token'}
+        def failed_command(args):
+            raise ValueError('private-test-token')
+        with patch.dict(os.environ, env, clear=True):
+            status, report = entry.dispatch('GET', '/healthz', {}, b'', failed_command)
+            self.assertEqual(status, 503)
+            self.assertFalse(report['checks']['redis_ping_passed'])
+            self.assertNotIn('private-test-token', json.dumps(report))
+            self.assertEqual(entry.dispatch('GET', '/healthz', {}, b'', lambda _: 'PONG')[0], 200)
+        env['P20_RECEIVER_CONTROL_TOKEN'] = 'short'
+        with patch.dict(os.environ, env, clear=True):
+            status, report = entry.dispatch('GET', '/healthz', {}, b'', lambda _: self.fail('must not contact Redis'))
+            self.assertEqual(status, 503)
+            self.assertFalse(report['checks']['control_token_length_valid'])
+
     def test_missing_configuration_cannot_pass(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(entry.dispatch('GET', '/healthz', {}, b'')[0], 503)
