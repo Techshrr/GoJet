@@ -89,8 +89,19 @@ def api(url: str, *, method: str = "GET", body=None):
 
 
 def exact_runs() -> list[dict]:
-    query = urllib.parse.urlencode({"head_sha": HEAD, "per_page": 100})
-    return api(f"https://api.github.com/repos/{REPO}/actions/runs?{query}").get("workflow_runs", [])
+    # Search-filtered Actions listings are capped at 1,000 results. Never
+    # interpret a truncated or malformed listing as missing-workflow authority.
+    runs = []
+    for page in range(1, 11):
+        query = urllib.parse.urlencode({"head_sha": HEAD, "per_page": 100, "page": page})
+        payload = api(f"https://api.github.com/repos/{REPO}/actions/runs?{query}")
+        batch = payload["workflow_runs"]
+        if not isinstance(batch, list):
+            raise RuntimeError("invalid exact-head workflow listing")
+        runs.extend(batch)
+        if len(batch) < 100:
+            return runs
+    raise RuntimeError("exact-head workflow listing reached the 1,000-result cap")
 
 
 def dispatch(workflow: str) -> None:

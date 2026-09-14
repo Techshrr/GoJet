@@ -145,6 +145,12 @@ func main() {
 		}
 		webhookWorked := false
 		if webhookAuthority != nil {
+			if _, queueErr := webhookAuthority.QueueLinkEvents(ctx, 100); queueErr != nil {
+				logger.Warn("operationsmonitor webhook event reconciliation failed")
+				if iterationErr == nil {
+					iterationErr = queueErr
+				}
+			}
 			var webhookErr error
 			webhookWorked, webhookErr = webhookAuthority.RunDeliveryOnce(ctx, time.Now().UTC())
 			if webhookErr != nil {
