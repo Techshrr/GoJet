@@ -6,6 +6,7 @@ import os
 from common import emit, fail_if_errors
 from t024_producer import verify_producer
 from t024_outbound import verify_outbound, OutboundVerificationError
+from t024_key_lifecycle import verify_key_lifecycle
 from t022_case import HEAD, http_json, predecessor, session_cookie, scalar, mysql, q
 
 
@@ -122,6 +123,7 @@ def run_case():
                 errors.append(f'production {field} list expected HTTP 200, observed {status}')
         if not errors:
             details.update(verify_management(workspace, user, auth_headers))
+            details.update(verify_key_lifecycle(workspace, auth_headers))
             details.update(verify_producer(workspace, auth_headers))
             details.update(verify_outbound(workspace, auth_headers))
     except OutboundVerificationError as exc:

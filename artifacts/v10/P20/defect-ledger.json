@@ -3,25 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D019",
-      "severity": "P1",
-      "title": "Outbound webhook worker lacks a production event source",
-      "case": "P20-T024",
-      "issue": 164,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "786a5dc9da1664dce32401b1cb3f46ce0aa7c1fb",
-      "discovery_kind": "source-audit",
-      "failure": "QueueDelivery has no production caller; operationsmonitor only consumes existing deliveries. Committed Links mutation audit records are not reconciled into subscribed deliveries."
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1231,6 +1213,104 @@
         "workspace_id": "ws_G9pon1Zc-aZPoHAkj0sj9--9"
       },
       "closed_at": "2026-09-13T05:11:44.608896+00:00"
+    },
+    {
+      "id": "P20-D019",
+      "severity": "P1",
+      "title": "Outbound webhook worker lacks a production event source",
+      "case": "P20-T024",
+      "issue": 164,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "786a5dc9da1664dce32401b1cb3f46ce0aa7c1fb",
+      "discovery_kind": "source-audit",
+      "failure": "QueueDelivery has no production caller; operationsmonitor only consumes existing deliveries. Committed Links mutation audit records are not reconciled into subscribed deliveries.",
+      "remediation_pr": 165,
+      "remediation_merge_commit": "fc688ea93ca155d781ce2d42978f90d370fe248b",
+      "verification_head": "61810f80f8051858fb399626ad0f47609e558c53",
+      "verification_workflow_run": 34770381583,
+      "verification_workflow_job": 103758773766,
+      "verification_artifact_id": 10322366979,
+      "verification_artifact_digest": "sha256:5e3bb3ceaef99bfd4f56f85c0c006d9abecea5a1f44aa23eb7a986f48fb13582",
+      "supporting_contract_workflow_run": 34770381481,
+      "supporting_p17_api_key_workflow_run": 34770381685,
+      "supporting_p17_webhook_workflow_run": 34770381606,
+      "supporting_p15_coherence_workflow_job": 103758773688,
+      "formalization_pr": 170,
+      "resolution": "Production operationsmonitor reconciles committed successful Links audit events into existing P17 deliveries. Real P15 HTTP mutations produced signed public HTTPS deliveries, first503 then200 after 60-second wall-clock retry across worker restart, repeated after secret rotation. Stable delivery IDs/body digests and operationsmonitor audit correlate with recipient acceptance once. This closes missing production event source; full T024 remains pending.",
+      "verified_outcome": {
+        "api_key_consumer_passed": true,
+        "api_key_create_http_status": 201,
+        "api_key_final_status": "revoked",
+        "api_key_read_http_status": 200,
+        "api_key_revocation_http_status": 200,
+        "api_key_rotation_http_status": 200,
+        "api_keys_auth_dependency_unavailable": false,
+        "api_keys_http_status": 200,
+        "audit_secret_safe": true,
+        "availability_only": true,
+        "committed_link_audit_bound": true,
+        "correlated_audit_count": 3,
+        "cross_surface_csrf_replay_http_status": 403,
+        "csrf_replay_http_status": 403,
+        "formal_p20_t024_claim": false,
+        "management_regression_passed": true,
+        "missing_csrf_http_status": 403,
+        "mock_authority": false,
+        "next_case_unlocked": false,
+        "outbound_audit_correlated": true,
+        "outbound_deliveries": [
+          {
+            "attempts": 2,
+            "body_sha256": "42c1d4eb4c45f048e413f29a3eea775ed9b19429d73d664587680b2fae552954",
+            "delivery_id": "whd_QKJfwrzJ_pyES3xKVU3zSKC-",
+            "event_id": "link-audit-6",
+            "link_id": 4,
+            "receiver_accepted_once": true,
+            "retry_delay_seconds": 60.0
+          },
+          {
+            "attempts": 2,
+            "body_sha256": "b992dc3392ae815941f543a5c315dc0c50a9242f3b1813d639e25032d8384358",
+            "delivery_id": "whd_oW6WhZjATWYi3x6fEO4y3CBJ",
+            "event_id": "link-audit-7",
+            "link_id": 5,
+            "receiver_accepted_once": true,
+            "retry_delay_seconds": 60.0
+          }
+        ],
+        "outbound_delivery_attempted": true,
+        "producer_duplicate_idempotent": true,
+        "real_link_http_create": true,
+        "real_operationsmonitor": true,
+        "real_p15_session": true,
+        "real_retry_clock": true,
+        "receiver_rotation_verified": true,
+        "receiver_signature_verified": true,
+        "revoked_key_http_status": 401,
+        "rotated_new_key_http_status": 200,
+        "rotated_old_key_http_status": 401,
+        "secret_material_recorded": false,
+        "secret_once_verified": true,
+        "t023_evidence_bound": true,
+        "test_header_authority": false,
+        "unauthenticated_http_status": 401,
+        "user_id": "usr_zlVg5Dm3H5j1sC148BJZVvlH",
+        "webhook_outbound_passed": true,
+        "webhook_payload_minimal": true,
+        "webhook_producer_passed": true,
+        "webhook_queue_count": 1,
+        "webhooks_auth_dependency_unavailable": false,
+        "webhooks_http_status": 200,
+        "worker_restart_verified": true,
+        "workspace_id": "ws_VWp0WcO9XJF9va6bLhUrvgfx"
+      },
+      "closed_at": "2026-09-13T18:16:58.403803+00:00"
     }
   ],
   "decision_required": [],
@@ -1241,5 +1321,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D018 closed. D019 production webhook event source under repair; real event-to-queue verification pending. Full T024 delivery/receiver and remaining lifecycle evidence pending; T025+ forbidden."
+  "note": "D001-D019 closed by verified bounded remediation evidence. Full T024 formalization and same-head predecessor binding remain pending; T025+ forbidden."
 }
