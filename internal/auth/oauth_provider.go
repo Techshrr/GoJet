@@ -181,10 +181,20 @@ func buildAuthorizationURL(cfg OAuthProviderConfig, state, challenge string) (st
 	query.Set("code_challenge_method", "S256")
 	if len(cfg.Scopes) > 0 {
 		separator := " "
-		if cfg.Provider == ProviderQQ || cfg.Provider == ProviderFacebook {
+		if cfg.Provider == ProviderQQ || cfg.Provider == ProviderFacebook || cfg.Provider == ProviderWeChat {
 			separator = ","
 		}
 		query.Set("scope", strings.Join(cfg.Scopes, separator))
+	}
+	if cfg.Provider == ProviderWeChat {
+		query.Del("client_id")
+		query.Set("appid", cfg.ClientID)
+		query.Del("code_challenge")
+		query.Del("code_challenge_method")
+		if len(cfg.Scopes) == 0 {
+			query.Set("scope", "snsapi_login")
+		}
+		parsed.Fragment = "wechat_redirect"
 	}
 	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil

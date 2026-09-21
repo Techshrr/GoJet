@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"net/url"
 	"strings"
 )
@@ -21,7 +20,7 @@ func (a *HTTPProviderAdapter) exchangeQQ(ctx context.Context, input OAuthProvide
 		"client_secret": {input.ClientSecret}, "code": {input.Code},
 		"redirect_uri": {input.RedirectURI}, "fmt": {"json"},
 	}
-	if a.qqRead(ctx, input.TokenURL, params, &token) != nil || len(token.Error) != 0 || token.AccessToken == "" {
+	if a.readQueryJSON(ctx, input.TokenURL, params, &token) != nil || len(token.Error) != 0 || token.AccessToken == "" {
 		return denied, ErrForbidden
 	}
 	var identity struct {
@@ -29,7 +28,7 @@ func (a *HTTPProviderAdapter) exchangeQQ(ctx context.Context, input OAuthProvide
 		OpenID   string          `json:"openid"`
 		Error    json.RawMessage `json:"error"`
 	}
-	if a.qqRead(ctx, "https://graph.qq.com/oauth2.0/me", url.Values{
+	if a.readQueryJSON(ctx, "https://graph.qq.com/oauth2.0/me", url.Values{
 		"access_token": {token.AccessToken}, "fmt": {"json"},
 	}, &identity) != nil || len(identity.Error) != 0 || identity.ClientID != input.ClientID || strings.TrimSpace(identity.OpenID) == "" {
 		return denied, ErrForbidden
@@ -38,19 +37,11 @@ func (a *HTTPProviderAdapter) exchangeQQ(ctx context.Context, input OAuthProvide
 		Ret      *int   `json:"ret"`
 		Nickname string `json:"nickname"`
 	}
-	if a.qqRead(ctx, input.UserInfoURL, url.Values{
+	if a.readQueryJSON(ctx, input.UserInfoURL, url.Values{
 		"access_token": {token.AccessToken}, "oauth_consumer_key": {input.ClientID},
 		"openid": {identity.OpenID},
 	}, &profile) != nil || profile.Ret == nil || *profile.Ret != 0 {
 		return denied, ErrForbidden
 	}
 	return OAuthProviderClaim{Subject: identity.OpenID, DisplayName: profile.Nickname}, nil
-}
-
-func (a *HTTPProviderAdapter) qqRead(ctx context.Context, endpoint string, params url.Values, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+params.Encode(), nil)
-	if err != nil {
-		return ErrForbidden
-	}
-	return a.read(req, out)
 }

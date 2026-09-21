@@ -28,6 +28,7 @@ func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderE
   input.Code == "" || input.ClientID == "" || input.ClientSecret == "" || input.PKCEVerifier == "" {
   return denied, ErrForbidden
  }
+ if input.Provider == ProviderWeChat { return a.exchangeWeChat(ctx, input) }
  if input.Provider == ProviderFacebook { return a.exchangeFacebook(ctx, input) }
  if input.Provider == ProviderQQ { return a.exchangeQQ(ctx, input) }
  form := url.Values{"grant_type": {"authorization_code"}, "client_id": {input.ClientID}, "client_secret": {input.ClientSecret},
@@ -81,6 +82,8 @@ func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
  switch input.Provider {
  case ProviderGitHub:
   return input.TokenURL == "https://github.com/login/oauth/access_token" && input.UserInfoURL == "https://api.github.com/user"
+ case ProviderWeChat:
+  return input.TokenURL == "https://api.weixin.qq.com/sns/oauth2/access_token" && input.UserInfoURL == "https://api.weixin.qq.com/sns/userinfo"
  case ProviderFacebook:
   return facebookEndpoints(input)
  case ProviderQQ:
@@ -90,4 +93,12 @@ func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
  default:
   return false
  }
+}
+
+func (a *HTTPProviderAdapter) readQueryJSON(ctx context.Context, endpoint string, params url.Values, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+params.Encode(), nil)
+	if err != nil {
+		return ErrForbidden
+	}
+	return a.read(req, out)
 }
