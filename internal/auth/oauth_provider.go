@@ -181,7 +181,7 @@ func buildAuthorizationURL(cfg OAuthProviderConfig, state, challenge string) (st
 	query.Set("code_challenge_method", "S256")
 	if len(cfg.Scopes) > 0 {
 		separator := " "
-		if cfg.Provider == ProviderQQ {
+		if cfg.Provider == ProviderQQ || cfg.Provider == ProviderFacebook {
 			separator = ","
 		}
 		query.Set("scope", strings.Join(cfg.Scopes, separator))

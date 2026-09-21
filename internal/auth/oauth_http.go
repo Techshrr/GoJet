@@ -28,6 +28,7 @@ func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderE
   input.Code == "" || input.ClientID == "" || input.ClientSecret == "" || input.PKCEVerifier == "" {
   return denied, ErrForbidden
  }
+ if input.Provider == ProviderFacebook { return a.exchangeFacebook(ctx, input) }
  if input.Provider == ProviderQQ { return a.exchangeQQ(ctx, input) }
  form := url.Values{"grant_type": {"authorization_code"}, "client_id": {input.ClientID}, "client_secret": {input.ClientSecret},
   "code": {input.Code}, "redirect_uri": {input.RedirectURI}, "code_verifier": {input.PKCEVerifier}}
@@ -80,6 +81,8 @@ func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
  switch input.Provider {
  case ProviderGitHub:
   return input.TokenURL == "https://github.com/login/oauth/access_token" && input.UserInfoURL == "https://api.github.com/user"
+ case ProviderFacebook:
+  return facebookEndpoints(input)
  case ProviderQQ:
   return input.TokenURL == "https://graph.qq.com/oauth2.0/token" && input.UserInfoURL == "https://graph.qq.com/user/get_user_info"
  case ProviderGoogle:
