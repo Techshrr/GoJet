@@ -180,7 +180,11 @@ func buildAuthorizationURL(cfg OAuthProviderConfig, state, challenge string) (st
 	query.Set("code_challenge", challenge)
 	query.Set("code_challenge_method", "S256")
 	if len(cfg.Scopes) > 0 {
-		query.Set("scope", strings.Join(cfg.Scopes, " "))
+		separator := " "
+		if cfg.Provider == ProviderQQ {
+			separator = ","
+		}
+		query.Set("scope", strings.Join(cfg.Scopes, separator))
 	}
 	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil

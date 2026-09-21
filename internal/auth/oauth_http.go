@@ -28,6 +28,7 @@ func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderE
   input.Code == "" || input.ClientID == "" || input.ClientSecret == "" || input.PKCEVerifier == "" {
   return denied, ErrForbidden
  }
+ if input.Provider == ProviderQQ { return a.exchangeQQ(ctx, input) }
  form := url.Values{"grant_type": {"authorization_code"}, "client_id": {input.ClientID}, "client_secret": {input.ClientSecret},
   "code": {input.Code}, "redirect_uri": {input.RedirectURI}, "code_verifier": {input.PKCEVerifier}}
  req, err := http.NewRequestWithContext(ctx, http.MethodPost, input.TokenURL, strings.NewReader(form.Encode()))
@@ -79,6 +80,8 @@ func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
  switch input.Provider {
  case ProviderGitHub:
   return input.TokenURL == "https://github.com/login/oauth/access_token" && input.UserInfoURL == "https://api.github.com/user"
+ case ProviderQQ:
+  return input.TokenURL == "https://graph.qq.com/oauth2.0/token" && input.UserInfoURL == "https://graph.qq.com/user/get_user_info"
  case ProviderGoogle:
   return input.TokenURL == "https://oauth2.googleapis.com/token" && input.UserInfoURL == "https://openidconnect.googleapis.com/v1/userinfo"
  default:
