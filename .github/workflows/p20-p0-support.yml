@@ -30,6 +30,7 @@ on:
       - 'scripts/p20/t023_case.py'
       - 'scripts/p20/t024_availability.py'
       - 'scripts/p20/t024_outbound.py'
+      - 'scripts/p20/t024_formal.py'
       - 'scripts/p20/t024_key_lifecycle.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
@@ -891,6 +892,21 @@ jobs:
           done
           true
 
+      - name: Bind frozen P17 webhook authority to real T024 lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          export GOJET_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_p20_network?multiStatements=true&parseTime=true&charset=utf8mb4'
+          for case in P17-T025 P17-T026 P17-T027 P17-T028 P17-T029; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'DROP DATABASE IF EXISTS gojet_p20_network; CREATE DATABASE gojet_p20_network CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'
+            for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+              mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_p20_network < "$migration"
+            done
+            python3 scripts/p17/integration.py --case "$case"
+          done
+          python3 scripts/p20/t024_formal.py
+
       - name: Upload exact-head T024 availability evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -899,6 +915,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P17/webhooks/
+            artifacts/v10/P20/integration/P20-T024-runtime.json
             artifacts/v10/P09/clamav/P09-T005.json
             artifacts/v10/P09/clamav/P09-T006.json
             artifacts/v10/P09/clamav/P09-T007.json
