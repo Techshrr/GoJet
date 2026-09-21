@@ -24,13 +24,11 @@ func NewHTTPProviderAdapter() *HTTPProviderAdapter {
 
 func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderExchangeRequest) (OAuthProviderClaim, error) {
  denied := OAuthProviderClaim{}
- if a == nil || a.client == nil || input.Provider != ProviderGitHub ||
-  input.TokenURL != "https://github.com/login/oauth/access_token" ||
-  input.UserInfoURL != "https://api.github.com/user" ||
+ if a == nil || a.client == nil || !supportedHTTPEndpoints(input) ||
   input.Code == "" || input.ClientID == "" || input.ClientSecret == "" || input.PKCEVerifier == "" {
   return denied, ErrForbidden
  }
- form := url.Values{"client_id": {input.ClientID}, "client_secret": {input.ClientSecret},
+ form := url.Values{"grant_type": {"authorization_code"}, "client_id": {input.ClientID}, "client_secret": {input.ClientSecret},
   "code": {input.Code}, "redirect_uri": {input.RedirectURI}, "code_verifier": {input.PKCEVerifier}}
  req, err := http.NewRequestWithContext(ctx, http.MethodPost, input.TokenURL, strings.NewReader(form.Encode()))
  if err != nil { return denied, ErrForbidden }
@@ -42,6 +40,19 @@ func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderE
  req, err = http.NewRequestWithContext(ctx, http.MethodGet, input.UserInfoURL, nil)
  if err != nil { return denied, ErrForbidden }
  req.Header.Set("Authorization", "Bearer " + token.AccessToken)
+ if input.Provider == ProviderGoogle {
+  var user struct {
+   Subject string `json:"sub"`
+   Email string `json:"email"`
+   EmailVerified bool `json:"email_verified"`
+   Name string `json:"name"`
+  }
+  if a.read(req, &user) != nil || strings.TrimSpace(user.Subject) == "" || len(user.Subject) > 255 {
+   return denied, ErrForbidden
+  }
+  return OAuthProviderClaim{Subject: user.Subject, Email: user.Email,
+   EmailVerified: user.EmailVerified, DisplayName: user.Name}, nil
+ }
  var user struct { ID int64 `json:"id"`; Name string `json:"name"`; Login string `json:"login"` }
  if a.read(req, &user) != nil || user.ID <= 0 { return denied, ErrForbidden }
  name := user.Name
@@ -62,4 +73,15 @@ func (a *HTTPProviderAdapter) read(req *http.Request, out any) error {
  body, err := io.ReadAll(io.LimitReader(response.Body, maxBody+1))
  if err != nil || len(body) > maxBody || json.Unmarshal(body, out) != nil { return ErrForbidden }
  return nil
+}
+
+func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
+ switch input.Provider {
+ case ProviderGitHub:
+  return input.TokenURL == "https://github.com/login/oauth/access_token" && input.UserInfoURL == "https://api.github.com/user"
+ case ProviderGoogle:
+  return input.TokenURL == "https://oauth2.googleapis.com/token" && input.UserInfoURL == "https://openidconnect.googleapis.com/v1/userinfo"
+ default:
+  return false
+ }
 }

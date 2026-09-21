@@ -69,3 +69,28 @@ func TestHTTPProviderAdapterFailsClosedOnProviderResponse(t *testing.T) {
  a:=NewHTTPProviderAdapter()
  if a.client.Timeout<=0 || a.client.CheckRedirect(&http.Request{},nil)!=http.ErrUseLastResponse {t.Fatal("missing network bounds")}
 }
+
+func TestHTTPProviderAdapterGoogleProtocol(t *testing.T) {
+ for _,verified:=range []bool{false,true} {
+  a:=NewHTTPProviderAdapter()
+  calls:=0
+  a.client.Transport=oauthRoundTrip(func(r *http.Request)(*http.Response,error){
+   calls++
+   body:=`{"access_token":"google-test-token","token_type":"Bearer"}`
+   if calls==1 {
+    if r.URL.String()!="https://oauth2.googleapis.com/token" || r.Method!="POST" {t.Fatal("wrong token endpoint")}
+    if err:=r.ParseForm();err!=nil {t.Fatal(err)}
+    if r.Form.Get("grant_type")!="authorization_code" || r.Form.Get("code_verifier")!="verifier" {t.Fatal("missing grant/PKCE binding")}
+   } else if calls==2 {
+    if r.URL.String()!="https://openidconnect.googleapis.com/v1/userinfo" || r.Header.Get("Authorization")!="Bearer google-test-token" {t.Fatal("wrong userinfo authority")}
+    body=`{"sub":"stable-subject","email":"person@example.test","email_verified":false,"name":"Person"}`
+    if verified {body=strings.Replace(body,"false","true",1)}
+   } else {t.Fatal("unexpected extra request")}
+   return &http.Response{StatusCode:200,Body:io.NopCloser(strings.NewReader(body)),Header:make(http.Header)},nil
+  })
+  input:=githubExchangeFixture();input.Provider=ProviderGoogle
+  input.TokenURL="https://oauth2.googleapis.com/token";input.UserInfoURL="https://openidconnect.googleapis.com/v1/userinfo"
+  claim,err:=a.Exchange(context.Background(),input)
+  if err!=nil || calls!=2 || claim.Subject!="stable-subject" || claim.EmailVerified!=verified {t.Fatal("incorrect Google identity verification")}
+ }
+}
