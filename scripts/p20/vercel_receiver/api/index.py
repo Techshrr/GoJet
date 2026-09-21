@@ -1,0 +1,112 @@
+"""Vercel entrypoint; shared receiver protocol with Redis compare-and-set state."""
+import hmac
+import json
+import os
+import urllib.request
+from urllib.parse import urlsplit, parse_qs
+from http.server import BaseHTTPRequestHandler
+
+from webhook_receiver import Receiver
+
+
+CAS = """
+local current = redis.call('GET', KEYS[1]) or ''
+if current ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'EX', 1800)
+return 1
+"""
+
+
+def native_url():
+    return os.environ.get('REDIS_URL') or os.environ.get('UPSTASH_REDIS_REST_REDIS_URL', '')
+
+
+def redis_command(command):
+    if native_url():
+        import redis
+        if not native_url().startswith(('redis://', 'rediss://')):
+            raise ValueError('invalid Redis URL')
+        with redis.Redis.from_url(native_url(), decode_responses=True,
+                                  socket_connect_timeout=5, socket_timeout=5) as client:
+            result = client.execute_command(*command)
+            return 'PONG' if command == ['PING'] and result is True else result
+    url = os.environ['UPSTASH_REDIS_REST_URL'].rstrip('/')
+    if not url.startswith('https://'):
+        raise ValueError('HTTPS storage required')
+    request = urllib.request.Request(url, data=json.dumps(command).encode(), method='POST',
+                                     headers={'Authorization': 'Bearer ' + os.environ['UPSTASH_REDIS_REST_TOKEN'],
+                                              'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        result = json.load(response)
+    if 'error' in result:
+        raise ValueError('state command failed')
+    return result['result']
+
+
+def dispatch(method, path, headers, body, command=redis_command):
+    storage_present = bool(native_url() or (os.environ.get('UPSTASH_REDIS_REST_URL')
+                                           and os.environ.get('UPSTASH_REDIS_REST_TOKEN')))
+    configured = bool(os.environ.get('P20_RECEIVER_CONTROL_TOKEN')) and storage_present
+    if path == '/healthz' and method == 'GET':
+        checks = {
+            'variables_present': configured,
+            'control_token_length_valid': len(os.environ.get('P20_RECEIVER_CONTROL_TOKEN', '')) >= 32,
+            'redis_url_valid': (native_url().startswith(('redis://', 'rediss://')) if native_url()
+                                else os.environ.get('UPSTASH_REDIS_REST_URL', '').startswith('https://')),
+        }
+        valid_configuration = all(checks.values())
+        checks['redis_ping_passed'] = False
+        if valid_configuration:
+            try:
+                checks['redis_ping_passed'] = command(['PING']) == 'PONG'
+            except Exception:
+                pass  # Never expose dependency exception text or credentials.
+        return (200 if all(checks.values()) else 503), {
+            'configured': configured, 'checks': checks, 'formal_p20_t024_claim': False}
+    if not configured:
+        return 503, {'error': 'receiver_not_configured'}
+    token = os.environ['P20_RECEIVER_CONTROL_TOKEN']
+    if path.startswith('/runs/') and not hmac.compare_digest(headers.get('Authorization', ''), 'Bearer ' + token):
+        return 401, {}
+    key = 'gojet:p20:receiver:v1'
+    for _ in range(5):
+        previous = command(['GET', key]) or ''
+        receiver = Receiver(token)
+        receiver.runs = json.loads(previous) if previous else {}
+        status, result = receiver.request(method, path, headers, body)
+        current = json.dumps(receiver.runs, separators=(',', ':'), sort_keys=True)
+        if command(['EVAL', CAS, 1, key, previous, current]) == 1:
+            return status, result
+    return 503, {'error': 'state_contention'}
+
+
+class handler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def respond(self):
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if length < 0 or length > 256 * 1024 or self.headers.get('Transfer-Encoding'):
+                status, result = 413, {}
+            else:
+                parsed = urlsplit(self.path)
+                paths = parse_qs(parsed.query).get("receiver_path", [parsed.path])
+                if len(paths) != 1:
+                    raise ValueError("ambiguous receiver path")
+                status, result = dispatch(self.command, paths[0], self.headers, self.rfile.read(length))
+        except (ValueError, TypeError, AttributeError):
+            status, result = 400, {}
+        except Exception:
+            # Dependency details may contain credentials; never return or log them.
+            status, result = 503, {'error': 'receiver_dependency_unavailable'}
+        payload = json.dumps(result).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        self.wfile.write(payload)
+
+    do_GET = do_POST = do_PATCH = do_DELETE = respond
