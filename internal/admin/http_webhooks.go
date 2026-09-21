@@ -12,6 +12,7 @@ import (
 type WorkspaceWebhookHTTPAPI struct {
 	authority       *WorkspaceWebhookAuthority
 	testAuthEnabled bool
+	resolveActor    WorkspaceActorResolver
 }
 
 func NewWorkspaceWebhookHTTPAPI(authority *WorkspaceWebhookAuthority, testAuthEnabled bool) (*WorkspaceWebhookHTTPAPI, error) {
@@ -19,6 +20,19 @@ func NewWorkspaceWebhookHTTPAPI(authority *WorkspaceWebhookAuthority, testAuthEn
 		return nil, ErrInvalid
 	}
 	return &WorkspaceWebhookHTTPAPI{authority: authority, testAuthEnabled: testAuthEnabled}, nil
+}
+
+// NewWorkspaceWebhookHTTPAPIWithActorResolver binds production customer authority.
+func NewWorkspaceWebhookHTTPAPIWithActorResolver(authority *WorkspaceWebhookAuthority, resolve WorkspaceActorResolver) (*WorkspaceWebhookHTTPAPI, error) {
+	if resolve == nil {
+		return nil, ErrInvalid
+	}
+	api, err := NewWorkspaceWebhookHTTPAPI(authority, false)
+	if err != nil {
+		return nil, err
+	}
+	api.resolveActor = resolve
+	return api, nil
 }
 
 func (a *WorkspaceWebhookHTTPAPI) Handler() http.Handler {
@@ -41,17 +55,7 @@ func (a *WorkspaceWebhookHTTPAPI) Handler() http.Handler {
 }
 
 func (a *WorkspaceWebhookHTTPAPI) actor(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if !a.testAuthEnabled {
-		webhookWriteError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable")
-		return "", false
-	}
-	actor := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
-	email := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Email"))
-	if actor == "" || email == "" {
-		webhookWriteError(w, http.StatusUnauthorized, "authentication_required")
-		return "", false
-	}
-	return actor, true
+	return workspaceDeveloperActor(w, r, a.resolveActor, a.testAuthEnabled)
 }
 
 func (a *WorkspaceWebhookHTTPAPI) list(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import (
 type WorkspaceDomainsAPI struct {
 	store           *MySQLStore
 	testAuthEnabled bool
+	actorResolver   ActorResolver
 }
 
 type createDomainRequest struct {
@@ -27,6 +28,10 @@ type domainActor struct {
 
 func NewWorkspaceDomainsAPI(store *MySQLStore, testAuthEnabled bool) *WorkspaceDomainsAPI {
 	return &WorkspaceDomainsAPI{store: store, testAuthEnabled: testAuthEnabled}
+}
+
+func NewWorkspaceDomainsAPIWithActorResolver(store *MySQLStore, resolver ActorResolver) *WorkspaceDomainsAPI {
+	return &WorkspaceDomainsAPI{store: store, actorResolver: resolver}
 }
 
 func (a *WorkspaceDomainsAPI) Handler() http.Handler {
@@ -47,6 +52,37 @@ func domainAPIHeaders(next http.Handler) http.Handler {
 }
 
 func (a *WorkspaceDomainsAPI) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (domainActor, bool) {
+	if a.actorResolver != nil {
+		actor, err := a.actorResolver(r, strings.TrimSpace(workspaceID))
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAuthenticationRequired):
+				writeDomainAPIError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrForbidden):
+				writeDomainAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			default:
+				writeDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			}
+			return domainActor{}, false
+		}
+		actorID := strings.TrimSpace(actor.ActorID)
+		role := strings.ToLower(strings.TrimSpace(actor.Role))
+		if actorID == "" || strings.TrimSpace(workspaceID) == "" {
+			writeDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			return domainActor{}, false
+		}
+		if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+			writeDomainAPIError(w, http.StatusForbidden, "forbidden", "Workspace access denied.")
+			return domainActor{}, false
+		}
+		if mutation && role == "viewer" {
+			writeDomainAPIError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+			return domainActor{}, false
+		}
+		return domainActor{ActorID: actorID, Role: role}, true
+	}
+
+	// Preserve the predecessor P06 test-only adapter for isolated P06 authority tests.
 	if !a.testAuthEnabled {
 		writeDomainAPIError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
 		return domainActor{}, false
@@ -119,12 +155,12 @@ func (a *WorkspaceDomainsAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := a.store.CreateDomain(r.Context(), CreateDomainInput{
-		WorkspaceID: workspaceID,
-		ActorID: actor.ActorID,
+		WorkspaceID:   workspaceID,
+		ActorID:       actor.ActorID,
 		CorrelationID: domainCorrelationID(r),
-		Reason: request.ChangeReason,
-		Hostname: request.Hostname,
-		Now: time.Now().UTC(),
+		Reason:        request.ChangeReason,
+		Hostname:      request.Hostname,
+		Now:           time.Now().UTC(),
 	})
 	if err != nil {
 		writeDomainStoreError(w, err)
