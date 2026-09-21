@@ -240,6 +240,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Test production OAuth HTTP adapter protocol
+        run: go test ./internal/auth -run TestHTTPProviderAdapter -count=1
+
       - name: Install native runtime, ClamAV and QR decoder clients
         shell: bash
         run: |

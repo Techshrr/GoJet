@@ -547,11 +547,11 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
-	if !h.testAuth {
-		writeAuthProblem(w, http.StatusServiceUnavailable, "provider_error", "The identity provider could not complete the request.")
-		return
+	var adapter authn.OAuthProviderAdapter = authn.NewHTTPProviderAdapter()
+	if h.testAuth {
+		adapter = deterministicOAuthAdapter{}
 	}
-	callback, err := h.oauth.Callback(r.Context(), deterministicOAuthAdapter{}, authn.OAuthCallbackInput{Provider: provider, State: state, Code: code, CorrelationID: correlationID}, time.Now().UTC())
+	callback, err := h.oauth.Callback(r.Context(), adapter, authn.OAuthCallbackInput{Provider: provider, State: state, Code: code, CorrelationID: correlationID}, time.Now().UTC())
 	if err != nil {
 		if errors.Is(err, authn.ErrForbidden) || errors.Is(err, authn.ErrExpired) || errors.Is(err, authn.ErrReplay) {
 			writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")

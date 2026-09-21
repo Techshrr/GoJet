@@ -3,7 +3,29 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D020",
+      "severity": "P1",
+      "title": "Production OAuth callback has no provider exchange adapter",
+      "case": "P20-T025",
+      "issue": 176,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "f35a1d04f42ea19941f5ebb4ba289fb2be751492",
+      "discovery_workflow_run": 35592953224,
+      "discovery_workflow_job": 106311228864,
+      "discovery_artifact_id": 10637409095,
+      "discovery_artifact_digest": "sha256:854142c094496031d277dc6012811fd6f5e3514ceecf21f02da125e2320dfe99",
+      "failure": "All six production OAuth callbacks return503 before state validation; only test adapter is wired.",
+      "status": "open"
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",
@@ -1321,5 +1343,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D019 closed by verified bounded remediation evidence. Full T024 formalization and same-head predecessor binding remain pending; T025+ forbidden."
+  "note": "D001-D019 closed. T024 formally completed at e9105bbff6bb217d47d8cb9227e3236777f7a5a6. D020 open: partial GitHub adapter remediation does not close multi-provider OAuth lifecycle or T025. T026+ forbidden."
 }
