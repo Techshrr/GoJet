@@ -82,17 +82,24 @@ jobs:
           path = Path('artifacts/v10/P09/evidence-producer-manifest.json')
 
           def fetch_runs():
-              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
-              request = urllib.request.Request(
-                  f'https://api.github.com/repos/{repository}/actions/runs?{query}',
-                  headers={
-                      'Accept': 'application/vnd.github+json',
-                      'Authorization': f'Bearer {token}',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                  },
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)['workflow_runs']
+              runs = []
+              page = 1
+              while True:
+                  query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100, 'page': page})
+                  request = urllib.request.Request(
+                      f'https://api.github.com/repos/{repository}/actions/runs?{query}',
+                      headers={
+                          'Accept': 'application/vnd.github+json',
+                          'Authorization': f'Bearer {token}',
+                          'X-GitHub-Api-Version': '2022-11-28',
+                      },
+                  )
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      batch = json.load(response)['workflow_runs']
+                  runs.extend(batch)
+                  if len(batch) < 100:
+                      return runs
+                  page += 1
 
           deadline = time.time() + 30 * 60
           while time.time() < deadline:
