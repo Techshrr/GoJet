@@ -16,12 +16,30 @@ func TestGoogleOneTapOriginAndExistingSession(t *testing.T) {
 		r.Header.Set("Origin", origin)
 		w := httptest.NewRecorder()
 		h.handleGoogleOneTapStart(w, r)
-		if w.Code != http.StatusForbidden || len(w.Result().Cookies()) != 0 { t.Fatal("foreign origin reached challenge creation") }
+		if w.Code != http.StatusForbidden || len(w.Result().Cookies()) != 0 {
+			t.Fatal("foreign origin reached challenge creation")
+		}
 	}
 	r := httptest.NewRequest(http.MethodPost, "https://gojet.example/api/public/auth/google/one-tap/start", nil)
 	r.Header.Set("Origin", "https://gojet.example")
 	r.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: "existing-browser-session"})
 	w := httptest.NewRecorder()
 	h.handleGoogleOneTapStart(w, r)
-	if w.Code != http.StatusOK || w.Body.String() != "{\"enabled\":false}\n" || len(w.Result().Cookies()) != 0 { t.Fatal("existing login must suppress the prompt without issuing a challenge") }
+	if w.Code != http.StatusOK || w.Body.String() != "{\"enabled\":false}\n" || len(w.Result().Cookies()) != 0 {
+		t.Fatal("existing login must suppress the prompt without issuing a challenge")
+	}
+}
+
+func TestGoogleOneTapCompletionRejectsForeignOrigin(t *testing.T) {
+	t.Setenv("GOJET_AUTH_ALLOWED_ORIGIN", "https://gojet.example")
+	h := &authHTTPHandler{}
+	for _, origin := range []string{"", "null", "https://attacker.example"} {
+		r := httptest.NewRequest(http.MethodPost, "https://gojet.example/api/public/auth/google/one-tap/complete", nil)
+		r.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		h.handleGoogleOneTapComplete(w, r)
+		if w.Code != http.StatusForbidden || len(w.Result().Cookies()) != 0 {
+			t.Fatal("foreign origin reached credential verification")
+		}
+	}
 }

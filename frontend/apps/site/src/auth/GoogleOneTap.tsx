@@ -9,7 +9,7 @@ type Identity = {
 type GoogleWindow = Window & { google?: { accounts?: { id?: Identity } } };
 let loading: Promise<Identity> | undefined;
 type Challenge = { enabled: boolean; client_id: string; state: string; nonce: string };
-let pendingChallenge: Promise<Challenge> | undefined;
+let pendingChallenge: Promise<Challenge | null> | undefined;
 function identity(): Promise<Identity> {
   const current = (window as GoogleWindow).google?.accounts?.id;
   if (current) return Promise.resolve(current);
@@ -42,9 +42,17 @@ export function GoogleOneTap() {
       return response.json() as Promise<T>;
     }
     void (async () => {
-      pendingChallenge ??= post<Challenge>('/api/public/auth/google/one-tap/start', {}).catch((error: unknown) => { pendingChallenge = undefined; throw error; });
+      // Discover the capability before creating state. Static sites and older APIs
+      // do not advertise it; neither should load GIS or issue a login POST.
+      pendingChallenge ??= (async () => {
+        const response = await fetch('/api/public/auth/providers', { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return null;
+        const capability = await response.json() as { google_one_tap_enabled?: boolean };
+        if (capability.google_one_tap_enabled !== true) return null;
+        return post<Challenge>('/api/public/auth/google/one-tap/start', {});
+      })().finally(() => { pendingChallenge = undefined; });
       const challenge = await pendingChallenge;
-      if (cancelled || !challenge.enabled) return;
+      if (cancelled || !challenge?.enabled) return;
       id = await identity();
       if (cancelled) return;
       id.initialize({ client_id: challenge.client_id, nonce: challenge.nonce, auto_select: false, use_fedcm_for_prompt: true,

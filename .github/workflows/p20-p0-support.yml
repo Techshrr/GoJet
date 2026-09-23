@@ -241,7 +241,9 @@ jobs:
           cache: true
 
       - name: Test production OAuth HTTP adapter protocol
-        run: go test ./internal/auth -run TestHTTPProviderAdapter -count=1
+        run: |
+          go test ./internal/auth -run TestHTTPProviderAdapter -count=1
+          go test ./internal/admin ./services/platformapi/cmd/server -run TestGoogleOneTap -count=1
 
       - name: Install native runtime, ClamAV and QR decoder clients
         shell: bash

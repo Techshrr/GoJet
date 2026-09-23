@@ -345,7 +345,10 @@ func (h *authHTTPHandler) handleProviders(w http.ResponseWriter, r *http.Request
 	for _, cfg := range configs {
 		providers = append(providers, publicOAuthProvider{Provider: cfg.Provider, Enabled: cfg.Enabled && cfg.Configured})
 	}
-	writeAuthJSON(w, http.StatusOK, map[string]any{"providers": providers})
+	// Public capability discovery never creates a challenge or exposes credentials.
+	// Missing/disabled One Tap configuration must preserve ordinary OAuth login.
+	oneTapClientID, oneTapErr := h.oauth.GoogleOneTapClientID(r.Context())
+	writeAuthJSON(w, http.StatusOK, map[string]any{"providers": providers, "google_one_tap_enabled": oneTapErr == nil && oneTapClientID != ""})
 }
 
 func (h *authHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request) {

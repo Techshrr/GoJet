@@ -39,19 +39,34 @@ func (h *authHTTPHandler) oneTapAllowed(w http.ResponseWriter, r *http.Request) 
 
 func (h *authHTTPHandler) handleGoogleOneTapStart(w http.ResponseWriter, r *http.Request) {
 	clientID, ok := h.oneTapAllowed(w, r)
-	if !ok { return }
+	if !ok {
+		return
+	}
 	correlation, err := authCorrelation("")
-	if err != nil { writeAuthServiceError(w, err, false); return }
+	if err != nil {
+		writeAuthServiceError(w, err, false)
+		return
+	}
 	start, err := h.oauth.Start(r.Context(), authn.OAuthStartInput{Provider: authn.ProviderGoogle, Intent: authn.OAuthIntentLogin, CorrelationID: correlation}, time.Now().UTC())
-	if err != nil { writeAuthServiceError(w, err, false); return }
+	if err != nil {
+		writeAuthServiceError(w, err, false)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{Name: googleOneTapCookie, Value: start.State, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, Expires: start.ExpiresAt})
 	writeAuthJSON(w, http.StatusOK, map[string]any{"enabled": true, "client_id": clientID, "state": start.State, "nonce": start.PKCEVerifier})
 }
 
 func (h *authHTTPHandler) handleGoogleOneTapComplete(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.oneTapAllowed(w, r); !ok { return }
-	var input struct { State string `json:"state"`; Credential string `json:"credential"` }
-	if !decodeAuthJSON(w, r, &input) { return }
+	if _, ok := h.oneTapAllowed(w, r); !ok {
+		return
+	}
+	var input struct {
+		State      string `json:"state"`
+		Credential string `json:"credential"`
+	}
+	if !decodeAuthJSON(w, r, &input) {
+		return
+	}
 	cookie, err := r.Cookie(googleOneTapCookie)
 	if err != nil || input.State == "" || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(input.State)) != 1 {
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The sign-in challenge could not be validated.")
@@ -59,8 +74,14 @@ func (h *authHTTPHandler) handleGoogleOneTapComplete(w http.ResponseWriter, r *h
 	}
 	http.SetCookie(w, &http.Cookie{Name: googleOneTapCookie, Value: "", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	correlation, err := authCorrelation("")
-	if err != nil { writeAuthServiceError(w, err, false); return }
+	if err != nil {
+		writeAuthServiceError(w, err, false)
+		return
+	}
 	handoff, err := h.oauth.CompleteGoogleOneTap(r.Context(), googleOneTapVerifier, input.State, input.Credential, correlation, time.Now().UTC())
-	if err != nil { writeAuthProblem(w, http.StatusBadRequest, "state_error", "The sign-in credential could not be validated."); return }
+	if err != nil {
+		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The sign-in credential could not be validated.")
+		return
+	}
 	writeAuthJSON(w, http.StatusOK, map[string]any{"status": "handoff_ready", "handoff_code": handoff.Code, "expires_at": handoff.ExpiresAt})
 }
