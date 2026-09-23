@@ -152,6 +152,10 @@ func (s *Service) GetPlatformSetting(ctx context.Context, p Principal, key strin
 	var raw []byte
 	err := s.db.QueryRowContext(ctx, `SELECT setting_key,value_json,version,updated_at FROM admin_platform_settings WHERE setting_key=?`, key).Scan(&item.Key, &raw, &item.Version, &item.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
+		if key == "google_one_tap" {
+			// An unsaved opt-in setting is disabled; version zero preserves create CAS.
+			return PlatformSetting{Key: key, Value: map[string]string{"enabled": "false"}, Version: 0}, nil
+		}
 		return PlatformSetting{}, ErrNotFound
 	}
 	if err != nil {

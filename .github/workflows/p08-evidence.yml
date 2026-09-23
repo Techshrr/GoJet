@@ -18,6 +18,7 @@ on:
       - 'frontend/packages/ui/**'
       - 'frontend/packages/tokens/**'
       - 'scripts/p08/**'
+      - 'scripts/p20/test_p08_discovery.py'
       - 'artifacts/v10/P08/**'
       - '.github/workflows/p08-*.yml'
   workflow_dispatch:
@@ -50,6 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m unittest scripts.p20.test_p08_discovery
           python3 -m py_compile scripts/p08/validate.py scripts/p08/validate_coherence.py scripts/p08/validate_closure.py scripts/p08/validate_contract.py
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
@@ -81,17 +83,25 @@ jobs:
           path = Path("artifacts/v10/P08/evidence-producer-manifest.json")
 
           def fetch_runs():
-              query = urllib.parse.urlencode({"head_sha": sha, "event": "pull_request", "per_page": 100})
-              request = urllib.request.Request(
-                  f"https://api.github.com/repos/{repository}/actions/runs?{query}",
-                  headers={
-                      "Accept": "application/vnd.github+json",
-                      "Authorization": f"Bearer {token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                  },
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)["workflow_runs"]
+              runs = []
+              for page in range(1, 11):
+                  query = urllib.parse.urlencode({"head_sha": sha, "event": "pull_request", "per_page": 100, "page": page})
+                  request = urllib.request.Request(
+                      f"https://api.github.com/repos/{repository}/actions/runs?{query}",
+                      headers={
+                          "Accept": "application/vnd.github+json",
+                          "Authorization": f"Bearer {token}",
+                          "X-GitHub-Api-Version": "2022-11-28",
+                      },
+                  )
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      rows = json.load(response)["workflow_runs"]
+                  if not isinstance(rows, list):
+                      raise RuntimeError("Malformed workflow run listing")
+                  runs.extend(rows)
+                  if len(rows) < 100:
+                      return runs
+              raise RuntimeError("Workflow listing exceeds API pagination boundary")
 
           deadline = time.time() + 25 * 60
           while time.time() < deadline:
