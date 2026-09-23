@@ -125,6 +125,8 @@ func buildAuthHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	mux.HandleFunc("POST /api/auth/login", h.handlePasswordLogin)
 	mux.HandleFunc("POST /api/public/login-email-code", h.handleLoginEmailCode)
 	mux.HandleFunc("GET /api/public/auth/providers", h.handleProviders)
+	mux.HandleFunc("POST /api/public/auth/google/one-tap/start", h.handleGoogleOneTapStart)
+	mux.HandleFunc("POST /api/public/auth/google/one-tap/complete", h.handleGoogleOneTapComplete)
 	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
 	mux.HandleFunc("POST /api/public/email-code", h.handleVerificationResend)
 	mux.HandleFunc("POST /api/public/register-email-code", h.handleVerifyEmail)
@@ -147,6 +149,8 @@ func mountAuthRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/auth/login",
 		"POST /api/public/login-email-code",
 		"GET /api/public/auth/providers",
+		"POST /api/public/auth/google/one-tap/start",
+		"POST /api/public/auth/google/one-tap/complete",
 		"POST /api/auth/register",
 		"POST /api/public/email-code",
 		"POST /api/public/register-email-code",
