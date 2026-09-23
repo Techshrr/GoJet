@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'frontend/apps/site/**'
       - 'frontend/apps/docs/src/data/content-manifest.json'
       - 'frontend/packages/**'
@@ -111,8 +113,8 @@ jobs:
                 method='POST',body={'ref':ref})
 
           while time.time()<deadline:
-            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
-            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            from scripts.ci.actions import workflow_runs
+            runs = workflow_runs(api, repo, sha)
             latest={}
             for run in runs:
               name=run.get('name')

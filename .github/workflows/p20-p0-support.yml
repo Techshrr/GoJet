@@ -242,6 +242,7 @@ jobs:
 
       - name: Test production OAuth HTTP adapter protocol
         run: |
+          python3 -m unittest scripts.ci.test_actions
           go test ./internal/auth -run TestHTTPProviderAdapter -count=1
           go test ./internal/admin ./services/platformapi/cmd/server -run TestGoogleOneTap -count=1
 
