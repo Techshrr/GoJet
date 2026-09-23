@@ -213,6 +213,9 @@ jobs:
           print(f'downloaded {len(seen)} exact-head P18 case evidence files for {sha}')
           PY
 
+      - name: Test retained P04 replay verification
+        run: python3 -m unittest scripts.p18.test_p04_replay
+
       - name: Bind inherited P17 and P04 signed authorities
         run: |
           set -euo pipefail
@@ -239,16 +242,8 @@ jobs:
           ):
             raise SystemExit('P17 signed predecessor live metadata mismatch')
 
-          p04_run=api('/actions/runs/32392744860')
-          p04_art=api('/actions/artifacts/9415518410')
-          if not (
-            p04_run.get('head_sha')=='659e25e3c5e263ffb3dd74cde953e812b75a7439'
-            and p04_run.get('status')=='completed' and p04_run.get('conclusion')=='success'
-            and p04_art.get('digest')=='sha256:5f6b4ec5be87d866b07599e8bd32d75171a81523d29dd86441a524bf33cbc7bb'
-            and p04_art.get('expired') is False
-            and int(p04_art.get('workflow_run',{}).get('id',0))==32392744860
-          ):
-            raise SystemExit('P04 signed Docs-shell live metadata mismatch')
+          from scripts.p18.p04_replay import bind as bind_p04_replay
+          p04_authority=bind_p04_replay(repo, token)
 
           payload={
             'generated_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
@@ -260,13 +255,7 @@ jobs:
               'artifact_digest':'sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1',
               'phase':'signed','merge_authoritative':True,
             },
-            'p04':{
-              'reviewed_pre_sign_commit':'659e25e3c5e263ffb3dd74cde953e812b75a7439',
-              'workflow_run_id':32392744860,
-              'artifact_id':9415518410,
-              'artifact_digest':'sha256:5f6b4ec5be87d866b07599e8bd32d75171a81523d29dd86441a524bf33cbc7bb',
-              'required_tests':'10/10',
-            },
+            'p04':p04_authority,
           }
           path=Path('artifacts/v10/P18/coherence/inherited-authorities.json')
           path.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n',encoding='utf-8')

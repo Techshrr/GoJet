@@ -161,6 +161,9 @@ def main() -> int:
     need(p04.get("artifact_digest") == P04_DIGEST and p04.get("required_tests") == "10/10",
          "P04 signed Docs-shell authority mismatch", errors)
 
+    from p04_replay import REPLAY
+    need(p04.get("retained_replay") == REPLAY, "P04 retained replay verification binding mismatch", errors)
+
     evidence_entries: list[dict] = []
     same_exact_head = True
     expected_ids = {f"P18-T{i:03d}" for i in range(1, 25)}
