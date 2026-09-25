@@ -13,7 +13,13 @@ import (
 type API struct {
 	store           *Store
 	testAuthEnabled bool
+	actorResolver   ActorResolver
 	enabled         bool
+}
+
+type actorContext struct {
+	ActorID string
+	Role    string
 }
 
 type conversionRequest struct {
@@ -25,6 +31,10 @@ type conversionRequest struct {
 
 func NewAPI(store *Store, testAuthEnabled, enabled bool) *API {
 	return &API{store: store, testAuthEnabled: testAuthEnabled, enabled: enabled}
+}
+
+func NewAPIWithActorResolver(store *Store, resolver ActorResolver, enabled bool) *API {
+	return &API{store: store, actorResolver: resolver, enabled: enabled}
 }
 
 func (a *API) Handler() http.Handler {
@@ -44,39 +54,69 @@ func analyticsSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func (a *API) authorize(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) bool {
+func (a *API) authenticate(w http.ResponseWriter, r *http.Request, workspaceID string, mutation bool) (actorContext, bool) {
 	if !a.enabled {
 		writeAnalyticsError(w, http.StatusServiceUnavailable, "analytics_unavailable", "Analytics is not enabled.")
-		return false
+		return actorContext{}, false
 	}
-	// P07 must not pretend P12/P15 permissions are implemented. This adapter is
-	// explicitly test-only; production auth remains owned by later nodes.
+	workspaceID = strings.TrimSpace(workspaceID)
+	if a.actorResolver != nil {
+		actor, err := a.actorResolver(r, workspaceID)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrAuthenticationRequired):
+				writeAnalyticsError(w, http.StatusUnauthorized, "authentication_required", "Authentication is required.")
+			case errors.Is(err, ErrForbidden):
+				writeAnalyticsError(w, http.StatusForbidden, "forbidden", "Analytics access denied.")
+			default:
+				writeAnalyticsError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			}
+			return actorContext{}, false
+		}
+		actorID := strings.TrimSpace(actor.ActorID)
+		role := strings.ToLower(strings.TrimSpace(actor.Role))
+		if actorID == "" || workspaceID == "" {
+			writeAnalyticsError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is unavailable.")
+			return actorContext{}, false
+		}
+		if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
+			writeAnalyticsError(w, http.StatusForbidden, "forbidden", "Analytics access denied.")
+			return actorContext{}, false
+		}
+		if mutation && role == "viewer" {
+			writeAnalyticsError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
+			return actorContext{}, false
+		}
+		return actorContext{ActorID: actorID, Role: role}, true
+	}
+
+	// Preserve the predecessor P07 test-only adapter for its isolated tests.
 	if !a.testAuthEnabled {
 		writeAnalyticsError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable", "Authentication dependency is not available in this implementation stage.")
-		return false
+		return actorContext{}, false
 	}
-	actor := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
+	actorID := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
 	role := strings.ToLower(strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace-Role")))
 	headerWorkspace := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Workspace"))
 	permission := strings.ToLower(strings.TrimSpace(r.Header.Get("X-GoJet-Test-Analytics-Permission")))
-	if actor == "" || headerWorkspace == "" || headerWorkspace != workspaceID || permission != "allow" {
+	if actorID == "" || headerWorkspace == "" || headerWorkspace != workspaceID || permission != "allow" {
 		writeAnalyticsError(w, http.StatusForbidden, "forbidden", "Analytics access denied.")
-		return false
+		return actorContext{}, false
 	}
 	if role != "owner" && role != "admin" && role != "member" && role != "viewer" {
 		writeAnalyticsError(w, http.StatusForbidden, "forbidden", "Analytics access denied.")
-		return false
+		return actorContext{}, false
 	}
 	if mutation && role == "viewer" {
 		writeAnalyticsError(w, http.StatusForbidden, "read_only", "This Workspace role is read-only.")
-		return false
+		return actorContext{}, false
 	}
-	return true
+	return actorContext{ActorID: actorID, Role: role}, true
 }
 
 func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	workspaceID := strings.TrimSpace(r.PathValue("workspaceId"))
-	if !a.authorize(w, r, workspaceID, false) {
+	if _, ok := a.authenticate(w, r, workspaceID, false); !ok {
 		return
 	}
 	query, err := queryFromRequest(r, workspaceID, nil)
@@ -94,7 +134,7 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) linkReport(w http.ResponseWriter, r *http.Request) {
 	workspaceID := strings.TrimSpace(r.PathValue("workspaceId"))
-	if !a.authorize(w, r, workspaceID, false) {
+	if _, ok := a.authenticate(w, r, workspaceID, false); !ok {
 		return
 	}
 	linkID, err := strconv.ParseUint(strings.TrimSpace(r.PathValue("linkId")), 10, 64)
@@ -117,7 +157,7 @@ func (a *API) linkReport(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) recordConversion(w http.ResponseWriter, r *http.Request) {
 	workspaceID := strings.TrimSpace(r.PathValue("workspaceId"))
-	if !a.authorize(w, r, workspaceID, true) {
+	if _, ok := a.authenticate(w, r, workspaceID, true); !ok {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
@@ -132,11 +172,11 @@ func (a *API) recordConversion(w http.ResponseWriter, r *http.Request) {
 		request.OccurredAt = time.Now().UTC()
 	}
 	inserted, err := a.store.RecordConversion(r.Context(), Conversion{
-		WorkspaceID: workspaceID,
+		WorkspaceID:  workspaceID,
 		ConversionID: request.ConversionID,
-		CampaignID: request.CampaignID,
-		LinkID: request.LinkID,
-		OccurredAt: request.OccurredAt,
+		CampaignID:   request.CampaignID,
+		LinkID:       request.LinkID,
+		OccurredAt:   request.OccurredAt,
 	})
 	if err != nil {
 		writeAnalyticsStoreError(w, err)
@@ -147,8 +187,8 @@ func (a *API) recordConversion(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	writeAnalyticsJSON(w, status, map[string]any{
-		"conversion_id": strings.TrimSpace(request.ConversionID),
-		"recorded": inserted,
+		"conversion_id":        strings.TrimSpace(request.ConversionID),
+		"recorded":             inserted,
 		"idempotent_duplicate": !inserted,
 	})
 }
@@ -171,18 +211,18 @@ func queryFromRequest(r *http.Request, workspaceID string, linkID *uint64) (Quer
 		}
 	}
 	return Query{
-		WorkspaceID: workspaceID,
-		LinkID: linkID,
-		From: from,
-		To: to,
-		Timezone: r.URL.Query().Get("timezone"),
-		Granularity: r.URL.Query().Get("granularity"),
-		CountryCode: r.URL.Query().Get("country"),
-		Device: r.URL.Query().Get("device"),
-		Language: r.URL.Query().Get("language"),
+		WorkspaceID:    workspaceID,
+		LinkID:         linkID,
+		From:           from,
+		To:             to,
+		Timezone:       r.URL.Query().Get("timezone"),
+		Granularity:    r.URL.Query().Get("granularity"),
+		CountryCode:    r.URL.Query().Get("country"),
+		Device:         r.URL.Query().Get("device"),
+		Language:       r.URL.Query().Get("language"),
 		SourceHostname: r.URL.Query().Get("source"),
-		CampaignID: r.URL.Query().Get("campaign"),
-		Now: now,
+		CampaignID:     r.URL.Query().Get("campaign"),
+		Now:            now,
 	}, nil
 }
 
@@ -202,8 +242,8 @@ func writeAnalyticsStoreError(w http.ResponseWriter, err error) {
 func writeAnalyticsError(w http.ResponseWriter, status int, code, message string) {
 	writeAnalyticsJSON(w, status, map[string]any{
 		"error": map[string]any{
-			"code": code,
-			"message": message,
+			"code":           code,
+			"message":        message,
 			"correlation_id": fmt.Sprintf("p07-%d", time.Now().UTC().UnixNano()),
 		},
 	})

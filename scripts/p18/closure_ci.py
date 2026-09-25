@@ -89,8 +89,19 @@ def api(url: str, *, method: str = "GET", body=None):
 
 
 def exact_runs() -> list[dict]:
-    query = urllib.parse.urlencode({"head_sha": HEAD, "per_page": 100})
-    return api(f"https://api.github.com/repos/{REPO}/actions/runs?{query}").get("workflow_runs", [])
+    # Search-filtered Actions listings are capped at 1,000 results. Never
+    # interpret a truncated or malformed listing as missing-workflow authority.
+    runs = []
+    for page in range(1, 11):
+        query = urllib.parse.urlencode({"head_sha": HEAD, "per_page": 100, "page": page})
+        payload = api(f"https://api.github.com/repos/{REPO}/actions/runs?{query}")
+        batch = payload["workflow_runs"]
+        if not isinstance(batch, list):
+            raise RuntimeError("invalid exact-head workflow listing")
+        runs.extend(batch)
+        if len(batch) < 100:
+            return runs
+    raise RuntimeError("exact-head workflow listing reached the 1,000-result cap")
 
 
 def dispatch(workflow: str) -> None:
@@ -264,27 +275,10 @@ def bind_p17() -> dict:
 
 
 def bind_p04() -> dict:
-    run = api(f"https://api.github.com/repos/{REPO}/actions/runs/{P04_RUN}")
-    artifact = api(f"https://api.github.com/repos/{REPO}/actions/artifacts/{P04_ARTIFACT}")
-    if not (
-        run.get("head_sha") == P04_SOURCE
-        and run.get("status") == "completed"
-        and run.get("conclusion") == "success"
-        and artifact.get("digest") == P04_DIGEST
-        and artifact.get("expired") is False
-        and int(artifact.get("workflow_run", {}).get("id", 0)) == P04_RUN
-    ):
-        raise SystemExit("P04 inherited Docs-shell authority live metadata mismatch")
+    from p04_replay import bind
+    metadata = bind(REPO, TOKEN)
     inherited = P18 / "inherited"
     inherited.mkdir(parents=True, exist_ok=True)
-    metadata = {
-        "node": "P04",
-        "reviewed_pre_sign_commit": P04_SOURCE,
-        "workflow_run_id": P04_RUN,
-        "artifact_id": P04_ARTIFACT,
-        "artifact_digest": P04_DIGEST,
-        "required_tests": "10/10",
-    }
     (inherited / "p04-authority.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return metadata
 

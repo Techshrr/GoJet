@@ -63,6 +63,8 @@ type OAuthStartResult struct {
 }
 
 type OAuthProviderExchangeRequest struct {
+	TokenURL     string
+	UserInfoURL  string
 	Provider     string
 	Code         string
 	ClientID     string

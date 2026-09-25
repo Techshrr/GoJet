@@ -91,8 +91,15 @@ jobs:
 
           deadline = time.time() + 135 * 60
           while time.time() < deadline:
-              query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
-              runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+              runs = []
+              page = 1
+              while True:
+                  query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100, 'page': page})
+                  batch = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+                  runs.extend(batch)
+                  if len(batch) < 100:
+                      break
+                  page += 1
               latest = {}
               for run in runs:
                   name = run.get('name')

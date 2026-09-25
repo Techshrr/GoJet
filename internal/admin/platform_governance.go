@@ -84,6 +84,11 @@ func normalizeSettingValue(key string, value map[string]string) (map[string]stri
 	key = strings.TrimSpace(key)
 	clean := map[string]string{}
 	switch key {
+	case "google_one_tap":
+		if len(value) != 1 || (value["enabled"] != "true" && value["enabled"] != "false") {
+			return nil, ErrInvalid
+		}
+		clean["enabled"] = value["enabled"]
 	case "general":
 		allowed := map[string]bool{"site_name": true, "public_base_url": true, "support_url": true}
 		for k, v := range value {
@@ -140,13 +145,17 @@ func (s *Service) GetPlatformSetting(ctx context.Context, p Principal, key strin
 		return PlatformSetting{}, err
 	}
 	key = strings.TrimSpace(key)
-	if key != "general" && key != "brand" {
+	if key != "general" && key != "brand" && key != "google_one_tap" {
 		return PlatformSetting{}, ErrInvalid
 	}
 	var item PlatformSetting
 	var raw []byte
 	err := s.db.QueryRowContext(ctx, `SELECT setting_key,value_json,version,updated_at FROM admin_platform_settings WHERE setting_key=?`, key).Scan(&item.Key, &raw, &item.Version, &item.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
+		if key == "google_one_tap" {
+			// An unsaved opt-in setting is disabled; version zero preserves create CAS.
+			return PlatformSetting{Key: key, Value: map[string]string{"enabled": "false"}, Version: 0}, nil
+		}
 		return PlatformSetting{}, ErrNotFound
 	}
 	if err != nil {
