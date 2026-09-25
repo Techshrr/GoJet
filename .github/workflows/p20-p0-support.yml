@@ -31,6 +31,7 @@ on:
       - 'scripts/p20/t024_availability.py'
       - 'scripts/p20/t024_outbound.py'
       - 'scripts/p20/t024_formal.py'
+      - 'scripts/p20/t025_availability.py'
       - 'scripts/p20/t024_key_lifecycle.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
@@ -238,6 +239,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Test production OAuth HTTP adapter protocol
+        run: |
+          python3 -m unittest scripts.ci.test_actions
+          go test ./internal/auth -run TestHTTPProviderAdapter -count=1
+          go test ./internal/admin ./services/platformapi/cmd/server -run 'TestGoogleOneTap|TestOAuthGovernance' -count=1
 
       - name: Install native runtime, ClamAV and QR decoder clients
         shell: bash
@@ -800,6 +807,9 @@ jobs:
           assert d['details']['next_case_unlocked'] is False
           PYCODE
 
+      - name: Diagnose T025 production OAuth callback boundary
+        run: python3 scripts/p20/t025_availability.py
+
       - name: Capture T020 through T022 authoritative runtime state
         if: always()
         shell: bash
@@ -917,6 +927,7 @@ jobs:
           path: |
             artifacts/v10/P17/webhooks/
             artifacts/v10/P20/integration/P20-T024-runtime.json
+            artifacts/v10/P20/integration/P20-T025-availability.json
             artifacts/v10/P09/clamav/P09-T005.json
             artifacts/v10/P09/clamav/P09-T006.json
             artifacts/v10/P09/clamav/P09-T007.json

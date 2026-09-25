@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'go.mod'
       - 'go.sum'
       - 'internal/workspace/**'
@@ -81,8 +83,8 @@ jobs:
               return json.load(response)
           deadline = time.time() + 35 * 60
           while time.time() < deadline:
-            query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
-            runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}')['workflow_runs']
+            from scripts.ci.actions import workflow_runs
+            runs = workflow_runs(get, repo, sha)
             latest = {}
             for run in runs:
               name = run.get('name')

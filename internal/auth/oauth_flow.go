@@ -146,7 +146,7 @@ LIMIT 1 FOR UPDATE`, input.Provider, stateHash[:]).Scan(
 	if err != nil {
 		return OAuthCallbackResult{}, ErrForbidden
 	}
-	claim, err := adapter.Exchange(ctx, OAuthProviderExchangeRequest{Provider: input.Provider, Code: input.Code, ClientID: raw.safe.ClientID, ClientSecret: clientSecret, RedirectURI: raw.safe.RedirectURI, PKCEVerifier: verifier})
+	claim, err := adapter.Exchange(ctx, OAuthProviderExchangeRequest{TokenURL: raw.safe.TokenURL, UserInfoURL: raw.safe.UserInfoURL, Provider: input.Provider, Code: input.Code, ClientID: raw.safe.ClientID, ClientSecret: clientSecret, RedirectURI: raw.safe.RedirectURI, PKCEVerifier: verifier})
 	if err != nil {
 		return OAuthCallbackResult{}, ErrForbidden
 	}

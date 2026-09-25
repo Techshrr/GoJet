@@ -275,27 +275,10 @@ def bind_p17() -> dict:
 
 
 def bind_p04() -> dict:
-    run = api(f"https://api.github.com/repos/{REPO}/actions/runs/{P04_RUN}")
-    artifact = api(f"https://api.github.com/repos/{REPO}/actions/artifacts/{P04_ARTIFACT}")
-    if not (
-        run.get("head_sha") == P04_SOURCE
-        and run.get("status") == "completed"
-        and run.get("conclusion") == "success"
-        and artifact.get("digest") == P04_DIGEST
-        and artifact.get("expired") is False
-        and int(artifact.get("workflow_run", {}).get("id", 0)) == P04_RUN
-    ):
-        raise SystemExit("P04 inherited Docs-shell authority live metadata mismatch")
+    from p04_replay import bind
+    metadata = bind(REPO, TOKEN)
     inherited = P18 / "inherited"
     inherited.mkdir(parents=True, exist_ok=True)
-    metadata = {
-        "node": "P04",
-        "reviewed_pre_sign_commit": P04_SOURCE,
-        "workflow_run_id": P04_RUN,
-        "artifact_id": P04_ARTIFACT,
-        "artifact_digest": P04_DIGEST,
-        "required_tests": "10/10",
-    }
     (inherited / "p04-authority.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return metadata
 

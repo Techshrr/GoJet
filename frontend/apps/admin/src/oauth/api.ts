@@ -23,7 +23,7 @@ export type OAuthProviderInput = {
   scopes: string[];
 };
 
-type ProviderListResponse = { providers: OAuthProviderConfig[]; csrf_token: string };
+type ProviderListResponse = { providers: OAuthProviderConfig[]; csrf_token: string; authority?: string };
 type ProviderUpdateResponse = { provider: OAuthProviderConfig };
 export type ProviderTestResponse = {
   provider: string;
@@ -56,15 +56,19 @@ function correlationID(action: string): string {
   return `p15-admin-oauth-${action}-${crypto.randomUUID()}`;
 }
 
-export async function updateOAuthProvider(provider: string, input: OAuthProviderInput): Promise<OAuthProviderConfig> {
+export async function updateOAuthProvider(provider: string, input: OAuthProviderInput, governance?: { expected_version: number; reason: string }): Promise<OAuthProviderConfig> {
   const authority = await listOAuthProviders();
+  const id = correlationID('update');
+  if (authority.authority === 'administrator' && !governance?.reason.trim()) throw new AdminOAuthAPIError(400);
   const response = await requestJSON<ProviderUpdateResponse>(`/api/admin/oauth/providers/${encodeURIComponent(provider)}`, {
     method: 'PATCH',
     headers: {
       'X-CSRF-Token': authority.csrf_token,
-      'X-Request-ID': correlationID('update'),
+      'X-Request-ID': id,
+      'X-Correlation-ID': id,
+      'Idempotency-Key': id,
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify(authority.authority === 'administrator' ? { ...input, ...governance } : input),
   });
   return response.provider;
 }
