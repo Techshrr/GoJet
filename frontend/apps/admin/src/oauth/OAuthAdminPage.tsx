@@ -63,6 +63,8 @@ export default function OAuthAdminPage() {
   const [state, setState] = useState<AdminOAuthState>('loading');
   const [shellState, setShellState] = useState<ShellState>('normal');
   const [message, setMessage] = useState('');
+  const [administratorAuthority, setAdministratorAuthority] = useState(false);
+  const [reason, setReason] = useState('');
   const alertRef = useRef<HTMLDivElement>(null);
 
   const selectedConfig = useMemo(() => providers.find((item) => item.provider === selected), [providers, selected]);
@@ -75,6 +77,7 @@ export default function OAuthAdminPage() {
       if (actual.length !== frozenProviders.length || actual.some((provider, index) => provider !== frozenProviders[index])) {
         throw new Error('Provider registry mismatch');
       }
+      setAdministratorAuthority(response.authority === 'administrator');
       setProviders(response.providers);
       const current = response.providers.find((item) => item.provider === selected) ?? response.providers.at(0);
       if (!current) throw new Error('Provider registry is empty');
@@ -117,10 +120,11 @@ export default function OAuthAdminPage() {
       scopes: form.scopes.split(/\s+/).map((value) => value.trim()).filter(Boolean),
     };
     try {
-      const updated = await updateOAuthProvider(selected, input);
+      const updated = await updateOAuthProvider(selected, input, { expected_version: selectedConfig?.version ?? 0, reason });
       const next = providers.map((item) => item.provider === selected ? updated : item);
       setProviders(next);
       setForm(formFor(updated));
+      setReason('');
       setShellState('normal');
       setState('configured');
       setMessage('Provider configuration saved. Client secret remains masked.');
@@ -187,6 +191,8 @@ export default function OAuthAdminPage() {
               <label><span>User info URL</span><input aria-label="User info URL" value={form.userInfoURL} onChange={(event) => setForm({ ...form, userInfoURL: event.currentTarget.value })} /></label>
               <label><span>Redirect URI</span><input aria-label="Redirect URI" value={form.redirectURI} onChange={(event) => setForm({ ...form, redirectURI: event.currentTarget.value })} /></label>
               <label><span>Scopes</span><input aria-label="Scopes" value={form.scopes} onChange={(event) => setForm({ ...form, scopes: event.currentTarget.value })} /></label>
+              {administratorAuthority && <p>Changes require recent administrator MFA verification. Leave the client secret blank to keep the stored secret.</p>}
+              {administratorAuthority && <label><span>Reason for change</span><input required maxLength={500} value={reason} onChange={(event) => setReason(event.currentTarget.value)} /></label>}
               <div className="p15-admin-oauth__actions">
                 <Button type="submit">Save provider</Button>
                 <Button type="button" variant="ghost" disabled={!selectedConfig?.configured || !selectedConfig?.enabled} onClick={() => void testProvider()}>Test provider</Button>
