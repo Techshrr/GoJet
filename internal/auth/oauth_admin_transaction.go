@@ -28,6 +28,9 @@ func (s *OAuthService) UpdateProviderConfigForAdministratorTx(ctx context.Contex
 	if input.Provider == ProviderRainbow && !validRainbowConfig(input.AuthorizationURL, input.TokenURL, input.UserInfoURL, scopes) {
 		return OAuthProviderConfig{}, ErrInvalid
 	}
+	if !validOptionalDirectConfig(OAuthProviderConfig{Provider: input.Provider, AuthorizationURL: input.AuthorizationURL, TokenURL: input.TokenURL, UserInfoURL: input.UserInfoURL, Scopes: scopes}) {
+		return OAuthProviderConfig{}, ErrInvalid
+	}
 	var version uint64
 	var ciphertext []byte
 	var keyID sql.NullString

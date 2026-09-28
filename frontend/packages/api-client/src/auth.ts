@@ -1,7 +1,7 @@
 import { GoJetApiError } from './links';
 import type { ApiTransport } from './links';
 
-export type AuthProvider = { provider: 'google' | 'facebook' | 'github' | 'qq' | 'wechat' | 'rainbow'; enabled: boolean };
+export type AuthProvider = { provider: 'google' | 'facebook' | 'github' | 'qq' | 'wechat' | 'rainbow' | 'x' | 'linkedin'; enabled: boolean };
 export type AuthProvidersResponse = { providers: AuthProvider[] };
 export type AuthStatusResponse = { status: string; expires_at?: string; verified_at?: string };
 export type OAuthCallbackResponse = { status: 'handoff_ready'; handoff_code: string; expires_at: string } | { status: 'binding_required' };

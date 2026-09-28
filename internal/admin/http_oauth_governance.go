@@ -18,7 +18,7 @@ func (a *HTTPAPI) OAuthGovernanceHandler(oauth *authn.OAuthService) http.Handler
 			writeError(w, err)
 			return
 		}
-		items, err := oauth.ListProviderConfigs(r.Context())
+		items, err := oauth.ListRuntimeProviderConfigs(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
@@ -67,7 +67,7 @@ func (a *HTTPAPI) OAuthGovernanceHandler(oauth *authn.OAuthService) http.Handler
 			writeError(w, err)
 			return
 		}
-		items, err := oauth.ListProviderConfigs(r.Context())
+		items, err := oauth.ListRuntimeProviderConfigs(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return

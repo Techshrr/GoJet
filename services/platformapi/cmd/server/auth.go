@@ -337,7 +337,12 @@ func (h *authHTTPHandler) handleLoginEmailCode(w http.ResponseWriter, r *http.Re
 }
 
 func (h *authHTTPHandler) handleProviders(w http.ResponseWriter, r *http.Request) {
-	configs, err := h.oauth.ListProviderConfigs(r.Context())
+	list := h.oauth.ListRuntimeProviderConfigs
+	if h.testAuth {
+		// The explicit historical fixture retains its frozen six-provider view.
+		list = h.oauth.ListProviderConfigs
+	}
+	configs, err := list(r.Context())
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return

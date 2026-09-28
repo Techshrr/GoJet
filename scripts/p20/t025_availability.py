@@ -19,7 +19,7 @@ def run_case():
         status, _, listing = http_json('GET', '/api/public/auth/providers')
         assert status == 200
         providers = listing['providers']
-        assert {p['provider'] for p in providers} == {'google', 'facebook', 'github', 'qq', 'wechat', 'rainbow'}
+        assert {p['provider'] for p in providers} == {'google', 'facebook', 'github', 'qq', 'wechat', 'rainbow', 'x', 'linkedin'}
         for provider in providers:
             name = provider['provider']
             # Unissued random state cannot authorize a provider exchange or login.

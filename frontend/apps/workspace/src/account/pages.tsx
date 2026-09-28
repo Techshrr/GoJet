@@ -45,7 +45,6 @@ type MeResponse = {
 
 type ApiFailure = Error & { status?: number };
 
-const providers = ['google', 'facebook', 'github', 'qq', 'wechat', 'rainbow'] as const;
 const accountTabs = [
   ['Profile', '/app/settings/profile'],
   ['Security', '/app/settings/security'],
@@ -314,6 +313,7 @@ export function SessionsSettingsPage() {
 }
 
 export function ConnectedAccountsPage() {
+  const [providers, setProviders] = useState<string[]>([]);
   const [state, setState] = useState<AccountState>('loading');
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [target, setTarget] = useState<ConnectedAccount | null>(null);
@@ -323,7 +323,11 @@ export function ConnectedAccountsPage() {
     setState('loading');
     try {
       await currentAccount();
-      const response = await requestJSON<{ accounts: ConnectedAccount[] }>('/api/me/connected-accounts');
+      const [response, registry] = await Promise.all([
+        requestJSON<{ accounts: ConnectedAccount[] }>('/api/me/connected-accounts'),
+        requestJSON<{ providers: { provider: string }[] }>('/api/public/auth/providers'),
+      ]);
+      setProviders(registry.providers.map((item) => item.provider));
       setAccounts(response.accounts);
       setTarget(null);
       setMessage('');

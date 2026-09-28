@@ -8,7 +8,7 @@ const checks = {};
 const assert = (name, value) => { checks[name] = Boolean(value); if (!value) throw new Error(name); };
 const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
 try {
-  for (const provider of ['google', 'rainbow']) {
+  for (const provider of ['google', 'rainbow', 'x', 'linkedin']) {
     const context = await browser.newContext();
     const page = await context.newPage();
     let starts = 0;
@@ -17,6 +17,7 @@ try {
       const path = new URL(request.url()).pathname;
       let body;
       if (path === '/api/me') body = { csrf_token: 'fixture-csrf', user: { display_name: 'Fixture' } };
+      else if (path === '/api/public/auth/providers') body = { providers: ['google', 'rainbow', 'x', 'linkedin'].map((provider) => ({ provider, enabled: true })) };
       else if (path === '/api/me/connected-accounts') body = { accounts: [] };
       else if (path === `/api/me/connected-accounts/${provider}/start`) {
         starts++;

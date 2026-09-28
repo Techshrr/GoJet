@@ -28,6 +28,7 @@ func (a *HTTPProviderAdapter) Exchange(ctx context.Context, input OAuthProviderE
   input.Code == "" || input.ClientID == "" || input.ClientSecret == "" || input.PKCEVerifier == "" {
   return denied, ErrForbidden
  }
+ if input.Provider == ProviderX || input.Provider == ProviderLinkedIn { return a.exchangeOptionalDirect(ctx, input) }
  if input.Provider == ProviderRainbow { return a.exchangeRainbow(ctx, input) }
  if input.Provider == ProviderWeChat { return a.exchangeWeChat(ctx, input) }
  if input.Provider == ProviderFacebook { return a.exchangeFacebook(ctx, input) }
@@ -81,6 +82,10 @@ func (a *HTTPProviderAdapter) read(req *http.Request, out any) error {
 
 func supportedHTTPEndpoints(input OAuthProviderExchangeRequest) bool {
  switch input.Provider {
+ case ProviderX:
+  return input.TokenURL == "https://api.x.com/2/oauth2/token" && input.UserInfoURL == "https://api.x.com/2/users/me"
+ case ProviderLinkedIn:
+  return input.TokenURL == "https://www.linkedin.com/oauth/v2/accessToken" && input.UserInfoURL == "https://api.linkedin.com/v2/userinfo"
  case ProviderRainbow:
   return input.TokenURL == RainbowEndpoint && input.UserInfoURL == RainbowEndpoint
  case ProviderGitHub:

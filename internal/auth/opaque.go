@@ -62,6 +62,9 @@ func NormalizeEmail(raw string) (string, error) {
 }
 
 func ValidProvider(provider string) bool {
+	if provider == ProviderX || provider == ProviderLinkedIn {
+		return true
+	}
 	for _, candidate := range Providers {
 		if provider == candidate {
 			return true

@@ -59,6 +59,8 @@ func main() {
 	}
 	initial := list()
 	checks["administrator_list"] = initial.Status == 200 && initial.Body["authority"] == "administrator" && adminfixture.NoStoreNoIndex(initial)
+	registry, ok := initial.Body["providers"].([]any)
+	checks["production_registry_has_eight_providers"] = ok && len(registry) == 8
 	var version uint64
 	must(runtime.DB.QueryRowContext(ctx, "SELECT version FROM oauth_provider_configs WHERE provider='google'").Scan(&version))
 	const secret = "p20-fixture-client-secret-not-a-live-credential"
@@ -110,6 +112,30 @@ func main() {
 	must(runtime.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM admin_idempotency_records WHERE action='admin.oauth.provider.update'").Scan(&records))
 	checks["exactly_two_committed_mutations"] = audits == 2 && records == 2
 	checks["responses_redacted"] = !strings.Contains(saved.Raw+replay.Raw+list().Raw, secret)
+	for _, provider := range []string{"x", "linkedin"} {
+		var enabled bool
+		var providerVersion uint64
+		must(runtime.DB.QueryRowContext(ctx, "SELECT enabled,version FROM oauth_provider_configs WHERE provider=?", provider).Scan(&enabled, &providerVersion))
+		checks[provider+"_initially_disabled"] = !enabled && providerVersion == 1
+		config := map[string]any{
+			"enabled": true, "client_id": "p20-" + provider + "-client", "client_secret": "p20-" + provider + "-secret",
+			"redirect_uri": "https://site.p20.test/oauth/" + provider + "/callback", "expected_version": providerVersion,
+			"reason": "Verify optional direct-provider administration",
+		}
+		if provider == "x" {
+			config["authorization_url"] = "https://x.com/i/oauth2/authorize"
+			config["token_url"] = "https://api.x.com/2/oauth2/token"
+			config["userinfo_url"] = "https://api.x.com/2/users/me"
+			config["scopes"] = []string{"tweet.read", "users.read"}
+		} else {
+			config["authorization_url"] = "https://www.linkedin.com/oauth/v2/authorization"
+			config["token_url"] = "https://www.linkedin.com/oauth/v2/accessToken"
+			config["userinfo_url"] = "https://api.linkedin.com/v2/userinfo"
+			config["scopes"] = []string{"openid", "profile", "email"}
+		}
+		response := request("PATCH", listPath+"/"+provider, adminfixture.AllowedOrigin, login.Token, adminfixture.CSRF(list()), "p20-config-"+provider, config)
+		checks[provider+"_audited_save"] = response.Status == 200 && !strings.Contains(response.Raw, "p20-"+provider+"-secret")
+	}
 	passed := adminfixture.AllTrue(checks)
 	must(json.NewEncoder(os.Stdout).Encode(map[string]any{"source_sha": os.Getenv("GITHUB_SHA"), "checks": checks, "passed": passed, "formal": false, "external_provider_exchange_verified": false}))
 	if !passed {

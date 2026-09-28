@@ -9,7 +9,7 @@ type Notice = { tone: 'error' | 'success' | 'info'; text: string } | null;
 
 const client = new GoJetAuthClient();
 const providerLabels: Record<AuthProvider['provider'], string> = {
-  google: 'Google', facebook: 'Facebook', github: 'GitHub', qq: 'QQ', wechat: 'WeChat', rainbow: 'Rainbow',
+  google: 'Google', facebook: 'Facebook', github: 'GitHub', qq: 'QQ', wechat: 'WeChat', rainbow: 'Rainbow', x: 'X', linkedin: 'LinkedIn',
 };
 
 function safeError(error: unknown): GoJetApiError {

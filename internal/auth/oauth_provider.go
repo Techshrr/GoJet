@@ -10,19 +10,32 @@ import (
 	"time"
 )
 
+// ListProviderConfigs retains the original six-provider P15 compatibility view.
 func (s *OAuthService) ListProviderConfigs(ctx context.Context) ([]OAuthProviderConfig, error) {
+	return s.listProviderConfigs(ctx, Providers[:])
+}
+
+func (s *OAuthService) ListRuntimeProviderConfigs(ctx context.Context) ([]OAuthProviderConfig, error) {
+	return s.listProviderConfigs(ctx, RuntimeProviders())
+}
+
+func (s *OAuthService) listProviderConfigs(ctx context.Context, expected []string) ([]OAuthProviderConfig, error) {
 	if s == nil || s.db == nil {
 		return nil, ErrInvalid
+	}
+	args := make([]any, len(expected))
+	for i, provider := range expected {
+		args[i] = provider
 	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT provider,enabled,client_id,client_secret_ciphertext,secret_key_id,
        authorization_url,token_url,userinfo_url,redirect_uri,scopes_json,version
-FROM oauth_provider_configs`)
+FROM oauth_provider_configs WHERE provider IN (`+strings.TrimSuffix(strings.Repeat("?,", len(expected)), ",")+`)`, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	configs := make(map[string]OAuthProviderConfig, len(Providers))
+	configs := make(map[string]OAuthProviderConfig, len(expected))
 	for rows.Next() {
 		cfg, err := scanProviderConfig(rows)
 		if err != nil {
@@ -33,11 +46,11 @@ FROM oauth_provider_configs`)
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(configs) != len(Providers) {
+	if len(configs) != len(expected) {
 		return nil, ErrConflict
 	}
-	out := make([]OAuthProviderConfig, 0, len(Providers))
-	for _, provider := range Providers {
+	out := make([]OAuthProviderConfig, 0, len(expected))
+	for _, provider := range expected {
 		cfg, ok := configs[provider]
 		if !ok {
 			return nil, ErrConflict
@@ -165,6 +178,9 @@ func scanRawProviderConfig(scanner rowScanner) (rawOAuthProviderConfig, error) {
 	cfg.SecretConfigured = len(ciphertext) > 0 && keyID.Valid && strings.TrimSpace(keyID.String) != ""
 	cfg.Configured = cfg.ClientID != "" && cfg.SecretConfigured && cfg.AuthorizationURL != "" && cfg.TokenURL != "" && cfg.RedirectURI != ""
 	if cfg.Provider == ProviderRainbow && !validRainbowConfig(cfg.AuthorizationURL, cfg.TokenURL, cfg.UserInfoURL, cfg.Scopes) {
+		cfg.Configured = false
+	}
+	if !validOptionalDirectConfig(cfg) {
 		cfg.Configured = false
 	}
 	return rawOAuthProviderConfig{safe: cfg, ciphertext: append([]byte(nil), ciphertext...), keyID: keyID}, nil

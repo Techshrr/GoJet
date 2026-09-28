@@ -26,7 +26,8 @@ unit tests check invalid intent and missing/mismatched/cross-provider cookies.
 Evidence: `artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl`.
 This proves entry routing and browser-state binding, not an external-provider
 login. Rainbow's server bootstrap protocol is described in `rainbow-login.md`;
-X/LinkedIn direct-provider expansion and the complete T025 OAuth/Turnstile matrix remain open.
+X/LinkedIn direct-provider expansion is documented in `direct-provider-extension.md`.
+The complete T025 OAuth/Turnstile matrix remains open.
 No frozen oracle, historical migration or formal T025 completion claim changes.
 
 ## Binding completion and callback UI
