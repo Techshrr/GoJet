@@ -28,3 +28,25 @@ This proves entry routing and browser-state binding, not an external-provider
 login. Rainbow's server bootstrap protocol remains unsupported and fails closed;
 X/LinkedIn expansion and the complete T025 OAuth/Turnstile matrix remain open.
 No frozen oracle, historical migration or formal T025 completion claim changes.
+
+## Binding completion and callback UI
+
+The public callback previously always called `CreateBrowserHandoff`, which
+explicitly rejects `bind`. A read-only state dispatch now routes binding to
+`POST /api/me/connected-accounts/{provider}/complete`. That mutation requires
+Origin, one-time CSRF, a matching browser-state cookie, and the exact initiating
+session before exchanging the code. It calls the existing callback and binding
+authorities and never creates a login handoff or replaces the current session.
+
+The callback page fetches a fresh CSRF token only for binding, finishes the
+mutation and returns to connected accounts. Login returns to `/app`; new
+identities retain the registration continuation. A component-local promise keeps
+React effect replay from consuming callback/handoff twice, and callback query
+credentials are removed from browser history immediately.
+
+`TestOAuthBrowserBindingLifecycle` exercises real database state, real sessions,
+Redis CSRF replay, binding/unbinding and audit with an explicitly injected
+provider fixture. `scripts/p20/oauth-callback-browser.mjs` exercises the built
+callback page with intercepted API responses for login, registration and binding.
+These tests cover local lifecycle and UI protocol behavior; neither claims a
+live provider exchange. The frozen P15 browser suite remains unchanged.

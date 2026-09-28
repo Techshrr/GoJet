@@ -59,3 +59,7 @@ func (h *authHTTPHandler) handleOAuthBrowserStart(w http.ResponseWriter, r *http
 	w.Header().Set("Location", result.AuthorizationURL)
 	w.WriteHeader(http.StatusFound)
 }
+
+func clearOAuthBrowserCookie(w http.ResponseWriter, provider string) {
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie(provider), Value: "", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+}

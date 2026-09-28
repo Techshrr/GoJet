@@ -186,23 +186,48 @@ function ResetPage() {
 }
 
 function OAuthCallbackPage() {
-  const [state, setState] = useState('processing'); const [notice, setNotice] = useState<Notice>({ tone: 'info', text: 'Finishing sign in with your identity provider…' }); const [registrationHref, setRegistrationHref] = useState('');
+  const [state, setState] = useState('processing');
+  const [notice, setNotice] = useState<Notice>({ tone: 'info', text: 'Finishing sign in with your identity provider…' });
+  const [registrationHref, setRegistrationHref] = useState('');
+  const input = useMemo(() => {
+    const query = new URLSearchParams(window.location.search);
+    return { provider: window.location.pathname.split('/').filter(Boolean)[1] ?? '', state: query.get('state') ?? '', code: query.get('code') ?? '' };
+  }, []);
+  const operation = useRef<Promise<{ destination: string; registration: boolean }> | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const parts = window.location.pathname.split('/').filter(Boolean); const provider = parts[1] ?? '';
-      const query = new URLSearchParams(window.location.search); const providerState = query.get('state') ?? ''; const providerCode = query.get('code') ?? '';
-      try {
-        const callback = await client.oauthCallback(provider, providerState, providerCode);
-        if (cancelled) return;
-        const exchange = await client.exchangeHandoff(callback.handoff_code);
-        if (cancelled) return;
-        if (exchange.status === 'authenticated') { setState('login-success'); setNotice({ tone: 'success', text: 'Provider sign in completed.' }); }
-        else { const href = `/social-registration?code=${encodeURIComponent(exchange.registration_code)}`; setRegistrationHref(href); setState('registration-required'); setNotice({ tone: 'info', text: 'One more step is required to finish registration.' }); }
-      } catch (caught) { if (cancelled) return; const error = safeError(caught); setState(authStateFor(error, 'provider-error')); setNotice({ tone: 'error', text: error.code === 'state_error' ? 'The provider response could not be validated. Start sign in again.' : error.message }); }
+    // Keep callback credentials in memory only; remove them from browser history.
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    // StrictMode can rerun effects. Complete the one-time exchange once, even
+    // when the first effect's UI subscription has already been cleaned up.
+    operation.current ??= (async () => {
+      const callback = await client.oauthCallback(input.provider, input.state, input.code);
+      if (callback.status === 'binding_required') {
+        await client.completeConnectedAccount(input.provider, input.state, input.code);
+        return { destination: '/app/settings/connected-accounts', registration: false };
+      }
+      const exchange = await client.exchangeHandoff(callback.handoff_code);
+      return exchange.status === 'authenticated'
+        ? { destination: '/app', registration: false }
+        : { destination: `/social-registration?code=${encodeURIComponent(exchange.registration_code)}`, registration: true };
     })();
+    void operation.current.then((result) => {
+      if (cancelled) return;
+      if (result.registration) {
+        setRegistrationHref(result.destination);
+        setState('registration-required');
+        setNotice({ tone: 'info', text: 'One more step is required to finish registration.' });
+      } else {
+        window.location.replace(result.destination);
+      }
+    }).catch((caught: unknown) => {
+      if (cancelled) return;
+      const error = safeError(caught);
+      setState(authStateFor(error, 'provider-error'));
+      setNotice({ tone: 'error', text: error.code === 'state_error' ? 'The provider response could not be validated. Start sign in again.' : error.message });
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [input]);
   return <AuthFrame title="Provider sign in" state={state} notice={notice}><p className="p15-auth__muted">Provider authorization codes, access tokens and callback parameters are never shown on this page or stored in browser storage.</p>{state === 'registration-required' && registrationHref && <a href={registrationHref}>Continue registration</a>}</AuthFrame>;
 }
 

@@ -559,6 +559,21 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
+	pending, err := h.oauth.PendingState(r.Context(), provider, state, time.Now().UTC())
+	if err != nil {
+		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
+		return
+	}
+	if pending.Intent == authn.OAuthIntentBind {
+		current, err := authn.AuthenticateRequest(r.Context(), h.store, r, time.Now().UTC())
+		if err != nil || current.UserID != pending.InitiatingUserID || current.ID != pending.InitiatingSessionID {
+			writeAuthServiceError(w, authn.ErrForbidden, false)
+			return
+		}
+		// Binding completes only through the authenticated POST + one-time CSRF.
+		writeAuthJSON(w, http.StatusOK, map[string]string{"status": "binding_required"})
+		return
+	}
 	var adapter authn.OAuthProviderAdapter = authn.NewHTTPProviderAdapter()
 	if h.testAuth {
 		adapter = deterministicOAuthAdapter{}
@@ -577,7 +592,7 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadGateway, "provider_error", "The identity provider could not complete the request.")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie(provider), Value: "", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	clearOAuthBrowserCookie(w, provider)
 	writeAuthJSON(w, http.StatusOK, map[string]any{"status": "handoff_ready", "handoff_code": handoff.Code, "expires_at": handoff.ExpiresAt})
 }
 
