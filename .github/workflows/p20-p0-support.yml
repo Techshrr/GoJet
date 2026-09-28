@@ -314,6 +314,7 @@ jobs:
           mkdir -p artifacts/v10/P20/runtime/t025
           go run ./scripts/p20/oauth_admin_probe > artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
           go test ./services/platformapi/cmd/server -run '^TestOAuthBrowser' -count=1 -json > artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
+          go test ./internal/auth -run '^TestHTTPProviderAdapterRainbow' -count=1 -json > artifacts/v10/P20/runtime/t025/rainbow-protocol-state.jsonl
 
       - name: Ensure current ClamAV signatures and start native clamd
         shell: bash
@@ -945,6 +946,7 @@ jobs:
           path: |
             artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
             artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
+            artifacts/v10/P20/runtime/t025/rainbow-protocol-state.jsonl
             artifacts/v10/P17/webhooks/
             artifacts/v10/P20/integration/P20-T024-runtime.json
             artifacts/v10/P20/integration/P20-T025-availability.json

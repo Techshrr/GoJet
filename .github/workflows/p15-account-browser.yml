@@ -181,6 +181,12 @@ jobs:
           exact_head="$(git rev-parse HEAD)"
           GITHUB_SHA="$exact_head" node scripts/p15/browser.mjs --case P15-T025
 
+      - name: Verify T025 connected-account navigation with protocol fixtures
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p20/oauth-connect-browser.mjs
+
       - name: Verify exact-head P15-T025 evidence
         if: always()
         run: |
@@ -246,6 +252,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P20/runtime/t025/oauth-connect-browser.json
             artifacts/v10/P15/browser/P15-T025.json
             artifacts/v10/P15/captures/P15-T025-*.png
             artifacts/v10/P15/runtime/browser-025/native-platformapi.sha256

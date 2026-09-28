@@ -44,7 +44,14 @@ func (s *OAuthService) Start(ctx context.Context, input OAuthStartInput, now tim
 	if err != nil {
 		return OAuthStartResult{}, err
 	}
-	state, err := NewOpaqueSecret("gos_", 32)
+	statePrefix := "gos_"
+	if input.Provider == ProviderRainbow {
+		if !validRainbowConfig(raw.safe.AuthorizationURL, raw.safe.TokenURL, raw.safe.UserInfoURL, raw.safe.Scopes) {
+			return OAuthStartResult{}, ErrForbidden
+		}
+		statePrefix = "gos_rb_" + raw.safe.Scopes[0] + "_"
+	}
+	state, err := NewOpaqueSecret(statePrefix, 32)
 	if err != nil {
 		return OAuthStartResult{}, err
 	}
@@ -146,7 +153,14 @@ LIMIT 1 FOR UPDATE`, input.Provider, stateHash[:]).Scan(
 	if err != nil {
 		return OAuthCallbackResult{}, ErrForbidden
 	}
-	claim, err := adapter.Exchange(ctx, OAuthProviderExchangeRequest{TokenURL: raw.safe.TokenURL, UserInfoURL: raw.safe.UserInfoURL, Provider: input.Provider, Code: input.Code, ClientID: raw.safe.ClientID, ClientSecret: clientSecret, RedirectURI: raw.safe.RedirectURI, PKCEVerifier: verifier})
+	providerType := ""
+	if input.Provider == ProviderRainbow {
+		providerType = rainbowStateType(input.State)
+		if providerType == "" || len(raw.safe.Scopes) != 1 || raw.safe.Scopes[0] != providerType {
+			return OAuthCallbackResult{}, ErrForbidden
+		}
+	}
+	claim, err := adapter.Exchange(ctx, OAuthProviderExchangeRequest{ProviderType: providerType, TokenURL: raw.safe.TokenURL, UserInfoURL: raw.safe.UserInfoURL, Provider: input.Provider, Code: input.Code, ClientID: raw.safe.ClientID, ClientSecret: clientSecret, RedirectURI: raw.safe.RedirectURI, PKCEVerifier: verifier})
 	if err != nil {
 		return OAuthCallbackResult{}, ErrForbidden
 	}

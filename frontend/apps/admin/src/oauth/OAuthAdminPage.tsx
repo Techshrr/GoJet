@@ -40,6 +40,15 @@ const emptyForm: FormState = {
 
 function formFor(config: OAuthProviderConfig | undefined): FormState {
   if (!config) return { ...emptyForm };
+  if (config.provider === 'rainbow' && !config.configured) return {
+    ...emptyForm,
+    clientID: config.client_id,
+    authorizationURL: 'https://auth.idcli.com/connect.php',
+    tokenURL: 'https://auth.idcli.com/connect.php',
+    userInfoURL: 'https://auth.idcli.com/connect.php',
+    redirectURI: config.redirect_uri,
+    scopes: config.scopes.length === 1 ? config.scopes[0]! : 'qq',
+  };
   return {
     enabled: config.configured ? config.enabled : true,
     clientID: config.client_id,
@@ -183,6 +192,7 @@ export default function OAuthAdminPage() {
                 <div><span>Provider</span><h2>{selected}</h2></div>
                 <label className="p15-admin-oauth__toggle"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.currentTarget.checked })} /> Enabled</label>
               </div>
+              {selected === 'rainbow' && <p>Use your auth.idcli.com appid as Client ID and appkey as Client secret. Scopes selects one aggregate channel: qq, wx, alipay, baidu, huawei, google, facebook, twitter, dingtalk, gitee or github. Redirect URI must end in /oauth/rainbow/callback. Keep the three endpoint URLs set to https://auth.idcli.com/connect.php.</p>}
               <label><span>Client ID</span><input aria-label="Client ID" value={form.clientID} onChange={(event) => setForm({ ...form, clientID: event.currentTarget.value })} autoComplete="off" /></label>
               <label><span>Client secret</span><input aria-label="Client secret" type="password" value={form.clientSecret} onChange={(event) => setForm({ ...form, clientSecret: event.currentTarget.value })} autoComplete="off" spellCheck={false} data-private-secret="true" /></label>
               <p className="p15-admin-oauth__secret-status">Secret status: {secretMasked ? 'Configured · masked' : 'Not configured'}</p>

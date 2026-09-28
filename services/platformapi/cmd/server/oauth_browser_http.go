@@ -39,17 +39,12 @@ func (h *authHTTPHandler) handleOAuthBrowserStart(w http.ResponseWriter, r *http
 		writeAuthProblem(w, http.StatusBadRequest, "invalid_request", "The sign-in request could not be validated.")
 		return
 	}
-	// Rainbow uses a server-side bootstrap protocol, not an OAuth authorization URL.
-	if provider == authn.ProviderRainbow && !h.testAuth {
-		writeAuthProblem(w, http.StatusServiceUnavailable, "provider_error", "This sign-in provider is temporarily unavailable.")
-		return
-	}
 	correlation, err := authCorrelation("")
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return
 	}
-	result, err := h.oauth.Start(r.Context(), authn.OAuthStartInput{Provider: provider, Intent: intent, CorrelationID: correlation}, time.Now().UTC())
+	result, err := h.oauth.StartWithHTTPProvider(r.Context(), authn.NewHTTPProviderAdapter(), authn.OAuthStartInput{Provider: provider, Intent: intent, CorrelationID: correlation}, time.Now().UTC())
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return

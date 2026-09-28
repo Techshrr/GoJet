@@ -362,8 +362,9 @@ export function ConnectedAccountsPage() {
         headers: { 'X-CSRF-Token': me.csrf_token },
         body: JSON.stringify({}),
       });
-      setMessage(`Provider authorization is ready for ${provider}: ${new URL(result.authorization_url).origin}`);
-      setState('success');
+      const authorization = new URL(result.authorization_url);
+      if (authorization.protocol !== 'https:' || authorization.username || authorization.password) throw new Error('Invalid authorization URL');
+      window.location.assign(authorization.href);
     } catch (error) {
       setMessage(`The ${provider} provider is unavailable or incomplete.`);
       setState(stateForFailure(error));

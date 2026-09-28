@@ -302,7 +302,7 @@ func (h *accountHTTPHandler) handleConnectedAccountStart(w http.ResponseWriter, 
 		writeAuthServiceError(w, err, false)
 		return
 	}
-	result, err := h.oauth.Start(r.Context(), authn.OAuthStartInput{
+	result, err := h.oauth.StartWithHTTPProvider(r.Context(), authn.NewHTTPProviderAdapter(), authn.OAuthStartInput{
 		Provider:            r.PathValue("provider"),
 		Intent:              authn.OAuthIntentBind,
 		InitiatingUserID:    session.UserID,

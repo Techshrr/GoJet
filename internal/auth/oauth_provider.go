@@ -164,6 +164,9 @@ func scanRawProviderConfig(scanner rowScanner) (rawOAuthProviderConfig, error) {
 	}
 	cfg.SecretConfigured = len(ciphertext) > 0 && keyID.Valid && strings.TrimSpace(keyID.String) != ""
 	cfg.Configured = cfg.ClientID != "" && cfg.SecretConfigured && cfg.AuthorizationURL != "" && cfg.TokenURL != "" && cfg.RedirectURI != ""
+	if cfg.Provider == ProviderRainbow && !validRainbowConfig(cfg.AuthorizationURL, cfg.TokenURL, cfg.UserInfoURL, cfg.Scopes) {
+		cfg.Configured = false
+	}
 	return rawOAuthProviderConfig{safe: cfg, ciphertext: append([]byte(nil), ciphertext...), keyID: keyID}, nil
 }
 
