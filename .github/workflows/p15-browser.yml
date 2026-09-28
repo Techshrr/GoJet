@@ -178,6 +178,7 @@ jobs:
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
           GITHUB_SHA="$exact_head" node scripts/p20/oauth-callback-browser.mjs
+          GITHUB_SHA="$exact_head" node scripts/p20/auth-turnstile-browser.mjs
 
       - name: Verify exact-head P15-T024 evidence
         if: always()
@@ -247,6 +248,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P20/runtime/t025/oauth-callback-browser.json
+            artifacts/v10/P20/runtime/t025/auth-turnstile-browser.json
             artifacts/v10/P15/browser/P15-T024.json
             artifacts/v10/P15/captures/P15-T024-*.png
             artifacts/v10/P15/runtime/browser-024/native-platformapi.sha256

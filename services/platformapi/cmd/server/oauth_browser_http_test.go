@@ -71,7 +71,7 @@ func TestOAuthBrowserStartPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal("OAuth service unavailable")
 	}
-	mux := oauthBrowserTestMux(&authHTTPHandler{oauth: oauth})
+	mux := oauthBrowserTestMux(&authHTTPHandler{oauth: oauth, db: runtime.DB})
 	discovery := httptest.NewRecorder()
 	mux.ServeHTTP(discovery, httptest.NewRequest(http.MethodGet, "/api/public/auth/providers", nil))
 	var inventory struct { Providers []publicOAuthProvider `json:"providers"` }

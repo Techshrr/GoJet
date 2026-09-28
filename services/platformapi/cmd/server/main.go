@@ -168,7 +168,12 @@ func main() {
 			logger.Error("configure Authentication rate protection", "error", rateErr)
 			os.Exit(1)
 		}
-		authHandler = authRateMiddleware(authHandler)
+		challengeGate, challengeErr := buildAuthChallengeGate(db, redisClient)
+		if challengeErr != nil {
+			logger.Error("configure Authentication challenge protection")
+			os.Exit(1)
+		}
+		authHandler = authRateMiddleware(challengeGate.wrap(authHandler))
 	}
 	accountHandler, accountEnabled, err := buildAccountHandler(db, redisClient)
 	if err != nil {
