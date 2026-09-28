@@ -3,7 +3,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GoJetApiError } from '@gojet/api-client';
 import type { SupportTicketStatus } from '@gojet/api-client';
-import { Button, Card, EmptyState, InlineMessage } from '@gojet/ui';
+import { Button, Card, EmptyState, InlineMessage, useTurnstile } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
 import { createSupportClient, readSupportRuntime } from './runtime';
 
@@ -68,19 +68,22 @@ export function SupportNewPage() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
+  const verification = useTurnstile({ siteKey: String(import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY ?? '').trim(), action: 'ticket-create', testMode: runtime?.testAuthority === true, testToken: runtime?.turnstileToken ?? '' });
   const mutation = useMutation({
     networkMode: 'always',
     mutationFn: async () => {
       if (!runtime || !client) throw new Error('Support runtime unavailable');
-      if (!runtime.turnstileToken) throw new GoJetApiError(400, 'turnstile_rejected', 'Verification is required.');
-      return client.create({ workspace_id: runtime.workspaceId, category, subject: subject.trim(), message: message.trim(), turnstile_token: runtime.turnstileToken });
+      const turnstileToken = verification.takeToken();
+      if (!turnstileToken) throw new GoJetApiError(400, 'turnstile_rejected', 'Verification is required.');
+      try { return await client.create({ workspace_id: runtime.workspaceId, category, subject: subject.trim(), message: message.trim(), turnstile_token: turnstileToken }); }
+      finally { verification.reset(); }
     },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['p14-support-tickets', runtime?.workspaceId, runtime?.actorId] }); },
   });
   const error = mutation.isError ? supportError(mutation.error) : null;
   const blockedAttachment = attachmentName !== '';
-  const canSubmit = Boolean(runtime && client && subject.trim() && message.trim() && runtime.turnstileToken && !blockedAttachment && !mutation.isPending);
-  const state = mutation.isSuccess ? 'success' : error?.state ?? (mutation.isPending ? 'submitting' : blockedAttachment ? 'attachment' : runtime?.turnstileToken ? 'input' : 'Turnstile-required');
+  const canSubmit = Boolean(runtime && client && subject.trim() && message.trim() && verification.token && !blockedAttachment && !mutation.isPending);
+  const state = mutation.isSuccess ? 'success' : error?.state ?? (mutation.isPending ? 'submitting' : blockedAttachment ? 'attachment' : verification.token ? 'input' : 'Turnstile-required');
 
   return (
     <WorkspaceShell sectionLabel="New support ticket">
@@ -88,7 +91,7 @@ export function SupportNewPage() {
         <header className="support-page-header"><div><p className="support-eyebrow">SUPPORT</p><h1>New ticket</h1><p>Ticket creation is protected by server-side verification, rate limiting and idempotency.</p></div><Link to="/app/support">Back to support</Link></header>
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable. Submission is disabled.</InlineMessage> : null}
         {category === 'custom-domain-access' ? <InlineMessage variant="info">This creates a support request only. It cannot grant custom-domain entitlement, ownership, DNS, HTTPS or risk authority.</InlineMessage> : null}
-        {!runtime?.turnstileToken ? <InlineMessage variant="warning">Verification is required before this ticket can be submitted.</InlineMessage> : null}
+        {!verification.token ? <InlineMessage variant="warning">Verification is required before this ticket can be submitted.</InlineMessage> : null}
         {blockedAttachment ? <InlineMessage variant="warning">Attachment “{attachmentName}” is held locally and has not been uploaded. P14 does not invent an unapproved attachment HTTP route; submission remains blocked until bytes can enter the inherited P09 quarantine/scan authority.</InlineMessage> : null}
         {error ? <InlineMessage variant={error.variant}>{error.text}</InlineMessage> : null}
         {mutation.isSuccess ? <InlineMessage variant="success">Ticket created successfully. <Link to="/app/support/$ticketId" params={{ ticketId: mutation.data.ticket.id }}>Open ticket</Link></InlineMessage> : null}
@@ -99,6 +102,7 @@ export function SupportNewPage() {
             <label>Message<textarea aria-label="Support message" value={message} onChange={(event) => setMessage(event.currentTarget.value)} rows={8} required disabled={mutation.isPending} /></label>
             <label>Attachment<input aria-label="Support attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={mutation.isPending} /></label>
             {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
+            {verification.widget}
             <Button type="submit" disabled={!canSubmit}>{mutation.isPending ? 'Submitting…' : 'Submit ticket'}</Button>
           </Card>
         </form>

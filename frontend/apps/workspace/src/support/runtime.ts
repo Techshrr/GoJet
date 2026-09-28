@@ -22,17 +22,17 @@ export function readSupportRuntime(): SupportRuntime | null {
     role: workspace.role,
     email,
     displayName: String(import.meta.env.VITE_GOJET_TEST_DISPLAY_NAME ?? '').trim(),
-    turnstileToken: String(import.meta.env.VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN ?? '').trim(),
+    turnstileToken: workspace.testAuthority ? String(import.meta.env.VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN ?? '').trim() : '',
     testAuthority: workspace.testAuthority,
   };
 }
 
 export function createSupportClient(runtime: SupportRuntime): GoJetSupportClient {
   return new GoJetSupportClient({
-    headers: () => ({
+    headers: () => runtime.testAuthority ? ({
       'X-GoJet-Test-Actor': runtime.actorId,
       'X-GoJet-Test-Email': runtime.email,
       'X-GoJet-Test-Display-Name': runtime.displayName,
-    }),
+    }) : ({}),
   });
 }
