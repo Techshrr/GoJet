@@ -244,7 +244,7 @@ jobs:
         run: |
           python3 -m unittest scripts.ci.test_actions
           go test ./internal/auth -run TestHTTPProviderAdapter -count=1
-          go test ./internal/admin ./services/platformapi/cmd/server -run 'TestGoogleOneTap|TestOAuthGovernance' -count=1
+          go test ./internal/admin ./services/platformapi/cmd/server -run 'TestGoogleOneTap|TestOAuthGovernance|TestOAuthBrowser' -count=1
 
       - name: Install native runtime, ClamAV and QR decoder clients
         shell: bash
@@ -301,6 +301,7 @@ jobs:
         env:
           GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_oauth_admin?multiStatements=true&parseTime=true&charset=utf8mb4
           GOJET_REDIS_DB: "12"
+          GOJET_P20_OAUTH_BROWSER_PROBE: "1"
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
@@ -312,6 +313,7 @@ jobs:
           done
           mkdir -p artifacts/v10/P20/runtime/t025
           go run ./scripts/p20/oauth_admin_probe > artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
+          go test ./services/platformapi/cmd/server -run '^TestOAuthBrowser' -count=1 -json > artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
 
       - name: Ensure current ClamAV signatures and start native clamd
         shell: bash
@@ -942,6 +944,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
+            artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
             artifacts/v10/P17/webhooks/
             artifacts/v10/P20/integration/P20-T024-runtime.json
             artifacts/v10/P20/integration/P20-T025-availability.json

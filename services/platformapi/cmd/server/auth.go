@@ -134,7 +134,7 @@ func buildAuthHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	mux.HandleFunc("POST /api/mail/verification", h.handleVerificationResend)
 	mux.HandleFunc("POST /api/auth/forgotpassword", h.handleForgotPassword)
 	mux.HandleFunc("POST /api/auth/resetpassword", h.handleResetPassword)
-	mux.HandleFunc("GET /api/public/auth/{provider}/callback", h.handleOAuthCallback)
+	h.registerOAuthBrowserRoutes(mux)
 	mux.HandleFunc("POST /api/public/auth/handoff", h.handleOAuthHandoff)
 	mux.HandleFunc("GET /api/public/auth/social-registration", h.handleSocialRegistrationState)
 	mux.HandleFunc("POST /api/public/auth/social-registration/complete", h.handleSocialRegistrationComplete)
@@ -158,6 +158,7 @@ func mountAuthRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/mail/verification",
 		"POST /api/auth/forgotpassword",
 		"POST /api/auth/resetpassword",
+		"GET /api/public/auth/{provider}/start",
 		"GET /api/public/auth/{provider}/callback",
 		"POST /api/public/auth/handoff",
 		"GET /api/public/auth/social-registration",
@@ -549,6 +550,10 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
+	if !h.testAuth && !validOAuthBrowserCallback(r, provider, state) {
+		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
+		return
+	}
 	correlationID, err := authCorrelation(r.Header.Get("X-GoJet-Correlation-ID"))
 	if err != nil {
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
@@ -572,6 +577,7 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadGateway, "provider_error", "The identity provider could not complete the request.")
 		return
 	}
+	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie(provider), Value: "", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 	writeAuthJSON(w, http.StatusOK, map[string]any{"status": "handoff_ready", "handoff_code": handoff.Code, "expires_at": handoff.ExpiresAt})
 }
 

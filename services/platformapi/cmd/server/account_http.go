@@ -314,6 +314,7 @@ func (h *accountHTTPHandler) handleConnectedAccountStart(w http.ResponseWriter, 
 		writeAuthServiceError(w, err, false)
 		return
 	}
+	setOAuthBrowserCookie(w, result)
 	writeAuthJSON(w, http.StatusOK, map[string]any{
 		"provider":          result.Provider,
 		"authorization_url": result.AuthorizationURL,
