@@ -297,6 +297,22 @@ jobs:
             mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
           done
 
+      - name: Verify production OAuth administrator persistence in isolated database
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_oauth_admin?multiStatements=true&parseTime=true&charset=utf8mb4
+          GOJET_REDIS_DB: "12"
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'CREATE DATABASE gojet_t025_oauth_admin CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_t025_oauth_admin < "$migration"
+          done
+          mkdir -p artifacts/v10/P20/runtime/t025
+          go run ./scripts/p20/oauth_admin_probe > artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
+
       - name: Ensure current ClamAV signatures and start native clamd
         shell: bash
         run: |
@@ -925,6 +941,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
             artifacts/v10/P17/webhooks/
             artifacts/v10/P20/integration/P20-T024-runtime.json
             artifacts/v10/P20/integration/P20-T025-availability.json
