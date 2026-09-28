@@ -5,7 +5,8 @@ import { GoJetApiError } from '@gojet/api-client';
 import type { SupportTicketStatus } from '@gojet/api-client';
 import { Button, Card, EmptyState, InlineMessage, useTurnstile } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
-import { createSupportClient, readSupportRuntime } from './runtime';
+import { createSupportClient } from './runtime';
+import { useSupportSession } from './session';
 
 function statusLabel(status: SupportTicketStatus): string {
   switch (status) {
@@ -26,7 +27,7 @@ function supportError(error: unknown): { variant: 'warning' | 'danger'; text: st
 }
 
 export function SupportListPage() {
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const query = useQuery({
     queryKey: ['p14-support-tickets', runtime?.workspaceId, runtime?.actorId],
@@ -44,6 +45,7 @@ export function SupportListPage() {
           <div><p className="support-eyebrow">SUPPORT</p><h1>Support tickets</h1><p>Tickets are scoped to your current Workspace identity. Navigation never replaces server authorization.</p></div>
           <Link to="/app/support/new" className="support-primary-link">New ticket</Link>
         </header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable. Support data is not loaded from local state.</InlineMessage> : null}
         {query.isPending && runtime ? <p role="status">Loading support tickets…</p> : null}
         {query.isError ? <InlineMessage variant="danger">Support tickets could not be loaded. No stale local list is presented as current.</InlineMessage> : null}
@@ -60,7 +62,7 @@ export function SupportListPage() {
 }
 
 export function SupportNewPage() {
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const queryClient = useQueryClient();
   const requestedCategory = useMemo(() => new URLSearchParams(window.location.search).get('category') ?? '', []);
@@ -89,6 +91,7 @@ export function SupportNewPage() {
     <WorkspaceShell sectionLabel="New support ticket">
       <section className="support-page" data-page="support-new" data-state={state}>
         <header className="support-page-header"><div><p className="support-eyebrow">SUPPORT</p><h1>New ticket</h1><p>Ticket creation is protected by server-side verification, rate limiting and idempotency.</p></div><Link to="/app/support">Back to support</Link></header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable. Submission is disabled.</InlineMessage> : null}
         {category === 'custom-domain-access' ? <InlineMessage variant="info">This creates a support request only. It cannot grant custom-domain entitlement, ownership, DNS, HTTPS or risk authority.</InlineMessage> : null}
         {!verification.token ? <InlineMessage variant="warning">Verification is required before this ticket can be submitted.</InlineMessage> : null}
@@ -113,7 +116,7 @@ export function SupportNewPage() {
 
 export function SupportThreadPage() {
   const { ticketId } = useParams({ from: '/app/support/$ticketId' });
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const queryClient = useQueryClient();
   const [reply, setReply] = useState('');
@@ -151,6 +154,7 @@ export function SupportThreadPage() {
     <WorkspaceShell sectionLabel="Support ticket">
       <section className="support-page" data-page="support-thread" data-state={state}>
         <header className="support-page-header"><div><p className="support-eyebrow">SUPPORT THREAD</p><h1>{ticket?.subject ?? 'Support ticket'}</h1>{ticket ? <p><strong>{statusLabel(ticket.status)}</strong> · {ticket.category}</p> : <p>Ticket access is re-authorized on every direct load.</p>}</div><Link to="/app/support">Back to support</Link></header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable.</InlineMessage> : null}
         {query.isPending && runtime ? <p role="status">Loading support thread…</p> : null}
         {queryError ? <InlineMessage variant="danger">{queryError.text}</InlineMessage> : null}

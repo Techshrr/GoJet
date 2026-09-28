@@ -15,9 +15,17 @@ coverage uses the built production widget path with explicit widget and HTTP
 fixtures, tests denial/no-success, token consumption, reset and expiry. It does
 not claim a live Cloudflare interaction.
 
-Remaining production blocker discovered during this change: the workspace
-readWorkspaceRuntime function still returns null outside test mode. Therefore
-adding the ticket widget does not itself make production workspace support
-usable. Session-backed workspace selection and unsafe-request CSRF wiring must
-be completed and verified separately before claiming full T025 coverage. This
-change makes no T025 closure claim and does not advance T026.
+The inherited workspace runtime was test-only. Support now resolves `/api/me`
+and `/api/workspaces` using the real session, limits selection to returned active
+workspaces, and requires a choice when multiple are available. A requested
+workspace ID is accepted only when returned by the authenticated list. No local
+storage grants workspace authority. Server membership checks remain decisive.
+Each unsafe Support request fetches fresh CSRF from `/api/me` and verifies the
+same user before sending it. Test identity headers are fixture-only. The shared
+Support client now preserves per-request headers, including Idempotency-Key.
+
+`support-session-browser.mjs` runs against a separate build with test auth off,
+using explicit API/widget fixtures. It verifies workspace choice, fresh CSRF,
+idempotency, absence of test identity headers and challenge denial lifecycle.
+This complements inherited real-session server tests but is not itself a live
+end-to-end browser/session proof. Full T025 coverage remains open.

@@ -187,6 +187,19 @@ jobs:
           exact_head="$(git rev-parse HEAD)"
           GITHUB_SHA="$exact_head" node scripts/p20/oauth-connect-browser.mjs
 
+      - name: Verify production support session and challenge transport
+        run: |
+          set -euo pipefail
+          VITE_GOJET_TEST_AUTH_ENABLED=0 VITE_GOJET_TURNSTILE_SITE_KEY=1x00000000000000000000AA pnpm --filter @gojet/workspace exec vite build --outDir dist-p20-support-session
+          pnpm --filter @gojet/workspace exec vite preview --host 127.0.0.1 --port 4187 --outDir dist-p20-support-session > /tmp/p20-support-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4187/app/support/new > /dev/null; then break; fi
+            sleep 1
+          done
+          GITHUB_SHA="$(git rev-parse HEAD)" node scripts/p20/support-session-browser.mjs
+
       - name: Verify exact-head P15-T025 evidence
         if: always()
         run: |
@@ -253,6 +266,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P20/runtime/t025/oauth-connect-browser.json
+            artifacts/v10/P20/runtime/t025/support-session-browser.json
             artifacts/v10/P15/browser/P15-T025.json
             artifacts/v10/P15/captures/P15-T025-*.png
             artifacts/v10/P15/runtime/browser-025/native-platformapi.sha256

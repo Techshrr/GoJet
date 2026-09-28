@@ -29,6 +29,17 @@ export function readSupportRuntime(): SupportRuntime | null {
 
 export function createSupportClient(runtime: SupportRuntime): GoJetSupportClient {
   return new GoJetSupportClient({
+    fetch: async (input, init) => {
+      const headers = new Headers(init?.headers);
+      if (!runtime.testAuthority && init?.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
+        const response = await fetch('/api/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Authenticated session unavailable');
+        const current = await response.json() as { user: { id: string }; csrf_token: string };
+        if (current.user.id !== runtime.actorId || !current.csrf_token) throw new Error('Authenticated session changed');
+        headers.set('X-CSRF-Token', current.csrf_token);
+      }
+      return fetch(input, { ...init, headers, credentials: 'same-origin' });
+    },
     headers: () => runtime.testAuthority ? ({
       'X-GoJet-Test-Actor': runtime.actorId,
       'X-GoJet-Test-Email': runtime.email,
