@@ -39,3 +39,19 @@ or full T025 formal completion. Contact and workspace ticket widget integration,
 full owned-surface parity and live configured OAuth proof remain separate gaps.
 
 Reference: https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
+
+## Official external verifier registration probe
+
+The isolated CI database now opts into
+`TestAuthChallengeAdministratorConfigAndRedis/OfficialCloudflareRegistration`.
+It encrypts the official Cloudflare test credential into the existing
+administrator configuration, constructs the production authentication handler
+with testAuth=false, and uses the inherited HTTP verifier without an injected
+client. A missing challenge must leave users/grants/audit unchanged; one official
+dummy token must authorize a real registration transaction; replay must leave
+all three counts at one. It uses the same real Redis digest replay store.
+
+This proves actual server-to-Cloudflare test validation and durable registration,
+not a human challenge, a live OAuth provider login or full T025 closure.
+Only the isolated probe opts in; production credentials are never requested,
+printed or changed. Evidence remains the exact-head auth-turnstile-state.jsonl.

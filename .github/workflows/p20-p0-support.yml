@@ -302,6 +302,7 @@ jobs:
           GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_oauth_admin?multiStatements=true&parseTime=true&charset=utf8mb4
           GOJET_REDIS_DB: "12"
           GOJET_P20_OAUTH_BROWSER_PROBE: "1"
+          GOJET_P20_AUTH_TURNSTILE_EXTERNAL_PROBE: "1"
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |

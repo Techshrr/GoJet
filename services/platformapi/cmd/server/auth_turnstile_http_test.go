@@ -90,4 +90,47 @@ func TestAuthChallengeAdministratorConfigAndRedis(t *testing.T) {
  if call("p20-auth-challenge-fixture-once") != 400 || mutations != 1 { t.Fatal("real Redis did not reject replay") }
  if _, err = runtime.DB.ExecContext(ctx, "UPDATE admin_turnstile_config SET provider_state='provider_error' WHERE id=1"); err != nil { t.Fatal("fixture update failed") }
  if call("p20-auth-fresh-fixture") != 400 || mutations != 1 { t.Fatal("provider state update did not fail closed immediately") }
+
+ t.Run("OfficialCloudflareRegistration", func(t *testing.T) {
+  if os.Getenv("GOJET_P20_AUTH_TURNSTILE_EXTERNAL_PROBE") != "1" { t.Skip("explicit isolated external test authority required") }
+  const officialTestSecret = "1x0000000000000000000000000000000AA"
+  if os.Getenv("GOJET_TURNSTILE_SECRET") != officialTestSecret { t.Fatal("only official isolated test credential is allowed") }
+  ciphertext, err := cipher.Encrypt(officialTestSecret, "admin-turnstile:singleton")
+  if err != nil { t.Fatal("test credential encryption failed") }
+  _, err = runtime.DB.ExecContext(ctx, "UPDATE admin_turnstile_config SET site_key='1x00000000000000000000AA',secret_ciphertext=?,provider_state='healthy' WHERE id=1", ciphertext)
+  if err != nil { t.Fatal("test authority setup failed") }
+  productionGate, err := buildAuthChallengeGate(runtime.DB, runtime.Redis)
+  if err != nil { t.Fatal("production challenge gate unavailable") }
+  // No injected HTTP client: inherited verifier calls the real fixed Cloudflare
+  // siteverify endpoint. This uses an official test key, not a human challenge.
+  handler, enabled, err := buildAuthHandler(runtime.DB, false)
+  if err != nil || !enabled { t.Fatal("production authentication builder unavailable") }
+  root := http.NewServeMux()
+  mountAuthRoutes(root, productionGate.wrap(handler))
+  const address = "t025-external-registration@example.test"
+  counts := func() (int, int, int) {
+   t.Helper()
+   var users, grants, audits int
+   if runtime.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM auth_users WHERE email_normalized=?", address).Scan(&users) != nil { t.Fatal("user state unavailable") }
+   if runtime.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM auth_one_time_grants WHERE email_normalized=?", address).Scan(&grants) != nil { t.Fatal("grant state unavailable") }
+   if runtime.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM auth_audit_events a JOIN auth_users u ON u.id=a.user_id WHERE u.email_normalized=? AND a.action='auth.registration.created'", address).Scan(&audits) != nil { t.Fatal("audit state unavailable") }
+   return users, grants, audits
+  }
+  request := func(token string) int {
+   t.Helper()
+   req := httptest.NewRequest("POST", "/api/auth/register", strings.NewReader(`{"email":"t025-external-registration@example.test","display_name":"External verification fixture","password":"Fixture-Registration-2026!","correlation_id":"p20-t025-external-registration"}`))
+   req.Header.Set("Content-Type", "application/json")
+   req.Header.Set("X-Turnstile-Token", token)
+   response := httptest.NewRecorder()
+   root.ServeHTTP(response, req)
+   if strings.Contains(response.Body.String(), address) || strings.Contains(response.Body.String(), officialTestSecret) || (token != "" && strings.Contains(response.Body.String(), token)) { t.Fatal("sensitive input reflected") }
+   return response.Code
+  }
+  if request("") != 400 { t.Fatal("missing challenge reached registration") }
+  if u,g,a := counts(); u != 0 || g != 0 || a != 0 { t.Fatal("denied request wrote durable registration state") }
+  if request("XXXX.DUMMY.TOKEN.XXXX") != 202 { t.Fatal("official siteverify did not authorize production registration") }
+  if u,g,a := counts(); u != 1 || g != 1 || a != 1 { t.Fatal("verified registration did not commit exactly once") }
+  if request("XXXX.DUMMY.TOKEN.XXXX") != 400 { t.Fatal("verified token replay reached registration") }
+  if u,g,a := counts(); u != 1 || g != 1 || a != 1 { t.Fatal("replay changed durable registration state") }
+ })
 }
