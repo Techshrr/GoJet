@@ -32,6 +32,8 @@ on:
       - 'scripts/p20/t024_outbound.py'
       - 'scripts/p20/t024_formal.py'
       - 'scripts/p20/t025_availability.py'
+      - 'scripts/p20/integration_cases.py'
+      - 'scripts/p20/test_integration_cases.py'
       - 'scripts/p20/t024_key_lifecycle.py'
       - 'scripts/p20/common.py'
       - 'scripts/p20/validate_contract.py'
@@ -318,6 +320,15 @@ jobs:
           go test ./services/platformapi/cmd/server -run '^TestAuthChallenge' -count=1 -json > artifacts/v10/P20/runtime/t025/auth-turnstile-state.jsonl
           go test ./internal/auth -run '^TestHTTPProviderAdapterOptional' -count=1 -json > artifacts/v10/P20/runtime/t025/optional-provider-state.jsonl
           go test ./internal/auth -run '^TestHTTPProviderAdapterRainbow' -count=1 -json > artifacts/v10/P20/runtime/t025/rainbow-protocol-state.jsonl
+          go test ./internal/auth -run '^TestHTTPProviderAdapter(Google|GitHub|QQ|WeChat|Facebook|RejectsUnsafe|FailsClosed)' -count=1 -json > artifacts/v10/P20/runtime/t025/provider-protocol.jsonl
+          python3 - <<'PYCODE'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('artifacts/v10/P20/runtime/t025')
+          manifest={'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+                    'files':{p.name:'sha256:'+hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*.jsonl')}}
+          (root/'native-manifest.json').write_text(json.dumps(manifest,sort_keys=True,indent=2)+'\n')
+          PYCODE
 
       - name: Ensure current ClamAV signatures and start native clamd
         shell: bash
@@ -939,6 +950,25 @@ jobs:
           done
           python3 scripts/p20/t024_formal.py
 
+      - name: Replay frozen OAuth and bot-protection authority for T025
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_predecessor?multiStatements=true&parseTime=true&charset=utf8mb4
+          GOJET_REDIS_DB: "13"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for case in P15-T015 P15-T016 P15-T017 P15-T018 P15-T019 P15-T020 P16-T019 P17-T018; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'DROP DATABASE IF EXISTS gojet_t025_predecessor; CREATE DATABASE gojet_t025_predecessor CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'
+            for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+              mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_t025_predecessor < "$migration"
+            done
+            node="${case:0:3}"
+            python3 "scripts/${node,,}/integration.py" --case "$case"
+          done
+          python3 -m unittest discover -s scripts/p20 -p test_integration_cases.py
+          python3 scripts/p20/integration_cases.py --case P20-T025
+
       - name: Upload exact-head T024 availability evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -947,6 +977,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P20/integration/P20-T025.json
+            artifacts/v10/P20/runtime/t025/native-manifest.json
+            artifacts/v10/P20/runtime/t025/provider-protocol.jsonl
+            artifacts/v10/P15/oauth/
+            artifacts/v10/P16/abuse/P16-T019.json
+            artifacts/v10/P17/platform/P17-T018.json
             artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
             artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
             artifacts/v10/P20/runtime/t025/rainbow-protocol-state.jsonl
