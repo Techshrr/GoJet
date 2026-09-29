@@ -137,7 +137,7 @@ func main() {
 		checks[provider+"_audited_save"] = response.Status == 200 && !strings.Contains(response.Raw, "p20-"+provider+"-secret")
 	}
 	passed := adminfixture.AllTrue(checks)
-	must(json.NewEncoder(os.Stdout).Encode(map[string]any{"source_sha": os.Getenv("GITHUB_SHA"), "checks": checks, "passed": passed, "formal": false, "external_provider_exchange_verified": false}))
+	must(json.NewEncoder(os.Stdout).Encode(map[string]any{"source_sha": os.Getenv("P20_EXACT_HEAD"), "checks": checks, "passed": passed, "formal": false, "external_provider_exchange_verified": false}))
 	if !passed {
 		fmt.Fprintln(os.Stderr, "OAuth administrator persistence checks failed; inspect boolean evidence")
 		os.Exit(1)

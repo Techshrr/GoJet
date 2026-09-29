@@ -315,6 +315,7 @@ jobs:
             mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_t025_oauth_admin < "$migration"
           done
           mkdir -p artifacts/v10/P20/runtime/t025
+          export P20_EXACT_HEAD="$(git rev-parse HEAD)"
           go run ./scripts/p20/oauth_admin_probe > artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
           go test ./services/platformapi/cmd/server -run '^TestOAuthBrowser' -count=1 -json > artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
           go test ./services/platformapi/cmd/server -run '^TestAuthChallenge' -count=1 -json > artifacts/v10/P20/runtime/t025/auth-turnstile-state.jsonl

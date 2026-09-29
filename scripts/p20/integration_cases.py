@@ -23,9 +23,13 @@ GO_TESTS = {
 }
 
 
+class EvidenceError(ValueError):
+    """Only internal, secret-free admission messages may enter evidence."""
+
+
 def require(condition, reason):
     if not condition:
-        raise ValueError(reason)
+        raise EvidenceError(reason)
 
 
 def check_go_events(events, required):
@@ -111,6 +115,8 @@ def t025():
                        oauth_state_pkce_handoff_bind_unbind_verified=True,
                        turnstile_auth_support_contact_abuse_verified=True,
                        live_cloudflare_official_test_registration_verified=True)
+    except EvidenceError as exc:
+        errors.append('T025 evidence binding failed: ' + str(exc))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         # Never serialize provider responses, tokens or arbitrary upstream errors.
         errors.append('T025 evidence binding failed: ' + type(exc).__name__)
