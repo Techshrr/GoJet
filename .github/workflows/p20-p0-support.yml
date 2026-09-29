@@ -964,7 +964,34 @@ jobs:
               mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_t025_predecessor < "$migration"
             done
             node="${case:0:3}"
-            python3 "scripts/${node,,}/integration.py" --case "$case"
+            if [ "$case" = P16-T019 ]; then
+              # Frozen P16 runner owns Redis DB 0 and a native HTTP service.
+              # The correlated P0 timeline has already finished and stopped.
+              export GOJET_TEST_TRUST_TURNSTILE_TOKEN=p16-trust-turnstile-ci-token
+              export GOJET_PLATFORMAPI_URL=http://127.0.0.1:18089
+              GOJET_PLATFORMAPI_ADDR=127.0.0.1:18089 GOJET_REDIS_DB=0 \
+              GOJET_TEST_AUTH_ENABLED=1 GOJET_TEST_TRUST_TURNSTILE_ENABLED=1 \
+              GOJET_TRUST_ENABLED=1 GOJET_TRUST_ABUSE_RATE_LIMIT=3 \
+              GOJET_TRUST_ABUSE_RATE_WINDOW=5m GOJET_ANALYTICS_ENABLED=0 \
+              GOJET_AUTH_ENABLED=0 GOJET_ACCOUNT_ENABLED=0 GOJET_WORKSPACE_ENABLED=0 \
+              GOJET_ADMIN_ACCESS_ENABLED=0 GOJET_BILLING_ENABLED=0 GOJET_SUPPORT_ENABLED=0 \
+              GOJET_FILES_ENABLED=0 GOJET_TEXT_ENABLED=0 GOJET_BIO_ENABLED=0 \
+                /tmp/gojet-p20-platformapi > /tmp/p20-t025-trust.log 2>&1 &
+              trust_pid=$!
+              trap 'kill "$trust_pid" 2>/dev/null || true' EXIT
+              ready=0
+              for attempt in $(seq 1 60); do
+                if curl -fsS "$GOJET_PLATFORMAPI_URL/healthz" >/dev/null; then ready=1; break; fi
+                sleep 1
+              done
+              test "$ready" = 1
+              python3 "scripts/${node,,}/integration.py" --case "$case"
+              kill "$trust_pid"
+              wait "$trust_pid" || true
+              trap - EXIT
+            else
+              python3 "scripts/${node,,}/integration.py" --case "$case"
+            fi
           done
           python3 -m unittest discover -s scripts/p20 -p test_integration_cases.py
           python3 scripts/p20/integration_cases.py --case P20-T025
