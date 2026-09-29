@@ -74,7 +74,9 @@ func TestOAuthBrowserStartPersistence(t *testing.T) {
 	mux := oauthBrowserTestMux(&authHTTPHandler{oauth: oauth, db: runtime.DB})
 	discovery := httptest.NewRecorder()
 	mux.ServeHTTP(discovery, httptest.NewRequest(http.MethodGet, "/api/public/auth/providers", nil))
-	var inventory struct { Providers []publicOAuthProvider `json:"providers"` }
+	var inventory struct {
+		Providers []publicOAuthProvider `json:"providers"`
+	}
 	if discovery.Code != 200 || json.Unmarshal(discovery.Body.Bytes(), &inventory) != nil || len(inventory.Providers) != 8 {
 		t.Fatal("production discovery must expose eight providers")
 	}
@@ -90,41 +92,41 @@ func TestOAuthBrowserStartPersistence(t *testing.T) {
 		}
 	}
 	for _, provider := range []string{"google", "x", "linkedin"} {
-	for _, intent := range []string{"login", "register"} {
-		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://site.p20.test/api/public/auth/"+provider+"/start?intent="+intent, nil))
-		if w.Code != http.StatusFound {
-			t.Fatalf("real public start route returned %d", w.Code)
+		for _, intent := range []string{"login", "register"} {
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://site.p20.test/api/public/auth/"+provider+"/start?intent="+intent, nil))
+			if w.Code != http.StatusFound {
+				t.Fatalf("real public start route returned %d", w.Code)
+			}
+			location, err := url.Parse(w.Header().Get("Location"))
+			if err != nil || location.Host != map[string]string{"google": "accounts.google.com", "x": "x.com", "linkedin": "www.linkedin.com"}[provider] || location.Scheme != "https" {
+				t.Fatal("provider redirect absent")
+			}
+			query := location.Query()
+			state := query.Get("state")
+			cookies := w.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Name != oauthBrowserCookie(provider) || cookies[0].Value != state || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode || cookies[0].Path != "/" {
+				t.Fatal("browser binding cookie missing or unsafe")
+			}
+			var id, storedIntent, keyID string
+			var encrypted []byte
+			hash := authn.HashOpaque(state)
+			err = runtime.DB.QueryRowContext(context.Background(), "SELECT id,intent,pkce_key_id,pkce_verifier_ciphertext FROM oauth_states WHERE provider=? AND state_hash=? AND consumed_at IS NULL", provider, hash[:]).Scan(&id, &storedIntent, &keyID, &encrypted)
+			if err != nil || storedIntent != intent {
+				t.Fatal("start did not persist the requested intent")
+			}
+			verifier, err := crypto.Decrypt(encrypted, keyID, "oauth_pkce:"+id)
+			if err != nil {
+				t.Fatal("encrypted PKCE authority invalid")
+			}
+			digest := sha256.Sum256([]byte(verifier))
+			if query.Get("code_challenge_method") != "S256" || query.Get("code_challenge") != base64.RawURLEncoding.EncodeToString(digest[:]) {
+				t.Fatal("redirect does not bind persisted PKCE verifier")
+			}
+			if strings.Contains(w.Header().Get("Location")+w.Body.String(), verifier) || query.Has("client_secret") || w.Body.Len() != 0 || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+				t.Fatal("public redirect leaked credentials or was cacheable")
+			}
 		}
-		location, err := url.Parse(w.Header().Get("Location"))
-		if err != nil || location.Host != map[string]string{"google": "accounts.google.com", "x": "x.com", "linkedin": "www.linkedin.com"}[provider] || location.Scheme != "https" {
-			t.Fatal("provider redirect absent")
-		}
-		query := location.Query()
-		state := query.Get("state")
-		cookies := w.Result().Cookies()
-		if len(cookies) != 1 || cookies[0].Name != oauthBrowserCookie(provider) || cookies[0].Value != state || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode || cookies[0].Path != "/" {
-			t.Fatal("browser binding cookie missing or unsafe")
-		}
-		var id, storedIntent, keyID string
-		var encrypted []byte
-		hash := authn.HashOpaque(state)
-		err = runtime.DB.QueryRowContext(context.Background(), "SELECT id,intent,pkce_key_id,pkce_verifier_ciphertext FROM oauth_states WHERE provider=? AND state_hash=? AND consumed_at IS NULL", provider, hash[:]).Scan(&id, &storedIntent, &keyID, &encrypted)
-		if err != nil || storedIntent != intent {
-			t.Fatal("start did not persist the requested intent")
-		}
-		verifier, err := crypto.Decrypt(encrypted, keyID, "oauth_pkce:"+id)
-		if err != nil {
-			t.Fatal("encrypted PKCE authority invalid")
-		}
-		digest := sha256.Sum256([]byte(verifier))
-		if query.Get("code_challenge_method") != "S256" || query.Get("code_challenge") != base64.RawURLEncoding.EncodeToString(digest[:]) {
-			t.Fatal("redirect does not bind persisted PKCE verifier")
-		}
-		if strings.Contains(w.Header().Get("Location")+w.Body.String(), verifier) || query.Has("client_secret") || w.Body.Len() != 0 || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
-			t.Fatal("public redirect leaked credentials or was cacheable")
-		}
-	}
 	}
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/public/auth/facebook/start", nil))

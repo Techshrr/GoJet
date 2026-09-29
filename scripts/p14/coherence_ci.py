@@ -5,11 +5,15 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.ci.actions import workflow_runs
 
 ROOT = Path('artifacts/v10/P14')
 MANIFEST = ROOT / 'evidence-producer-manifest.json'
@@ -76,9 +80,7 @@ def bind_producers() -> dict:
     deadline = time.time() + 35 * 60
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, contract_expected)
-        query = urllib.parse.urlencode({'head_sha': HEAD, 'event': 'pull_request', 'per_page': 100})
-        runs_url = f'https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}'
-        runs = api_get(runs_url).get('workflow_runs', [])
+        runs = workflow_runs(api_get, REPOSITORY, HEAD, event='pull_request')
         latest: dict[str, dict] = {}
         for run in runs:
             name = run.get('name')
