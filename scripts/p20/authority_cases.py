@@ -4,11 +4,14 @@ from __future__ import annotations
 import json
 import os
 import re
-import urllib.request
+import sys
 from pathlib import Path
 
 from common import HEAD, ROOT, ancestor, emit, fail_if_errors
 from traceability_cases import INTEGRATIONS
+
+sys.path.insert(0, str(ROOT))
+from scripts.ci.actions import github_json
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "Techshrr/GoJet")
 TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
@@ -17,17 +20,15 @@ TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
 def github_commit(sha: str) -> dict:
     if not TOKEN:
         raise RuntimeError("GH_TOKEN/GITHUB_TOKEN is required for live authority binding")
-    request = urllib.request.Request(
+    return github_json(
         f"https://api.github.com/repos/{REPO}/commits/{sha}",
-        headers={
+        {
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {TOKEN}",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "gojet-p20-authority",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read())
 
 
 def main() -> int:

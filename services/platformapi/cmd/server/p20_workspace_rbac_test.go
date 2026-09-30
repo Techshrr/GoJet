@@ -39,6 +39,19 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 	if err != nil || !enabled {
 		t.Fatalf("production workspace handler unavailable: %v", err)
 	}
+	t.Setenv("GOJET_TEXT_ENABLED", "1")
+	t.Setenv("GOJET_TEXT_WORKSPACE_QUOTA", "100")
+	t.Setenv("GOJET_TEXT_PUBLIC_AUTH_SECRET", strings.Repeat("t", 32))
+	t.Setenv("GOJET_BIO_ENABLED", "1")
+	t.Setenv("GOJET_BIO_WORKSPACE_QUOTA", "100")
+	textHandler, textEnabled, err := buildTextHandler(runtime.DB, runtime.Redis, false)
+	if err != nil || !textEnabled {
+		t.Fatalf("production Text handler unavailable: %v", err)
+	}
+	bioHandler, bioEnabled, err := buildBioHandler(runtime.DB, runtime.Redis, false)
+	if err != nil || !bioEnabled {
+		t.Fatalf("production Bio handler unavailable: %v", err)
+	}
 	replay, err := authn.NewRedisDigestReplayStore(runtime.Redis, "auth:csrf:account", time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -98,10 +111,17 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 			}
 		}
 		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, req)
+		switch {
+		case strings.Contains(path, "/text-shares"):
+			textHandler.ServeHTTP(response, req)
+		case strings.Contains(path, "/bio-pages"):
+			bioHandler.ServeHTTP(response, req)
+		default:
+			handler.ServeHTTP(response, req)
+		}
 		return response.Code
 	}
-	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications"} {
+	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications", "text-shares", "bio-pages"} {
 		t.Run("read-"+resource, func(t *testing.T) {
 			path := "/api/workspaces/" + ws.ID + "/" + resource
 			for _, role := range []string{"owner", "admin", "member", "viewer"} {
@@ -170,6 +190,39 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 				}
 				if after != before {
 					t.Fatal("durable row count disagrees with authorization")
+				}
+			})
+		}
+	}
+	for _, resource := range []string{"text-shares", "bio-pages"} {
+		for _, role := range []string{"owner", "admin", "member", "viewer", "outsider"} {
+			t.Run("product-create-"+resource+"-"+role, func(t *testing.T) {
+				table := "text_shares"
+				body := `{"title":"RBAC text","content":"private fixture","visibility":"public","change_reason":"RBAC test"}`
+				if resource == "bio-pages" {
+					table = "bio_pages"
+					body = `{"title":"RBAC bio","bio":"fixture","links":[],"change_reason":"RBAC test"}`
+				}
+				var before, after int
+				query := "SELECT COUNT(*) FROM " + table + " WHERE workspace_id=?"
+				if err := runtime.DB.QueryRowContext(ctx, query, ws.ID).Scan(&before); err != nil {
+					t.Fatal(err)
+				}
+				want := 201
+				if role == "viewer" || role == "outsider" {
+					want = 403
+				}
+				if code := call(role, "POST", "/api/workspaces/"+ws.ID+"/"+resource, body); code != want {
+					t.Fatalf("product create status %d, want %d", code, want)
+				}
+				if err := runtime.DB.QueryRowContext(ctx, query, ws.ID).Scan(&after); err != nil {
+					t.Fatal(err)
+				}
+				if want == 201 {
+					before++
+				}
+				if after != before {
+					t.Fatal("product mutation disagrees with durable authorization")
 				}
 			})
 		}
