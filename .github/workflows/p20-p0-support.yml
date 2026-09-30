@@ -300,6 +300,36 @@ jobs:
             mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
           done
 
+      - name: Verify T027 workspace RBAC with durable production sessions
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t027_rbac?multiStatements=true&parseTime=true&charset=utf8mb4
+          GOJET_REDIS_DB: "14"
+          GOJET_P20_RBAC_PROBE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'CREATE DATABASE gojet_t027_rbac CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_t027_rbac < "$migration"
+          done
+          mkdir -p artifacts/v10/P20/runtime/t027
+          go test ./services/platformapi/cmd/server -run '^TestP20WorkspaceRBACDurableSessions$' -count=1 -json > artifacts/v10/P20/runtime/t027/workspace-rbac.jsonl
+          python3 - <<'PYCODE'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('artifacts/v10/P20/runtime/t027')
+          path=root/'workspace-rbac.jsonl'
+          rows=[json.loads(line) for line in path.read_text().splitlines()]
+          assert not any(row.get('Action') in ('fail','skip') for row in rows)
+          assert any(row.get('Test')=='TestP20WorkspaceRBACDurableSessions' and row.get('Action')=='pass' for row in rows)
+          manifest={'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+                    'formal_p20_t027_claim':False,
+                    'scope':'Workspace organization/membership/resource API production-session matrix; full cross-product UI/Admin authority still required',
+                    'files':{path.name:'sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()}}
+          (root/'native-manifest.json').write_text(json.dumps(manifest,sort_keys=True,indent=2)+'\n')
+          PYCODE
+
       - name: Verify production OAuth administrator persistence in isolated database
         env:
           GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_oauth_admin?multiStatements=true&parseTime=true&charset=utf8mb4
@@ -1016,6 +1046,7 @@ jobs:
             artifacts/v10/P15/oauth/
             artifacts/v10/P16/abuse/P16-T019.json
             artifacts/v10/P17/platform/P17-T018.json
+            artifacts/v10/P20/runtime/t027/
             artifacts/v10/P20/runtime/t025/oauth-admin-governance.json
             artifacts/v10/P20/runtime/t025/oauth-browser-start.jsonl
             artifacts/v10/P20/runtime/t025/rainbow-protocol-state.jsonl
