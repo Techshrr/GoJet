@@ -66,6 +66,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.ci.actions import workflow_runs
 
           required = {
               'P16 Trust Destination Risk Abuse Contract': lambda sha: f'p16-trust-destination-risk-abuse-contract-guard-{sha}',
@@ -91,15 +92,7 @@ jobs:
 
           deadline = time.time() + 135 * 60
           while time.time() < deadline:
-              runs = []
-              page = 1
-              while True:
-                  query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100, 'page': page})
-                  batch = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
-                  runs.extend(batch)
-                  if len(batch) < 100:
-                      break
-                  page += 1
+              runs = workflow_runs(get, repo, sha)
               latest = {}
               for run in runs:
                   name = run.get('name')

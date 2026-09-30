@@ -3,29 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D020",
-      "severity": "P1",
-      "title": "Production OAuth callback has no provider exchange adapter",
-      "case": "P20-T025",
-      "issue": 176,
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "f35a1d04f42ea19941f5ebb4ba289fb2be751492",
-      "discovery_workflow_run": 35592953224,
-      "discovery_workflow_job": 106311228864,
-      "discovery_artifact_id": 10637409095,
-      "discovery_artifact_digest": "sha256:854142c094496031d277dc6012811fd6f5e3514ceecf21f02da125e2320dfe99",
-      "failure": "All six production OAuth callbacks return503 before state validation; only test adapter is wired.",
-      "status": "open"
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1333,6 +1311,34 @@
         "workspace_id": "ws_VWp0WcO9XJF9va6bLhUrvgfx"
       },
       "closed_at": "2026-09-13T18:16:58.403803+00:00"
+    },
+    {
+      "id": "P20-D020",
+      "severity": "P1",
+      "title": "Production OAuth callback has no provider exchange adapter",
+      "case": "P20-T025",
+      "issue": 176,
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "f35a1d04f42ea19941f5ebb4ba289fb2be751492",
+      "discovery_workflow_run": 35592953224,
+      "discovery_workflow_job": 106311228864,
+      "discovery_artifact_id": 10637409095,
+      "discovery_artifact_digest": "sha256:854142c094496031d277dc6012811fd6f5e3514ceecf21f02da125e2320dfe99",
+      "failure": "All six production OAuth callbacks return503 before state validation; only test adapter is wired.",
+      "status": "closed",
+      "verification_head": "f344a42196479a7f23141d92332118198844e801",
+      "verification_workflow_run": 36616538987,
+      "verification_artifact_id": 11055299085,
+      "verification_artifact_digest": "sha256:513e9688cafac895f4b696321aac05246074c6fe7ff3ed63816ae06468044dab",
+      "remediation_pr": 177,
+      "resolution": "Production HTTP adapters and browser state/cookie binding implemented for all eight runtime providers. Real MySQL/Redis administrator configuration, state/PKCE/handoff/bind-unbind, callback rejection and Turnstile owned-surface evidence passed under the frozen P15 deterministic upstream protocol policy. T025 formal PASS and all 20 referenced digests independently verified. This closes D020; live provider credentials and production deployment are not claimed.",
+      "closed_at": "2026-09-30T11:08:10.575485+00:00"
     }
   ],
   "decision_required": [],
@@ -1343,5 +1349,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D019 closed. T024 formally completed at e9105bbff6bb217d47d8cb9227e3236777f7a5a6. D020 open: partial GitHub adapter remediation does not close multi-provider OAuth lifecycle or T025. T026+ forbidden."
+  "note": "D001-D020 closed with verified remediation evidence. T025 formal evidence PASS at f344a42196479a7f23141d92332118198844e801; formal promotion and T026+ remain gated by the closure child same-head Candidate Freeze and required regression authority."
 }
