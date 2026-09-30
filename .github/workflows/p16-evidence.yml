@@ -66,6 +66,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.ci.actions import github_json
           from scripts.ci.actions import workflow_runs
 
           required = {
@@ -86,9 +87,7 @@ jobs:
           }
 
           def get(url):
-              request = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)
+              return github_json(url, headers)
 
           deadline = time.time() + 135 * 60
           while time.time() < deadline:
@@ -140,7 +139,7 @@ jobs:
                   print(f'P16 producers/artifacts green for {sha}')
                   break
               print(f'Waiting P16 producers missing={missing} pending={pending}')
-              time.sleep(10)
+              time.sleep(30)
           else:
               raise SystemExit(f'timed out waiting for P16 producers on {sha}')
           PY

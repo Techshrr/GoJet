@@ -80,6 +80,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.ci.actions import github_json
 
           sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
           required={
@@ -125,6 +126,8 @@ jobs:
           dispatched=set(); deadline=time.time()+170*60
 
           def api(url, *, method='GET', body=None):
+            if method == 'GET' and body is None:
+              return github_json(url, headers)
             data=None if body is None else json.dumps(body).encode()
             request=urllib.request.Request(url,data=data,method=method,headers=headers)
             with urllib.request.urlopen(request,timeout=30) as response:
@@ -176,7 +179,7 @@ jobs:
                 print(f'Dispatching missing P17 producer {name} via {required[name]["workflow"]} on {ref}',flush=True)
                 dispatch(required[name]['workflow']); dispatched.add(name)
             print(f'Waiting P17 producers missing={missing} pending={pending}',flush=True)
-            time.sleep(10)
+            time.sleep(30)
           else:
             raise SystemExit(f'timed out waiting for P17 producers on {sha}')
           PY
