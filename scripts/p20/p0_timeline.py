@@ -585,6 +585,9 @@ def main() -> int:
         payload = t012()
     elif args.case == "P20-T013":
         payload = t013()
+    elif args.case == "P20-T026":
+        from t026_case import run_case
+        payload = run_case()
     else:
         raise SystemExit(f"unsupported P20 P0 tranche case: {args.case}")
     fail_if_errors([payload])

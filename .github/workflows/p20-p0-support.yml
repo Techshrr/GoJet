@@ -33,6 +33,7 @@ on:
       - 'scripts/p20/t024_formal.py'
       - 'scripts/p20/t025_availability.py'
       - 'scripts/p20/integration_cases.py'
+      - 'scripts/p20/t026_case.py'
       - 'scripts/p20/test_integration_cases.py'
       - 'scripts/p20/t024_key_lifecycle.py'
       - 'scripts/p20/common.py'
@@ -997,6 +998,9 @@ jobs:
           python3 -m unittest discover -s scripts/p20 -p test_integration_cases.py
           python3 scripts/p20/integration_cases.py --case P20-T025
 
+      - name: Verify correlated whole-product P0 timeline
+        run: python3 scripts/p20/p0_timeline.py --case P20-T026
+
       - name: Upload exact-head T024 availability evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -1005,6 +1009,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P20/p0/P20-T026.json
             artifacts/v10/P20/integration/P20-T025.json
             artifacts/v10/P20/runtime/t025/native-manifest.json
             artifacts/v10/P20/runtime/t025/provider-protocol.jsonl
