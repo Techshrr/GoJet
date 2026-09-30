@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import zipfile
 import os
 import shutil
 import subprocess
@@ -63,9 +65,9 @@ def artifact_for(run_id: int, expected: str) -> dict | None:
     url = f'https://api.github.com/repos/{REPOSITORY}/actions/runs/{run_id}/artifacts?per_page=100'
     artifacts = api_get(url).get('artifacts', [])
     matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
-    if len(matches) != 1:
+    if not matches:
         return None
-    item = matches[0]
+    item = max(matches, key=lambda item: int(item['id']))
     return {
         'id': int(item['id']),
         'name': item['name'],
@@ -157,18 +159,24 @@ def bind_producers() -> dict:
     raise SystemExit(f'timed out waiting for P14 T024 producers on {HEAD}')
 
 
-def download(run_id: int, artifact_name: str, destination: Path) -> None:
+def download(artifact: dict, destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
-    subprocess.run(
-        [
-            'gh', 'run', 'download', str(run_id), '--repo', REPOSITORY,
-            '--name', artifact_name, '--dir', str(destination),
-        ],
-        check=True,
-        env={**os.environ, 'GH_TOKEN': TOKEN},
-    )
+    archive = destination.parent / f"{artifact['id']}.zip"
+    with archive.open('wb') as output:
+        subprocess.run(
+            ['gh', 'api', f"repos/{REPOSITORY}/actions/artifacts/{int(artifact['id'])}/zip"],
+            check=True, stdout=output, env={**os.environ, 'GH_TOKEN': TOKEN},
+        )
+    digest = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != artifact.get('digest'):
+        raise SystemExit('P14 artifact digest mismatch')
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.infolist():
+            if not (destination / member.filename).resolve().is_relative_to(destination.resolve()):
+                raise SystemExit('unsafe P14 artifact path')
+        bundle.extractall(destination)
 
 
 def first_file(root: Path, name: str) -> Path:
@@ -215,7 +223,7 @@ def assemble_evidence(manifest: dict) -> None:
     }
     for name, destination in destinations.items():
         row = rows[name]
-        download(int(row['run_id']), row['artifact']['name'], destination)
+        download(row['artifact'], destination)
 
     for dirname in (
         'contract', 'api', 'rbac', 'security', 'entitlement', 'mail', 'notification',
