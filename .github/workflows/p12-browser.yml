@@ -125,6 +125,7 @@ jobs:
           node --check scripts/p12/browser.mjs
           node --check scripts/p12/browser_base.mjs
           node --check scripts/p12/browser_contract.mjs
+          node scripts/p20/test_workspace_session.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
           go test ./internal/workspace ./services/platformapi/cmd/server
