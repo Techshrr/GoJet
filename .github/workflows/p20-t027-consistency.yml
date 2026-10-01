@@ -1,0 +1,28 @@
+name: P20-T027 Consistency
+
+on:
+  push:
+    branches:
+      - develop/p20-whole-product-verification
+  pull_request:
+    branches:
+      - develop/p20-whole-product-verification
+
+jobs:
+  t027-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run T027 consistency evidence
+        run: python3 scripts/p20/consistency_cases.py
+      - name: Upload T027 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t027-consistency-evidence
+          path: artifacts/v10/P20/consistency/
