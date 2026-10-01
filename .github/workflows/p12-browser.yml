@@ -264,6 +264,23 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,status,data_through_at,state_reason FROM workspace_notification_state ORDER BY workspace_id" > artifacts/v10/P12/runtime/browser-notification-state.tsv 2> artifacts/v10/P12/runtime/browser-notification-state.err
           true
 
+      - name: Verify T027 production-session Workspace browser
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t027_browser?multiStatements=true&parseTime=true
+          GOJET_REDIS_DB: '15'
+          GOJET_P20_BROWSER_PROBE: '1'
+          GOJET_TEST_AUTH_ENABLED: '0'
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -u root -e 'CREATE DATABASE gojet_t027_browser'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -u root gojet_t027_browser < "$migration"
+          done
+          mkdir -p artifacts/v10/P20/runtime/t027
+          go test ./services/platformapi/cmd/server -run '^TestP20WorkspaceProductionBrowser$' -count=1 -timeout=5m -json > artifacts/v10/P20/runtime/t027/workspace-browser.jsonl
+
       - name: Stop P12 browser services
         if: always()
         run: |
@@ -286,5 +303,6 @@ jobs:
             artifacts/v10/P12/browser/P12-T023.json
             artifacts/v10/P12/captures/
             artifacts/v10/P12/runtime/
+            artifacts/v10/P20/runtime/t027/
           if-no-files-found: warn
           retention-days: 30
