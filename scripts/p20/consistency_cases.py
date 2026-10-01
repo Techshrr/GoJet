@@ -1,77 +1,39 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
+"""T027 admission: declarations of desired coverage are never executed evidence."""
+import hashlib
 import json
 from pathlib import Path
 
-from common import ROOT, HEAD, emit, fail_if_errors
+
+def inspect_native(root: Path, head: str):
+    from t027_native import PACKAGE, validate_native
+    directory = root / 'artifacts/v10/P20/runtime/t027'
+    raw = (directory / 'workspace-rbac.jsonl').read_bytes()
+    manifest = json.loads((directory / 'native-manifest.json').read_text())
+    if manifest.get('implementation_commit') != head:
+        raise ValueError('native evidence belongs to another commit')
+    digest = 'sha256:' + hashlib.sha256(raw).hexdigest()
+    if manifest.get('files', {}).get('workspace-rbac.jsonl') != digest:
+        raise ValueError('native evidence digest mismatch')
+    verified = validate_native(raw, head, PACKAGE)
+    return {'required_test_count': verified['required_test_count'], 'jsonl_sha256': digest}
 
 
-RESOURCE_MATRIX = {
-    "workspace": ["owner", "admin", "member", "viewer"],
-    "links": ["owner", "admin", "member", "viewer"],
-    "domains": ["owner", "admin", "member", "viewer"],
-    "qr": ["owner", "admin", "member", "viewer"],
-    "files": ["owner", "admin", "member", "viewer"],
-    "billing": ["owner", "admin", "member", "viewer"],
-    "support": ["owner", "admin", "member", "viewer"],
-}
+def run_case():
+    from common import ROOT, HEAD, emit
+    errors = []
+    details = {'formal_p20_t027_claim': False, 'next_case_unlocked': False,
+               'static_matrix_is_not_runtime_evidence': True}
+    try:
+        details['native'] = inspect_native(ROOT, HEAD)
+    except (OSError, ValueError, KeyError, TypeError, ImportError) as error:
+        errors.append('T027 native runtime evidence unavailable or invalid: ' + str(error))
+    # No admitted production-session browser producer exists yet. Do not turn a
+    # coverage declaration, file existence or arbitrary booleans into authority.
+    errors.append('T027 production-session UI/Admin evidence is not yet admitted; formal closure blocked')
+    return emit('P20-T027', 'consistency', 'Cross-resource tenant and RBAC consistency', errors, details)
 
 
-def main() -> int:
-    errors: list[str] = []
-
-    rows = []
-    for resource, roles in RESOURCE_MATRIX.items():
-        for role in roles:
-            rows.append({
-                "resource": resource,
-                "role": role,
-                "authority_source": "server_side_session",
-                "client_override_allowed": False,
-            })
-
-    negative_cases = [
-        "cross_workspace_read_denied",
-        "cross_workspace_write_denied",
-        "last_owner_removal_denied",
-        "privilege_header_escalation_denied",
-        "stale_role_reuse_denied",
-    ]
-
-    if not rows:
-        errors.append("empty authority matrix")
-    if len(negative_cases) != 5:
-        errors.append("negative admission matrix incomplete")
-
-    evidence = {
-        "schema": "gojet.p20-t027-consistency.v1",
-        "implementation_commit": HEAD,
-        "resource_matrix": rows,
-        "negative_admission_checks": negative_cases,
-        "server_authority_required": True,
-        "mock_evidence_accepted": False,
-    }
-
-    out = ROOT / "artifacts" / "v10" / "P20" / "consistency" / "t027-consistency.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    payload = emit(
-        "P20-T027",
-        "consistency",
-        "Cross-resource tenant and RBAC consistency",
-        errors,
-        {
-            "resource_count": len(RESOURCE_MATRIX),
-            "role_cases": len(rows),
-            "negative_admission_checks": len(negative_cases),
-            "evidence": out.relative_to(ROOT).as_posix(),
-        },
-    )
-    fail_if_errors([payload])
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    from common import fail_if_errors
+    fail_if_errors([run_case()])
