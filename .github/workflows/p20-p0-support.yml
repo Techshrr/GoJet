@@ -314,7 +314,7 @@ jobs:
             mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root gojet_t027_rbac < "$migration"
           done
           mkdir -p artifacts/v10/P20/runtime/t027
-          go test ./services/platformapi/cmd/server -run '^TestP20WorkspaceRBACDurableSessions$' -count=1 -json > artifacts/v10/P20/runtime/t027/workspace-rbac.jsonl
+          go test ./services/platformapi/cmd/server -run '^TestP20(WorkspaceRBACDurableSessions|AdministratorPermissionBoundary)$' -count=1 -json > artifacts/v10/P20/runtime/t027/workspace-rbac.jsonl
           python3 - <<'PYCODE'
           import hashlib,json,subprocess
           from pathlib import Path
@@ -322,7 +322,8 @@ jobs:
           path=root/'workspace-rbac.jsonl'
           rows=[json.loads(line) for line in path.read_text().splitlines()]
           assert not any(row.get('Action') in ('fail','skip') for row in rows)
-          assert any(row.get('Test')=='TestP20WorkspaceRBACDurableSessions' and row.get('Action')=='pass' for row in rows)
+          for test in ('TestP20WorkspaceRBACDurableSessions','TestP20AdministratorPermissionBoundary'):
+              assert any(row.get('Test')==test and row.get('Action')=='pass' for row in rows)
           manifest={'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
                     'formal_p20_t027_claim':False,
                     'scope':'Workspace organization/membership/resource API production-session matrix; full cross-product UI/Admin authority still required',

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	authn "github.com/Techshrr/GoJet/internal/auth"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
@@ -332,5 +333,71 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 	current, err := store.GetMembership(ctx, ws.ID, owner.ID)
 	if err != nil || current.Role != "owner" {
 		t.Fatal("last owner not preserved")
+	}
+}
+
+func TestP20AdministratorPermissionBoundary(t *testing.T) {
+	if os.Getenv("GOJET_P20_RBAC_PROBE") != "1" {
+		t.Skip("requires isolated migrated MySQL and Redis")
+	}
+	runtime, err := adminfixture.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	ctx := context.Background()
+	service, err := adminfixture.NewService(runtime, "p20-rbac-admin", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const email = "p20-limited-admin@example.test"
+	const password = "P20-fixture-only-Administrator-987!"
+	now := time.Now().UTC().Add(-10 * time.Second)
+	_, err = adminfixture.Bootstrap(ctx, service, email, password, []string{adminaccess.PermissionPlatformRead}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, adminSession, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, email, password, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api, err := adminaccess.NewHTTPAPI(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := runnerutil.ActivateUser(ctx, runtime.DB, "p20-admin-boundary-user@example.test", "Workspace user", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	userSession, err := runnerutil.CreateSession(ctx, runtime.DB, user.ID, "p20-admin-boundary", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/admin/overview", "/api/admin/administrators", "/api/admin/users", "/api/admin/workspaces"} {
+		for _, identity := range []string{"anonymous", "workspace", "limited-admin"} {
+			t.Run(identity+path, func(t *testing.T) {
+				req := httptest.NewRequest("GET", adminfixture.AllowedOrigin+path, nil)
+				req.Header.Set("X-GoJet-Test-Actor", "forged-root")
+				req.Header.Set("X-GoJet-Test-Admin-Permissions", "admins.manage,users.manage,workspaces.manage")
+				want := 401
+				if identity == "workspace" {
+					req.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: userSession.Token})
+				} else if identity == "limited-admin" {
+					req.AddCookie(&http.Cookie{Name: adminaccess.AdminSessionCookie, Value: adminSession.Token})
+					want = 403
+					if path == "/api/admin/overview" {
+						want = 200
+					}
+				}
+				response := httptest.NewRecorder()
+				api.Handler().ServeHTTP(response, req)
+				if response.Code != want {
+					t.Fatalf("administrator boundary status %d, want %d", response.Code, want)
+				}
+				if strings.Contains(response.Body.String(), adminSession.Token) || strings.Contains(response.Body.String(), userSession.Token) {
+					t.Fatal("session secret reflected")
+				}
+			})
+		}
 	}
 }
