@@ -72,6 +72,29 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 	linkHandler := links.NewAPIWithActorResolver(linkStore, linkAuthority.resolve).Handler()
 	domainHandler := domains.NewWorkspaceDomainsAPIWithActorResolver(domainStore, domainAuthority.resolve).Handler()
 	qrHandler := qrcodes.NewAPIWithActorResolver(qrcodes.NewStore(runtime.DB, 100), linkStore, links.NewRedisRiskStore(runtime.Redis), qrAuthority.resolve).Handler()
+	t.Setenv("GOJET_FILES_ENABLED", "1")
+	t.Setenv("GOJET_FILE_WORKSPACE_MAX_FILES", "100")
+	t.Setenv("GOJET_FILE_WORKSPACE_MAX_BYTES", "1048576")
+	t.Setenv("GOJET_FILE_MAX_UPLOAD_BYTES", "1024")
+	t.Setenv("GOJET_FILE_STORAGE_ROOT", t.TempDir())
+	t.Setenv("GOJET_FILE_PUBLIC_AUTH_SECRET", strings.Repeat("f", 32))
+	t.Setenv("GOJET_FILE_TYPE_ALLOWLIST", "txt=text/plain")
+	fileHandler, fileEnabled, err := buildFilesHandler(runtime.DB, runtime.Redis, false)
+	if err != nil || !fileEnabled {
+		t.Fatalf("production Files handler unavailable: %v", err)
+	}
+	t.Setenv("GOJET_BILLING_ENABLED", "1")
+	billingHandler, billingEnabled, err := buildBillingHandler(runtime.DB, runtime.Redis, false)
+	if err != nil || !billingEnabled {
+		t.Fatalf("production Billing handler unavailable: %v", err)
+	}
+	t.Setenv("GOJET_SUPPORT_ENABLED", "1")
+	// This read-only Support matrix never calls the external verifier.
+	t.Setenv("GOJET_TURNSTILE_SECRET", "rbac-unused-verifier-secret")
+	supportHandler, supportEnabled, err := buildSupportHandler(runtime.DB, runtime.Redis, false)
+	if err != nil || !supportEnabled {
+		t.Fatalf("production Support handler unavailable: %v", err)
+	}
 	replay, err := authn.NewRedisDigestReplayStore(runtime.Redis, "auth:csrf:account", time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +155,12 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 		}
 		response := httptest.NewRecorder()
 		switch {
+		case strings.Contains(path, "/files"):
+			fileHandler.ServeHTTP(response, req)
+		case strings.Contains(path, "/billing"):
+			billingHandler.ServeHTTP(response, req)
+		case strings.HasPrefix(path, "/api/support/"):
+			supportHandler.ServeHTTP(response, req)
 		case strings.Contains(path, "/links"):
 			linkHandler.ServeHTTP(response, req)
 		case strings.Contains(path, "/domains"):
@@ -147,7 +176,7 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 		}
 		return response.Code
 	}
-	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications", "text-shares", "bio-pages", "links", "domains", "qr-codes"} {
+	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications", "text-shares", "bio-pages", "links", "domains", "qr-codes", "files"} {
 		t.Run("read-"+resource, func(t *testing.T) {
 			path := "/api/workspaces/" + ws.ID + "/" + resource
 			for _, role := range []string{"owner", "admin", "member", "viewer"} {
@@ -253,7 +282,7 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 			})
 		}
 	}
-	for _, resource := range []string{"links", "domains", "qr-codes"} {
+	for _, resource := range []string{"links", "domains", "qr-codes", "files"} {
 		for _, role := range []string{"viewer", "outsider"} {
 			t.Run("deny-create-"+resource+"-"+role, func(t *testing.T) {
 				// Authorization must reject before even parsing an invalid payload.
@@ -262,6 +291,30 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 				}
 			})
 		}
+	}
+	for _, role := range []string{"owner", "admin", "member", "viewer", "outsider", "anonymous"} {
+		t.Run("billing-summary-"+role, func(t *testing.T) {
+			want := 403
+			if role == "owner" || role == "admin" {
+				want = 200
+			} else if role == "anonymous" {
+				want = 401
+			}
+			if code := call(role, "GET", "/api/workspaces/"+ws.ID+"/billing", ""); code != want {
+				t.Fatalf("billing status %d, want %d", code, want)
+			}
+		})
+		t.Run("support-list-"+role, func(t *testing.T) {
+			want := 200
+			if role == "outsider" {
+				want = 403
+			} else if role == "anonymous" {
+				want = 401
+			}
+			if code := call(role, "GET", "/api/support/tickets?workspace_id="+ws.ID, ""); code != want {
+				t.Fatalf("support status %d, want %d", code, want)
+			}
+		})
 	}
 	memberPath := fmt.Sprintf("/api/workspaces/%s/members/%d", ws.ID, membership.ID)
 	for _, method := range []string{"PATCH", "DELETE"} {
