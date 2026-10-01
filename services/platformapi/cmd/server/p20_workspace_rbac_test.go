@@ -13,6 +13,9 @@ import (
 	"time"
 
 	authn "github.com/Techshrr/GoJet/internal/auth"
+	"github.com/Techshrr/GoJet/internal/domains"
+	"github.com/Techshrr/GoJet/internal/links"
+	qrcodes "github.com/Techshrr/GoJet/internal/qr"
 	"github.com/Techshrr/GoJet/internal/workspace"
 	"github.com/Techshrr/GoJet/scripts/p15/runnerutil"
 	"github.com/Techshrr/GoJet/scripts/p17/adminfixture"
@@ -52,6 +55,23 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 	if err != nil || !bioEnabled {
 		t.Fatalf("production Bio handler unavailable: %v", err)
 	}
+	domainStore := domains.NewMySQLStore(runtime.DB)
+	linkStore := links.NewMySQLStoreWithCustomDomainAuthority(runtime.DB, domainStore)
+	linkAuthority, err := buildLinksSessionAuthority(runtime.DB, runtime.Redis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	domainAuthority, err := buildDomainsSessionAuthority(runtime.DB, runtime.Redis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qrAuthority, err := buildQRSessionAuthority(runtime.DB, runtime.Redis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkHandler := links.NewAPIWithActorResolver(linkStore, linkAuthority.resolve).Handler()
+	domainHandler := domains.NewWorkspaceDomainsAPIWithActorResolver(domainStore, domainAuthority.resolve).Handler()
+	qrHandler := qrcodes.NewAPIWithActorResolver(qrcodes.NewStore(runtime.DB, 100), linkStore, links.NewRedisRiskStore(runtime.Redis), qrAuthority.resolve).Handler()
 	replay, err := authn.NewRedisDigestReplayStore(runtime.Redis, "auth:csrf:account", time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -112,6 +132,12 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 		}
 		response := httptest.NewRecorder()
 		switch {
+		case strings.Contains(path, "/links"):
+			linkHandler.ServeHTTP(response, req)
+		case strings.Contains(path, "/domains"):
+			domainHandler.ServeHTTP(response, req)
+		case strings.Contains(path, "/qr-codes"):
+			qrHandler.ServeHTTP(response, req)
 		case strings.Contains(path, "/text-shares"):
 			textHandler.ServeHTTP(response, req)
 		case strings.Contains(path, "/bio-pages"):
@@ -121,7 +147,7 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 		}
 		return response.Code
 	}
-	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications", "text-shares", "bio-pages"} {
+	for _, resource := range []string{"organization", "members", "campaigns", "tags", "folders", "notifications", "text-shares", "bio-pages", "links", "domains", "qr-codes"} {
 		t.Run("read-"+resource, func(t *testing.T) {
 			path := "/api/workspaces/" + ws.ID + "/" + resource
 			for _, role := range []string{"owner", "admin", "member", "viewer"} {
@@ -223,6 +249,16 @@ func TestP20WorkspaceRBACDurableSessions(t *testing.T) {
 				}
 				if after != before {
 					t.Fatal("product mutation disagrees with durable authorization")
+				}
+			})
+		}
+	}
+	for _, resource := range []string{"links", "domains", "qr-codes"} {
+		for _, role := range []string{"viewer", "outsider"} {
+			t.Run("deny-create-"+resource+"-"+role, func(t *testing.T) {
+				// Authorization must reject before even parsing an invalid payload.
+				if code := call(role, "POST", "/api/workspaces/"+ws.ID+"/"+resource, "{"); code != 403 {
+					t.Fatalf("unauthorized mutation status %d, want 403", code)
 				}
 			})
 		}
