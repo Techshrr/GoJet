@@ -234,7 +234,12 @@ jobs:
             cp "$source" "artifacts/v10/P12/browser/P12-T${number}.json"
           done
           find /tmp/p12-browser -type f -name 'P12-T*.png' -print -exec cp '{}' artifacts/v10/P12/captures/ ';'
-          if [ -d /tmp/p12-browser/runtime ]; then cp -a /tmp/p12-browser/runtime/. artifacts/v10/P12/runtime/; fi
+          # The shared browser archive now includes P20, so upload-artifact
+          # roots it at v10 instead of P12. Accept both archive layouts.
+          browser_root=/tmp/p12-browser
+          if [ -d "$browser_root/P12" ]; then browser_root="$browser_root/P12"; fi
+          test -d "$browser_root/runtime"
+          cp -a "$browser_root/runtime/." artifacts/v10/P12/runtime/
 
           test "$(find artifacts/v10/P12/api -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 11
           test "$(find artifacts/v10/P12/rbac -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 5
