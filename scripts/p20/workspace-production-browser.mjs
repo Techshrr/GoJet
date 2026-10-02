@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
+const implementationCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+assert.match(implementationCommit, /^[0-9a-f]{40}$/);
 const { origin, tokens, workspace, adminOrigin, adminToken } = JSON.parse(process.env.P20_BROWSER_HANDOFF);
 delete process.env.P20_BROWSER_HANDOFF;
 const executablePath = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'].find(p => p && existsSync(p));
@@ -63,5 +66,5 @@ try {
     await context.close();
   }
   mkdirSync('artifacts/v10/P20/runtime/t027', { recursive: true });
-  writeFileSync('artifacts/v10/P20/runtime/t027/workspace-browser.json', JSON.stringify({ implementation_commit: process.env.GITHUB_SHA, checks, production_session: true, mocked_api: false, formal_p20_t027_claim: false }) + '\n');
+  writeFileSync('artifacts/v10/P20/runtime/t027/workspace-browser.json', JSON.stringify({ implementation_commit: implementationCommit, checks, production_session: true, mocked_api: false, formal_p20_t027_claim: false }) + '\n');
 } finally { await browser.close(); }

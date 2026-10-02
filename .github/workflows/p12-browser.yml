@@ -291,7 +291,6 @@ jobs:
           GOJET_REDIS_DB: '15'
           GOJET_P20_BROWSER_PROBE: '1'
           GOJET_TEST_AUTH_ENABLED: '0'
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           export MYSQL_PWD=root
