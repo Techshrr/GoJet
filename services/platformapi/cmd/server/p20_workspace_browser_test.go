@@ -12,6 +12,7 @@ import (
  "testing"
  "time"
 
+ adminaccess "github.com/Techshrr/GoJet/internal/admin"
  authn "github.com/Techshrr/GoJet/internal/auth"
  "github.com/Techshrr/GoJet/internal/workspace"
  "github.com/Techshrr/GoJet/scripts/p15/runnerutil"
@@ -51,7 +52,24 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
  owner:=users["owner"]
  ws,_,err:=workspace.NewStore(runtime.DB).CreateWorkspace(ctx,workspace.Principal{UserID:owner.ID,Email:owner.Email,DisplayName:owner.DisplayName},"P20 Browser Workspace"); if err != nil { t.Fatal(err) }
  for _,role:=range []string{"admin","member","viewer"} { u:=users[role]; if _,err:=runtime.DB.ExecContext(ctx,"INSERT INTO workspace_memberships (workspace_id,user_id,email,display_name,role) VALUES (?,?,?,?,?)",ws.ID,u.ID,u.Email,u.DisplayName,role);err!=nil {t.Fatal(err)} }
- payload,err:=json.Marshal(map[string]any{"origin":server.URL,"tokens":tokens,"workspace":ws.ID});if err!=nil {t.Fatal(err)}
+ // Administrator authority is separate from every Workspace role.
+ service,err:=adminfixture.NewService(runtime,"p20-browser-admin",10);if err!=nil {t.Fatal(err)}
+ const adminEmail="browser-limited@p20.test"
+ const adminPassword="P20-browser-fixture-only-Administrator-987!"
+ now:=time.Now().UTC().Add(-10*time.Second)
+ if _,err:=adminfixture.Bootstrap(ctx,service,adminEmail,adminPassword,[]string{adminaccess.PermissionPlatformRead},now);err!=nil {t.Fatal(err)}
+ _,adminSession,_,err:=adminfixture.LoginAndConfirmMFA(ctx,service,adminEmail,adminPassword,now);if err!=nil {t.Fatal(err)}
+ adminAPI,err:=adminaccess.NewHTTPAPI(service);if err!=nil {t.Fatal(err)}
+ adminDist:=filepath.Join(root,"frontend/apps/admin/dist-p20-rbac")
+ adminMux:=http.NewServeMux()
+ adminMux.Handle("/api/admin/",adminAPI.Handler())
+ adminMux.HandleFunc("/",func(w http.ResponseWriter,r *http.Request) {
+  w.Header().Set("Cache-Control","no-store")
+  if strings.HasPrefix(r.URL.Path,"/assets/") {http.FileServer(http.Dir(adminDist)).ServeHTTP(w,r);return}
+  http.ServeFile(w,r,filepath.Join(adminDist,"index.html"))
+ })
+ adminServer:=httptest.NewTLSServer(adminMux);defer adminServer.Close()
+ payload,err:=json.Marshal(map[string]any{"origin":server.URL,"tokens":tokens,"workspace":ws.ID,"adminOrigin":adminServer.URL,"adminToken":adminSession.Token});if err!=nil {t.Fatal(err)}
  cmd:=exec.Command("node","scripts/p20/workspace-production-browser.mjs")
  cmd.Dir=root
  cmd.Env=append(os.Environ(),"P20_BROWSER_HANDOFF="+string(payload))

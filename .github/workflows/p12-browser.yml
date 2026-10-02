@@ -278,6 +278,7 @@ jobs:
           for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
             mysql --protocol=tcp -h 127.0.0.1 -u root gojet_t027_browser < "$migration"
           done
+          VITE_GOJET_TEST_AUTH_ENABLED=0 pnpm --filter @gojet/admin exec vite build --outDir dist-p20-rbac
           mkdir -p artifacts/v10/P20/runtime/t027
           go test ./services/platformapi/cmd/server -run '^TestP20WorkspaceProductionBrowser$' -count=1 -timeout=5m -json > artifacts/v10/P20/runtime/t027/workspace-browser.jsonl
 

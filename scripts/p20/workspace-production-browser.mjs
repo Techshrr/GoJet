@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
-const { origin, tokens, workspace } = JSON.parse(process.env.P20_BROWSER_HANDOFF);
+const { origin, tokens, workspace, adminOrigin, adminToken } = JSON.parse(process.env.P20_BROWSER_HANDOFF);
 delete process.env.P20_BROWSER_HANDOFF;
 const executablePath = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'].find(p => p && existsSync(p));
 assert(executablePath, 'Chrome unavailable');
@@ -41,6 +41,25 @@ try {
     }
     assert.equal(fixtureHeader, false);
     checks[role] = true;
+    await context.close();
+  }
+  for (const role of ['anonymous', 'owner', 'admin', 'member', 'viewer', 'limited-admin']) {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, extraHTTPHeaders: { 'X-Role': 'admin', 'X-GoJet-Test-Admin-Permissions': 'admins.manage' } });
+    if (tokens[role]) await context.addCookies([{ name: '__Host-gojet_session', value: tokens[role], url: adminOrigin, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+    if (role === 'limited-admin') await context.addCookies([{ name: 'gojet_admin_session', value: adminToken, url: adminOrigin, secure: true, httpOnly: true, sameSite: 'Strict' }]);
+    await context.addInitScript(() => localStorage.setItem('role', 'admin'));
+    const page = await context.newPage();
+    await page.goto(`${adminOrigin}/admin/access/roles`, { waitUntil: 'domcontentloaded' });
+    await page.getByText('Your administrator permission does not authorize this operation.', { exact: true }).waitFor();
+    if (role === 'limited-admin') await page.locator('[data-page="admin-roles"][data-state="permission-denied"]').waitFor();
+    const result = await page.evaluate(async () => {
+      const response = await fetch('/api/admin/roles');
+      return { status: response.status, body: await response.json() };
+    });
+    assert.equal(result.status, role === 'limited-admin' ? 403 : 401);
+    assert.equal(result.body.items, undefined);
+    assert(!(await page.locator('body').innerText()).includes('browser-limited@p20.test'));
+    checks[`admin-route-${role}`] = true;
     await context.close();
   }
   mkdirSync('artifacts/v10/P20/runtime/t027', { recursive: true });
