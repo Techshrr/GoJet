@@ -264,6 +264,20 @@ jobs:
           print(f'P16-T028 exact-head coherence PASS on {head} phase={obs["review_phase"]}')
           PY
 
+      - name: Verify P20 T028 destination safety section
+        run: |
+          python3 -m unittest discover -s scripts/p20 -p test_t028_destination.py
+          python3 scripts/p20/t028_destination.py
+
+      - name: Upload P20 destination section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-destination-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-destination.json
+
       - name: Upload P16 coherence evidence
         if: always()
         uses: actions/upload-artifact@v4
