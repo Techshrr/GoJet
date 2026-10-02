@@ -21,6 +21,7 @@ on:
       - 'artifacts/v10/P12/**'
       - '.github/workflows/p12-*.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
