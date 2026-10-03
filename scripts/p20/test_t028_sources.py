@@ -75,6 +75,16 @@ class SourceAdmissionTests(unittest.TestCase):
             bad = dict(good, id=6, **changed)
             self.assertEqual(select_run([good, bad], 'check.yml', self.head, 'Techshrr/GoJet'), good)
 
+    def test_same_head_manual_repair_replaces_older_pr_run(self):
+        pr = {'id': 5, 'path': '.github/workflows/check.yml', 'head_sha': self.head,
+              'event': 'pull_request', 'head_repository': {'full_name': 'Techshrr/GoJet'}}
+        manual = dict(pr, id=6, event='workflow_dispatch')
+        self.assertEqual(select_run([pr, manual], 'check.yml', self.head, 'Techshrr/GoJet'), manual)
+        for changed in ({'head_sha': 'b' * 40}, {'head_repository': {'full_name': 'outsider/GoJet'}},
+                        {'path': '.github/workflows/other.yml'}):
+            bad = dict(manual, **changed)
+            self.assertEqual(select_run([pr, bad], 'check.yml', self.head, 'Techshrr/GoJet'), pr)
+
     def test_failed_or_pending_producer_never_passes(self):
         run = {'path': 'check.yml', 'status': 'in_progress'}
         self.assertFalse(successful(run, None, []))

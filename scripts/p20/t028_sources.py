@@ -61,7 +61,7 @@ def verified_archive(raw, artifact, head):
 
 def select_run(runs, workflow, head, repository):
     candidates = [r for r in runs if r.get('path') == '.github/workflows/' + workflow
-                  and r.get('head_sha') == head and r.get('event') == 'pull_request'
+                  and r.get('head_sha') == head and r.get('event') in ('pull_request', 'workflow_dispatch')
                   and r.get('head_repository', {}).get('full_name') == repository]
     return max(candidates, key=lambda r: (r['id'], r.get('run_attempt', 1))) if candidates else None
 
@@ -113,7 +113,9 @@ def collect(root: Path, head: str):
     requirements.update({name: None for name in GATES})
     deadline = time.monotonic() + 150 * 60
     while True:
-        runs = workflow_runs(api, repository, head, event='pull_request')
+        # Same-head manually dispatched repairs are valid producers too. Keep
+        # repository/path/SHA checks in select_run; never select by branch alone.
+        runs = workflow_runs(api, repository, head)
         selected, pending = {}, []
         for workflow, job in requirements.items():
             run = select_run(runs, workflow, head, repository)
