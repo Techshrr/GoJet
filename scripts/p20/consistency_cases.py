@@ -65,5 +65,13 @@ def run_case():
 
 
 if __name__ == '__main__':
+    import argparse
     from common import fail_if_errors
-    fail_if_errors([run_case()])
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--case', choices=['T027', 'T028'], default='T027')
+    args = parser.parse_args()
+    if args.case == 'T028':
+        from t028_case import run_case as run_t028
+        fail_if_errors([run_t028()])
+    else:
+        fail_if_errors([run_case()])
