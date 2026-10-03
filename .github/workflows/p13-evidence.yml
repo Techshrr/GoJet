@@ -251,6 +251,18 @@ jobs:
           print(f'P13-T026 exact-head coherence PASS on {head}')
           PY
 
+      - name: Verify P20 T028 entitlement safety section
+        run: python3 scripts/p20/t028_entitlement.py
+
+      - name: Upload P20 entitlement section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-entitlement-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-entitlement.json
+
       - name: Upload P13 coherence evidence
         if: always()
         uses: actions/upload-artifact@v4
