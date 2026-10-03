@@ -81,18 +81,18 @@ jobs:
           token = os.environ['GH_TOKEN']
           path = Path('artifacts/v10/P09/evidence-producer-manifest.json')
 
+          import sys
+          sys.path.insert(0, 'scripts')
+          from ci.actions import github_json, workflow_runs
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
           def fetch_runs():
-              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
-              request = urllib.request.Request(
-                  f'https://api.github.com/repos/{repository}/actions/runs?{query}',
-                  headers={
-                      'Accept': 'application/vnd.github+json',
-                      'Authorization': f'Bearer {token}',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                  },
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)['workflow_runs']
+              return workflow_runs(lambda url: github_json(url, headers),
+                                   repository, sha, event='pull_request')
 
           deadline = time.time() + 30 * 60
           while time.time() < deadline:

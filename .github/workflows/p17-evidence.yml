@@ -249,6 +249,18 @@ jobs:
           assert obs['browser_capture_counts']['P17-T033']>=12,obs
           PY
 
+      - name: Verify P20 T028 administrator safety section
+        run: python3 scripts/p20/t028_admin.py
+
+      - name: Upload P20 administrator section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-admin-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-admin.json
+
       - name: Upload P17 T034 exact-head evidence
         if: always()
         uses: actions/upload-artifact@v4
