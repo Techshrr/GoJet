@@ -593,6 +593,12 @@ async function caseT014(browser) {
   const source = page.getByLabel('Source Link', { exact: true });
   const tabsToSource = await tabUntil(page, source, 20);
   assert(await source.getAttribute('required') !== null, 'Source Link required semantics missing');
+  // The dialog is rendered before the real source-Link request completes.
+  // Wait for that exact fixture option; missing/error responses still time out.
+  await page.waitForFunction(
+    (expected) => Array.from(document.querySelectorAll('#qr-source-link option')).some((option) => option.value === expected),
+    String(link.id),
+  );
   const sourceOptions = await source.locator('option').evaluateAll((options) => options.map((option) => option.value));
   assert(sourceOptions.includes(String(link.id)), `keyboard source option missing: ${JSON.stringify(sourceOptions)}`);
   await source.press('Home');

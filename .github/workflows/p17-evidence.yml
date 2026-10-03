@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'go.mod'
       - 'go.sum'
       - 'package.json'
@@ -78,6 +80,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.ci.actions import github_json
 
           sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
           required={
@@ -123,6 +126,8 @@ jobs:
           dispatched=set(); deadline=time.time()+170*60
 
           def api(url, *, method='GET', body=None):
+            if method == 'GET' and body is None:
+              return github_json(url, headers)
             data=None if body is None else json.dumps(body).encode()
             request=urllib.request.Request(url,data=data,method=method,headers=headers)
             with urllib.request.urlopen(request,timeout=30) as response:
@@ -133,8 +138,8 @@ jobs:
             api(f'https://api.github.com/repos/{repo}/actions/workflows/{quoted}/dispatches',method='POST',body={'ref':ref})
 
           while time.time()<deadline:
-            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
-            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            from scripts.ci.actions import workflow_runs
+            runs = workflow_runs(api, repo, sha)
             latest={}
             for run in runs:
               name=run.get('name')
@@ -174,7 +179,7 @@ jobs:
                 print(f'Dispatching missing P17 producer {name} via {required[name]["workflow"]} on {ref}',flush=True)
                 dispatch(required[name]['workflow']); dispatched.add(name)
             print(f'Waiting P17 producers missing={missing} pending={pending}',flush=True)
-            time.sleep(10)
+            time.sleep(30)
           else:
             raise SystemExit(f'timed out waiting for P17 producers on {sha}')
           PY
@@ -243,6 +248,18 @@ jobs:
           assert obs['browser_capture_counts']['P17-T032']>=8,obs
           assert obs['browser_capture_counts']['P17-T033']>=12,obs
           PY
+
+      - name: Verify P20 T028 administrator safety section
+        run: python3 scripts/p20/t028_admin.py
+
+      - name: Upload P20 administrator section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-admin-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-admin.json
 
       - name: Upload P17 T034 exact-head evidence
         if: always()

@@ -125,6 +125,8 @@ func buildAuthHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	mux.HandleFunc("POST /api/auth/login", h.handlePasswordLogin)
 	mux.HandleFunc("POST /api/public/login-email-code", h.handleLoginEmailCode)
 	mux.HandleFunc("GET /api/public/auth/providers", h.handleProviders)
+	mux.HandleFunc("POST /api/public/auth/google/one-tap/start", h.handleGoogleOneTapStart)
+	mux.HandleFunc("POST /api/public/auth/google/one-tap/complete", h.handleGoogleOneTapComplete)
 	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
 	mux.HandleFunc("POST /api/public/email-code", h.handleVerificationResend)
 	mux.HandleFunc("POST /api/public/register-email-code", h.handleVerifyEmail)
@@ -132,7 +134,7 @@ func buildAuthHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
 	mux.HandleFunc("POST /api/mail/verification", h.handleVerificationResend)
 	mux.HandleFunc("POST /api/auth/forgotpassword", h.handleForgotPassword)
 	mux.HandleFunc("POST /api/auth/resetpassword", h.handleResetPassword)
-	mux.HandleFunc("GET /api/public/auth/{provider}/callback", h.handleOAuthCallback)
+	h.registerOAuthBrowserRoutes(mux)
 	mux.HandleFunc("POST /api/public/auth/handoff", h.handleOAuthHandoff)
 	mux.HandleFunc("GET /api/public/auth/social-registration", h.handleSocialRegistrationState)
 	mux.HandleFunc("POST /api/public/auth/social-registration/complete", h.handleSocialRegistrationComplete)
@@ -147,6 +149,8 @@ func mountAuthRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/auth/login",
 		"POST /api/public/login-email-code",
 		"GET /api/public/auth/providers",
+		"POST /api/public/auth/google/one-tap/start",
+		"POST /api/public/auth/google/one-tap/complete",
 		"POST /api/auth/register",
 		"POST /api/public/email-code",
 		"POST /api/public/register-email-code",
@@ -154,6 +158,7 @@ func mountAuthRoutes(root *http.ServeMux, handler http.Handler) {
 		"POST /api/mail/verification",
 		"POST /api/auth/forgotpassword",
 		"POST /api/auth/resetpassword",
+		"GET /api/public/auth/{provider}/start",
 		"GET /api/public/auth/{provider}/callback",
 		"POST /api/public/auth/handoff",
 		"GET /api/public/auth/social-registration",
@@ -332,7 +337,12 @@ func (h *authHTTPHandler) handleLoginEmailCode(w http.ResponseWriter, r *http.Re
 }
 
 func (h *authHTTPHandler) handleProviders(w http.ResponseWriter, r *http.Request) {
-	configs, err := h.oauth.ListProviderConfigs(r.Context())
+	list := h.oauth.ListRuntimeProviderConfigs
+	if h.testAuth {
+		// The explicit historical fixture retains its frozen six-provider view.
+		list = h.oauth.ListProviderConfigs
+	}
+	configs, err := list(r.Context())
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return
@@ -341,7 +351,13 @@ func (h *authHTTPHandler) handleProviders(w http.ResponseWriter, r *http.Request
 	for _, cfg := range configs {
 		providers = append(providers, publicOAuthProvider{Provider: cfg.Provider, Enabled: cfg.Enabled && cfg.Configured})
 	}
-	writeAuthJSON(w, http.StatusOK, map[string]any{"providers": providers})
+	// Public capability discovery never creates a challenge or exposes credentials.
+	// Missing/disabled One Tap configuration must preserve ordinary OAuth login.
+	oneTapClientID, oneTapErr := h.oauth.GoogleOneTapClientID(r.Context())
+	challenge, challengeErr := loadAuthChallengePolicy(r.Context(), h.db)
+	// A read/decryption failure is advertised as required but unavailable, never
+	// as disabled. Secret material is deliberately excluded from discovery.
+	writeAuthJSON(w, http.StatusOK, map[string]any{"providers": providers, "google_one_tap_enabled": oneTapErr == nil && oneTapClientID != "", "turnstile_required": challenge.Enabled || challengeErr != nil, "turnstile_site_key": challenge.SiteKey, "turnstile_available": challengeErr == nil})
 }
 
 func (h *authHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -542,16 +558,35 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
+	if !h.testAuth && !validOAuthBrowserCallback(r, provider, state) {
+		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
+		return
+	}
 	correlationID, err := authCorrelation(r.Header.Get("X-GoJet-Correlation-ID"))
 	if err != nil {
 		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
-	if !h.testAuth {
-		writeAuthProblem(w, http.StatusServiceUnavailable, "provider_error", "The identity provider could not complete the request.")
+	pending, err := h.oauth.PendingState(r.Context(), provider, state, time.Now().UTC())
+	if err != nil {
+		writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
 		return
 	}
-	callback, err := h.oauth.Callback(r.Context(), deterministicOAuthAdapter{}, authn.OAuthCallbackInput{Provider: provider, State: state, Code: code, CorrelationID: correlationID}, time.Now().UTC())
+	if pending.Intent == authn.OAuthIntentBind {
+		current, err := authn.AuthenticateRequest(r.Context(), h.store, r, time.Now().UTC())
+		if err != nil || current.UserID != pending.InitiatingUserID || current.ID != pending.InitiatingSessionID {
+			writeAuthServiceError(w, authn.ErrForbidden, false)
+			return
+		}
+		// Binding completes only through the authenticated POST + one-time CSRF.
+		writeAuthJSON(w, http.StatusOK, map[string]string{"status": "binding_required"})
+		return
+	}
+	var adapter authn.OAuthProviderAdapter = authn.NewHTTPProviderAdapter()
+	if h.testAuth {
+		adapter = deterministicOAuthAdapter{}
+	}
+	callback, err := h.oauth.Callback(r.Context(), adapter, authn.OAuthCallbackInput{Provider: provider, State: state, Code: code, CorrelationID: correlationID}, time.Now().UTC())
 	if err != nil {
 		if errors.Is(err, authn.ErrForbidden) || errors.Is(err, authn.ErrExpired) || errors.Is(err, authn.ErrReplay) {
 			writeAuthProblem(w, http.StatusBadRequest, "state_error", "The provider callback could not be validated.")
@@ -565,6 +600,7 @@ func (h *authHTTPHandler) handleOAuthCallback(w http.ResponseWriter, r *http.Req
 		writeAuthProblem(w, http.StatusBadGateway, "provider_error", "The identity provider could not complete the request.")
 		return
 	}
+	clearOAuthBrowserCookie(w, provider)
 	writeAuthJSON(w, http.StatusOK, map[string]any{"status": "handoff_ready", "handoff_code": handoff.Code, "expires_at": handoff.ExpiresAt})
 }
 

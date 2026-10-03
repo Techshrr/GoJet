@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	authn "github.com/Techshrr/GoJet/internal/auth"
 	"github.com/redis/go-redis/v9"
 )
@@ -83,6 +84,20 @@ func buildAdminOAuthHandler(db *sql.DB, redisClient *redis.Client, testAuth bool
 	oauthService, err := authn.NewOAuthService(db, oauthCrypto, 10*time.Minute)
 	if err != nil {
 		return nil, false, err
+	}
+	if !testAuth {
+		service, _, enabled, err := buildAdminAccessService(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		if !enabled {
+			return nil, false, authn.ErrInvalid
+		}
+		api, err := adminaccess.NewHTTPAPI(service)
+		if err != nil {
+			return nil, false, err
+		}
+		return api.OAuthGovernanceHandler(oauthService), true, nil
 	}
 	h := &adminOAuthHTTPHandler{
 		store:      authn.NewStore(db),

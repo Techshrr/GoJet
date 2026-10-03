@@ -12,6 +12,7 @@ import (
 type WorkspaceAPIKeyHTTPAPI struct {
 	authority       *WorkspaceAPIKeyAuthority
 	testAuthEnabled bool
+	resolveActor    WorkspaceActorResolver
 }
 
 func NewWorkspaceAPIKeyHTTPAPI(authority *WorkspaceAPIKeyAuthority, testAuthEnabled bool) (*WorkspaceAPIKeyHTTPAPI, error) {
@@ -19,6 +20,19 @@ func NewWorkspaceAPIKeyHTTPAPI(authority *WorkspaceAPIKeyAuthority, testAuthEnab
 		return nil, ErrInvalid
 	}
 	return &WorkspaceAPIKeyHTTPAPI{authority: authority, testAuthEnabled: testAuthEnabled}, nil
+}
+
+// NewWorkspaceAPIKeyHTTPAPIWithActorResolver binds production customer authority.
+func NewWorkspaceAPIKeyHTTPAPIWithActorResolver(authority *WorkspaceAPIKeyAuthority, resolve WorkspaceActorResolver) (*WorkspaceAPIKeyHTTPAPI, error) {
+	if resolve == nil {
+		return nil, ErrInvalid
+	}
+	api, err := NewWorkspaceAPIKeyHTTPAPI(authority, false)
+	if err != nil {
+		return nil, err
+	}
+	api.resolveActor = resolve
+	return api, nil
 }
 
 func (a *WorkspaceAPIKeyHTTPAPI) Handler() http.Handler {
@@ -37,17 +51,7 @@ func (a *WorkspaceAPIKeyHTTPAPI) Handler() http.Handler {
 }
 
 func (a *WorkspaceAPIKeyHTTPAPI) actor(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if !a.testAuthEnabled {
-		apiKeyWriteError(w, http.StatusServiceUnavailable, "auth_dependency_unavailable")
-		return "", false
-	}
-	actor := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Actor"))
-	email := strings.TrimSpace(r.Header.Get("X-GoJet-Test-Email"))
-	if actor == "" || email == "" {
-		apiKeyWriteError(w, http.StatusUnauthorized, "authentication_required")
-		return "", false
-	}
-	return actor, true
+	return workspaceDeveloperActor(w, r, a.resolveActor, a.testAuthEnabled)
 }
 
 func (a *WorkspaceAPIKeyHTTPAPI) list(w http.ResponseWriter, r *http.Request) {

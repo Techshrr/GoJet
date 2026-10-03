@@ -1,0 +1,18 @@
+name: P20-T027 Consistency
+
+on:
+  push:
+    branches: [develop/p20-whole-product-verification]
+  pull_request:
+    branches: [develop/p20-whole-product-verification]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # This runs the actual MySQL/Redis native matrix and production browsers,
+  # then admits their exact-head evidence. A standalone Python invocation
+  # cannot supply the runtime evidence required by T027.
+  t027-consistency:
+    uses: ./.github/workflows/p12-browser.yml

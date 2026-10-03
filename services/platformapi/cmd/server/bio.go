@@ -25,7 +25,16 @@ func buildBioHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http
 	}
 	store := bio.NewStore(db, quota)
 	risk := bio.NewRedisRiskAuthority(redisClient)
-	api, err := bio.NewAPI(store, risk, testAuth)
+	var api *bio.API
+	if testAuth {
+		api, err = bio.NewAPI(store, risk, true)
+	} else {
+		authority, authorityErr := buildBioSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			return nil, false, fmt.Errorf("configure Bio authentication authority: %w", authorityErr)
+		}
+		api, err = bio.NewAPIWithActorResolver(store, risk, authority.resolve)
+	}
 	if err != nil {
 		return nil, false, fmt.Errorf("configure Bio API: %w", err)
 	}
