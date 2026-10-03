@@ -4,6 +4,8 @@ import io
 import json
 from pathlib import Path, PurePosixPath
 import zipfile
+import urllib.error
+import urllib.request
 
 # workflow file, successful job (only when historical closure is a separate job),
 # section artifact, raw artifact, raw node.
@@ -20,7 +22,7 @@ SOURCES = {
 }
 EXTRA = {
     'domain-browser': ('p06-browser.yml', 'gojet-v10-p06-browser-', 'P06',
-                       ['browser/P06-T023.json']),
+                       ['results/P06-T023.json']),
     't027': ('p12-browser.yml', 'gojet-v10-p12-browser-', 'P20',
              ['runtime/t027/workspace-rbac.jsonl', 'runtime/t027/native-manifest.json',
               'runtime/t027/workspace-browser.json', 'runtime/t027/workspace-browser.jsonl',
@@ -78,11 +80,27 @@ def successful(run, job_name, jobs):
     return True
 
 
+def download_archive(url, headers):
+    """Keep GitHub authorization on the API host, not its signed redirect."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+            return None
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        response = urllib.request.build_opener(NoRedirect).open(request, timeout=60)
+    except urllib.error.HTTPError as error:
+        require(error.code == 302, 'artifact download failed')
+        location = error.headers['Location']
+        require(location.startswith('https://'), 'insecure artifact redirect')
+        response = urllib.request.urlopen(location, timeout=120)
+    with response:
+        return response.read()
+
+
 def collect(root: Path, head: str):
     import os
     import sys
     import time
-    import urllib.request
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from ci.actions import github_json, workflow_runs
     repository = os.environ['GITHUB_REPOSITORY']
@@ -127,22 +145,7 @@ def collect(root: Path, head: str):
         require(len(matches) == 1, 'missing/ambiguous artifact: ' + key)
         artifact = matches[0]
         require(artifact.get('workflow_run', {}).get('id') == run['id'], 'artifact run mismatch')
-        request = urllib.request.Request(base + f'/actions/artifacts/{artifact["id"]}/zip', headers=headers)
-        # The REST endpoint redirects to a signed download URL. Do not forward
-        # the GitHub bearer token to that host.
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-                return None
-        import urllib.error
-        try:
-            response = urllib.request.build_opener(NoRedirect).open(request, timeout=60)
-        except urllib.error.HTTPError as error:
-            require(error.code == 302, 'artifact download failed')
-            location = error.headers['Location']
-            require(location.startswith('https://'), 'insecure artifact redirect')
-            response = urllib.request.urlopen(location, timeout=120)
-        with response:
-            raw = response.read()
+        raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archives[key] = verified_archive(raw, artifact, head)
         provenance[key] = {'workflow': workflow, 'run_id': run['id'],
                            'run_attempt': run.get('run_attempt', 1), 'head_sha': head,

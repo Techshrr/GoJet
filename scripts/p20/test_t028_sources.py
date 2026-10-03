@@ -5,12 +5,39 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+import urllib.error
+from unittest.mock import patch, Mock
 from t028_sources import digest, member, verified_archive, select_run, successful
+from t028_sources import download_archive
 from t028_case import inspect
 
 
 class SourceAdmissionTests(unittest.TestCase):
     head = 'a' * 40
+
+    def test_archive_download_redirect_does_not_forward_authorization(self):
+        url = 'https://api.github.com/repos/Techshrr/GoJet/actions/artifacts/1/zip'
+        location = 'https://artifact.example/signed-download'
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(url, 302, 'Found', {'Location': location}, None)
+        with patch('t028_sources.urllib.request.build_opener', return_value=opener), \
+             patch('t028_sources.urllib.request.urlopen', return_value=io.BytesIO(b'archive')) as signed:
+            self.assertEqual(download_archive(url, {'Authorization': 'Bearer test-only'}), b'archive')
+            self.assertEqual(opener.open.call_args.args[0].get_header('Authorization'), 'Bearer test-only')
+            signed.assert_called_once_with(location, timeout=120)
+
+    def test_archive_download_direct_response_and_invalid_redirect(self):
+        opener = Mock()
+        opener.open.return_value = io.BytesIO(b'archive')
+        with patch('t028_sources.urllib.request.build_opener', return_value=opener):
+            self.assertEqual(download_archive('https://api.github.com/archive', {}), b'archive')
+        for code, location in [(403, 'https://artifact.example/zip'), (302, 'http://artifact.example/zip')]:
+            opener.open.side_effect = urllib.error.HTTPError('https://api.github.com/archive', code, 'Error',
+                                                            {'Location': location}, None)
+            with patch('t028_sources.urllib.request.build_opener', return_value=opener), \
+                 patch('t028_sources.urllib.request.urlopen') as signed, self.assertRaises(ValueError):
+                download_archive('https://api.github.com/archive', {})
+            signed.assert_not_called()
 
     def archive(self, entries):
         stream = io.BytesIO()

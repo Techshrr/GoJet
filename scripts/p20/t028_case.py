@@ -57,7 +57,7 @@ def inspect(root: Path, head: str):
                 and data.get('status') == 'PASS' and data.get('errors', []) == [], 'extra browser evidence failed')
         return data
 
-    domain = read('P06', 'browser/P06-T023.json')
+    domain = read('P06', 'results/P06-T023.json')
     require(domain.get('case_id') == 'P06-T023'
             and {'ingress_dns_invalid', 'https_error', 'risk_review'}
             <= set(domain['details'].get('persistent_problem_states_after_reload', [])),
