@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -132,13 +133,55 @@ def run_case(case_id: str):
             page=create_page(workspace,links=[child("Mutable","https://example.com/old",0)])
             old=page["links"][0]; seed_risk(old,"allow")
             published=transition_page(workspace,page["id"],1,"publish")[3]
-            update=update_page(workspace,page["id"],published["version"],links=[child("Mutable","https://example.com/new",0,old["id"])])
+            equivalent=update_page(workspace,page["id"],published["version"],links=[child("Mutable","HTTPS://EXAMPLE.COM:443/old#ignored",0,old["id"])])
+            expect(equivalent[0] == 200, "canonical-equivalent update failed")
+            stable=equivalent[3]["links"][0]
+            expect(stable["destination_fingerprint"] == old["destination_fingerprint"] and stable["risk_status"] == "allowed", "equivalent target invalidated current allow")
+            expect('href="https://example.com/old"' in body_text(public_page(page["slug"])[2]), "equivalent target lost navigation")
+            expected_fp=hashlib.sha256(b"gojet-v10-risk-targets-v1\nhttps://example.com/old\n").hexdigest()
+            expect(old["destination_fingerprint"] == expected_fp, "Bio fingerprint differs from frozen Link target fingerprint")
+            update=update_page(workspace,page["id"],equivalent[3]["version"],links=[child("Mutable","https://example.com/new",0,old["id"])])
             expect(update[0] == 200, "destination update failed")
             changed=update[3]["links"][0]
             expect(changed["destination_fingerprint"] != old["destination_fingerprint"] and changed["risk_status"] == "review", "destination change did not invalidate allow")
             hp=public_page(page["slug"]); html=body_text(hp[2])
             expect(hp[0] == 200 and 'href="https://example.com/new"' not in html and 'href="https://example.com/old"' not in html, "stale allow created public href window")
-            observations={"old_fingerprint":old["destination_fingerprint"],"new_fingerprint":changed["destination_fingerprint"],"public_status":hp[0]}
+            redis_args=["redis-cli", "-h", os.environ.get("GOJET_TEST_REDIS_HOST", "127.0.0.1"), "-p", os.environ.get("GOJET_TEST_REDIS_PORT", "6379")]
+            old_key=f"risk:bio-child:{old['id']}:{old['destination_fingerprint']}"
+            expect(subprocess.check_output(redis_args+["EXISTS",old_key],text=True).strip() == "1", "old allow fixture disappeared")
+            seed=seed_risk(changed,"allow")
+            current=seed["decision"]
+            faults={
+                "missing": None,
+                "review": dict(current,decision="review"),
+                "block": dict(current,decision="block"),
+                "malformed": "{invalid-json",
+                "stale": dict(current,valid_until="2000-01-01T00:00:00Z"),
+                "wrong-fingerprint": dict(current,fingerprint=old["destination_fingerprint"]),
+                "unknown": dict(current,decision="unknown"),
+                "missing-policy": dict(current,policy_version=""),
+            }
+            denied=[]
+            for mode,decision in faults.items():
+                if decision is None:
+                    delete_risk(changed)
+                else:
+                    raw=decision if isinstance(decision,str) else json.dumps(decision)
+                    expect(subprocess.check_output(redis_args+["SET",seed["key"],raw,"EX","1800"],text=True).strip() == "OK", "risk fault write failed")
+                html_response=public_page(page["slug"]); api_response=public_api(page["slug"])
+                html=body_text(html_response[2]); dto=json.loads(api_response[2])
+                expect(html_response[0] == 200 and api_response[0] == 200, "Bio public page availability changed under risk uncertainty")
+                expect('href="https://example.com/new"' not in html and 'href="https://example.com/old"' not in html
+                       and dto["links"][0].get("url") is None, "uncertain Bio target remained navigable: " + mode)
+                denied.append(mode)
+            seed_risk(changed,"allow")
+            recovered=public_api(page["slug"])
+            expect(recovered[0] == 200 and json.loads(recovered[2])["links"][0].get("url") == "https://example.com/new"
+                   and 'href="https://example.com/new"' in body_text(public_page(page["slug"])[2]), "current exact allow did not restore Bio navigation")
+            observations={"old_fingerprint":old["destination_fingerprint"],"new_fingerprint":changed["destination_fingerprint"],"public_status":hp[0],
+                          "canonical_equivalent_preserved_allow":True,"shared_link_fingerprint":expected_fp,
+                          "old_allow_retained_but_non_authoritative":True,"denied_risk_modes":denied,
+                          "html_api_denial_parity":True,"current_exact_allow_recovered":True}
 
         elif case_id == "P11-T011":
             published=create_page(workspace+"-pub",links=[]); transition_page(workspace+"-pub",published["id"],1,"publish")

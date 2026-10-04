@@ -61,3 +61,5 @@ export {
 export type { ResolvedTheme, ThemePreference } from './theme';
 export { useShellViewport } from './responsive';
 export type { ShellViewport } from './responsive';
+
+export { useTurnstile } from './turnstile';

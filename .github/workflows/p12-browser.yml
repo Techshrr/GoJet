@@ -14,9 +14,14 @@ on:
       - 'frontend/packages/ui/**'
       - 'frontend/packages/tokens/**'
       - 'scripts/p12/**'
+      - 'scripts/p20/consistency_cases.py'
+      - 'scripts/p20/test_consistency_cases.py'
+      - 'scripts/p20/t027_native.py'
+      - 'scripts/p20/workspace-production-browser.mjs'
       - 'artifacts/v10/P12/**'
       - '.github/workflows/p12-*.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -125,6 +130,7 @@ jobs:
           node --check scripts/p12/browser.mjs
           node --check scripts/p12/browser_base.mjs
           node --check scripts/p12/browser_contract.mjs
+          node scripts/p20/test_workspace_session.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
           go test ./internal/workspace ./services/platformapi/cmd/server
@@ -263,6 +269,45 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,status,data_through_at,state_reason FROM workspace_notification_state ORDER BY workspace_id" > artifacts/v10/P12/runtime/browser-notification-state.tsv 2> artifacts/v10/P12/runtime/browser-notification-state.err
           true
 
+      - name: Verify T027 native production-session matrix
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t027_native?multiStatements=true&parseTime=true
+          GOJET_REDIS_DB: '14'
+          GOJET_P20_RBAC_PROBE: '1'
+          GOJET_TEST_AUTH_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -u root -e 'CREATE DATABASE gojet_t027_native'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -u root gojet_t027_native < "$migration"
+          done
+          mkdir -p artifacts/v10/P20/runtime/t027
+          go test ./services/platformapi/cmd/server -run '^TestP20(WorkspaceRBACDurableSessions|AdministratorPermissionBoundary)$' -count=1 -json > artifacts/v10/P20/runtime/t027/workspace-rbac.jsonl
+          python3 scripts/p20/t027_native.py --root artifacts/v10/P20/runtime/t027 --head "$(git rev-parse HEAD)" --package github.com/Techshrr/GoJet/services/platformapi/cmd/server
+
+      - name: Verify T027 production-session Workspace browser
+        env:
+          GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t027_browser?multiStatements=true&parseTime=true
+          GOJET_REDIS_DB: '15'
+          GOJET_P20_BROWSER_PROBE: '1'
+          GOJET_TEST_AUTH_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          mysql --protocol=tcp -h 127.0.0.1 -u root -e 'CREATE DATABASE gojet_t027_browser'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -u root gojet_t027_browser < "$migration"
+          done
+          VITE_GOJET_TEST_AUTH_ENABLED=0 pnpm --filter @gojet/admin exec vite build --outDir dist-p20-rbac
+          mkdir -p artifacts/v10/P20/runtime/t027
+          go test ./services/platformapi/cmd/server -run '^TestP20WorkspaceProductionBrowser$' -count=1 -timeout=5m -json > artifacts/v10/P20/runtime/t027/workspace-browser.jsonl
+
+      - name: Admit T027 combined API and browser evidence
+        run: |
+          python3 -m unittest discover -s scripts/p20 -p test_consistency_cases.py
+          python3 scripts/p20/consistency_cases.py
+
       - name: Stop P12 browser services
         if: always()
         run: |
@@ -285,5 +330,7 @@ jobs:
             artifacts/v10/P12/browser/P12-T023.json
             artifacts/v10/P12/captures/
             artifacts/v10/P12/runtime/
+            artifacts/v10/P20/runtime/t027/
+            artifacts/v10/P20/consistency/P20-T027.json
           if-no-files-found: warn
           retention-days: 30

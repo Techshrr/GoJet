@@ -117,6 +117,18 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
           python3 scripts/p14/coherence_ci.py
 
+      - name: Verify P20 T028 support and contact safety section
+        run: python3 scripts/p20/t028_support.py
+
+      - name: Upload P20 support section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-support-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-support.json
+
       - name: Upload P14 T024 coherence evidence
         if: ${{ always() && github.event_name == 'pull_request' }}
         uses: actions/upload-artifact@v4

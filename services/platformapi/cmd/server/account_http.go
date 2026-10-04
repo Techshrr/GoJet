@@ -14,11 +14,12 @@ import (
 const accountCSRFTTL = 10 * time.Minute
 
 type accountHTTPHandler struct {
-	store    *authn.Store
-	accounts *authn.AccountService
-	oauth    *authn.OAuthService
-	csrf     *authn.CSRFManager
-	origins  *authn.OriginPolicy
+	oauthAdapter authn.OAuthProviderAdapter
+	store        *authn.Store
+	accounts     *authn.AccountService
+	oauth        *authn.OAuthService
+	csrf         *authn.CSRFManager
+	origins      *authn.OriginPolicy
 }
 
 func buildAccountHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, bool, error) {
@@ -85,9 +86,7 @@ func buildAccountHandler(db *sql.DB, redisClient *redis.Client) (http.Handler, b
 	mux.HandleFunc("PATCH /api/me/password", h.handlePassword)
 	mux.HandleFunc("GET /api/me/sessions", h.handleSessions)
 	mux.HandleFunc("DELETE /api/me/sessions/{sessionId}", h.handleSessionRevoke)
-	mux.HandleFunc("GET /api/me/connected-accounts", h.handleConnectedAccounts)
-	mux.HandleFunc("POST /api/me/connected-accounts/{provider}/start", h.handleConnectedAccountStart)
-	mux.HandleFunc("DELETE /api/me/connected-accounts/{provider}", h.handleConnectedAccountDelete)
+	h.registerConnectedAccountRoutes(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authn.ApplyPrivateAuthHeaders(w.Header())
 		mux.ServeHTTP(w, r)
@@ -104,6 +103,7 @@ func mountAccountRoutes(root *http.ServeMux, handler http.Handler) {
 		"DELETE /api/me/sessions/{sessionId}",
 		"GET /api/me/connected-accounts",
 		"POST /api/me/connected-accounts/{provider}/start",
+		"POST /api/me/connected-accounts/{provider}/complete",
 		"DELETE /api/me/connected-accounts/{provider}",
 	} {
 		root.Handle(pattern, handler)
@@ -302,7 +302,7 @@ func (h *accountHTTPHandler) handleConnectedAccountStart(w http.ResponseWriter, 
 		writeAuthServiceError(w, err, false)
 		return
 	}
-	result, err := h.oauth.Start(r.Context(), authn.OAuthStartInput{
+	result, err := h.oauth.StartWithHTTPProvider(r.Context(), authn.NewHTTPProviderAdapter(), authn.OAuthStartInput{
 		Provider:            r.PathValue("provider"),
 		Intent:              authn.OAuthIntentBind,
 		InitiatingUserID:    session.UserID,
@@ -314,6 +314,7 @@ func (h *accountHTTPHandler) handleConnectedAccountStart(w http.ResponseWriter, 
 		writeAuthServiceError(w, err, false)
 		return
 	}
+	setOAuthBrowserCookie(w, result)
 	writeAuthJSON(w, http.StatusOK, map[string]any{
 		"provider":          result.Provider,
 		"authorization_url": result.AuthorizationURL,

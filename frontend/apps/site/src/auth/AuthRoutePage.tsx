@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { GoJetApiError, GoJetAuthClient } from '@gojet/api-client';
+import { GoJetApiError } from '@gojet/api-client';
 import type { AuthProvider, SocialRegistrationState } from '@gojet/api-client';
 import { AuthShell } from '../shell/SiteShells';
+import { AuthChallenge, AuthChallengeProvider, useAuthClient } from './AuthChallenge';
 
 type AuthPageKind = 'login' | 'register' | 'verify' | 'forgot' | 'reset' | 'oauth' | 'social';
 type Notice = { tone: 'error' | 'success' | 'info'; text: string } | null;
 
-const client = new GoJetAuthClient();
 const providerLabels: Record<AuthProvider['provider'], string> = {
-  google: 'Google', facebook: 'Facebook', github: 'GitHub', qq: 'QQ', wechat: 'WeChat', rainbow: 'Rainbow',
+  google: 'Google', facebook: 'Facebook', github: 'GitHub', qq: 'QQ', wechat: 'WeChat', rainbow: 'Rainbow', x: 'X', linkedin: 'LinkedIn',
 };
 
 function safeError(error: unknown): GoJetApiError {
@@ -19,6 +19,7 @@ function safeError(error: unknown): GoJetApiError {
 
 function authStateFor(error: GoJetApiError, fallback = 'invalid') {
   switch (error.code) {
+    case 'turnstile_rejected': return 'Turnstile-required';
     case 'account_locked': return 'account-locked';
     case 'verification_required': return 'verification-required';
     case 'rate_limited': return 'rate-limited';
@@ -62,6 +63,7 @@ function AuthFrame({ title, state, notice, children }: { title: string; state: s
     <section className="p15-auth" data-auth-page={title.toLowerCase().replaceAll(' ', '-')} data-auth-state={state}>
       <header className="p15-auth__header"><p className="p15-auth__eyebrow">GoJet account</p><h2>{title}</h2></header>
       {notice && <div ref={noticeRef} tabIndex={notice.tone === 'error' ? -1 : undefined} className={`p15-auth__notice p15-auth__notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'} aria-live="polite">{notice.text}</div>}
+      <AuthChallenge />
       {children}
     </section>
   </AuthShell>;
@@ -81,6 +83,7 @@ function Providers({ intent, providers }: { intent: 'login' | 'register'; provid
 }
 
 function LoginPage() {
+  const client = useAuthClient();
   const [state, setState] = useState('input');
   const [notice, setNotice] = useState<Notice>(null);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
@@ -128,6 +131,7 @@ function LoginPage() {
 }
 
 function RegisterPage() {
+  const client = useAuthClient();
   const [state, setState] = useState('input');
   const [notice, setNotice] = useState<Notice>(null);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
@@ -162,6 +166,7 @@ function RegisterPage() {
 }
 
 function VerifyPage() {
+  const client = useAuthClient();
   const initialCode = useMemo(() => new URLSearchParams(window.location.search).get('code') ?? '', []);
   const [code, setCode] = useState(initialCode);
   const [email, setEmail] = useState('');
@@ -173,12 +178,14 @@ function VerifyPage() {
 }
 
 function ForgotPage() {
+  const client = useAuthClient();
   const [email, setEmail] = useState(''); const [state, setState] = useState('input'); const [notice, setNotice] = useState<Notice>(null);
   async function submit(event: React.FormEvent) { event.preventDefault(); setState('submitting'); setNotice(null); try { await client.forgotPassword(email); setState('submitted-neutral'); setNotice({ tone: 'success', text: 'If the account can be recovered, a password reset message will be sent.' }); } catch (caught) { const error = safeError(caught); setState(authStateFor(error)); setNotice({ tone: 'error', text: error.message }); } }
   return <AuthFrame title="Reset your password" state={state} notice={notice}><form className="p15-auth__form" onSubmit={submit}><label htmlFor="forgot-email">Email</label><input id="forgot-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /><button type="submit">Send reset instructions</button></form><p className="p15-auth__links"><Link to="/login">Back to sign in</Link></p></AuthFrame>;
 }
 
 function ResetPage() {
+  const client = useAuthClient();
   const token = useMemo(() => new URLSearchParams(window.location.search).get('token') ?? '', []);
   const [password, setPassword] = useState(''); const [state, setState] = useState(token ? 'input' : 'invalid-token'); const [notice, setNotice] = useState<Notice>(token ? null : { tone: 'error', text: 'This password reset link is not valid.' });
   async function submit(event: React.FormEvent) { event.preventDefault(); if (!token) return; setState('submitting'); setNotice(null); try { await client.resetPassword(token, password); setState('success'); setNotice({ tone: 'success', text: 'Password reset successfully. You can sign in with the new password.' }); } catch (caught) { const error = safeError(caught); setState(authStateFor(error, 'invalid-token')); setNotice({ tone: 'error', text: error.message }); } }
@@ -186,27 +193,54 @@ function ResetPage() {
 }
 
 function OAuthCallbackPage() {
-  const [state, setState] = useState('processing'); const [notice, setNotice] = useState<Notice>({ tone: 'info', text: 'Finishing sign in with your identity provider…' }); const [registrationHref, setRegistrationHref] = useState('');
+  const client = useAuthClient();
+  const [state, setState] = useState('processing');
+  const [notice, setNotice] = useState<Notice>({ tone: 'info', text: 'Finishing sign in with your identity provider…' });
+  const [registrationHref, setRegistrationHref] = useState('');
+  const input = useMemo(() => {
+    const query = new URLSearchParams(window.location.search);
+    return { provider: window.location.pathname.split('/').filter(Boolean)[1] ?? '', state: query.get('state') ?? '', code: query.get('code') ?? '' };
+  }, []);
+  const operation = useRef<Promise<{ destination: string; registration: boolean }> | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const parts = window.location.pathname.split('/').filter(Boolean); const provider = parts[1] ?? '';
-      const query = new URLSearchParams(window.location.search); const providerState = query.get('state') ?? ''; const providerCode = query.get('code') ?? '';
-      try {
-        const callback = await client.oauthCallback(provider, providerState, providerCode);
-        if (cancelled) return;
-        const exchange = await client.exchangeHandoff(callback.handoff_code);
-        if (cancelled) return;
-        if (exchange.status === 'authenticated') { setState('login-success'); setNotice({ tone: 'success', text: 'Provider sign in completed.' }); }
-        else { const href = `/social-registration?code=${encodeURIComponent(exchange.registration_code)}`; setRegistrationHref(href); setState('registration-required'); setNotice({ tone: 'info', text: 'One more step is required to finish registration.' }); }
-      } catch (caught) { if (cancelled) return; const error = safeError(caught); setState(authStateFor(error, 'provider-error')); setNotice({ tone: 'error', text: error.code === 'state_error' ? 'The provider response could not be validated. Start sign in again.' : error.message }); }
+    // Keep callback credentials in memory only; remove them from browser history.
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    // StrictMode can rerun effects. Complete the one-time exchange once, even
+    // when the first effect's UI subscription has already been cleaned up.
+    operation.current ??= (async () => {
+      const callback = await client.oauthCallback(input.provider, input.state, input.code);
+      if (callback.status === 'binding_required') {
+        await client.completeConnectedAccount(input.provider, input.state, input.code);
+        return { destination: '/app/settings/connected-accounts', registration: false };
+      }
+      const exchange = await client.exchangeHandoff(callback.handoff_code);
+      return exchange.status === 'authenticated'
+        ? { destination: '/app', registration: false }
+        : { destination: `/social-registration?code=${encodeURIComponent(exchange.registration_code)}`, registration: true };
     })();
+    void operation.current.then((result) => {
+      if (cancelled) return;
+      if (result.registration) {
+        setRegistrationHref(result.destination);
+        setState('registration-required');
+        setNotice({ tone: 'info', text: 'One more step is required to finish registration.' });
+      } else {
+        window.location.replace(result.destination);
+      }
+    }).catch((caught: unknown) => {
+      if (cancelled) return;
+      const error = safeError(caught);
+      setState(authStateFor(error, 'provider-error'));
+      setNotice({ tone: 'error', text: error.code === 'state_error' ? 'The provider response could not be validated. Start sign in again.' : error.message });
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [input]);
   return <AuthFrame title="Provider sign in" state={state} notice={notice}><p className="p15-auth__muted">Provider authorization codes, access tokens and callback parameters are never shown on this page or stored in browser storage.</p>{state === 'registration-required' && registrationHref && <a href={registrationHref}>Continue registration</a>}</AuthFrame>;
 }
 
 function SocialPage() {
+  const client = useAuthClient();
   const code = useMemo(() => new URLSearchParams(window.location.search).get('code') ?? '', []);
   const [registration, setRegistration] = useState<SocialRegistrationState | null>(null); const [email, setEmail] = useState(''); const [verificationCode, setVerificationCode] = useState(''); const [state, setState] = useState('loading-handoff'); const [notice, setNotice] = useState<Notice>(null);
   useEffect(() => { let cancelled = false; if (!code) { setState('expired-handoff'); setNotice({ tone: 'error', text: 'This social registration handoff is not valid.' }); return; } client.socialRegistration(code).then((result) => { if (cancelled) return; setRegistration(result); setEmail(result.email); setState(result.requires_email_verification && !result.email ? 'missing-provider-email' : 'form'); }).catch((caught) => { if (cancelled) return; const error = safeError(caught); setState(authStateFor(error, 'expired-handoff')); setNotice({ tone: 'error', text: error.message }); }); return () => { cancelled = true; }; }, [code]);
@@ -214,7 +248,7 @@ function SocialPage() {
   return <AuthFrame title="Finish social registration" state={state} notice={notice}>{registration && <form className="p15-auth__form" onSubmit={submit}><p className="p15-auth__provider-context">Provider: <strong>{providerLabels[registration.provider]}</strong></p><label htmlFor="social-email">Email</label><input id="social-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /><label htmlFor="social-code">Email verification code</label><input id="social-code" autoComplete="one-time-code" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} /><button type="submit">Finish registration</button></form>}</AuthFrame>;
 }
 
-export function AuthRoutePage({ kind }: { kind: AuthPageKind }) {
+function AuthPageContent({ kind }: { kind: AuthPageKind }) {
   switch (kind) {
     case 'login': return <LoginPage />;
     case 'register': return <RegisterPage />;
@@ -224,4 +258,9 @@ export function AuthRoutePage({ kind }: { kind: AuthPageKind }) {
     case 'oauth': return <OAuthCallbackPage />;
     case 'social': return <SocialPage />;
   }
+}
+
+export function AuthRoutePage({ kind }: { kind: AuthPageKind }) {
+  if (kind === 'oauth') return <AuthPageContent kind={kind} />;
+  return <AuthChallengeProvider key={kind}><AuthPageContent kind={kind} /></AuthChallengeProvider>;
 }
