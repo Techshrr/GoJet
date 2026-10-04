@@ -68,9 +68,12 @@ if __name__ == '__main__':
     import argparse
     from common import fail_if_errors
     parser = argparse.ArgumentParser()
-    parser.add_argument('--case', choices=['T027', 'T028', 'T029'], default='T027')
+    parser.add_argument('--case', choices=['T027', 'T028', 'T029', 'T030'], default='T027')
     args = parser.parse_args()
-    if args.case == 'T029':
+    if args.case == 'T030':
+        from t030_case import run_case as run_t030
+        fail_if_errors([run_t030()])
+    elif args.case == 'T029':
         from t029_case import run_case as run_t029
         fail_if_errors([run_t029()])
     elif args.case == 'T028':
