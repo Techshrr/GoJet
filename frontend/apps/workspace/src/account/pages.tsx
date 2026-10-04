@@ -9,6 +9,7 @@ export type AccountState =
   | 'read-only'
   | 'validation-error'
   | 'session-revoked'
+  | 'csrf-expired'
   | 'provider-error'
   | 'destructive-confirm';
 
@@ -67,6 +68,7 @@ async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> 
 
 function stateForFailure(error: unknown, validation = false): AccountState {
   const status = (error as ApiFailure)?.status;
+  if (status === 419) return 'csrf-expired';
   if (status === 401 || status === 410) return 'session-revoked';
   if (validation && (status === 400 || status === 409)) return 'validation-error';
   return 'provider-error';
@@ -110,6 +112,10 @@ function AccountFrame({ title, state, children }: { title: string; state: Accoun
             );
           })}
         </nav>
+        {state === 'csrf-expired' && <div className="p15-account__message" role="alert">
+          <p>Your request token has expired. Refresh the page, then try your change again.</p>
+          <Button onClick={() => window.location.reload()}>Refresh page</Button>
+        </div>}
         {children}
       </section>
     </WorkspaceShell>

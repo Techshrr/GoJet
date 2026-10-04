@@ -128,7 +128,7 @@ func (h *accountHTTPHandler) mutationAuthority(w http.ResponseWriter, r *http.Re
 	}
 	authority, err := authn.AuthorizeUnsafeMutation(r.Context(), r, session, h.origins, h.csrf, now)
 	if err != nil {
-		writeAuthServiceError(w, err, false)
+		writeAuthMutationError(w, err)
 		return authn.Session{}, nil, false
 	}
 	return session, authority, true

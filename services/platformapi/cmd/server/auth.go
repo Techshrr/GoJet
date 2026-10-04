@@ -226,6 +226,16 @@ func writeAuthProblem(w http.ResponseWriter, status int, code, message string) {
 	writeAuthJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 
+// Called only after a valid session has reached the CSRF/Origin check. Grant
+// expiry elsewhere keeps its existing 410 semantics.
+func writeAuthMutationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, authn.ErrExpired) {
+		writeAuthProblem(w, 419, "csrf_expired", "Your request token has expired. Refresh the page and try again.")
+		return
+	}
+	writeAuthServiceError(w, err, false)
+}
+
 func writeAuthServiceError(w http.ResponseWriter, err error, tokenContext bool) {
 	status := http.StatusInternalServerError
 	code := "internal_error"
