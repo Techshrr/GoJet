@@ -52,6 +52,7 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 		t.Fatalf("workspace: %v", err)
 	}
 	mux.Handle("/api/me", account)
+	mux.Handle("/api/me/", account)
 	mux.Handle("/api/workspaces", handler)
 	mux.Handle("/api/workspaces/", handler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

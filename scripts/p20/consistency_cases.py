@@ -19,7 +19,8 @@ def inspect_native(root: Path, head: str):
     return {'required_test_count': verified['required_test_count'], 'jsonl_sha256': digest}
 
 
-BROWSER_CHECKS = {'owner', 'admin', 'member', 'viewer', 'anonymous'} | {
+BROWSER_CHECKS = {'mail-template-preview-save-conflict', 'mail-template-anonymous-denied', 'danger-revocation-durable', 'owner', 'admin', 'member', 'viewer', 'anonymous'} | {
+    'danger-navigation-' + role for role in ('owner', 'admin', 'member', 'viewer', 'anonymous')} | {
     'profile-navigation-' + role for role in ('owner', 'admin', 'member', 'viewer', 'anonymous')} | {
     'operations-navigation-' + role for role in ('anonymous', 'owner', 'admin', 'member', 'viewer', 'limited-admin')} | {
     'admin-route-' + role for role in ('anonymous', 'owner', 'admin', 'member', 'viewer', 'limited-admin')}

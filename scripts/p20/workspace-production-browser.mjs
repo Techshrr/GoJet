@@ -48,6 +48,12 @@ try {
     await page.getByRole('heading', { name: 'Profile', exact: true }).waitFor();
     await page.locator(`[data-account-state="${role === 'anonymous' ? 'session-revoked' : 'success'}"]`).waitFor();
     checks[`profile-navigation-${role}`] = true;
+    await page.getByRole('link', { name: 'Danger zone', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/app/settings/danger');
+    await page.locator(`[data-account-state="${role === 'anonymous' ? 'session-revoked' : 'success'}"]`).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Revoke current session', exact: true }).count(), role === 'anonymous' ? 0 : 1);
+    checks[`danger-navigation-${role}`] = true;
+
     assert.equal(fixtureHeader, false);
     checks[role] = true;
     await context.close();
@@ -76,6 +82,28 @@ try {
     assert.equal(jobsStatus, role === 'limited-admin' ? 403 : 401);
     checks[`operations-navigation-${role}`] = true;
     checks[`admin-route-${role}`] = true;
+    await context.close();
+  }
+
+  {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    await context.addCookies([{ name: '__Host-gojet_session', value: tokens.owner, url: origin, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+    const page = await context.newPage();
+    await page.goto(`${origin}/app/settings/danger`);
+    await page.getByRole('button', { name: 'Revoke current session', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Confirm sign out', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    assert.equal(await page.evaluate(async () => (await fetch('/api/me')).status), 200);
+    await page.getByRole('button', { name: 'Revoke current session', exact: true }).click();
+    await page.getByLabel('Type SIGN OUT', { exact: true }).fill('SIGN OUT');
+    const response = page.waitForResponse(r => r.request().method() === 'DELETE' && new URL(r.url()).pathname.startsWith('/api/me/sessions/'));
+    await page.getByRole('button', { name: 'Confirm sign out', exact: true }).click();
+    assert.equal((await response).status(), 200);
+    await page.locator('[data-account-state="session-revoked"]').waitFor();
+    const revoked = await page.evaluate(async () => { const response = await fetch('/api/me'); return { status: response.status, body: await response.json() }; });
+    assert.equal(revoked.status, 410);
+    assert.equal(revoked.body.error.code, 'revoked_token');
+    checks['danger-revocation-durable'] = true;
     await context.close();
   }
   {
