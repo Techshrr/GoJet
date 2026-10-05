@@ -57,6 +57,24 @@ func TestP20MailTemplateVersionAndAudit(t *testing.T) {
 	if err != nil || updated.Version != 2 {
 		t.Fatalf("save: %+v %v", updated, err)
 	}
+	// Exercise the production list query and preserve both immutable revisions.
+	listed, listErr := store.ListAdminMailTemplates(ctx)
+	if listErr != nil {
+		t.Fatalf("list templates: %v", listErr)
+	}
+	var revisions []support.AdminMailTemplateView
+	for _, item := range listed {
+		if item.Key == "p20-template-probe" && item.Locale == "en" {
+			revisions = append(revisions, item)
+		}
+	}
+	if len(revisions) != 2 || revisions[0].Version != 2 || revisions[0].SubjectTemplate != "Updated" ||
+		revisions[1].Version != 1 || revisions[1].SubjectTemplate != "Original" {
+		t.Fatalf("listed revisions: %+v", revisions)
+	}
+	if len(revisions[0].VariableAllowlist) != 1 || revisions[0].VariableAllowlist[0] != "display_name" {
+		t.Fatalf("list lost variable allowlist: %+v", revisions[0])
+	}
 	var version int
 	if err = runtime.DB.QueryRow(`SELECT template_version FROM mail_jobs WHERE template_key='p20-template-probe' AND resource_id='old'`).Scan(&version); err != nil || version != 1 {
 		t.Fatalf("queued version changed: %d %v", version, err)

@@ -84,7 +84,8 @@ func (s *Store) ListAdminMailTemplates(ctx context.Context) ([]AdminMailTemplate
 	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT template_key,locale,version,subject_template,text_template,html_template,
-       variable_allowlist_json,internal_only,enabled,updated_at ORDER BY template_key,locale,version DESC`)
+       variable_allowlist_json,internal_only,enabled,updated_at
+FROM mail_templates ORDER BY template_key,locale,version DESC`)
 	if err != nil {
 		return nil, err
 	}
