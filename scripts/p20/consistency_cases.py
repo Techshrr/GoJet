@@ -20,6 +20,8 @@ def inspect_native(root: Path, head: str):
 
 
 BROWSER_CHECKS = {'owner', 'admin', 'member', 'viewer', 'anonymous'} | {
+    'profile-navigation-' + role for role in ('owner', 'admin', 'member', 'viewer', 'anonymous')} | {
+    'operations-navigation-' + role for role in ('anonymous', 'owner', 'admin', 'member', 'viewer', 'limited-admin')} | {
     'admin-route-' + role for role in ('anonymous', 'owner', 'admin', 'member', 'viewer', 'limited-admin')}
 
 

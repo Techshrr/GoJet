@@ -25,7 +25,7 @@ class AdmissionTests(unittest.TestCase):
         return inspect_browser(self.root, self.head)
 
     def test_complete_admission(self):
-        self.assertEqual(len(self.check_browser()['checks']), 11)
+        self.assertEqual(len(self.check_browser()['checks']), 22)
 
     def test_missing_each_browser_case(self):
         for name in BROWSER_CHECKS:

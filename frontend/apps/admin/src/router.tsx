@@ -23,7 +23,6 @@ import {
   WorkspaceDetailPage,
 } from './p17/details';
 
-const ShellPage = lazy(() => import('./routes/ShellPage'));
 const StorageStatusPage = lazy(() => import('./routes/StorageStatusPage'));
 const CommercePlansPage = lazy(() => import('./routes/CommercePlansPage'));
 const CommercePaymentsPage = lazy(() => import('./routes/CommercePaymentsPage'));
@@ -81,10 +80,6 @@ const domainRiskList = createRoute({ getParentRoute: () => rootRoute, path: '/ad
 const domainRiskDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/domain-risk/$domainId', component: DomainRiskDetailPage });
 const abuseList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/abuse', component: AbuseListPage });
 const abuseDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/abuse/$reportId', component: AbuseDetailPage });
-const sections = ['customers', 'resources', 'trust-safety', 'operations', 'commerce', 'access', 'platform'].map((section) =>
-  createRoute({ getParentRoute: () => rootRoute, path: `/admin/${section}`, component: ShellPage }),
-);
-
 const routeTree = rootRoute.addChildren([
   login,
   home,
@@ -119,7 +114,6 @@ const routeTree = rootRoute.addChildren([
   domainRiskDetail,
   abuseList,
   abuseDetail,
-  ...sections,
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });

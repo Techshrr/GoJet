@@ -42,6 +42,12 @@ try {
         assert.equal(status, 403);
       }
     }
+    // Follow the actual sidebar link under the same production session.
+    await page.locator('nav[aria-label="Workspace navigation"] a[href="/app/settings/profile"]').click();
+    await page.waitForURL(url => url.pathname === '/app/settings/profile');
+    await page.getByRole('heading', { name: 'Profile', exact: true }).waitFor();
+    await page.locator(`[data-account-state="${role === 'anonymous' ? 'session-revoked' : 'success'}"]`).waitFor();
+    checks[`profile-navigation-${role}`] = true;
     assert.equal(fixtureHeader, false);
     checks[role] = true;
     await context.close();
@@ -62,6 +68,13 @@ try {
     assert.equal(result.status, role === 'limited-admin' ? 403 : 401);
     assert.equal(result.body.items, undefined);
     assert(!(await page.locator('body').innerText()).includes('browser-limited@p20.test'));
+    await page.locator('nav[aria-label="Admin navigation"] a[href="/admin/operations/jobs"]').click();
+    await page.waitForURL(url => url.pathname === '/admin/operations/jobs');
+    await page.getByRole('heading', { name: 'Jobs', exact: true }).waitFor();
+    await page.getByText('Your administrator permission does not authorize this operation.', { exact: true }).waitFor();
+    const jobsStatus = await page.evaluate(async () => (await fetch('/api/admin/operations/jobs')).status);
+    assert.equal(jobsStatus, role === 'limited-admin' ? 403 : 401);
+    checks[`operations-navigation-${role}`] = true;
     checks[`admin-route-${role}`] = true;
     await context.close();
   }
