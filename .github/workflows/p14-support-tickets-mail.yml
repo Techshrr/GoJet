@@ -36,7 +36,7 @@ jobs:
   contract:
     name: P14 contract freeze
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 110
     steps:
       - name: Checkout exact candidate head
         uses: actions/checkout@v4

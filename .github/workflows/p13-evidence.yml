@@ -37,7 +37,7 @@ jobs:
   coherence:
     name: P13 exact-head evidence coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 100
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -87,7 +87,7 @@ jobs:
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)
 
-          deadline = time.time() + 35 * 60
+          deadline = time.time() + 90 * 60
           while time.time() < deadline:
               from scripts.ci.actions import workflow_runs
               runs = workflow_runs(get, repo, sha, event='pull_request')

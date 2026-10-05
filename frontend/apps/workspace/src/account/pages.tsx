@@ -51,6 +51,7 @@ const accountTabs = [
   ['Security', '/app/settings/security'],
   ['Sessions', '/app/settings/sessions'],
   ['Connected accounts', '/app/settings/connected-accounts'],
+  ['Danger zone', '/app/settings/danger'],
 ] as const;
 
 async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -248,6 +249,47 @@ export function SecuritySettingsPage() {
       )}
     </AccountFrame>
   );
+}
+
+export function DangerSettingsPage() {
+  const [state, setState] = useState<AccountState>('loading');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    currentAccount().then(() => { if (active) setState('success'); })
+      .catch(error => { if (active) setState(stateForFailure(error)); });
+    return () => { active = false; };
+  }, []);
+  const revoke = async () => {
+    if (busy || confirmation !== 'SIGN OUT') return;
+    setBusy(true);
+    try {
+      const me = await currentAccount();
+      await requestJSON<{ status: string }>(`/api/me/sessions/${encodeURIComponent(me.session.id)}`, {
+        method: 'DELETE', headers: { 'X-CSRF-Token': me.csrf_token },
+      });
+      setConfirmation('');
+      setState('session-revoked');
+    } catch (error) { setState(stateForFailure(error)); }
+    finally { setBusy(false); }
+  };
+  return <AccountFrame title="Danger zone" state={state}>
+    {state === 'loading' ? <p role="status">Checking your session…</p> : null}
+    <StateMessage state={state} />
+    {state === 'success' || state === 'destructive-confirm' ? <>
+      <h2>Revoke this session</h2>
+      <p>This signs you out on this browser. Your account, Workspace and resources remain available.</p>
+      <Button variant="destructive" disabled={busy} onClick={() => setState('destructive-confirm')}>Revoke current session</Button>
+      <p><a href="/app/settings/sessions">Manage other sessions</a></p>
+    </> : null}
+    {state === 'destructive-confirm' ? <form role="alertdialog" aria-label="Confirm sign out" onSubmit={event => { event.preventDefault(); void revoke(); }}>
+      <label>Type SIGN OUT<input value={confirmation} onChange={event => setConfirmation(event.target.value)} required disabled={busy} /></label>
+      <Button type="submit" variant="destructive" disabled={busy || confirmation !== 'SIGN OUT'}>Confirm sign out</Button>
+      <Button type="button" disabled={busy} variant="ghost" onClick={() => { setConfirmation(''); setState('success'); }}>Cancel</Button>
+    </form> : null}
+    {state === 'session-revoked' ? <a href="/login">Sign in again</a> : null}
+  </AccountFrame>;
 }
 
 export function SessionsSettingsPage() {

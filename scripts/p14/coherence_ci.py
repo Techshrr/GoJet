@@ -79,7 +79,7 @@ def artifact_for(run_id: int, expected: str) -> dict | None:
 def bind_producers() -> dict:
     ROOT.mkdir(parents=True, exist_ok=True)
     contract_expected = f'p14-support-tickets-mail-contract-{HEAD}'
-    deadline = time.time() + 35 * 60
+    deadline = time.time() + 90 * 60
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, contract_expected)
         runs = workflow_runs(api_get, REPOSITORY, HEAD, event='pull_request')

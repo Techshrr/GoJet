@@ -36,6 +36,21 @@ def digest(raw):
     return 'sha256:' + hashlib.sha256(raw).hexdigest()
 
 
+def select_artifact(rows, name, run, job=None):
+    matches = [a for a in rows if a.get('name') == name and a.get('expired') is False]
+    if len(matches) > 1:
+        # Retrying a failed producer retains the earlier attempt's upload.
+        # Bind duplicates to the admitted job/run attempt, never an older green.
+        from datetime import datetime
+        boundary = (job or {}).get('started_at') or run.get('run_started_at')
+        require(bool(boundary), 'artifact attempt boundary missing')
+        start = datetime.fromisoformat(boundary.replace('Z', '+00:00'))
+        matches = [a for a in matches if datetime.fromisoformat(a['created_at'].replace('Z', '+00:00')) >= start]
+    require(len(matches) == 1, 'missing/ambiguous artifact: ' + name)
+    require(matches[0].get('workflow_run', {}).get('id') == run['id'], 'artifact run mismatch')
+    return matches[0]
+
+
 def require(ok, reason):
     if not ok:
         raise ValueError(reason)
@@ -143,10 +158,7 @@ def collect(root: Path, head: str):
         run = selected[workflow]['run']
         rows = api(base + f'/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
         require(len(rows) < 100, 'artifact listing completeness unproven')
-        matches = [a for a in rows if a.get('name') == key and a.get('expired') is False]
-        require(len(matches) == 1, 'missing/ambiguous artifact: ' + key)
-        artifact = matches[0]
-        require(artifact.get('workflow_run', {}).get('id') == run['id'], 'artifact run mismatch')
+        artifact = select_artifact(rows, key, run, selected[workflow]['job'])
         raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archives[key] = verified_archive(raw, artifact, head)
         provenance[key] = {'workflow': workflow, 'run_id': run['id'],

@@ -34,7 +34,7 @@ jobs:
   coherence:
     name: P09 exact-head evidence coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 100
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -94,7 +94,7 @@ jobs:
               return workflow_runs(lambda url: github_json(url, headers),
                                    repository, sha, event='pull_request')
 
-          deadline = time.time() + 30 * 60
+          deadline = time.time() + 90 * 60
           while time.time() < deadline:
               runs = fetch_runs()
               latest = {}

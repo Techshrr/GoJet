@@ -8,12 +8,23 @@ import zipfile
 import urllib.error
 from unittest.mock import patch, Mock
 from t028_sources import digest, member, verified_archive, select_run, successful
-from t028_sources import download_archive
+from t028_sources import download_archive, select_artifact
 from t028_case import inspect
 
 
 class SourceAdmissionTests(unittest.TestCase):
     head = 'a' * 40
+
+    def test_retry_artifact_is_bound_to_current_attempt(self):
+        run = {'id': 9, 'run_started_at': '2026-10-05T08:00:00Z'}
+        old = {'id': 1, 'name': 'proof', 'expired': False, 'created_at': '2026-10-05T07:00:00Z', 'workflow_run': {'id': 9}}
+        current = dict(old, id=2, created_at='2026-10-05T08:01:00Z')
+        self.assertEqual(select_artifact([old, current], 'proof', run)['id'], 2)
+        for rows in ([old, dict(old, id=3)], [current, dict(current, id=3)], [dict(current, workflow_run={'id': 10})]):
+            with self.assertRaises(ValueError):
+                select_artifact(rows, 'proof', run)
+        with self.assertRaises(ValueError):
+            select_artifact([old, current], 'proof', {'id': 9})
 
     def test_archive_download_redirect_does_not_forward_authorization(self):
         url = 'https://api.github.com/repos/Techshrr/GoJet/actions/artifacts/1/zip'
