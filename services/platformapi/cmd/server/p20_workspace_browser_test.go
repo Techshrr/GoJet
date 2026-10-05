@@ -108,6 +108,11 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 	}
 	adminDist := filepath.Join(root, "frontend/apps/admin/dist-p20-rbac")
 	adminMux := http.NewServeMux()
+	operations, err := buildAdminOperationsGovernance(service, runtime.DB, runtime.Redis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminMux.Handle("/api/admin/operations/", adminAPI.ExtendedGovernanceHandler(operations))
 	adminMux.Handle("/api/admin/", adminAPI.Handler())
 	adminMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
