@@ -23,6 +23,7 @@ import {
   WorkspaceDetailPage,
 } from './p17/details';
 
+const MailTemplatesPage = lazy(() => import('./support/templates'));
 const ResourcePage = lazy(() => import('./p17/resources').then(module => ({ default: module.ResourcePage })));
 const StorageStatusPage = lazy(() => import('./routes/StorageStatusPage'));
 const CommercePlansPage = lazy(() => import('./routes/CommercePlansPage'));
@@ -94,7 +95,11 @@ const bioResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '
 const filesResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/files', component: () => <ResourcePage kind="files" /> });
 const filesResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/files/$resourceId', component: () => <ResourcePage kind="files" detail /> });
 
+const mailTemplates = createRoute({ getParentRoute: () => rootRoute, path: '/admin/platform/mail-templates', component: MailTemplatesPage });
+const mailTemplateDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/platform/mail-templates/$key', component: MailTemplatesPage });
+
 const routeTree = rootRoute.addChildren([
+  mailTemplates, mailTemplateDetail,
   linksResourceList, linksResourceDetail, domainsResourceList, domainsResourceDetail, qrResourceList, qrResourceDetail, textResourceList, textResourceDetail, bioResourceList, bioResourceDetail, filesResourceList, filesResourceDetail,
   login,
   home,

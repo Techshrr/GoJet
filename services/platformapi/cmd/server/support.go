@@ -212,6 +212,8 @@ func buildSupportHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 	for _, pattern := range []string{
 		"GET /api/admin/mail/queue",
 		"GET /api/admin/mail/templates",
+		"PATCH /api/admin/mail/templates/{key}",
+		"POST /api/admin/mail/templates/{key}/preview",
 		"GET /api/admin/mail/settings",
 		"PATCH /api/admin/mail/settings",
 		"POST /api/admin/mail/test",
@@ -235,6 +237,8 @@ func mountSupportRoutes(root *http.ServeMux, handler http.Handler) {
 		"PATCH /api/admin/support/tickets/{ticketId}",
 		"GET /api/admin/mail/queue",
 		"GET /api/admin/mail/templates",
+		"PATCH /api/admin/mail/templates/{key}",
+		"POST /api/admin/mail/templates/{key}/preview",
 		"GET /api/admin/mail/settings",
 		"PATCH /api/admin/mail/settings",
 		"POST /api/admin/mail/test",

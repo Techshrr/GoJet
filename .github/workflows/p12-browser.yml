@@ -289,6 +289,8 @@ jobs:
           mkdir -p artifacts/v10/P20/runtime/t030
           go test ./services/platformapi/cmd/server -run '^TestP20HTTPStatus' -count=1 -json > artifacts/v10/P20/runtime/t030/http-status.jsonl
           python3 scripts/p20/t030_native.py --root artifacts/v10/P20/runtime/t030 --head "$(git rev-parse HEAD)"
+          mkdir -p artifacts/v10/P20/runtime/t031
+          go test ./services/platformapi/cmd/server -run '^TestP20MailTemplateVersionAndAudit$' -count=1 -json > artifacts/v10/P20/runtime/t031/mail-template.jsonl
 
       - name: Verify T027 production-session Workspace browser
         env:
@@ -336,6 +338,7 @@ jobs:
             artifacts/v10/P12/runtime/
             artifacts/v10/P20/runtime/t027/
             artifacts/v10/P20/runtime/t030/
+            artifacts/v10/P20/runtime/t031/
             artifacts/v10/P20/consistency/P20-T027.json
           if-no-files-found: warn
           retention-days: 30

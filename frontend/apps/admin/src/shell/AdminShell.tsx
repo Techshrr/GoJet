@@ -6,6 +6,7 @@ import type{ReactNode}from'react';import{Link}from'@tanstack/react-router';impor
   ['Operations', '/admin/operations/jobs'],
   ['Tickets', '/admin/tickets'],
   ['Mail', '/admin/mail'],
+  ['Mail templates', '/admin/platform/mail-templates'],
   ['Commerce', '/admin/commerce/plans'],
   ['Access', '/admin/access/administrators'],
   ['Platform', '/admin/platform/general'],

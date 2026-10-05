@@ -35,6 +35,8 @@ func (a *AdminMailAPI) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/admin/mail/queue", a.listQueue)
 	mux.HandleFunc("GET /api/admin/mail/templates", a.listTemplates)
+	mux.HandleFunc("PATCH /api/admin/mail/templates/{key}", a.patchTemplate)
+	mux.HandleFunc("POST /api/admin/mail/templates/{key}/preview", a.previewTemplate)
 	mux.HandleFunc("GET /api/admin/mail/settings", a.getSettings)
 	mux.HandleFunc("PATCH /api/admin/mail/settings", a.patchSettings)
 	mux.HandleFunc("POST /api/admin/mail/test", a.testSend)

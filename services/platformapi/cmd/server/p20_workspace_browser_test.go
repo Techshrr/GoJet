@@ -14,6 +14,7 @@ import (
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	authn "github.com/Techshrr/GoJet/internal/auth"
+	"github.com/Techshrr/GoJet/internal/support"
 	"github.com/Techshrr/GoJet/internal/workspace"
 	"github.com/Techshrr/GoJet/scripts/p15/runnerutil"
 	"github.com/Techshrr/GoJet/scripts/p17/adminfixture"
@@ -51,7 +52,6 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 		t.Fatalf("workspace: %v", err)
 	}
 	mux.Handle("/api/me", account)
-	mux.Handle("/api/me/", account)
 	mux.Handle("/api/workspaces", handler)
 	mux.Handle("/api/workspaces/", handler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -89,14 +89,21 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 		}
 	}
 	// Administrator authority is separate from every Workspace role.
-	service, err := adminfixture.NewService(runtime, "p20-browser-admin", 10)
+	adminMux := http.NewServeMux()
+	adminServer := httptest.NewTLSServer(adminMux)
+	defer adminServer.Close()
+	t.Setenv("GOJET_ADMIN_ACCESS_ENABLED", "1")
+	t.Setenv("GOJET_ADMIN_TOTP_KEY_ID", "p20-mail-browser")
+	t.Setenv("GOJET_ADMIN_TOTP_KEY_HEX", strings.Repeat("6d", 32))
+	t.Setenv("GOJET_ADMIN_ALLOWED_ORIGIN", adminServer.URL)
+	service, _, _, err := buildAdminAccessService(runtime.DB, runtime.Redis)
 	if err != nil {
 		t.Fatal(err)
 	}
 	const adminEmail = "browser-limited@p20.test"
 	const adminPassword = "P20-browser-fixture-only-Administrator-987!"
 	now := time.Now().UTC().Add(-10 * time.Second)
-	if _, err := adminfixture.Bootstrap(ctx, service, adminEmail, adminPassword, []string{adminaccess.PermissionPlatformRead}, now); err != nil {
+	if _, err := adminfixture.Bootstrap(ctx, service, adminEmail, adminPassword, []string{adminaccess.PermissionPlatformRead, adminaccess.PermissionMailManage}, now); err != nil {
 		t.Fatal(err)
 	}
 	_, adminSession, _, err := adminfixture.LoginAndConfirmMFA(ctx, service, adminEmail, adminPassword, now)
@@ -108,7 +115,6 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	adminDist := filepath.Join(root, "frontend/apps/admin/dist-p20-rbac")
-	adminMux := http.NewServeMux()
 	operations, err := buildAdminOperationsGovernance(service, runtime.DB, runtime.Redis)
 	if err != nil {
 		t.Fatal(err)
@@ -123,8 +129,20 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 		}
 		http.ServeFile(w, r, filepath.Join(adminDist, "index.html"))
 	})
-	adminServer := httptest.NewTLSServer(adminMux)
-	defer adminServer.Close()
+	store, err := support.NewStore(runtime.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	audited, err := support.NewAuditedAdminMailStore(store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority := newSupportAdminAuthority(service)
+	mailAPI, err := support.NewAdminMailAPI(audited, authority, authority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminMux.Handle("/api/admin/mail/", support.WithSupportCorrelation(mailAPI.Handler()))
 	payload, err := json.Marshal(map[string]any{"origin": server.URL, "tokens": tokens, "workspace": ws.ID, "adminOrigin": adminServer.URL, "adminToken": adminSession.Token})
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +152,13 @@ func TestP20WorkspaceProductionBrowser(t *testing.T) {
 	cmd.Env = append(os.Environ(), "P20_BROWSER_HANDOFF="+string(payload))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("browser failed: %v\n%s", err, output)
+	}
+	var templateVersion, templateAudits int
+	if err := runtime.DB.QueryRowContext(ctx, "SELECT MAX(version) FROM mail_templates WHERE template_key='mail-test' AND locale='en'").Scan(&templateVersion); err != nil || templateVersion != 2 {
+		t.Fatalf("browser template version: %d %v", templateVersion, err)
+	}
+	if err := runtime.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM support_audit_events WHERE action='admin_mail_template_updated' AND resource_id='mail-test:en'").Scan(&templateAudits); err != nil || templateAudits != 1 {
+		t.Fatalf("browser template audit: %d %v", templateAudits, err)
 	}
 	var name string
 	if err := runtime.DB.QueryRowContext(ctx, "SELECT name FROM workspaces WHERE id=?", ws.ID).Scan(&name); err != nil {

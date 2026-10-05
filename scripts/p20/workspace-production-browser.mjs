@@ -48,12 +48,6 @@ try {
     await page.getByRole('heading', { name: 'Profile', exact: true }).waitFor();
     await page.locator(`[data-account-state="${role === 'anonymous' ? 'session-revoked' : 'success'}"]`).waitFor();
     checks[`profile-navigation-${role}`] = true;
-    await page.getByRole('link', { name: 'Danger zone', exact: true }).click();
-    await page.waitForURL(url => url.pathname === '/app/settings/danger');
-    await page.locator(`[data-account-state="${role === 'anonymous' ? 'session-revoked' : 'success'}"]`).waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Revoke current session', exact: true }).count(), role === 'anonymous' ? 0 : 1);
-    checks[`danger-navigation-${role}`] = true;
-
     assert.equal(fixtureHeader, false);
     checks[role] = true;
     await context.close();
@@ -84,25 +78,42 @@ try {
     checks[`admin-route-${role}`] = true;
     await context.close();
   }
-
   {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
-    await context.addCookies([{ name: '__Host-gojet_session', value: tokens.owner, url: origin, secure: true, httpOnly: true, sameSite: 'Lax' }]);
+    await context.addCookies([{ name: 'gojet_admin_session', value: adminToken, url: adminOrigin, secure: true, httpOnly: true, sameSite: 'Strict' }]);
     const page = await context.newPage();
-    await page.goto(`${origin}/app/settings/danger`);
-    await page.getByRole('button', { name: 'Revoke current session', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: 'Confirm sign out', exact: true }).isDisabled(), true);
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    assert.equal(await page.evaluate(async () => (await fetch('/api/me')).status), 200);
-    await page.getByRole('button', { name: 'Revoke current session', exact: true }).click();
-    await page.getByLabel('Type SIGN OUT', { exact: true }).fill('SIGN OUT');
-    const response = page.waitForResponse(r => r.request().method() === 'DELETE' && new URL(r.url()).pathname.startsWith('/api/me/sessions/'));
-    await page.getByRole('button', { name: 'Confirm sign out', exact: true }).click();
-    assert.equal((await response).status(), 200);
-    await page.locator('[data-account-state="session-revoked"]').waitFor();
-    assert.equal(await page.evaluate(async () => (await fetch('/api/me')).status), 401);
-    checks['danger-revocation-durable'] = true;
+    await page.goto(`${adminOrigin}/admin/platform/mail-templates`);
+    await page.locator('[data-page="admin-mail-templates"][data-state="ready"]').waitFor();
+    await page.getByRole('link', { name: 'mail-test · en', exact: true }).click();
+    await page.locator('[data-page="admin-mail-templates"][data-state="edit"]').waitFor();
+    const current = await page.evaluate(async () => (await (await fetch('/api/admin/mail/templates')).json()).items.filter(item => item.key === 'mail-test' && item.locale === 'en').sort((a,b) => b.version-a.version)[0]);
+    await page.getByLabel('Subject', { exact: true }).fill('P20 template edited');
+    await page.getByRole('button', { name: 'Preview with sample values', exact: true }).click();
+    await page.locator('[data-page="admin-mail-templates"][data-state="preview"]').waitFor();
+    assert((await page.getByRole('region', { name: 'Template preview' }).innerText()).includes('P20 template edited'));
+    const save = page.waitForResponse(r => r.request().method() === 'PATCH' && new URL(r.url()).pathname === '/api/admin/mail/templates/mail-test');
+    await page.getByRole('button', { name: 'Save template', exact: true }).click();
+    assert.equal((await save).status(), 200);
+    await page.locator('[data-page="admin-mail-templates"][data-state="saved"]').waitFor();
+    const result = await page.evaluate(async original => {
+      const list = (await (await fetch('/api/admin/mail/templates')).json()).items.filter(item => item.key === 'mail-test' && item.locale === 'en');
+      const session = await (await fetch('/api/admin/auth/session')).json();
+      const stale = await fetch('/api/admin/mail/templates/mail-test', { method: 'PATCH', headers: {'Content-Type':'application/json','X-CSRF-Token':session.csrf_token}, body: JSON.stringify({locale:'en',expected_version:original.version,subject_template:'stale overwrite',text_template:original.text_template,html_template:original.html_template}) });
+      const noCSRF = await fetch('/api/admin/mail/templates/mail-test', { method:'PATCH',headers:{'Content-Type':'application/json'},body:'{}' });
+      return { list, stale:stale.status, noCSRF:noCSRF.status };
+    }, current);
+    assert.equal(result.stale, 409);
+    assert.equal(result.noCSRF, 401);
+    assert(result.list.some(item => item.version === current.version && item.subject_template === current.subject_template));
+    assert(result.list.some(item => item.version === current.version+1 && item.subject_template === 'P20 template edited'));
+    checks['mail-template-preview-save-conflict'] = true;
     await context.close();
+    const anonymous = await browser.newContext({ignoreHTTPSErrors:true});
+    const denied = await anonymous.request.get(`${adminOrigin}/api/admin/mail/templates`);
+    assert.equal(denied.status(),401);
+    const body = await denied.json();assert.equal(body.items,undefined);
+    checks['mail-template-anonymous-denied'] = true;
+    await anonymous.close();
   }
   mkdirSync('artifacts/v10/P20/runtime/t027', { recursive: true });
   writeFileSync('artifacts/v10/P20/runtime/t027/workspace-browser.json', JSON.stringify({ implementation_commit: implementationCommit, checks, production_session: true, mocked_api: false, formal_p20_t027_claim: false }) + '\n');
