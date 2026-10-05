@@ -23,6 +23,7 @@ import {
   WorkspaceDetailPage,
 } from './p17/details';
 
+const ResourcePage = lazy(() => import('./p17/resources').then(module => ({ default: module.ResourcePage })));
 const StorageStatusPage = lazy(() => import('./routes/StorageStatusPage'));
 const CommercePlansPage = lazy(() => import('./routes/CommercePlansPage'));
 const CommercePaymentsPage = lazy(() => import('./routes/CommercePaymentsPage'));
@@ -80,7 +81,21 @@ const domainRiskList = createRoute({ getParentRoute: () => rootRoute, path: '/ad
 const domainRiskDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/domain-risk/$domainId', component: DomainRiskDetailPage });
 const abuseList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/abuse', component: AbuseListPage });
 const abuseDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/trust/abuse/$reportId', component: AbuseDetailPage });
+const linksResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/links', component: () => <ResourcePage kind="links" /> });
+const linksResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/links/$resourceId', component: () => <ResourcePage kind="links" detail /> });
+const domainsResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/domains', component: () => <ResourcePage kind="domains" /> });
+const domainsResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/domains/$resourceId', component: () => <ResourcePage kind="domains" detail /> });
+const qrResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/qr', component: () => <ResourcePage kind="qr" /> });
+const qrResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/qr/$resourceId', component: () => <ResourcePage kind="qr" detail /> });
+const textResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/text', component: () => <ResourcePage kind="text" /> });
+const textResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/text/$resourceId', component: () => <ResourcePage kind="text" detail /> });
+const bioResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/bio', component: () => <ResourcePage kind="bio" /> });
+const bioResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/resources/bio/$resourceId', component: () => <ResourcePage kind="bio" detail /> });
+const filesResourceList = createRoute({ getParentRoute: () => rootRoute, path: '/admin/files', component: () => <ResourcePage kind="files" /> });
+const filesResourceDetail = createRoute({ getParentRoute: () => rootRoute, path: '/admin/files/$resourceId', component: () => <ResourcePage kind="files" detail /> });
+
 const routeTree = rootRoute.addChildren([
+  linksResourceList, linksResourceDetail, domainsResourceList, domainsResourceDetail, qrResourceList, qrResourceDetail, textResourceList, textResourceDetail, bioResourceList, bioResourceDetail, filesResourceList, filesResourceDetail,
   login,
   home,
   users,

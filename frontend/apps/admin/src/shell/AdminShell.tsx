@@ -1,6 +1,7 @@
 import type{ReactNode}from'react';import{Link}from'@tanstack/react-router';import{InlineMessage,useShellViewport}from'@gojet/ui';import type{ShellState}from'@gojet/utils';const groups = [
   ['Users', '/admin/users'],
   ['Workspaces', '/admin/workspaces'],
+  ['Resources', '/admin/resources/links'],
   ['Trust & Safety', '/admin/trust/destination-risk'],
   ['Operations', '/admin/operations/jobs'],
   ['Tickets', '/admin/tickets'],
