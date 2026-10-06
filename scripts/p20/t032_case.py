@@ -108,7 +108,7 @@ def inspect_seo(sources, head):
             'ugc_noindex_observations': 14, 'crawler_differential': False, 'sitemap_canonical_parity': True}
 
 
-def inspect(root, head):
+def inspect(root, head, source_root=None):
     directory = root / 'artifacts/v10/P20/runtime/t032-sources'
     manifest = json.loads((directory / 'collection.json').read_bytes())
     require(manifest.get('implementation_commit') == head and set(manifest['artifacts']) == set(PRODUCERS), 'missing/mixed-head SEO producers')
@@ -125,7 +125,7 @@ def inspect(root, head):
     prerequisite = directory / 'prerequisite'
     formal = json.loads((prerequisite / 'artifacts/v10/P20/consistency/P20-T031.json').read_bytes())
     require(formal.get('case') == 'P20-T031' and formal.get('status') == 'PASS' and formal.get('errors') == []
-            and formal.get('implementation_commit') == head and formal['details'] == inspect_t031(prerequisite, head, source_root=root), 'invalid T031 prerequisite')
+            and formal.get('implementation_commit') == head and formal['details'] == inspect_t031(prerequisite, head, source_root=source_root or root), 'invalid T031 prerequisite')
     sources = {key + '/' + path: json.loads((directory / key / path).read_bytes())
                for key, (_, _, _, paths) in PRODUCERS.items() if key not in ('prerequisite', 'private') for path in paths}
     private = json.loads((directory / 'private/runtime/t032/private-indexation.json').read_bytes())
