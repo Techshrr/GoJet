@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { createHmac } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -65,6 +66,7 @@ async function noOverflow(page, label) {
 }
 async function maskInputs(page) { await page.evaluate(() => { for (const input of document.querySelectorAll('input')) input.value = ''; }); }
 async function capture(page, label) {
+  if (label === 'login-input-desktop') await visualProbe(page, 'P15', 'auth');
   await maskInputs(page);
   const path = `${capturesDir}/${caseId}-${label}.png`;
   await page.screenshot({ path, fullPage: true });

@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
       - 'go.mod'
       - 'go.sum'
       - 'internal/text/**'
@@ -225,6 +226,7 @@ jobs:
         with:
           name: gojet-v10-p10-browser-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            artifacts/v10/P10/t034/
             artifacts/v10/P10/browser/P10-T016.json
             artifacts/v10/P10/browser/P10-T017.json
             artifacts/v10/P10/browser/P10-T018.json
