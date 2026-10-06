@@ -34,7 +34,7 @@ jobs:
   coherence:
     name: P12 exact-head evidence coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 110
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -80,7 +80,7 @@ jobs:
           }
           def get(url):
             return github_json(url, headers)
-          deadline = time.time() + 35 * 60
+          deadline = time.time() + 90 * 60
           while time.time() < deadline:
             from scripts.ci.actions import workflow_runs
             runs = workflow_runs(get, repo, sha)
@@ -136,7 +136,7 @@ jobs:
               print(f'P12 producers/artifacts green for {sha}')
               break
             print(f'Waiting P12 producers missing={missing} pending={pending}')
-            time.sleep(30)
+            time.sleep(60)
           else:
             raise SystemExit(f'timed out waiting for P12 producers on {sha}')
           PY

@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -53,6 +54,9 @@ def need_env(name: str) -> str:
     return value
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.ci.actions import github_json
+
 HEAD = need_env("EXACT_HEAD")
 REPOSITORY = need_env("REPOSITORY")
 TOKEN = need_env("GH_TOKEN")
@@ -67,9 +71,7 @@ HEADERS = {
 
 
 def api_get(url: str) -> dict:
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    return github_json(url, HEADERS)
 
 
 def exact_producer_runs() -> list[dict]:
@@ -194,7 +196,7 @@ def bind_producers() -> dict:
             print(f"P15 T028 producer authority green for {HEAD}")
             return manifest
         print(f"Waiting P15 T028 producers missing={missing} pending={pending}", flush=True)
-        time.sleep(10)
+        time.sleep(60)
 
     raise SystemExit(f"timed out waiting for P15 T028 producers on {HEAD}")
 

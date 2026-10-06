@@ -73,7 +73,7 @@ def inspect_navigation(sources, head):
             'notification_destination': '/app/billing'}
 
 
-def inspect(root, head):
+def inspect(root, head, source_root=None):
     directory = root / 'artifacts/v10/P20/runtime/t031-sources'
     manifest = json.loads((directory / 'collection.json').read_bytes())
     require(manifest.get('implementation_commit') == head, 'mixed-head T031 collection')
@@ -111,7 +111,7 @@ def inspect(root, head):
         require(sum(row.get('Action') == 'pass' and row.get('Package') == PACKAGE and row.get('Test') == test for row in rows) == 1, 'missing mail template native verdict')
     return {'formal_p20_t031_claim': True, 'next_case_unlocked': False,
             'prerequisite': {'case': 'P20-T030', 'head': head, 'revalidated': True},
-            'registry': inspect_routes(root), 'navigation': inspect_navigation(sources, head),
+            'registry': inspect_routes(source_root or root), 'navigation': inspect_navigation(sources, head),
             'workspace_browser': browser, 'mail_template_native_verified': True,
             'source_evidence': [{'path': path, 'sha256': files[path]['sha256']} for path in sorted(sources)],
             'collection_sha256': digest((directory / 'collection.json').read_bytes())}

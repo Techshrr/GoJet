@@ -339,6 +339,7 @@ jobs:
             artifacts/v10/P20/runtime/t027/
             artifacts/v10/P20/runtime/t030/
             artifacts/v10/P20/runtime/t031/
+            artifacts/v10/P20/runtime/t032/
             artifacts/v10/P20/consistency/P20-T027.json
           if-no-files-found: warn
           retention-days: 30

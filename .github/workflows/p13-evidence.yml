@@ -83,9 +83,8 @@ jobs:
           }
 
           def get(url):
-              request = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)
+              from scripts.ci.actions import github_json
+              return github_json(url, headers)
 
           deadline = time.time() + 90 * 60
           while time.time() < deadline:
@@ -138,7 +137,7 @@ jobs:
                   print(f'P13 producers/artifacts green for {sha}')
                   break
               print(f'Waiting P13 producers missing={missing} pending={pending}')
-              time.sleep(10)
+              time.sleep(60)
           else:
               raise SystemExit(f'timed out waiting for P13 producers on {sha}')
           PY

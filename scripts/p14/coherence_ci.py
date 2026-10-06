@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.ci.actions import workflow_runs
+from scripts.ci.actions import workflow_runs, github_json
 
 ROOT = Path('artifacts/v10/P14')
 MANIFEST = ROOT / 'evidence-producer-manifest.json'
@@ -56,9 +56,7 @@ HEADERS = {
 
 
 def api_get(url: str) -> dict:
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    return github_json(url, HEADERS)
 
 
 def artifact_for(run_id: int, expected: str) -> dict | None:
@@ -154,7 +152,7 @@ def bind_producers() -> dict:
             print(f'P14 T024 producer authority green for {HEAD}')
             return manifest
         print(f'Waiting P14 T024 producers missing={missing} pending={pending}', flush=True)
-        time.sleep(10)
+        time.sleep(60)
 
     raise SystemExit(f'timed out waiting for P14 T024 producers on {HEAD}')
 

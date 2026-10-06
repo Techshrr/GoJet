@@ -10,6 +10,21 @@ const executablePath = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/
 assert(executablePath, 'Chrome unavailable');
 const browser = await chromium.launch({ executablePath, args: ['--no-sandbox'] });
 const checks = {};
+const privateIndexation = [];
+async function verifyPrivateIndexation(page, role) {
+  const row = await page.evaluate(() => ({
+    path: location.pathname,
+    robots: Array.from(document.querySelectorAll('meta[name="robots"]'), node => node.content),
+    canonical: document.querySelectorAll('link[rel="canonical"]').length,
+    alternates: document.querySelectorAll('link[hreflang]').length,
+    structuredData: document.querySelectorAll('script[type="application/ld+json"]').length,
+  }));
+  assert(row.robots.some(value => value.split(',').map(s => s.trim().toLowerCase()).includes('noindex')));
+  assert.equal(row.canonical, 0);
+  assert.equal(row.alternates, 0);
+  assert.equal(row.structuredData, 0);
+  privateIndexation.push({ role, ...row });
+}
 try {
   for (const role of ['owner', 'admin', 'member', 'viewer', 'anonymous']) {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -55,6 +70,7 @@ try {
     checks[`danger-navigation-${role}`] = true;
 
     assert.equal(fixtureHeader, false);
+    await verifyPrivateIndexation(page, role);
     checks[role] = true;
     await context.close();
   }
@@ -81,6 +97,7 @@ try {
     const jobsStatus = await page.evaluate(async () => (await fetch('/api/admin/operations/jobs')).status);
     assert.equal(jobsStatus, role === 'limited-admin' ? 403 : 401);
     checks[`operations-navigation-${role}`] = true;
+    await verifyPrivateIndexation(page, role);
     checks[`admin-route-${role}`] = true;
     await context.close();
   }
@@ -134,6 +151,7 @@ try {
     assert.equal(result.noCSRF, 401);
     assert(result.list.some(item => item.version === current.version && item.subject_template === current.subject_template));
     assert(result.list.some(item => item.version === current.version+1 && item.subject_template === 'P20 template edited'));
+    await verifyPrivateIndexation(page, 'mail-admin');
     checks['mail-template-preview-save-conflict'] = true;
     await context.close();
     const anonymous = await browser.newContext({ignoreHTTPSErrors:true});
@@ -143,6 +161,8 @@ try {
     checks['mail-template-anonymous-denied'] = true;
     await anonymous.close();
   }
+  mkdirSync('artifacts/v10/P20/runtime/t032', { recursive: true });
+  writeFileSync('artifacts/v10/P20/runtime/t032/private-indexation.json', JSON.stringify({ implementation_commit: implementationCommit, production_session: true, mocked_api: false, rows: privateIndexation }) + '\n');
   mkdirSync('artifacts/v10/P20/runtime/t027', { recursive: true });
   writeFileSync('artifacts/v10/P20/runtime/t027/workspace-browser.json', JSON.stringify({ implementation_commit: implementationCommit, checks, production_session: true, mocked_api: false, formal_p20_t027_claim: false }) + '\n');
 } finally { await browser.close(); }
