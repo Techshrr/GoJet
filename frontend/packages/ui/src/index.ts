@@ -11,6 +11,7 @@ export {
   DestructiveConfirmation,
   Dialog,
   EmptyState,
+  FeedbackIcon,
   InlineLink,
   InlineMessage,
   Navigation,

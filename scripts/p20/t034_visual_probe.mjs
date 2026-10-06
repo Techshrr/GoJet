@@ -71,6 +71,23 @@ export async function visualProbe(page, node, surface) {
           placeholder_elements: [...document.querySelectorAll('[data-placeholder], img[src*="placeholder"]')].filter(visible).length,
           active_animations: document.getAnimations().filter(animation => animation.playState === 'running').length,
           svg_icons: [...document.querySelectorAll('svg')].filter(visible).map(icon => ({view_box: icon.getAttribute('viewBox'), hidden: icon.getAttribute('aria-hidden'), role: icon.getAttribute('role')})),
+          images: [...document.images].filter(visible).map(image => ({
+            alt_present: image.hasAttribute('alt'), width: Number(image.getAttribute('width')), height: Number(image.getAttribute('height')),
+            natural_width: image.naturalWidth, natural_height: image.naturalHeight, complete: image.complete,
+            same_origin: new URL(image.currentSrc || image.src, location.href).origin === location.origin,
+            responsive: image.hasAttribute('srcset'), sizes: !!image.getAttribute('sizes'),
+            loading: image.getAttribute('loading'), priority: image.getAttribute('fetchpriority'),
+          })),
+          auth_state: document.querySelector('[data-auth-state]')?.getAttribute('data-auth-state') || null,
+          notices: [...document.querySelectorAll('[data-notice-tone]')].filter(visible).map(notice => {
+            const icon = notice.querySelector('svg');
+            return { tone: notice.getAttribute('data-notice-tone'), role: notice.getAttribute('role'),
+              has_text: !!notice.textContent.trim(), foreground: getComputedStyle(notice).color,
+              background: getComputedStyle(notice).backgroundColor, focused: notice === document.activeElement,
+              icon: icon ? { classes: [...icon.classList], hidden: icon.getAttribute('aria-hidden'),
+                view_box: icon.getAttribute('viewBox'), width: icon.getBoundingClientRect().width,
+                height: icon.getBoundingClientRect().height, stroke: getComputedStyle(icon).strokeWidth } : null };
+          }),
         };
       }, names);
       const checks = { canonical_tokens: names.every(name => canonicalColor(observation.tokens[name]) === canonicalColor(expected[theme][name])),

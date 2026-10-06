@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { GoJetApiError } from '@gojet/api-client';
+import { FeedbackIcon } from '@gojet/ui';
 import type { AuthProvider, SocialRegistrationState } from '@gojet/api-client';
 import { AuthShell } from '../shell/SiteShells';
 import { AuthChallenge, AuthChallengeProvider, useAuthClient } from './AuthChallenge';
@@ -62,7 +63,7 @@ function AuthFrame({ title, state, notice, children }: { title: string; state: s
   return <AuthShell state={state === 'submitting' ? 'submitting' : state === 'rate-limited' ? 'rate-limited' : state === 'provider-error' ? 'provider-error' : 'normal'}>
     <section className="p15-auth" data-auth-page={title.toLowerCase().replaceAll(' ', '-')} data-auth-state={state}>
       <header className="p15-auth__header"><p className="p15-auth__eyebrow">GoJet account</p><h2>{title}</h2></header>
-      {notice && <div ref={noticeRef} tabIndex={notice.tone === 'error' ? -1 : undefined} className={`p15-auth__notice p15-auth__notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'} aria-live="polite">{notice.text}</div>}
+      {notice && <div ref={noticeRef} tabIndex={notice.tone === 'error' ? -1 : undefined} className={`p15-auth__notice p15-auth__notice--${notice.tone}`} data-notice-tone={notice.tone} role={notice.tone === 'error' ? 'alert' : 'status'} aria-live="polite"><FeedbackIcon variant={notice.tone === 'error' ? 'danger' : notice.tone} /><span>{notice.text}</span></div>}
       <AuthChallenge />
       {children}
     </section>

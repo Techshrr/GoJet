@@ -67,6 +67,9 @@ async function noOverflow(page, label) {
 async function maskInputs(page) { await page.evaluate(() => { for (const input of document.querySelectorAll('input')) input.value = ''; }); }
 async function capture(page, label) {
   if (label === 'login-input-desktop') await visualProbe(page, 'P15', 'auth');
+  if (label === 'login-invalid') await visualProbe(page, 'P15', 'auth-invalid');
+  if (label === 'register-code-sent') await visualProbe(page, 'P15', 'auth-code-sent');
+  if (label === 'verify-success') await visualProbe(page, 'P15', 'auth-verified');
   await maskInputs(page);
   const path = `${capturesDir}/${caseId}-${label}.png`;
   await page.screenshot({ path, fullPage: true });

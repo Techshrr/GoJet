@@ -12,7 +12,7 @@ PRODUCERS = {
     'foundation': ('p03-design-system.yml', 'gojet-v10-p03-', 'P03', foundation_paths()),
     'website': ('p19-website-browser.yml', 'gojet-v10-p19-browser-', 'P19', ['website']),
     'docs': ('p18-docs-quality.yml', 'gojet-v10-p18-docs-quality-', 'P18', ['docs']),
-    'auth': ('p15-browser.yml', 'p15-t024-auth-browser-', 'P15', ['auth']),
+    'auth': ('p15-browser.yml', 'p15-t024-auth-browser-', 'P15', ['auth', 'auth-invalid', 'auth-code-sent', 'auth-verified']),
     'workspace': ('p10-browser.yml', 'gojet-v10-p10-browser-', 'P10', ['workspace', 'public']),
     'admin': ('p17-browser.yml', 'p17-P17-T030-browser-', 'P17', ['admin']),
 }

@@ -2,7 +2,7 @@
 import copy
 import hashlib
 import unittest
-from t034_matrix import inspect_surface
+from t034_matrix import inspect_surface, inspect_assets_and_states
 
 class MatrixAdmissionTest(unittest.TestCase):
     def fixture(self):
@@ -15,7 +15,38 @@ class MatrixAdmissionTest(unittest.TestCase):
             for theme in ('light', 'dark'):
                 name = f'docs-{size}-{theme}.png'; captures[name] = b'\x89PNG\r\n\x1a\nsynthetic unit fixture'
                 data['observations'].append({'size': size, 'theme': theme, 'viewport': viewports[size], 'tokens': {'--gojet-' + n: '#fff' if theme == 'light' else '#070b14' for n in names}, 'reduced_motion': True, 'active_animations': 0, 'body': {'margin': '0px'}, 'browser_default_links': 0, 'overflow': False, 'broken_images': 0, 'placeholder_elements': 0, 'capture': name, 'capture_sha256': hashlib.sha256(captures[name]).hexdigest()})
+        for row in data['observations']:
+            row.update(images=[], notices=[], auth_state=None)
         return data, css, viewports, captures
+
+    def test_native_notice_semantics(self):
+        row = {'images': [], 'auth_state': 'invalid', 'notices': [{
+            'tone': 'error', 'role': 'alert', 'has_text': True, 'focused': True,
+            'foreground': 'rgb(0, 0, 0)', 'background': 'rgb(255, 255, 255)',
+            'icon': {'classes': ['lucide', 'lucide-circle-alert'], 'hidden': 'true',
+                     'view_box': '0 0 24 24', 'width': 16, 'height': 16, 'stroke': '1.75px'}}]}
+        inspect_assets_and_states(row, 'auth-invalid')
+        success = copy.deepcopy(row)
+        success['auth_state'] = 'success'
+        success['notices'][0].update(tone='success', role='status', focused=False)
+        success['notices'][0]['icon']['classes'] = ['lucide', 'lucide-circle-check']
+        inspect_assets_and_states(success, 'auth-verified')
+        for field, value in [('icon', None), ('has_text', False), ('focused', False),
+                             ('foreground', 'rgb(255, 255, 255)'), ('role', 'status')]:
+            with self.subTest(field=field):
+                bad = copy.deepcopy(row); bad['notices'][0][field] = value
+                with self.assertRaises(ValueError): inspect_assets_and_states(bad, 'auth-invalid')
+        with self.assertRaises(ValueError): inspect_assets_and_states(row, 'auth-verified')
+
+    def test_native_image_rejection(self):
+        image = dict(alt_present=True, width=20, height=20, natural_width=20, natural_height=20,
+                     complete=True, same_origin=True, responsive=False, sizes=False, priority=None, loading=None)
+        inspect_assets_and_states({'images': [image]}, 'website')
+        for field, value in [('alt_present', False), ('width', 0), ('natural_height', 0),
+                             ('same_origin', False), ('responsive', True)]:
+            with self.subTest(field=field):
+                bad = dict(image); bad[field] = value
+                with self.assertRaises(ValueError): inspect_assets_and_states({'images': [bad]}, 'website')
 
     def test_valid_equivalent_color(self):
         data, css, viewports, captures = self.fixture()

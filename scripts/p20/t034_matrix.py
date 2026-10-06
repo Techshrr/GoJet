@@ -12,6 +12,49 @@ def color(value):
     return '#' + ''.join(c * 2 for c in value[1:]) if re.fullmatch(r'#[0-9a-f]{3}', value) else value
 
 
+def contrast(foreground, background):
+    def luminance(value):
+        match = re.fullmatch(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', value)
+        require(match is not None, 'nonopaque notice color')
+        channels = [int(c) / 255 for c in match.groups()]
+        channels = [c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4 for c in channels]
+        return sum(c * weight for c, weight in zip(channels, (.2126, .7152, .0722)))
+    a, b = sorted((luminance(foreground), luminance(background)))
+    return (b + .05) / (a + .05)
+
+
+AUTH_STATES = {'auth': ('input', None), 'auth-invalid': ('invalid', 'error'),
+               'auth-code-sent': ('code-sent', 'success'), 'auth-verified': ('success', 'success')}
+
+
+def inspect_assets_and_states(row, surface):
+    images = row['images']
+    require(isinstance(images, list), 'missing native image inventory')
+    for image in images:
+        require(image['alt_present'] is True and image['width'] > 0 and image['height'] > 0,
+                'image missing alt or intrinsic dimensions')
+        require(image['complete'] is True and image['natural_width'] > 0 and image['natural_height'] > 0
+                and image['same_origin'] is True, 'broken or hotlinked image')
+        require(not image['responsive'] or image['sizes'], 'responsive image missing sizes')
+        require(image['priority'] != 'high' or image['loading'] != 'lazy', 'lazy high-priority image')
+    require(sum(image['priority'] == 'high' for image in images) <= 1, 'multiple high-priority images')
+    if surface not in AUTH_STATES: return
+    state, tone = AUTH_STATES[surface]
+    require(row['auth_state'] == state, 'native auth state mismatch')
+    notices = row['notices']
+    require(len(notices) == (1 if tone else 0), 'missing/unexpected auth notice')
+    if not tone: return
+    notice = notices[0]; icon = notice['icon']
+    require(notice['tone'] == tone and notice['has_text'] is True
+            and notice['role'] == ('alert' if tone == 'error' else 'status'), 'missing semantic state text')
+    require(icon is not None and icon['hidden'] == 'true' and icon['view_box'] == '0 0 24 24'
+            and ('lucide-circle-alert' if tone == 'error' else 'lucide-circle-check') in icon['classes'],
+            'missing canonical state icon')
+    require(icon['width'] == icon['height'] == 16 and icon['stroke'] == '1.75px', 'noncanonical state icon geometry')
+    require(contrast(notice['foreground'], notice['background']) >= 4.5, 'state text contrast failed')
+    require(tone != 'error' or notice['focused'] is True, 'error notice lost focus')
+
+
 def inspect_surface(data, surface, node, head, css, viewports, captures):
     require(data['implementation_commit'] == head and data['surface'] == surface and data['node'] == node,
             'wrong surface or implementation')
@@ -31,6 +74,7 @@ def inspect_surface(data, surface, node, head, css, viewports, captures):
         require(row['body']['margin'] == '0px' and row['browser_default_links'] == 0, 'unthemed document defaults')
         require(row['overflow'] is False and row['broken_images'] == 0 and row['placeholder_elements'] == 0,
                 'invalid layout/image observations')
+        inspect_assets_and_states(row, surface)
         name = f"{surface}-{row['size']}-{theme}.png"
         require(row['capture'] == name and hashlib.sha256(captures[name]).hexdigest() == row['capture_sha256'], 'capture hash mismatch')
         require(captures[name].startswith(b'\x89PNG\r\n\x1a\n'), 'capture is not PNG')
