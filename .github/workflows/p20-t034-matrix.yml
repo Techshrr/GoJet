@@ -1,0 +1,39 @@
+name: P20-T034 Native Visual Matrix
+on:
+  pull_request:
+    branches: [main]
+    paths: ['scripts/p20/**', 'frontend/**', 'internal/**', 'services/**', '.github/workflows/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p20-t034-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Test rejection of invalid visual observations
+        run: python3 -m unittest discover -s scripts/p20 -p 'test_t034_matrix.py'
+      - name: Collect same-head native producer observations and captures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t034_sources.py
+      - name: Independently verify six-surface native matrix
+        run: python3 scripts/p20/t034_matrix.py
+      - name: Preserve raw matrix evidence (not formal T034 closure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t034-native-matrix-${{ github.event.pull_request.head.sha || github.sha }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            artifacts/v10/P20/runtime/t034-sources/
+            artifacts/v10/P20/runtime/t034-matrix/
