@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/test_t034_visual_probe.mjs'
       - 'frontend/apps/site/**'
       - 'frontend/packages/tokens/**'
       - 'frontend/packages/ui/**'
@@ -114,6 +115,8 @@ jobs:
               assert data['status']=='PASS' and data['errors']==[], data
               assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
           PY
+      - name: Test T034 color equivalence admission
+        run: node --test scripts/p20/test_t034_visual_probe.mjs
       - name: Record exact-head browser authority
         run: |
           set -euo pipefail

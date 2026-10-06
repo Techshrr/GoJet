@@ -3,6 +3,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
+// CSS minifiers may shorten hex colors without changing their value.
+export function canonicalColor(value) {
+  const color = value.trim().toLowerCase();
+  return /^#[0-9a-f]{3}$/.test(color) ? '#' + [...color.slice(1)].map(c => c + c).join('') : color;
+}
 const sampled = new Set();
 export async function visualProbe(page, node, surface) {
   const key = `${node}-${surface}`;
@@ -38,6 +43,15 @@ export async function visualProbe(page, node, surface) {
       await page.setViewportSize(canonical(size));
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      // Sample the settled state, after bounded canonical feedback transitions.
+      // Persistent/repeating motion remains observable and fails below.
+      const settleMs = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        const ms = name => { const value = style.getPropertyValue(name).trim(); return value.endsWith('ms') ? parseFloat(value) : parseFloat(value) * 1000; };
+        return Math.max(ms('--gojet-motion-duration-feedback') || 0, ms('--gojet-motion-duration-reduced') || 0);
+      });
+      if (!Number.isFinite(settleMs) || settleMs > 1000) throw new Error('Invalid canonical motion duration');
+      await page.waitForTimeout(settleMs);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const observation = await page.evaluate(names => {
         const style = getComputedStyle(document.documentElement);
@@ -54,7 +68,7 @@ export async function visualProbe(page, node, surface) {
           svg_icons: [...document.querySelectorAll('svg')].filter(visible).map(icon => ({view_box: icon.getAttribute('viewBox'), hidden: icon.getAttribute('aria-hidden'), role: icon.getAttribute('role')})),
         };
       }, names);
-      const checks = { canonical_tokens: names.every(name => observation.tokens[name] === expected[theme][name]),
+      const checks = { canonical_tokens: names.every(name => canonicalColor(observation.tokens[name]) === canonicalColor(expected[theme][name])),
         reduced_motion: observation.reduced_motion && observation.active_animations === 0,
         no_overflow: !observation.overflow, images_loaded: observation.broken_images === 0,
         no_placeholder_elements: observation.placeholder_elements === 0 };

@@ -1,0 +1,13 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--gojet-surface-canvas); color: var(--gojet-text-primary); }
+body { margin: 0; padding: var(--gojet-space-4); font-family: var(--gojet-font-family-latin), var(--gojet-font-family-cjk), sans-serif; font-size: var(--gojet-type-product-body-size); line-height: var(--gojet-type-product-body-line-height); overflow-wrap: anywhere; }
+main { max-inline-size: var(--gojet-content-prose-max); margin-inline: auto; padding: var(--gojet-space-6); background: var(--gojet-surface-default); border: var(--gojet-border-width-default) solid var(--gojet-border-default); border-radius: var(--gojet-radius-lg); }
+h1 { font-size: var(--gojet-type-product-page-title-size); line-height: var(--gojet-type-product-page-title-line-height); }
+h2 { font-size: var(--gojet-type-product-section-title-size); line-height: var(--gojet-type-product-section-title-line-height); }
+pre { max-inline-size: 100%; padding: var(--gojet-space-4); background: var(--gojet-surface-muted); border-radius: var(--gojet-radius-md); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: var(--gojet-font-family-mono); }
+form { display: grid; gap: var(--gojet-space-2); justify-items: start; }
+input, button { max-inline-size: 100%; min-block-size: var(--gojet-control-hit-minimum); padding: var(--gojet-space-2) var(--gojet-space-4); border: var(--gojet-border-width-default) solid var(--gojet-border-default); border-radius: var(--gojet-radius-md); font: inherit; }
+input { background: var(--gojet-surface-default); color: var(--gojet-text-primary); }
+button { background: var(--gojet-action-primary); color: var(--gojet-action-on-primary); cursor: pointer; }
+a { color: var(--gojet-text-link); text-underline-offset: var(--gojet-focus-ring-offset); }
+:focus-visible { outline: var(--gojet-focus-ring-width) solid var(--gojet-focus-ring); outline-offset: var(--gojet-focus-ring-offset); }
