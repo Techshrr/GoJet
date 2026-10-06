@@ -6,7 +6,10 @@ import time
 from pathlib import Path, PurePosixPath
 from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest, select_artifact
 
+from t034_foundation import paths as foundation_paths
+
 PRODUCERS = {
+    'foundation': ('p03-design-system.yml', 'gojet-v10-p03-', 'P03', foundation_paths()),
     'website': ('p19-website-browser.yml', 'gojet-v10-p19-browser-', 'P19', ['website']),
     'docs': ('p18-docs-quality.yml', 'gojet-v10-p18-docs-quality-', 'P18', ['docs']),
     'auth': ('p15-browser.yml', 'p15-t024-auth-browser-', 'P15', ['auth']),
@@ -61,6 +64,10 @@ def collect(root, head):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
             manifest['files'][path] = {'sha256': digest(content), 'producer': key}
+        if key == 'foundation':
+            for path in paths:
+                save(key + '/' + path, member(archive, node, path))
+            continue
         for surface in paths:
             save(key + '/' + surface + '.json', member(archive, node, 't034/' + surface + '.json'))
             for size in ('desktop', 'mobile'):

@@ -47,6 +47,9 @@ def inspect(root, head):
     files = manifest['files']
     expected = set()
     for key, (_, _, _, surfaces) in PRODUCERS.items():
+        if key == 'foundation':
+            expected.update(key + '/' + path for path in surfaces)
+            continue
         for surface in surfaces:
             expected.add(f'{key}/{surface}.json')
             expected.update(f'{key}/{surface}-{size}-{theme}.png' for size in ('desktop', 'mobile') for theme in ('light', 'dark'))
@@ -59,12 +62,15 @@ def inspect(root, head):
     viewports = {size: dict(zip(('width', 'height'), map(int, tokens['viewport.' + size]['dimensions'].split('×')))) for size in ('desktop', 'mobile')}
     surfaces = {}
     for key, (_, _, node, names) in PRODUCERS.items():
+        if key == 'foundation': continue
         for name in names:
             data = json.loads((directory / key / (name + '.json')).read_bytes())
             captures = {p.name: p.read_bytes() for p in (directory / key).glob(name + '-*.png')}
             surfaces[name] = inspect_surface(data, name, node, head, css, viewports, captures)
-    return {'surfaces': surfaces, 'observations': sum(surfaces.values()), 'formal_p20_t034_claim': False,
-            'remaining_authority': ['Design System state/icon/image coverage', 'formal predecessor and design-system admission'],
+    from t034_foundation import inspect as inspect_foundation
+    foundation = inspect_foundation(directory / 'foundation', root, head)
+    return {'foundation': foundation, 'surfaces': surfaces, 'observations': sum(surfaces.values()), 'formal_p20_t034_claim': False,
+            'remaining_authority': ['native state/icon/image coverage', 'formal predecessor admission'],
             'collection_sha256': digest((directory / 'collection.json').read_bytes())}
 
 
