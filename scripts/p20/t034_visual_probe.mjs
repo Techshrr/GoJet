@@ -60,7 +60,12 @@ export async function visualProbe(page, node, surface) {
           theme: document.documentElement.getAttribute('data-theme'),
           reduced_motion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           tokens: Object.fromEntries(names.map(name => [name, style.getPropertyValue(name).trim().toLowerCase()])),
-          body: { background: getComputedStyle(document.body).backgroundColor, color: getComputedStyle(document.body).color },
+          body: { background: getComputedStyle(document.body).backgroundColor, color: getComputedStyle(document.body).color,
+            margin: getComputedStyle(document.body).margin },
+          document_canvas: style.backgroundColor,
+          native_color_scheme: style.colorScheme,
+          browser_default_links: [...document.querySelectorAll('a[href]')].filter(visible).filter(link =>
+            ['rgb(0, 0, 238)', 'rgb(85, 26, 139)'].includes(getComputedStyle(link).color)).length,
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
           broken_images: [...document.images].filter(image => visible(image) && (!image.complete || image.naturalWidth === 0)).length,
           placeholder_elements: [...document.querySelectorAll('[data-placeholder], img[src*="placeholder"]')].filter(visible).length,
@@ -70,6 +75,8 @@ export async function visualProbe(page, node, surface) {
       }, names);
       const checks = { canonical_tokens: names.every(name => canonicalColor(observation.tokens[name]) === canonicalColor(expected[theme][name])),
         reduced_motion: observation.reduced_motion && observation.active_animations === 0,
+        document_margin_reset: observation.body.margin === '0px',
+        themed_links: observation.browser_default_links === 0,
         no_overflow: !observation.overflow, images_loaded: observation.broken_images === 0,
         no_placeholder_elements: observation.placeholder_elements === 0 };
       const file = `${surface}-${size}-${theme}.png`;
