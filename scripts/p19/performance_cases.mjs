@@ -61,7 +61,12 @@ async function t028() {
     window.__p19Perf = { lcp: 0, cls: 0, events: [] };
     if (PerformanceObserver.supportedEntryTypes.includes('largest-contentful-paint')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) window.__p19Perf.lcp = Math.max(window.__p19Perf.lcp, entry.startTime || entry.renderTime || entry.loadTime || 0); }).observe({ type: 'largest-contentful-paint', buffered: true });
     if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__p19Perf.cls += entry.value; }).observe({ type: 'layout-shift', buffered: true });
-    if (PerformanceObserver.supportedEntryTypes.includes('event')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (entry.interactionId) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId }); }).observe({ type: 'event', durationThreshold: 0 });
+    // Event Timing clamps durationThreshold to 16ms. The first-input entry is
+    // reported even for faster trusted interactions (W3C Event Timing §1.3).
+    // Retain actual durations; never synthesize a zero or slow down the page.
+    const record = list => { for (const entry of list.getEntries()) if (entry.interactionId > 0) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId, entryType: entry.entryType }); };
+    if (PerformanceObserver.supportedEntryTypes.includes('event')) new PerformanceObserver(record).observe({ type: 'event', durationThreshold: 16, buffered: true });
+    if (PerformanceObserver.supportedEntryTypes.includes('first-input')) new PerformanceObserver(record).observe({ type: 'first-input', buffered: true });
   });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);

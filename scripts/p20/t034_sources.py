@@ -9,6 +9,7 @@ from t028_sources import download_archive, verified_archive, member, select_run,
 from t034_foundation import paths as foundation_paths
 
 PRODUCERS = {
+    'prerequisite': ('p20-t033-consistency.yml', 'p20-t033-formal-', 'P20', None),
     'foundation': ('p03-design-system.yml', 'gojet-v10-p03-', 'P03', foundation_paths()),
     'website': ('p19-website-browser.yml', 'gojet-v10-p19-browser-', 'P19', ['website']),
     'docs': ('p18-docs-quality.yml', 'gojet-v10-p18-docs-quality-', 'P18', ['docs']),
@@ -64,6 +65,14 @@ def collect(root, head):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
             manifest['files'][path] = {'sha256': digest(content), 'producer': key}
+        if key == 'prerequisite':
+            for entry in archive.infolist():
+                path = PurePosixPath(entry.filename)
+                require(not path.is_absolute() and '..' not in path.parts and entry.file_size <= 32 * 1024 * 1024, 'unsafe T033 member')
+                if entry.is_dir(): continue
+                require(entry.filename == 'consistency/P20-T033.json' or entry.filename.startswith('runtime/t033-sources/'), 'unexpected T033 member')
+                save('prerequisite/artifacts/v10/P20/' + entry.filename, archive.read(entry))
+            continue
         if key == 'foundation':
             for path in paths:
                 save(key + '/' + path, member(archive, node, path))

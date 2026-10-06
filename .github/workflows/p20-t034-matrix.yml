@@ -19,15 +19,19 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Test rejection of invalid visual observations
-        run: python3 -m unittest discover -s scripts/p20 -p 'test_t034_matrix.py'
+      - name: Test rejection of invalid visual observations and predecessor parity
+        run: |
+          python3 -m unittest discover -s scripts/p20 -p 'test_t034*.py'
+          python3 -m unittest discover -s scripts/p20 -p 'test_t033*.py'
       - name: Collect same-head native producer observations and captures
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/p20/t034_sources.py
       - name: Independently verify six-surface native matrix
         run: python3 scripts/p20/t034_matrix.py
-      - name: Preserve raw matrix evidence (not formal T034 closure)
+      - name: Emit T034 formal result from native evidence and T033 authority
+        run: python3 scripts/p20/browser_matrix.py --case T034
+      - name: Preserve formal result and recursively verifiable raw evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -35,5 +39,6 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: |
+            artifacts/v10/P20/browser/P20-T034.json
             artifacts/v10/P20/runtime/t034-sources/
             artifacts/v10/P20/runtime/t034-matrix/

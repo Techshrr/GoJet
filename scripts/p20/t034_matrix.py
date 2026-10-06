@@ -91,6 +91,14 @@ def inspect(root, head):
     files = manifest['files']
     expected = set()
     for key, (_, _, _, surfaces) in PRODUCERS.items():
+        if key == 'prerequisite':
+            prefix = 'prerequisite/artifacts/v10/P20/'
+            prerequisite_files = {path for path in files if path.startswith(prefix)}
+            require(prefix + 'consistency/P20-T033.json' in prerequisite_files, 'missing T033 formal result')
+            require(all(path == prefix + 'consistency/P20-T033.json' or path.startswith(prefix + 'runtime/t033-sources/')
+                        for path in prerequisite_files), 'unexpected prerequisite evidence')
+            expected.update(prerequisite_files)
+            continue
         if key == 'foundation':
             expected.update(key + '/' + path for path in surfaces)
             continue
@@ -100,21 +108,29 @@ def inspect(root, head):
     require(set(files) == expected, 'unexpected or missing evidence file')
     require(expected == {str(p.relative_to(directory)) for p in directory.rglob('*') if p.is_file() and p.name != 'collection.json'}, 'untracked raw evidence')
     for path, row in files.items():
+        require(not Path(path).is_absolute() and '..' not in Path(path).parts, 'unsafe evidence member')
         require(row['producer'] == path.split('/')[0] and digest((directory / path).read_bytes()) == row['sha256'], 'member digest mismatch')
     css = (root / 'frontend/packages/tokens/generated/tokens.css').read_text()
     tokens = json.loads((root / 'frontend/packages/tokens/generated/design-variables.json').read_text())['tokens']['composite']
     viewports = {size: dict(zip(('width', 'height'), map(int, tokens['viewport.' + size]['dimensions'].split('×')))) for size in ('desktop', 'mobile')}
     surfaces = {}
     for key, (_, _, node, names) in PRODUCERS.items():
-        if key == 'foundation': continue
+        if key in ('foundation', 'prerequisite'): continue
         for name in names:
             data = json.loads((directory / key / (name + '.json')).read_bytes())
             captures = {p.name: p.read_bytes() for p in (directory / key).glob(name + '-*.png')}
             surfaces[name] = inspect_surface(data, name, node, head, css, viewports, captures)
     from t034_foundation import inspect as inspect_foundation
     foundation = inspect_foundation(directory / 'foundation', root, head)
+    from t033_case import inspect as inspect_t033
+    prerequisite = directory / 'prerequisite'
+    formal = json.loads((prerequisite / 'artifacts/v10/P20/consistency/P20-T033.json').read_bytes())
+    require(formal.get('case') == 'P20-T033' and formal.get('status') == 'PASS' and formal.get('errors') == []
+            and formal.get('implementation_commit') == head
+            and formal['details'] == inspect_t033(prerequisite, head, source_root=root), 'invalid T033 prerequisite')
     return {'foundation': foundation, 'surfaces': surfaces, 'observations': sum(surfaces.values()), 'formal_p20_t034_claim': False,
-            'remaining_authority': ['native state/icon/image coverage', 'formal predecessor admission'],
+            'prerequisite': {'case': 'P20-T033', 'head': head, 'revalidated': True},
+            'native_state_coverage': sorted(AUTH_STATES), 'native_image_inventory_checked': True,
             'collection_sha256': digest((directory / 'collection.json').read_bytes())}
 
 

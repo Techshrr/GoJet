@@ -53,7 +53,7 @@ def inspect_locales(graph, canonical, links, articles, searches, head):
             'docs_navigation_links_checked': article_links, 'invented_locale_targets': 0}
 
 
-def inspect(root, head):
+def inspect(root, head, source_root=None):
     directory = root / 'artifacts/v10/P20/runtime/t033-sources'
     manifest = json.loads((directory / 'collection.json').read_bytes())
     require(manifest.get('implementation_commit') == head and set(manifest['artifacts']) == set(PRODUCERS), 'mixed/missing locale collection')
@@ -70,7 +70,7 @@ def inspect(root, head):
     prerequisite = directory / 'prerequisite'
     formal = json.loads((prerequisite / 'artifacts/v10/P20/consistency/P20-T032.json').read_bytes())
     require(formal.get('case') == 'P20-T032' and formal.get('status') == 'PASS' and formal.get('errors') == []
-            and formal.get('implementation_commit') == head and formal['details'] == inspect_t032(prerequisite, head, source_root=root), 'invalid T032 prerequisite')
+            and formal.get('implementation_commit') == head and formal['details'] == inspect_t032(prerequisite, head, source_root=source_root or root), 'invalid T032 prerequisite')
     seo = prerequisite / 'artifacts/v10/P20/runtime/t032-sources'
     navigation = seo / 'prerequisite/artifacts/v10/P20/runtime/t031-sources'
     def read(path): return json.loads(path.read_bytes())
