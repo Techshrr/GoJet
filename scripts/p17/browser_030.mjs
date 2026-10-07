@@ -109,9 +109,21 @@ export async function run(browser) {
   await waitState(page, 'admin-roles', 'role-list');
   details.states.push('role-list');
   await page.getByLabel('Role name').fill('P17 Browser Duplicate Probe');
-  await page.getByRole('button', { name: 'Create role' }).click();
+  const rolePost = (response) => new URL(response.url()).pathname === '/api/admin/roles' && response.request().method() === 'POST';
+  const [createdRole] = await Promise.all([
+    page.waitForResponse(rolePost),
+    page.getByRole('button', { name: 'Create role' }).click(),
+  ]);
+  assert(createdRole.status() === 201, `initial role creation returned ${createdRole.status()}`);
+  // The old role-list state is already visible while POST is in flight.
+  // Wait for the created role to appear after load() before probing conflict.
+  await page.locator('[data-page="admin-roles"] .p17-list strong').filter({ hasText: 'P17 Browser Duplicate Probe' }).waitFor();
   await waitState(page, 'admin-roles', 'role-list');
-  await page.getByRole('button', { name: 'Create role' }).click();
+  const [duplicateRole] = await Promise.all([
+    page.waitForResponse(rolePost),
+    page.getByRole('button', { name: 'Create role' }).click(),
+  ]);
+  assert(duplicateRole.status() === 409, `duplicate role creation returned ${duplicateRole.status()}`);
   await waitState(page, 'admin-roles', 'permission-conflict');
   details.states.push('permission-conflict');
   checks.permission_conflict_server_side = true;

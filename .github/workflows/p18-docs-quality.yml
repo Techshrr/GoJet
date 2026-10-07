@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
       - 'frontend/apps/docs/**'
       - 'frontend/packages/tokens/**'
       - 'deploy/nginx/docs-p18.conf'
@@ -171,12 +172,14 @@ jobs:
           cp /tmp/p18-build-digests.txt artifacts/v10/P18/quality-authority/static-build-digests.txt
 
       - name: Upload exact-head P18 quality evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gojet-v10-p18-docs-quality-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P18/t034/
             artifacts/v10/P18/browser/P18-T019.json
             artifacts/v10/P18/browser/P18-T020.json
             artifacts/v10/P18/browser/P18-T021.json

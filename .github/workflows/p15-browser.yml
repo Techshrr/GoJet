@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
       - 'go.mod'
       - 'go.sum'
       - 'package.json'
@@ -64,6 +65,8 @@ jobs:
       GOJET_PLATFORMAPI_PROXY: http://127.0.0.1:18081
       GOJET_TEST_AUTH_ENABLED: '1'
       GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_RATE_LIMIT: '100'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
       GOJET_AUTH_GRANT_KEY_ID: p15-browser-grant-v1
       GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
       GOJET_OAUTH_KEY_ID: p15-browser-oauth-v1
@@ -147,7 +150,7 @@ jobs:
           set -euo pipefail
           go build -trimpath -o /tmp/gojet-p15-browser-platformapi ./services/platformapi/cmd/server
           sha256sum /tmp/gojet-p15-browser-platformapi > artifacts/v10/P15/runtime/browser-024/native-platformapi.sha256
-          pnpm --filter @gojet/site exec vite build --outDir dist-p15-auth
+          VITE_GOJET_TURNSTILE_SITE_KEY=1x00000000000000000000AA VITE_GOJET_TEST_SUPPORT_TURNSTILE_ENABLED=0 pnpm --filter @gojet/site exec vite build --outDir dist-p15-auth
 
       - name: Start native API and built Website Auth surface
         run: |
@@ -170,6 +173,14 @@ jobs:
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
           GITHUB_SHA="$exact_head" node scripts/p15/browser.mjs --case P15-T024
+
+      - name: Verify T025 callback UI branches with explicit protocol fixtures
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          GITHUB_SHA="$exact_head" node scripts/p20/oauth-callback-browser.mjs
+          GITHUB_SHA="$exact_head" node scripts/p20/auth-turnstile-browser.mjs
+          GITHUB_SHA="$exact_head" node scripts/p20/support-turnstile-browser.mjs
 
       - name: Verify exact-head P15-T024 evidence
         if: always()
@@ -238,6 +249,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P15/t034/
+            artifacts/v10/P20/runtime/t025/oauth-callback-browser.json
+            artifacts/v10/P20/runtime/t025/auth-turnstile-browser.json
+            artifacts/v10/P20/runtime/t025/support-turnstile-browser.json
             artifacts/v10/P15/browser/P15-T024.json
             artifacts/v10/P15/captures/P15-T024-*.png
             artifacts/v10/P15/runtime/browser-024/native-platformapi.sha256

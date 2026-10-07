@@ -215,7 +215,7 @@ jobs:
                   dispatched.add(name)
 
               print(f'Waiting exact-head matrix: missing={missing} pending={pending}')
-              time.sleep(10)
+              time.sleep(60)
           else:
               raise SystemExit(f'timed out waiting for P00-P12 affected workflows on {sha}')
           PY

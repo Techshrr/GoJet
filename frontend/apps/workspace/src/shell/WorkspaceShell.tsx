@@ -9,7 +9,7 @@ const groups = [
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains'], ['Organization', '/app/organization'], ['Campaigns', '/app/campaigns'], ['Tags', '/app/tags']]],
   ['DEVELOPER', [['API keys', '/app/api-keys'], ['Webhooks', '/app/webhooks']]],
-  ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings']]],
+  ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings/profile']]],
 ] as const;
 
 type OverlayName = 'create' | 'command' | 'notifications';

@@ -3,9 +3,10 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GoJetApiError } from '@gojet/api-client';
 import type { SupportTicketStatus } from '@gojet/api-client';
-import { Button, Card, EmptyState, InlineMessage } from '@gojet/ui';
+import { Button, Card, EmptyState, InlineMessage, useTurnstile } from '@gojet/ui';
 import { WorkspaceShell } from '../shell/WorkspaceShell';
-import { createSupportClient, readSupportRuntime } from './runtime';
+import { createSupportClient } from './runtime';
+import { useSupportSession } from './session';
 
 function statusLabel(status: SupportTicketStatus): string {
   switch (status) {
@@ -26,7 +27,7 @@ function supportError(error: unknown): { variant: 'warning' | 'danger'; text: st
 }
 
 export function SupportListPage() {
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const query = useQuery({
     queryKey: ['p14-support-tickets', runtime?.workspaceId, runtime?.actorId],
@@ -44,6 +45,7 @@ export function SupportListPage() {
           <div><p className="support-eyebrow">SUPPORT</p><h1>Support tickets</h1><p>Tickets are scoped to your current Workspace identity. Navigation never replaces server authorization.</p></div>
           <Link to="/app/support/new" className="support-primary-link">New ticket</Link>
         </header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable. Support data is not loaded from local state.</InlineMessage> : null}
         {query.isPending && runtime ? <p role="status">Loading support tickets…</p> : null}
         {query.isError ? <InlineMessage variant="danger">Support tickets could not be loaded. No stale local list is presented as current.</InlineMessage> : null}
@@ -60,7 +62,7 @@ export function SupportListPage() {
 }
 
 export function SupportNewPage() {
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const queryClient = useQueryClient();
   const requestedCategory = useMemo(() => new URLSearchParams(window.location.search).get('category') ?? '', []);
@@ -68,27 +70,31 @@ export function SupportNewPage() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
+  const verification = useTurnstile({ siteKey: String(import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY ?? '').trim(), action: 'ticket-create', testMode: runtime?.testAuthority === true, testToken: runtime?.turnstileToken ?? '' });
   const mutation = useMutation({
     networkMode: 'always',
     mutationFn: async () => {
       if (!runtime || !client) throw new Error('Support runtime unavailable');
-      if (!runtime.turnstileToken) throw new GoJetApiError(400, 'turnstile_rejected', 'Verification is required.');
-      return client.create({ workspace_id: runtime.workspaceId, category, subject: subject.trim(), message: message.trim(), turnstile_token: runtime.turnstileToken });
+      const turnstileToken = verification.takeToken();
+      if (!turnstileToken) throw new GoJetApiError(400, 'turnstile_rejected', 'Verification is required.');
+      try { return await client.create({ workspace_id: runtime.workspaceId, category, subject: subject.trim(), message: message.trim(), turnstile_token: turnstileToken }); }
+      finally { verification.reset(); }
     },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['p14-support-tickets', runtime?.workspaceId, runtime?.actorId] }); },
   });
   const error = mutation.isError ? supportError(mutation.error) : null;
   const blockedAttachment = attachmentName !== '';
-  const canSubmit = Boolean(runtime && client && subject.trim() && message.trim() && runtime.turnstileToken && !blockedAttachment && !mutation.isPending);
-  const state = mutation.isSuccess ? 'success' : error?.state ?? (mutation.isPending ? 'submitting' : blockedAttachment ? 'attachment' : runtime?.turnstileToken ? 'input' : 'Turnstile-required');
+  const canSubmit = Boolean(runtime && client && subject.trim() && message.trim() && verification.token && !blockedAttachment && !mutation.isPending);
+  const state = mutation.isSuccess ? 'success' : error?.state ?? (mutation.isPending ? 'submitting' : blockedAttachment ? 'attachment' : verification.token ? 'input' : 'Turnstile-required');
 
   return (
     <WorkspaceShell sectionLabel="New support ticket">
       <section className="support-page" data-page="support-new" data-state={state}>
         <header className="support-page-header"><div><p className="support-eyebrow">SUPPORT</p><h1>New ticket</h1><p>Ticket creation is protected by server-side verification, rate limiting and idempotency.</p></div><Link to="/app/support">Back to support</Link></header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable. Submission is disabled.</InlineMessage> : null}
         {category === 'custom-domain-access' ? <InlineMessage variant="info">This creates a support request only. It cannot grant custom-domain entitlement, ownership, DNS, HTTPS or risk authority.</InlineMessage> : null}
-        {!runtime?.turnstileToken ? <InlineMessage variant="warning">Verification is required before this ticket can be submitted.</InlineMessage> : null}
+        {!verification.token ? <InlineMessage variant="warning">Verification is required before this ticket can be submitted.</InlineMessage> : null}
         {blockedAttachment ? <InlineMessage variant="warning">Attachment “{attachmentName}” is held locally and has not been uploaded. P14 does not invent an unapproved attachment HTTP route; submission remains blocked until bytes can enter the inherited P09 quarantine/scan authority.</InlineMessage> : null}
         {error ? <InlineMessage variant={error.variant}>{error.text}</InlineMessage> : null}
         {mutation.isSuccess ? <InlineMessage variant="success">Ticket created successfully. <Link to="/app/support/$ticketId" params={{ ticketId: mutation.data.ticket.id }}>Open ticket</Link></InlineMessage> : null}
@@ -99,6 +105,7 @@ export function SupportNewPage() {
             <label>Message<textarea aria-label="Support message" value={message} onChange={(event) => setMessage(event.currentTarget.value)} rows={8} required disabled={mutation.isPending} /></label>
             <label>Attachment<input aria-label="Support attachment" type="file" accept=".txt,text/plain" onChange={(event) => setAttachmentName(event.currentTarget.files?.[0]?.name ?? '')} disabled={mutation.isPending} /></label>
             {blockedAttachment ? <Button type="button" variant="ghost" onClick={() => setAttachmentName('')}>Remove attachment selection</Button> : null}
+            {verification.widget}
             <Button type="submit" disabled={!canSubmit}>{mutation.isPending ? 'Submitting…' : 'Submit ticket'}</Button>
           </Card>
         </form>
@@ -109,7 +116,7 @@ export function SupportNewPage() {
 
 export function SupportThreadPage() {
   const { ticketId } = useParams({ from: '/app/support/$ticketId' });
-  const runtime = useMemo(() => readSupportRuntime(), []);
+  const { runtime, selector } = useSupportSession();
   const client = useMemo(() => runtime ? createSupportClient(runtime) : null, [runtime]);
   const queryClient = useQueryClient();
   const [reply, setReply] = useState('');
@@ -147,6 +154,7 @@ export function SupportThreadPage() {
     <WorkspaceShell sectionLabel="Support ticket">
       <section className="support-page" data-page="support-thread" data-state={state}>
         <header className="support-page-header"><div><p className="support-eyebrow">SUPPORT THREAD</p><h1>{ticket?.subject ?? 'Support ticket'}</h1>{ticket ? <p><strong>{statusLabel(ticket.status)}</strong> · {ticket.category}</p> : <p>Ticket access is re-authorized on every direct load.</p>}</div><Link to="/app/support">Back to support</Link></header>
+        {selector}
         {!runtime ? <InlineMessage variant="danger">Authoritative Workspace identity is unavailable.</InlineMessage> : null}
         {query.isPending && runtime ? <p role="status">Loading support thread…</p> : null}
         {queryError ? <InlineMessage variant="danger">{queryError.text}</InlineMessage> : null}

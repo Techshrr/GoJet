@@ -18,8 +18,12 @@ const (
 	ProviderQQ       = "qq"
 	ProviderWeChat   = "wechat"
 	ProviderRainbow  = "rainbow"
+	ProviderX        = "x"
+	ProviderLinkedIn = "linkedin"
 )
 
+// Providers preserves the historical P15 inventory for its compatibility API.
+// Production discovery uses RuntimeProviders, including optional extensions.
 var Providers = [...]string{
 	ProviderGoogle,
 	ProviderFacebook,
@@ -27,6 +31,10 @@ var Providers = [...]string{
 	ProviderQQ,
 	ProviderWeChat,
 	ProviderRainbow,
+}
+
+func RuntimeProviders() []string {
+	return append(append([]string{}, Providers[:]...), ProviderX, ProviderLinkedIn)
 }
 
 type User struct {

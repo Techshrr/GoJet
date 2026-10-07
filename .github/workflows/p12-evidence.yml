@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'go.mod'
       - 'go.sum'
       - 'internal/workspace/**'
@@ -32,7 +34,7 @@ jobs:
   coherence:
     name: P12 exact-head evidence coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 110
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -61,6 +63,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.ci.actions import github_json
           required = {
             'P12 Workspace Organization Contract': lambda sha: f'p12-workspace-organization-contract-{sha}',
             'P12 Real Workspace Organization Integration': lambda sha: f'gojet-v10-p12-integration-{sha}',
@@ -76,13 +79,11 @@ jobs:
             'X-GitHub-Api-Version': '2022-11-28',
           }
           def get(url):
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as response:
-              return json.load(response)
-          deadline = time.time() + 35 * 60
+            return github_json(url, headers)
+          deadline = time.time() + 90 * 60
           while time.time() < deadline:
-            query = urllib.parse.urlencode({'head_sha': sha, 'per_page': 100})
-            runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}')['workflow_runs']
+            from scripts.ci.actions import workflow_runs
+            runs = workflow_runs(get, repo, sha)
             latest = {}
             for run in runs:
               name = run.get('name')
@@ -135,7 +136,7 @@ jobs:
               print(f'P12 producers/artifacts green for {sha}')
               break
             print(f'Waiting P12 producers missing={missing} pending={pending}')
-            time.sleep(10)
+            time.sleep(60)
           else:
             raise SystemExit(f'timed out waiting for P12 producers on {sha}')
           PY
@@ -233,7 +234,12 @@ jobs:
             cp "$source" "artifacts/v10/P12/browser/P12-T${number}.json"
           done
           find /tmp/p12-browser -type f -name 'P12-T*.png' -print -exec cp '{}' artifacts/v10/P12/captures/ ';'
-          if [ -d /tmp/p12-browser/runtime ]; then cp -a /tmp/p12-browser/runtime/. artifacts/v10/P12/runtime/; fi
+          # The shared browser archive now includes P20, so upload-artifact
+          # roots it at v10 instead of P12. Accept both archive layouts.
+          browser_root=/tmp/p12-browser
+          if [ -d "$browser_root/P12" ]; then browser_root="$browser_root/P12"; fi
+          test -d "$browser_root/runtime"
+          cp -a "$browser_root/runtime/." artifacts/v10/P12/runtime/
 
           test "$(find artifacts/v10/P12/api -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 11
           test "$(find artifacts/v10/P12/rbac -maxdepth 1 -type f -name 'P12-T*.json' | wc -l)" -eq 5

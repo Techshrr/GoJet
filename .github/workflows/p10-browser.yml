@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'internal/publicstyle/**'
+      - 'scripts/p20/t034_visual_probe.mjs'
       - 'go.mod'
       - 'go.sum'
       - 'internal/text/**'
@@ -121,7 +123,7 @@ jobs:
           node --check scripts/p10/browser.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
-          go test ./internal/text ./internal/links ./services/platformapi/cmd/server
+          go test ./internal/publicstyle ./internal/text ./internal/links ./services/platformapi/cmd/server
           go vet ./internal/text ./internal/links ./services/platformapi/cmd/server
 
       - name: Apply P05 through P10 migrations
@@ -225,6 +227,7 @@ jobs:
         with:
           name: gojet-v10-p10-browser-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            artifacts/v10/P10/t034/
             artifacts/v10/P10/browser/P10-T016.json
             artifacts/v10/P10/browser/P10-T017.json
             artifacts/v10/P10/browser/P10-T018.json

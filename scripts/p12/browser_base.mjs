@@ -300,8 +300,12 @@ async function caseT021(browser) {
   await waitState(opened.page, '[data-page="workspace-organization"]', 'edit');
   await opened.page.getByLabel('Organization name').fill('P12 Organization Updated');
   await opened.page.getByLabel('Organization description').fill('Browser-governed organization metadata');
-  await opened.page.getByRole('button', { name: 'Save organization' }).click();
-  await opened.page.waitForFunction(() => document.querySelector('[data-page="workspace-organization"]')?.getAttribute('data-state') === 'edit');
+  const [saved] = await Promise.all([
+    opened.page.waitForResponse((response) => new URL(response.url()).pathname === `/api/workspaces/${WS}/organization` && response.request().method() === 'PATCH'),
+    opened.page.getByRole('button', { name: 'Save organization' }).click(),
+  ]);
+  assert(saved.status() === 200, `organization update HTTP status ${saved.status()}`);
+  await saved.finished();
   assert(mysqlScalar(`SELECT CONCAT(name,'|',version) FROM workspace_organizations WHERE workspace_id='${WS}'`) === 'P12 Organization Updated|2', 'organization update not persisted');
   assertDiagnostics(opened.report, 'T021 organization');
   await opened.context.close();

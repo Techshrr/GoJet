@@ -1,6 +1,19 @@
 from integration_common import *
 from integration_cases_a import clean_with_real
 
+def assert_uncertain_distribution_denied(rid, row):
+    # Probe the real publish API and public byte endpoint for each scanner
+    # failure, rather than inferring distribution safety from database state.
+    status, _, _, _ = action("ws-a", rid, "publish")
+    expect(status == 409, f"uncertain file publish returned {status}")
+    current = db_resource(rid)
+    expect(current["published"] == 0 and current["scan_state"] == "scan_error", current)
+    public_status, _, body = public_binary(row["public_slug"])
+    expect(public_status == 403 and BENIGN not in body,
+           f"uncertain file public response failed closed check: {public_status}")
+    return {"publish_status": status, "public_status": public_status,
+            "published": current["published"], "public_content_leaked": False}
+
 def case_t007():
     reset_case()
     status, _, _, created = upload("ws-a", "down.txt", "text/plain", BENIGN)
@@ -11,7 +24,8 @@ def case_t007():
     row, scan = db_resource(rid), db_scan(rid)
     expect(row["scan_state"] == "scan_error" and row["published"] == 0, row)
     expect(scan["error_code"] == "clamav_unavailable", scan)
-    return {"scan_state": row["scan_state"], "error_code": scan["error_code"], "published": row["published"]}
+    return {"scan_state": row["scan_state"], "error_code": scan["error_code"],
+            **assert_uncertain_distribution_denied(rid, row)}
 
 def case_t008():
     reset_case()
@@ -25,7 +39,8 @@ def case_t008():
     expect(scan["error_code"] in {"scan_read_failed", "scan_write_failed"}, scan)
     pstatus, _, pbody = public_binary(row["public_slug"])
     expect(pstatus == 403 and BENIGN not in pbody, f"timeout leaked bytes {pstatus}")
-    return {"scan_state": row["scan_state"], "error_code": scan["error_code"], "public_status": pstatus}
+    return {"scan_state": row["scan_state"], "error_code": scan["error_code"],
+            **assert_uncertain_distribution_denied(rid, row)}
 
 def case_t009():
     reset_case()
@@ -36,7 +51,8 @@ def case_t009():
         run_worker(address, signature_age="1h", scan_timeout="1s")
     row, scan = db_resource(rid), db_scan(rid)
     expect(row["scan_state"] == "scan_error" and scan["error_code"] == "signature_stale", (row, scan))
-    return {"scan_state": row["scan_state"], "error_code": scan["error_code"], "signature_version": scan["signature_version"]}
+    return {"scan_state": row["scan_state"], "error_code": scan["error_code"], "signature_version": scan["signature_version"],
+            **assert_uncertain_distribution_denied(rid, row)}
 
 def case_t010():
     reset_case()
@@ -47,7 +63,8 @@ def case_t010():
         run_worker(address, scan_timeout="1s")
     row, scan = db_resource(rid), db_scan(rid)
     expect(row["scan_state"] == "scan_error" and scan["error_code"] == "indeterminate_response", (row, scan))
-    return {"scan_state": row["scan_state"], "error_code": scan["error_code"]}
+    return {"scan_state": row["scan_state"], "error_code": scan["error_code"],
+            **assert_uncertain_distribution_denied(rid, row)}
 
 def case_t011():
     reset_case()
@@ -93,4 +110,3 @@ def case_t012():
     scan = db_scan(rid)
     expect(scan["status"] == "clean", scan)
     return {"scan_attempt_count": 1, "concurrent_processing_count": 1, "final_scan_status": scan["status"]}
-

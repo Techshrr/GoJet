@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'go.mod'
       - 'go.sum'
       - 'package.json'
@@ -35,7 +37,7 @@ jobs:
   coherence:
     name: P13 exact-head evidence coherence
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 100
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -81,14 +83,13 @@ jobs:
           }
 
           def get(url):
-              request = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  return json.load(response)
+              from scripts.ci.actions import github_json
+              return github_json(url, headers)
 
-          deadline = time.time() + 35 * 60
+          deadline = time.time() + 90 * 60
           while time.time() < deadline:
-              query = urllib.parse.urlencode({'head_sha': sha, 'event': 'pull_request', 'per_page': 100})
-              runs = get(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs', [])
+              from scripts.ci.actions import workflow_runs
+              runs = workflow_runs(get, repo, sha, event='pull_request')
               latest = {}
               for run in runs:
                   name = run.get('name')
@@ -136,7 +137,7 @@ jobs:
                   print(f'P13 producers/artifacts green for {sha}')
                   break
               print(f'Waiting P13 producers missing={missing} pending={pending}')
-              time.sleep(10)
+              time.sleep(60)
           else:
               raise SystemExit(f'timed out waiting for P13 producers on {sha}')
           PY
@@ -248,6 +249,18 @@ jobs:
               assert value['id'] > 0 and value['digest'].startswith('sha256:') and value['size_in_bytes'] > 0, value
           print(f'P13-T026 exact-head coherence PASS on {head}')
           PY
+
+      - name: Verify P20 T028 entitlement safety section
+        run: python3 scripts/p20/t028_entitlement.py
+
+      - name: Upload P20 entitlement section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-entitlement-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-entitlement.json
 
       - name: Upload P13 coherence evidence
         if: always()

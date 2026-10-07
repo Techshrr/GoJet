@@ -37,10 +37,32 @@ export function clearP12WorkspaceSelection(): void {
 
 export function createP12Client(runtime: P12Runtime): GoJetWorkspaceClient {
   return new GoJetWorkspaceClient({
-    headers: () => ({
+    fetch: async (input, init) => {
+      const headers = new Headers(init?.headers);
+      if (!runtime.testAuthority && !['GET', 'HEAD', 'OPTIONS'].includes((init?.method ?? 'GET').toUpperCase())) {
+        const response = await fetch('/api/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Authenticated session unavailable');
+        const current = await response.json() as { user?: { id: string }; csrf_token?: string };
+        if (current.user?.id !== runtime.actorId || !current.csrf_token) throw new Error('Authenticated session changed');
+        headers.set('X-CSRF-Token', current.csrf_token);
+      }
+      return fetch(input, { ...init, headers, credentials: 'same-origin' });
+    },
+    headers: () => runtime.testAuthority ? ({
       'X-GoJet-Test-Actor': runtime.actorId,
       'X-GoJet-Test-Email': runtime.email,
       'X-GoJet-Test-Display-Name': runtime.displayName,
-    }),
+    }) : ({}),
   });
+}
+
+export async function loadP12Session(): Promise<P12Runtime> {
+  const response = await fetch('/api/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error('Authenticated session unavailable');
+  const current = await response.json() as { user?: { id: string; email: string; display_name: string } };
+  if (!current.user?.id) throw new Error('Invalid authenticated session');
+  let workspaceId = '';
+  try { workspaceId = window.sessionStorage.getItem(STORAGE_KEY)?.trim() ?? ''; } catch { /* storage unavailable */ }
+  return { actorId: current.user.id, email: current.user.email, displayName: current.user.display_name,
+    workspaceId, testAuthority: false };
 }
