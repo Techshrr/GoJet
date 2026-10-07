@@ -6,8 +6,10 @@ from pathlib import Path
 import textwrap
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 import urllib.parse
 import urllib.request
+from scripts.ci.actions import github_json
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,7 +23,14 @@ def discovery(open_url):
                  'urllib': SimpleNamespace(parse=urllib.parse, request=SimpleNamespace(
                      Request=urllib.request.Request, urlopen=open_url))}
     exec(compile(function, 'p08-workflow-discovery', 'exec'), namespace)
-    return namespace['fetch_runs']
+    def run():
+        # Exercise the production retry/JSON helper while keeping its transport
+        # offline. Patching urllib alone misses github_json's bound default.
+        def read(url, headers):
+            return github_json(url, headers, opener=open_url)
+        with patch('scripts.ci.actions.github_json', side_effect=read):
+            return namespace['fetch_runs']()
+    return run
 
 
 class P08DiscoveryTests(unittest.TestCase):
