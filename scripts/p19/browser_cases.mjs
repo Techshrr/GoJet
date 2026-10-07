@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -213,6 +214,7 @@ async function t026() {
       routeId: document.querySelector('article.website-page')?.getAttribute('data-route-id') || null,
     }));
     if (dom.brokenImages || dom.placeholderIcons || dom.suspiciousCopy) errors.push(`${label}: placeholder/broken visual artifact detected`);
+    if (label === 'home-en') await visualProbe(page, 'P19', 'website');
     const file = `gjv10__website__p19__${label}__light__${viewportName}.png`; await page.screenshot({ path: `${capturesDir}/${file}`, fullPage: true });
     captures.push({ label, path, viewport: viewportName, dimensions: size, routeId: dom.routeId, file: `artifacts/v10/P19/captures/${file}` }); await context.close();
   }

@@ -1,6 +1,14 @@
 @import "./styles.css";
 @import "@gojet/tokens/responsive.css";
 
+/* Shared document defaults must follow the same theme as the app shell. */
+:root { color-scheme: light; background: var(--gojet-surface-canvas); color: var(--gojet-text-primary); }
+:root[data-theme="dark"] { color-scheme: dark; }
+body { margin: 0; }
+a { color: var(--gojet-text-link); }
+button, input, select, textarea { font: inherit; }
+
+
 html:lang(en) {
   font-family: var(--gojet-font-family-latin);
 }

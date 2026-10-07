@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'internal/publicstyle/**'
       - 'artifacts/v10/P10/**'
       - 'scripts/p10/**'
       - '.github/workflows/p10-*.yml'

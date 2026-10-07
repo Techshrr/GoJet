@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -157,7 +158,7 @@ async function caseT018(browser){
   resetText(); const item=await createText({title:'Responsive public Text',content:'Responsive and accessible public Text content.',visibility:'public'}); const captures=[]; const layouts=[];
   for (const [name,viewport] of Object.entries(viewports)) {
     for (const [surface,base,path] of [['list',OWNER_URL,'/app/text'],['detail',OWNER_URL,`/app/text/${item.id}`],['public',PLATFORM_URL,`/t/${item.public_slug}`]]) {
-      const opened=await openPage(browser,base,path,viewport); const value=await layout(opened.page); assertLayout(value,`${name} ${surface}`); layouts.push({name,surface,...value}); captures.push(await screenshot(opened.page,`P10-T018-${name}-${surface}`)); await opened.context.close();
+      const opened=await openPage(browser,base,path,viewport); const value=await layout(opened.page); assertLayout(value,`${name} ${surface}`); layouts.push({name,surface,...value}); if (name === 'desktop' && ['detail','public'].includes(surface)) await visualProbe(opened.page, 'P10', surface === 'detail' ? 'workspace' : 'public'); captures.push(await screenshot(opened.page,`P10-T018-${name}-${surface}`)); await opened.context.close();
     }
   }
   for (const [surface,base,path] of [['detail',OWNER_URL,`/app/text/${item.id}`],['public',PLATFORM_URL,`/t/${item.public_slug}`]]) {

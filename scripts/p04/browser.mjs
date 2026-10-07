@@ -193,8 +193,8 @@ await verifySpa(
   '/pricing',
   'website',
 );
-await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings"]', '/app/settings', 'workspace');
-await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/admin/operations', 'admin');
+await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings/workspace"]', '/app/settings/workspace', 'workspace');
+await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations/jobs"]', '/admin/operations/jobs', 'admin');
 
 {
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1 });

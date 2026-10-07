@@ -13,13 +13,13 @@ import NotificationsPage from './workspace/NotificationsPage';
 import { SupportListPage, SupportNewPage, SupportThreadPage } from './support/pages';
 import {
   ConnectedAccountsPage,
+  DangerSettingsPage,
   ProfileSettingsPage,
   SecuritySettingsPage,
   SessionsSettingsPage,
 } from './account/pages';
 import { APIKeysPage, WebhooksPage } from './developer/pages';
 
-const ShellPage = lazy(() => import('./routes/ShellPage'));
 const LinksListPage = lazy(() => import('./routes/LinksListPage'));
 const LinkCreatePage = lazy(() => import('./routes/LinkCreatePage'));
 const LinkDetailPage = lazy(() => import('./routes/LinkDetailPage'));
@@ -77,17 +77,14 @@ const profileSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path
 const securitySettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/security', component: SecuritySettingsPage });
 const sessionsSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/sessions', component: SessionsSettingsPage });
 const connectedAccountsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/connected-accounts', component: ConnectedAccountsPage });
+const dangerSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/app/settings/danger', component: DangerSettingsPage });
 const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/invite/$token', component: InvitationPage });
-const sectionRoutes = ['developer', 'settings'].map((section) =>
-  createRoute({ getParentRoute: () => rootRoute, path: `/app/${section}`, component: ShellPage }),
-);
 const routeTree = rootRoute.addChildren([
   appRoute, linksRoute, linkCreateRoute, linkDetailRoute, domainsRoute, domainCreateRoute, domainDetailRoute,
   analyticsRoute, qrRoute, qrDetailRoute, filesRoute, fileDetailRoute, textRoute, textDetailRoute, bioRoute, bioDetailRoute,
   billingRoute, supportRoute, supportNewRoute, supportThreadRoute, notificationsRoute, organizationRoute, campaignsRoute, tagsRoute, membersRoute,
   apiKeysRoute, webhooksRoute,
-  workspaceSettingsRoute, profileSettingsRoute, securitySettingsRoute, sessionsSettingsRoute, connectedAccountsRoute, inviteRoute,
-  ...sectionRoutes,
+  workspaceSettingsRoute, profileSettingsRoute, securitySettingsRoute, sessionsSettingsRoute, connectedAccountsRoute, dangerSettingsRoute, inviteRoute,
 ]);
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
 declare module '@tanstack/react-router' { interface Register { router: typeof router } }

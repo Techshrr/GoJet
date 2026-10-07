@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
@@ -134,6 +135,7 @@ async function caseT019() {
     header: Boolean(document.querySelector('header')),
   }));
   if (!shell.main || !shell.header || shell.h1 !== 1 || shell.nav < 1) throw new Error(`inherited P04 article shell missing: ${JSON.stringify(shell)}`);
+  await visualProbe(page, 'P18', 'docs');
   const { dialog } = await openSearchWithKeyboard(page);
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden', timeout: 5000 });

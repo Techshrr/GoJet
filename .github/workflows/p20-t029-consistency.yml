@@ -1,0 +1,52 @@
+name: P20-T029 Domain Destination Parity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p20/**'
+      - 'scripts/p11/**'
+      - 'scripts/p16/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p20-t029-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: P20-T029 exact-head domain and destination parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Test parity evidence admission
+        run: python3 -m unittest discover -s scripts/p20 -p 'test_t029*.py'
+      - name: Bind same-head T028 and native parity producers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t029_sources.py
+      - name: Admit official custom and Bio authority parity
+        run: python3 scripts/p20/consistency_cases.py --case T029
+      - name: Preserve parity proof and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t029-formal-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/consistency/P20-T029.json
+            artifacts/v10/P20/runtime/t029/

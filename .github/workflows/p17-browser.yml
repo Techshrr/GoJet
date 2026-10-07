@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'frontend/apps/admin/**'
       - 'frontend/apps/workspace/**'
       - 'frontend/packages/**'
@@ -115,6 +119,7 @@ jobs:
           mkdir -p artifacts/v10/P17/browser artifacts/v10/P17/captures artifacts/v10/P17/runtime/browser
           go mod verify
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           node --check scripts/p17/browser_common.mjs
           node --check scripts/p17/browser_030.mjs
           node --check scripts/p17/browser_031.mjs
@@ -284,6 +289,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P17/t034/
+            artifacts/v10/P17/t035/
             artifacts/v10/P17/browser/${{ matrix.case }}.json
             artifacts/v10/P17/captures/${{ matrix.case }}-*.png
             artifacts/v10/P17/test-plan.json

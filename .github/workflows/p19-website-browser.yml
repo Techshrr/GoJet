@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
+      - 'scripts/p20/test_t034_visual_probe.mjs'
       - 'frontend/apps/site/**'
       - 'frontend/packages/tokens/**'
       - 'frontend/packages/ui/**'
@@ -66,6 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           pnpm --filter @gojet/site typecheck
           pnpm --filter @gojet/site build
       - name: Start exact static Nginx browser fixture
@@ -113,6 +119,8 @@ jobs:
               assert data['status']=='PASS' and data['errors']==[], data
               assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
           PY
+      - name: Test T034 color equivalence admission
+        run: node --test scripts/p20/test_t034_visual_probe.mjs
       - name: Record exact-head browser authority
         run: |
           set -euo pipefail
@@ -122,12 +130,15 @@ jobs:
           git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/browser-authority/review_blob.txt
           find artifacts/v10/P19/captures -type f -name '*.png' -print0 | sort -z | xargs -0 sha256sum > artifacts/v10/P19/browser-authority/captures.sha256
       - name: Upload exact-head browser and visual evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gojet-v10-p19-browser-${{ env.EXACT_HEAD }}
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P19/t034/
+            artifacts/v10/P19/t035/
             artifacts/v10/P19/browser/
             artifacts/v10/P19/visual/P19-T026.json
             artifacts/v10/P19/captures/

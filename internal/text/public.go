@@ -15,11 +15,12 @@ import (
 	"time"
 
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/publicstyle"
 )
 
 const publicAuthTTL = 30 * time.Minute
 
-const publicTextCSP = "default-src 'none'; style-src 'sha256-ndr9wehkfVoyup3ouFvWLt2MWpDZ7EKznZDNNtr7uHE='; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+var publicTextCSP = publicstyle.CSP()
 
 type publicPageData struct {
 	State        string
@@ -36,10 +37,12 @@ type publicPageData struct {
 	AbuseURL     string
 }
 
-var publicTextTemplate = template.Must(template.New("public-text").Parse(`<!doctype html>
+var publicTextTemplate = template.Must(template.New("public-text").Funcs(template.FuncMap{
+	"publicCSS": func() template.CSS { return template.CSS(publicstyle.CSS()) },
+}).Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>{{.Headline}} · GoJet</title>
-<style>*,*::before,*::after{box-sizing:border-box}body{overflow-wrap:anywhere}pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}input,button{max-width:100%}</style></head>
+<style>{{publicCSS}}</style></head>
 <body><main aria-labelledby="text-state-heading"><section data-text-state="{{.State}}">
 <h1 id="text-state-heading">{{.Headline}}</h1><p>{{.Message}}</p>
 {{if .ShowPassword}}<form method="post" action="/t/{{.Slug}}"><label for="text-password">Password</label>
