@@ -48,8 +48,8 @@ var publicTextTemplate = template.Must(template.New("public-text").Funcs(templat
 {{if .ShowPassword}}<form method="post" action="/t/{{.Slug}}"><label for="text-password">Password</label>
 <input id="text-password" name="password" type="password" autocomplete="current-password" required>
 <button type="submit">Continue</button></form>{{end}}
-{{if .ShowContent}}<div aria-labelledby="text-title"><h2 id="text-title">{{.Title}}</h2><pre id="text-content">{{.Content}}</pre>
-<form method="post" action="/api/public/text/{{.Slug}}"><button type="submit">Open plain text</button></form></div>{{end}}
+{{if .ShowContent}}<section aria-labelledby="text-title"><h2 id="text-title">{{.Title}}</h2><pre id="text-content">{{.Content}}</pre>
+<form method="post" action="/api/public/text/{{.Slug}}"><button type="submit">Open plain text</button></form></section>{{end}}
 {{if .ShowReveal}}<form method="post" action="/api/public/text/{{.Slug}}"><button type="submit">Reveal text once</button></form>{{end}}
 {{if .ShowDownload}}<p><a href="{{.DownloadURL}}">Download text</a></p>{{end}}
 <p><a href="{{.AbuseURL}}">Report abuse</a></p>

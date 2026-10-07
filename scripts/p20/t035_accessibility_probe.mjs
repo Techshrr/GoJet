@@ -62,7 +62,19 @@ export async function accessibilityProbe(page, node, surface) {
           nodes: rule.nodes.map(n => {
             let el = null;
             try { if (n.target.length === 1 && typeof n.target[0] === 'string') el = document.querySelector(n.target[0]); } catch {}
+            const style = el ? getComputedStyle(el) : null;
+            const ancestors = [];
+            for (let p = el; p; p = p.parentElement) {
+              const s = getComputedStyle(p);
+              ancestors.push({opacity: s.opacity, background: s.backgroundColor,
+                background_image: s.backgroundImage !== 'none', filter: s.filter,
+                blend: s.mixBlendMode});
+            }
             return {element_index: elements.indexOf(el), tag: el?.tagName || null,
+              computed: style ? {foreground: style.color, background: style.backgroundColor,
+                font_size: style.fontSize, font_weight: style.fontWeight,
+                has_value: el instanceof HTMLTextAreaElement ? !!el.value : null,
+                ancestors} : null,
               checks: [...n.any, ...n.all, ...n.none].map(c => ({id: c.id, impact: c.impact}))};
           })}));
         return {version: report.testEngine.version, violations: rules(report.violations), incomplete: rules(report.incomplete),
@@ -95,6 +107,8 @@ export async function accessibilityProbe(page, node, surface) {
             visible_indicator: (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none',
             in_view: rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight,
             unobscured: hit === el || el.contains(hit),
+            hit_tag: hit?.tagName || null, hit_element_index: [...document.querySelectorAll('*')].indexOf(hit),
+            rectangle: {x: rect.x, y: rect.y, width: rect.width, height: rect.height},
             outline_width: style.outlineWidth, outline_style: style.outlineStyle};
         });
         if (item) {

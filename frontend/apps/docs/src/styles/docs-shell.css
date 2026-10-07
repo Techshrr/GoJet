@@ -6,3 +6,7 @@
 @layer starlight.reset {
   a { color: var(--gojet-text-link); }
 }
+
+/* Keep keyboard-scrolled controls below the fixed header and mobile TOC. */
+html{scroll-padding-block-start:calc(var(--sl-nav-height) + var(--sl-mobile-toc-height) + var(--gojet-space-4))}
+.main-frame :is(a,button,input,select,textarea,[tabindex]){scroll-margin-block-start:calc(var(--sl-nav-height) + var(--sl-mobile-toc-height) + var(--gojet-space-4))}

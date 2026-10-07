@@ -72,7 +72,7 @@ function AuthFrame({ title, state, notice, children }: { title: string; state: s
 
 function Providers({ intent, providers }: { intent: 'login' | 'register'; providers: AuthProvider[] }) {
   if (providers.length === 0) return <p className="p15-auth__muted">Social sign-in is not configured.</p>;
-  return <div className="p15-auth__providers" aria-label="Social authentication providers">
+  return <div className="p15-auth__providers" role="group" aria-label="Social authentication providers">
     {providers.map((provider) => <a
       key={provider.provider}
       href={provider.enabled ? `/api/public/auth/${provider.provider}/start?intent=${intent}` : undefined}
