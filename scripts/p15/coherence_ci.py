@@ -129,7 +129,7 @@ def bind_producers() -> dict:
             or attempt.get("run_attempt") != attempt_number):
         raise RuntimeError("current attempt authority mismatch")
     attempt_started = attempt["run_started_at"]
-    deadline = time.time() + 60 * 60
+    deadline = time.time() + 135 * 60
 
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, "exact", contract_name, created_after=attempt_started)

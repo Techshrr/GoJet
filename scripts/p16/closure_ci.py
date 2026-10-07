@@ -81,7 +81,7 @@ def wait_matrix() -> dict:
         for name in missing:
             if name not in dispatched:
                 print(f"Dispatching missing exact-head workflow {name} via {REQUIRED[name]} at {HEAD_REF}"); dispatch(REQUIRED[name]); dispatched.add(name)
-        print(f"Waiting P16 matrix missing={missing} pending={pending}",flush=True); time.sleep(10)
+        print(f"Waiting P16 matrix missing={missing} pending={pending}",flush=True); time.sleep(60)
     raise SystemExit(f"timed out waiting for P00-P16 affected workflows on {HEAD}")
 
 def run_gh(*args:str, stdout=None):

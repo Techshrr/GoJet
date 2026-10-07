@@ -159,7 +159,7 @@ def wait_matrix() -> dict[str, dict]:
                 dispatch(REQUIRED[name])
                 dispatched.add(name)
         print(f"Waiting P18 matrix missing={missing} pending={pending}", flush=True)
-        time.sleep(10)
+        time.sleep(60)
     raise SystemExit(f"timed out waiting for P18 affected workflows on {HEAD}")
 
 

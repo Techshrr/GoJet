@@ -2,9 +2,35 @@
 import copy
 import hashlib
 import unittest
-from t034_matrix import inspect_surface, inspect_assets_and_states
+import tempfile
+from pathlib import Path
+from t034_matrix import inspect_surface, inspect_assets_and_states, inspect_files
+from t028_sources import digest
 
 class MatrixAdmissionTest(unittest.TestCase):
+    def test_nested_manifests_are_checked_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'collection.json').write_text('{}')
+            path = 'prerequisite/runtime/t033-sources/collection.json'
+            nested = root / path
+            nested.parent.mkdir(parents=True)
+            nested.write_text('{"implementation_commit":"unit-fixture"}')
+            files = {path: {'producer': 'prerequisite', 'sha256': digest(nested.read_bytes())}}
+            inspect_files(root, files, set(files))
+            nested.write_text('{"implementation_commit":"tampered"}')
+            with self.assertRaisesRegex(ValueError, 'member digest mismatch'):
+                inspect_files(root, files, set(files))
+            nested.unlink()
+            with self.assertRaisesRegex(ValueError, 'untracked raw evidence'):
+                inspect_files(root, files, set(files))
+            nested.write_text('{}')
+            files[path]['sha256'] = digest(nested.read_bytes())
+            extra = root / 'prerequisite/untracked/collection.json'
+            extra.parent.mkdir(); extra.write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'untracked raw evidence'):
+                inspect_files(root, files, set(files))
+
     def fixture(self):
         names = ['surface-canvas', 'surface-default', 'text-primary', 'text-secondary']
         css = ':root {' + ''.join('--gojet-' + n + ': #ffffff;' for n in names) + '}\n:root[data-theme="dark"] {' + ''.join('--gojet-' + n + ': #070b14;' for n in names) + '}'

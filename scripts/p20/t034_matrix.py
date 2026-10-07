@@ -81,6 +81,18 @@ def inspect_surface(data, surface, node, head, css, viewports, captures):
     return len(rows)
 
 
+def inspect_files(directory, files, expected):
+    require(set(files) == expected, 'unexpected or missing evidence file')
+    # Only this collection's own manifest is outside its member inventory.
+    # Nested prerequisite manifests are evidence and must remain accounted for.
+    actual = {str(p.relative_to(directory)) for p in directory.rglob('*')
+              if p.is_file() and p != directory / 'collection.json'}
+    require(expected == actual, 'untracked raw evidence')
+    for path, row in files.items():
+        require(not Path(path).is_absolute() and '..' not in Path(path).parts, 'unsafe evidence member')
+        require(row['producer'] == path.split('/')[0] and digest((directory / path).read_bytes()) == row['sha256'], 'member digest mismatch')
+
+
 def inspect(root, head):
     directory = root / 'artifacts/v10/P20/runtime/t034-sources'
     manifest = json.loads((directory / 'collection.json').read_bytes())
@@ -105,11 +117,7 @@ def inspect(root, head):
         for surface in surfaces:
             expected.add(f'{key}/{surface}.json')
             expected.update(f'{key}/{surface}-{size}-{theme}.png' for size in ('desktop', 'mobile') for theme in ('light', 'dark'))
-    require(set(files) == expected, 'unexpected or missing evidence file')
-    require(expected == {str(p.relative_to(directory)) for p in directory.rglob('*') if p.is_file() and p.name != 'collection.json'}, 'untracked raw evidence')
-    for path, row in files.items():
-        require(not Path(path).is_absolute() and '..' not in Path(path).parts, 'unsafe evidence member')
-        require(row['producer'] == path.split('/')[0] and digest((directory / path).read_bytes()) == row['sha256'], 'member digest mismatch')
+    inspect_files(directory, files, expected)
     css = (root / 'frontend/packages/tokens/generated/tokens.css').read_text()
     tokens = json.loads((root / 'frontend/packages/tokens/generated/design-variables.json').read_text())['tokens']['composite']
     viewports = {size: dict(zip(('width', 'height'), map(int, tokens['viewport.' + size]['dimensions'].split('×')))) for size in ('desktop', 'mobile')}

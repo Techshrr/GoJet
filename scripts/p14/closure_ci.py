@@ -219,7 +219,7 @@ def wait_matrix() -> None:
             dispatched.add(name)
 
         print(f"Waiting P14 matrix missing={missing} pending={pending}")
-        time.sleep(10)
+        time.sleep(60)
     raise SystemExit(f"timed out waiting for P00-P14 affected workflows on {HEAD}")
 
 

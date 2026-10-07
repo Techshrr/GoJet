@@ -92,6 +92,9 @@ jobs:
           dispatched=set(); deadline=time.time()+135*60
 
           def api(url, *, method='GET', body=None):
+            if method == 'GET':
+              from scripts.ci.actions import github_json
+              return github_json(url, headers)
             data=None if body is None else json.dumps(body).encode()
             req=urllib.request.Request(url,data=data,method=method,headers=headers)
             with urllib.request.urlopen(req,timeout=30) as response:
@@ -159,7 +162,7 @@ jobs:
                 dispatch(required[name]['workflow'])
                 dispatched.add(name)
             print(f'Waiting P18 producers missing={missing} pending={pending}',flush=True)
-            time.sleep(10)
+            time.sleep(60)
           else:
             raise SystemExit(f'timed out waiting for P18 producers on {sha}')
           PY
@@ -229,9 +232,8 @@ jobs:
           repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
           headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
           def api(path):
-            req=urllib.request.Request(f'https://api.github.com/repos/{repo}{path}',headers=headers)
-            with urllib.request.urlopen(req,timeout=30) as response:
-              return json.loads(response.read())
+            from scripts.ci.actions import github_json
+            return github_json(f'https://api.github.com/repos/{repo}{path}', headers)
 
           p17_run=api('/actions/runs/33232541982')
           p17_art=api('/actions/artifacts/9709093486')
