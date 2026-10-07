@@ -6,6 +6,9 @@ on:
     paths:
       - 'internal/publicstyle/**'
       - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'go.mod'
       - 'go.sum'
       - 'internal/text/**'
@@ -120,6 +123,7 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           node --check scripts/p10/browser.mjs
           pnpm run typecheck:packages
           pnpm --filter @gojet/workspace typecheck
@@ -228,6 +232,7 @@ jobs:
           name: gojet-v10-p10-browser-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             artifacts/v10/P10/t034/
+            artifacts/v10/P10/t035/
             artifacts/v10/P10/browser/P10-T016.json
             artifacts/v10/P10/browser/P10-T017.json
             artifacts/v10/P10/browser/P10-T018.json

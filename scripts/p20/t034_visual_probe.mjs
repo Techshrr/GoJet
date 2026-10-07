@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { accessibilityProbe } from './t035_accessibility_probe.mjs';
 
 // CSS minifiers may shorten hex colors without changing their value.
 export function canonicalColor(value) {
@@ -111,4 +112,5 @@ export async function visualProbe(page, node, surface) {
     await page.emulateMedia({ reducedMotion: original.reduced ? 'reduce' : 'no-preference' });
     if (viewport) await page.setViewportSize(viewport);
   }
+  await accessibilityProbe(page, node, surface);
 }

@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'scripts/p20/test_t034_visual_probe.mjs'
       - 'frontend/apps/site/**'
       - 'frontend/packages/tokens/**'
@@ -68,6 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           pnpm --filter @gojet/site typecheck
           pnpm --filter @gojet/site build
       - name: Start exact static Nginx browser fixture
@@ -134,6 +138,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P19/t034/
+            artifacts/v10/P19/t035/
             artifacts/v10/P19/browser/
             artifacts/v10/P19/visual/P19-T026.json
             artifacts/v10/P19/captures/

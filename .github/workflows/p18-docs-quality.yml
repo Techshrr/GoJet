@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'frontend/apps/docs/**'
       - 'frontend/packages/tokens/**'
       - 'deploy/nginx/docs-p18.conf'
@@ -65,6 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           pnpm --filter @gojet/docs typecheck
           pnpm --filter @gojet/docs build
           snapshot_dist() {
@@ -180,6 +184,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P18/t034/
+            artifacts/v10/P18/t035/
             artifacts/v10/P18/browser/P18-T019.json
             artifacts/v10/P18/browser/P18-T020.json
             artifacts/v10/P18/browser/P18-T021.json

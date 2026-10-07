@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'go.mod'
       - 'go.sum'
       - 'package.json'
@@ -120,6 +123,7 @@ jobs:
           mkdir -p artifacts/v10/P15/browser artifacts/v10/P15/captures artifacts/v10/P15/runtime/browser-024
           go mod verify
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           node --check scripts/p15/browser.mjs
           gofmt -d services/platformapi/cmd/server/auth.go | tee /tmp/p15-auth-http-gofmt.diff
           test ! -s /tmp/p15-auth-http-gofmt.diff
@@ -250,6 +254,7 @@ jobs:
           retention-days: 30
           path: |
             artifacts/v10/P15/t034/
+            artifacts/v10/P15/t035/
             artifacts/v10/P20/runtime/t025/oauth-callback-browser.json
             artifacts/v10/P20/runtime/t025/auth-turnstile-browser.json
             artifacts/v10/P20/runtime/t025/support-turnstile-browser.json
