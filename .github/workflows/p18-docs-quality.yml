@@ -95,9 +95,14 @@ jobs:
           print(payload['digest'])
           PY
           }
+          mkdir -p artifacts/v10/P18/build-diagnostics
           digest_a="$(snapshot_dist /tmp/p18-build-a.json | tail -n1)"
+          cp /tmp/p18-build-a.json artifacts/v10/P18/build-diagnostics/first-manifest.json
+          cp frontend/apps/docs/dist/pagefind/pagefind-component-ui.css artifacts/v10/P18/build-diagnostics/first-component-ui.css
           pnpm --filter @gojet/docs build
           digest_b="$(snapshot_dist /tmp/p18-build-b.json | tail -n1)"
+          cp /tmp/p18-build-b.json artifacts/v10/P18/build-diagnostics/second-manifest.json
+          cp frontend/apps/docs/dist/pagefind/pagefind-component-ui.css artifacts/v10/P18/build-diagnostics/second-component-ui.css
           printf 'P18 build digest A: %s\n' "$digest_a"
           printf 'P18 build digest B: %s\n' "$digest_b"
           python3 - <<'PY'
@@ -124,6 +129,15 @@ jobs:
           test -f frontend/apps/docs/dist/pagefind/pagefind.js
           test -f frontend/apps/docs/dist/sitemap-docs-en.xml
           test -f frontend/apps/docs/dist/sitemap-docs-zh-CN.xml
+
+      - name: Preserve deterministic-build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p18-build-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/v10/P18/build-diagnostics/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Start exact static Nginx fixture
         run: |

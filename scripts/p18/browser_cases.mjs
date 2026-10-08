@@ -151,12 +151,35 @@ async function caseT019() {
   await mobile.waitForFunction(() => Boolean(customElements.get('starlight-menu-button')), null, { timeout: 12000 });
   const drawerTrigger = drawerHost.locator('button').first();
   await drawerTrigger.waitFor({ state: 'visible', timeout: 12000 });
-  await drawerTrigger.click();
+  const reachByTab = async (target) => {
+    for (let step = 0; step < 256; step++) {
+      if (await target.evaluate(el => el === document.activeElement)) return;
+      await mobile.keyboard.press('Tab');
+    }
+    throw new Error('Docs interactive control is not keyboard reachable');
+  };
+  await reachByTab(drawerTrigger);
+  await mobile.keyboard.press('Enter');
   const expanded = await drawerTrigger.getAttribute('aria-expanded');
   if (expanded !== 'true') throw new Error(`mobile navigation drawer did not enter expanded state: ${String(expanded)}`);
-  await drawerTrigger.click();
+  await mobile.keyboard.press('Escape');
+  if (!await drawerTrigger.evaluate(el => el === document.activeElement)) throw new Error('Docs menu Escape did not restore trigger focus');
   const collapsed = await drawerTrigger.getAttribute('aria-expanded');
   if (collapsed !== 'false') throw new Error(`mobile navigation drawer did not return to collapsed state: ${String(collapsed)}`);
+  const toc = mobile.locator('#starlight__mobile-toc');
+  const summary = toc.locator('summary').first();
+  await reachByTab(summary);
+  const wasOpen = await toc.evaluate(el => el.open);
+  if (wasOpen) throw new Error('Docs mobile TOC unexpectedly starts open');
+  await mobile.keyboard.press('Enter');
+  if (!await toc.evaluate(el => el.open)) throw new Error('Docs TOC did not open with Enter');
+  const tocLinks = toc.locator('a[href]');
+  const tocLinkCount = await tocLinks.count();
+  if (!tocLinkCount) throw new Error('Docs expanded TOC has no links');
+  for (let index = 0; index < tocLinkCount; index++) await reachByTab(tocLinks.nth(index));
+  await reachByTab(summary);
+  await mobile.keyboard.press('Enter');
+  if (await toc.evaluate(el => el.open)) throw new Error('Docs TOC did not close with Enter');
   assertCleanDiagnostics(mobileDiagnostics, 'P18-T019/nav-drawer');
   await mobileContext.close();
 
@@ -189,6 +212,8 @@ async function caseT019() {
     article_state: shell,
     search_open_state: true,
     nav_drawer_state: 'expanded-and-closed',
+    nav_drawer_keyboard: {enter_open: true, escape_close: true, trigger_focus_returned: true},
+    toc_keyboard: {enter_open: true, links_reached: tocLinkCount, enter_close: true},
     not_found_status: 404,
     offline_static_state: offlineState,
     offline_pagefind_failures: expectedPagefindFailures.length,
