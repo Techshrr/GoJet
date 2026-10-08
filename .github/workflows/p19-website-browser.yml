@@ -67,6 +67,11 @@ jobs:
               assert data['implementation_authorized'] is False, data
           assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
           PY
+      - name: Install CJK fonts for bilingual browser evidence
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          fc-match ':lang=zh-cn'
       - name: Build exact static Website
         run: |
           set -euo pipefail

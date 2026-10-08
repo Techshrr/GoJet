@@ -147,6 +147,61 @@ async function t024() {
   return writeCase(outDir, 'P19-T024', 'Responsive and 320 CSS px reflow matrix', errors, { matrix });
 }
 
+async function mobileMenuKeyboard() {
+  const observations = [];
+  for (const [viewportName, size] of [['mobile', viewports.mobile], ['compact320', viewports.compact320]]) {
+    for (const [path, label] of [['/', 'Mobile navigation'], ['/zh-CN/', '移动导航']]) {
+      const context = await browser.newContext({viewport: size, reducedMotion: 'reduce'});
+      try {
+        const page = await context.newPage(); attach(page, `T025-menu-${viewportName}`);
+        await page.goto(`${baseUrl}${path}`, {waitUntil: 'networkidle'});
+        const trigger = page.locator('.site-menu-trigger');
+        for (let i = 0; i < 30 && !await trigger.evaluate(el => el === document.activeElement); i++)
+          await page.keyboard.press('Tab');
+        if (!await trigger.evaluate(el => el === document.activeElement)) throw Error('menu trigger unreachable');
+        await page.keyboard.press('Enter');
+        const dialog = page.getByRole('dialog', {name: label, exact: true});
+        await dialog.waitFor({state: 'visible'});
+        if (!await dialog.evaluate(el => el.matches(':modal') && el.contains(document.activeElement)))
+          throw Error('menu is not modal or initial focus escaped');
+        const controls = dialog.locator('button,a[href]');
+        const count = await controls.count();
+        if (count !== 6) throw Error('mobile menu control set incomplete');
+        const seen = new Set();
+        for (const key of ['Tab', 'Shift+Tab']) {
+          for (let i = 0; i < count * 2; i++) {
+            const index = await dialog.evaluate(el => [...el.querySelectorAll('button,a[href]')].indexOf(document.activeElement));
+            if (index < 0) throw Error('keyboard focus escaped mobile menu');
+            seen.add(index);
+            await page.keyboard.press(key);
+          }
+        }
+        if (seen.size !== count) throw Error('mobile menu keyboard coverage incomplete');
+        await page.screenshot({path: `${capturesDir}/T025-menu-${viewportName}-${path === '/' ? 'en' : 'zh'}.png`, fullPage: true});
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({state: 'hidden'});
+        await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        if (await trigger.getAttribute('aria-expanded') !== 'false') throw Error('stale menu expanded state');
+        await page.keyboard.press('Enter');
+        await dialog.waitFor({state: 'visible'});
+        await page.keyboard.press('Enter'); // initially focused close button
+        await dialog.waitFor({state: 'hidden'});
+        await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        await page.keyboard.press('Enter');
+        await dialog.waitFor({state: 'visible'});
+        await page.keyboard.press('Tab'); // first navigation link
+        await page.keyboard.press('Enter');
+        await page.waitForURL(`${baseUrl}${path === '/' ? '/products' : '/zh-CN/products'}`);
+        await dialog.waitFor({state: 'hidden'});
+        observations.push({viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN',
+          enter_open: true, modal: true, keyboard_controls: seen.size, forward_and_reverse_contained: true,
+          escape_close: true, close_button: true, trigger_focus_returned: true, link_navigation: true});
+      } finally { await context.close(); }
+    }
+  }
+  return observations;
+}
+
 async function t025() {
   const errors = []; const checks = [];
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1, reducedMotion: 'reduce' });
@@ -191,7 +246,8 @@ async function t025() {
   const visibleFocus = focus && ((focus.outlineStyle !== 'none' && parseFloat(focus.outlineWidth) > 0) || focus.boxShadow !== 'none');
   if (!visibleFocus) errors.push(`keyboard focus is not visibly styled: ${JSON.stringify(focus)}`);
   await context.close();
-  return writeCase(outDir, 'P19-T025', 'Accessibility semantic and interaction matrix', errors, { checks, keyboardFocus: focus, visibleFocus });
+  const mobileMenu = await mobileMenuKeyboard();
+  return writeCase(outDir, 'P19-T025', 'Accessibility semantic and interaction matrix', errors, { checks, keyboardFocus: focus, visibleFocus, mobileMenu });
 }
 
 async function t026() {

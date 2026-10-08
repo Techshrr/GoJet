@@ -12,7 +12,7 @@ export function auditFile(path, head, viewports) {
   const data = JSON.parse(readFileSync(path, 'utf8'));
   require(data.implementation_commit === head, 'mixed implementation head');
   require(data.kind === 'native-accessibility-diagnostics' && data.formal_p20_t035_claim === false, 'invalid diagnostic scope');
-  require(/^[a-f0-9]{64}$/.test(data.axe_source_sha256), 'missing axe source digest');
+  require(data.axe_source_sha256 === '880970c081707360e64f34cea25ff91892f5bc95675b0776925b9709dd8a68bb', 'unpinned axe source digest');
   require(data.observations.length === 8, 'incomplete matrix');
   const pairs = new Set();
   let tabSteps = 0;
