@@ -73,6 +73,9 @@ export async function accessibilityProbe(page, node, surface) {
   const original = await page.evaluate(() => ({theme: document.documentElement.getAttribute('data-theme'),
     reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, x: scrollX, y: scrollY}));
   const focused = await page.evaluateHandle(() => document.activeElement);
+  const scrollPositions = await page.evaluateHandle(() => [...document.querySelectorAll('*')]
+    .filter(el => el.scrollTop || el.scrollLeft)
+    .map(el => ({el, top: el.scrollTop, left: el.scrollLeft})));
   try {
     if (!process.env.P20_AXE_SOURCE) throw new Error('Pinned axe source was not installed');
     const source = readFileSync(process.env.P20_AXE_SOURCE, 'utf8');
@@ -89,6 +92,14 @@ export async function accessibilityProbe(page, node, surface) {
       await page.setViewportSize(dimensions);
       await page.emulateMedia({reducedMotion: 'reduce'});
       await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      // Each viewport/theme starts at the same scroll origin. Keyboard sampling
+      // scrolls nested navigation too; do not carry that into the next axe scan.
+      await page.evaluate(() => {
+        for (const el of document.querySelectorAll('*')) {
+          if (el.scrollTop || el.scrollLeft) el.scrollTo({top: 0, left: 0, behavior: 'instant'});
+        }
+        window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+      });
       await page.waitForTimeout(400);
       const axe = await page.evaluate(async tags => {
         const report = await window.axe.run(document, {runOnly: {type: 'tag', values: tags}});
@@ -187,6 +198,10 @@ export async function accessibilityProbe(page, node, surface) {
     if (viewport) await page.setViewportSize(viewport);
     await focused.evaluate(el => { if (el instanceof HTMLElement && el.isConnected) el.focus({preventScroll: true}); });
     await focused.dispose();
+    await scrollPositions.evaluate(rows => rows.forEach(({el, top, left}) => {
+      if (el.isConnected) el.scrollTo({top, left, behavior: 'instant'});
+    }));
+    await scrollPositions.dispose();
     await page.evaluate(({x, y}) => scrollTo(x, y), original);
   }
 }
