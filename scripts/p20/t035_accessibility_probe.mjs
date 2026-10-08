@@ -44,6 +44,12 @@ export function fragmentsUnobscured(fragments) {
   return fragments.length > 0 && fragments.every(r => r.width > 0 && r.height > 0 && r.in_view && r.unobscured);
 }
 
+export function keyboardCoverage(expected, observed) {
+  const visited = new Set(observed.map(item => item.element_index));
+  return expected.length > 0 && new Set(expected).size === expected.length &&
+    expected.every(index => visited.has(index));
+}
+
 // Keep unresolved checks visible. Zero reported violations is insufficient.
 export function auditVerdict(row) {
   return {
@@ -53,6 +59,7 @@ export function auditVerdict(row) {
     reflow: row.layout.scroll_width <= row.viewport.width + 1,
     reduced_motion: row.layout.reduced_motion && row.layout.active_animations === 0,
     keyboard_sample: row.keyboard.length > 0 && row.keyboard.every(x => x.visible_indicator && x.in_view && x.unobscured),
+    keyboard_coverage: keyboardCoverage(row.keyboard_expected || [], row.keyboard),
     no_positive_tabindex: row.layout.positive_tabindex === 0,
     state_messages: row.layout.notices.every(x => x.has_text && ['alert', 'status'].includes(x.role)),
   };
@@ -141,9 +148,17 @@ export async function accessibilityProbe(page, node, surface) {
       const capture = `${surface}-${size}-${theme}.png`;
       const png = await page.screenshot({path: `${out}/${capture}`, fullPage: true});
       const keyboard = [];
+      const keyboardExpected = await page.evaluate(() => {
+        const elements = [...document.querySelectorAll('*')];
+        return elements.filter(el => el instanceof HTMLElement && el.tabIndex >= 0 &&
+          !el.matches(':disabled') && !el.closest('[inert]') &&
+          el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible')
+          .map(el => elements.indexOf(el));
+      });
       // Real Tab input; no click, synthetic focus target or test-only tabindex.
-      // Bounded sample is retained explicitly, not claimed as complete coverage.
-      for (let n = 0; n < 12; n++) {
+      // Traverse the visible native tab-stop inventory. Repeated focus on date
+      // subfields must not terminate early. A safety cap fails coverage closed.
+      for (let n = 0; n < 256; n++) {
         await page.keyboard.press('Tab');
         const item = await page.evaluate(() => {
           const el = document.activeElement;
@@ -176,11 +191,11 @@ export async function accessibilityProbe(page, node, surface) {
         if (item) {
           item.union_box_unobscured = item.unobscured;
           item.unobscured = fragmentsUnobscured(item.fragments);
-          if (keyboard.some(x => x.element_index === item.element_index)) break;
           keyboard.push(item);
+          if (keyboardCoverage(keyboardExpected, keyboard)) break;
         }
       }
-      const row = {size, theme, viewport: dimensions, axe, layout, keyboard, keyboard_scope: 'up to 12 successive Tab steps',
+      const row = {size, theme, viewport: dimensions, axe, layout, keyboard, keyboard_expected: keyboardExpected, keyboard_scope: 'visible native tab-stop inventory; 256-step safety cap',
         capture, capture_sha256: sha256(png)};
       row.supplemental_contrast = axe.incomplete.filter(r => r.id === 'color-contrast')
         .flatMap(r => r.nodes.map(n => ({element_index: n.element_index, measurement: textareaContrast(n)})));

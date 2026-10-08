@@ -5,7 +5,7 @@ import { auditVerdict, AXE_VERSION } from './t035_accessibility_probe.mjs';
 const fixture = () => ({axe: {version: AXE_VERSION, passes: ['label'], violations: [], incomplete: []},
   viewport: {width: 320}, layout: {scroll_width: 320, reduced_motion: true, active_animations: 0,
     positive_tabindex: 0, notices: [{has_text: true, role: 'alert'}]},
-  keyboard: [{visible_indicator: true, in_view: true, unobscured: true}]});
+  keyboard_expected: [1], keyboard: [{element_index: 1, visible_indicator: true, in_view: true, unobscured: true}]});
 
 test('unresolved or unexecuted axe scans cannot become a clean diagnostic', () => {
   assert.ok(Object.values(auditVerdict(fixture())).every(Boolean));
@@ -70,4 +70,13 @@ test('wrapped focus requires every actual fragment visible and unobstructed', ()
   for (const bad of [{width: 0}, {height: 0}, {in_view: false}, {unobscured: false}]) {
     assert.equal(fragmentsUnobscured([visible, {...visible, ...bad}]), false);
   }
+});
+
+const { keyboardCoverage } = await import('./t035_accessibility_probe.mjs');
+test('keyboard traversal cannot stop at a repeated date subfield or omit later controls', () => {
+  const seen = [1, 2, 2, 2].map(element_index => ({element_index}));
+  assert.equal(keyboardCoverage([1, 2, 3], seen), false);
+  assert.equal(keyboardCoverage([1, 2, 3], [...seen, {element_index: 3}]), true);
+  assert.equal(keyboardCoverage([], seen), false);
+  assert.equal(keyboardCoverage([1, 1], seen), false);
 });
