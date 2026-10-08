@@ -72,3 +72,22 @@ T028 auth section, then artifact creation failed with `ECONNRESET`. This caused
 T028 and T029–T034 to fail by dependency. It is an upload transport failure,
 not an authentication assertion failure. New-head native execution and upload
 must succeed; older diagnostic PASS does not substitute for these results.
+
+## 6b65c36 native focus cycle and close-event race
+
+Verified Website archive 11564382935 from run 37809822705, SHA-256
+`067a3e9ef201abb8817e383d55831a106f91d5f3ddb1c97af691e638b6905283`.
+English and Chinese mobile tests completed without errors; their traces each
+contain 24 forward/reverse steps, all within the modal controls. At 320px,
+English also completed all 24 steps but timed out reopening after Escape.
+
+The controlled dialog effect calls `close()`, which queues a native close event.
+The redundant `onClose -> setMenuOpen(false)` handler can overwrite a subsequent
+open action. Remove that feedback path: all dismissal paths already update
+React state (Escape cancel, close button, and navigation links), and the effect
+owns the native dialog lifecycle. Preserve the rapid-reopen assertion and add
+five immediate Enter/Escape cycles per viewport/locale, plus native lifecycle
+records. Fresh CI remains required; this is not accepted by source reasoning.
+
+At this head T028–T033, Contract and Freeze succeeded. T034/T035 still reject
+the failed Website producer. No T035 acceptance or integration promotion.

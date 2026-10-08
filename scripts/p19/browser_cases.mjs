@@ -157,6 +157,13 @@ async function mobileMenuKeyboard() {
       const traceName = `T025-menu-${viewportName}-${trace.locale}`;
       try {
         await page.goto(`${baseUrl}${path}`, {waitUntil: 'networkidle'});
+        await page.evaluate(() => {
+          window.__menuLifecycle = [];
+          const menu = document.querySelector('.site-mobile-sheet');
+          for (const type of ['cancel', 'close']) menu.addEventListener(type, () => {
+            window.__menuLifecycle.push({type, open: menu.open, modal: menu.matches(':modal')});
+          });
+        });
         const trigger = page.locator('.site-menu-trigger');
         for (let i = 0; i < 30 && !await trigger.evaluate(el => el === document.activeElement); i++)
           await page.keyboard.press('Tab');
@@ -189,6 +196,15 @@ async function mobileMenuKeyboard() {
         await dialog.waitFor({state: 'hidden'});
         await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
         if (await trigger.getAttribute('aria-expanded') !== 'false') throw Error('stale menu expanded state');
+        for (let repeat = 0; repeat < 5; repeat++) {
+          await page.keyboard.press('Enter');
+          await dialog.waitFor({state: 'visible'});
+          if (!await dialog.evaluate(el => el.matches(':modal') && el.contains(document.activeElement)))
+            throw Error('reopened menu lost modal focus');
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({state: 'hidden'});
+          await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        }
         await page.keyboard.press('Enter');
         await dialog.waitFor({state: 'visible'});
         await page.keyboard.press('Enter'); // initially focused close button
@@ -202,12 +218,13 @@ async function mobileMenuKeyboard() {
         await dialog.waitFor({state: 'hidden'});
         observations.push({viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN',
           enter_open: true, modal: true, keyboard_controls: seen.size, forward_and_reverse_contained: true,
-          escape_close: true, close_button: true, trigger_focus_returned: true, link_navigation: true});
+          escape_close: true, rapid_reopen_cycles: 5, close_button: true, trigger_focus_returned: true, link_navigation: true});
       } catch (error) {
         trace.errors.push(String(error));
         await page.screenshot({path: `${capturesDir}/${traceName}-failure.png`, fullPage: true});
         throw error;
       } finally {
+        trace.lifecycle = await page.evaluate(() => window.__menuLifecycle || []);
         writeFileSync(`${outDir}/${traceName}.json`, JSON.stringify(trace, null, 2) + '\n');
         await context.close();
       }
