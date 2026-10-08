@@ -91,3 +91,39 @@ records. Fresh CI remains required; this is not accepted by source reasoning.
 
 At this head T028–T033, Contract and Freeze succeeded. T034/T035 still reject
 the failed Website producer. No T035 acceptance or integration promotion.
+
+## 46562e9 batch evidence review
+
+Website run 37816439828 succeeded. Verified artifact 11567825869 digest
+`a307a72a0c0af0d5cad36f54618b903f15121b6f132ddb7b8d08d05d138a7998`.
+All four menu variants (en/zh-CN × mobile/320px) passed, including 96 retained
+Tab/Shift+Tab steps and 20 immediate reopen cycles, Escape, close button,
+focus return and actual navigation. Direct capture inspection confirms that
+Chinese menu text and the Chinese language-switch label now render glyphs.
+
+All five native archives were downloaded and verified against API digests.
+The other 64 diagnostic observations pass. Website desktop/tablet passes, but
+four mobile/320px observations retain `aria-valid-attr-value` incomplete items.
+The fixed axe 4.10.3 evaluator deliberately reports `controlsWithinPopup` for
+`aria-controls` combined with `aria-haspopup`:
+https://github.com/dequelabs/axe-core/blob/v4.10.3/lib/checks/aria/aria-valid-attr-value-evaluate.js
+
+Do not remove valid ARIA attributes or suppress the rule. Retain the exact
+check message key and structural relationship (no text/IDs): button, dialog
+popup type, exactly one reference and one target, native named dialog without
+conflicting role, matching expanded/open state. Resolve only that specific
+review reason after validating every field. Missing evidence and all other
+ARIA review reasons remain unresolved. The aggregate also revalidates all four
+native menu cases and their 96 raw focus steps. Negative checks reject missing
+steps/controls, escaped focus and mixed head. Raw axe records remain unchanged.
+Older archives lack the new structural fields and cannot be retroactively
+admitted with this resolver.
+
+P14 contract/coherence succeeded on retry; P13 evidence also succeeded on
+retry after its already-successful producers had exceeded its original wait.
+The downstream T028–T035 chain was restarted on this same head. These transport/
+orchestration recoveries do not solve legacy expired closure archives.
+
+Outstanding formal admission includes screen-reader evidence and complete
+zoom/manual review against G5. Current diagnostics and DOM/ARIA inspection
+must not be labeled actual screen-reader testing. T035 and P20 remain open.

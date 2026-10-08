@@ -7,7 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from t028_sources import digest
-from t035_sources import PRODUCERS, SIZES, INTERACTIONS, save_archive, prerequisite_member
+from t035_sources import PRODUCERS, SIZES, INTERACTIONS, MENU_TRACES, save_archive, prerequisite_member
 from t035_matrix import inspect_collection
 
 
@@ -39,6 +39,8 @@ class AccessibilitySourcesTest(unittest.TestCase):
                 [f'-{size}-{theme}.png' for size in SIZES for theme in ('light', 'dark')]]
             if surfaces is not None:
                 paths += [f'{key}/interactions/{case}.json' for case in INTERACTIONS[key]]
+            if key == 'website':
+                paths += ['website/menu-traces/' + name for name in MENU_TRACES]
             for path in paths:
                 target = directory / path
                 target.parent.mkdir(parents=True, exist_ok=True)

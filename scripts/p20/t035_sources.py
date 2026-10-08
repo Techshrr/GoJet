@@ -12,6 +12,7 @@ PRODUCERS = {key: value for key, value in VISUAL_PRODUCERS.items()
              if key not in ('prerequisite', 'foundation')}
 PRODUCERS['prerequisite'] = ('p20-t034-matrix.yml', 'p20-t034-native-matrix-', 'P20', None)
 SIZES = ('desktop', 'tablet', 'mobile', 'reflow320')
+MENU_TRACES = [f'T025-menu-{size}-{locale}.json' for size in ('mobile', 'compact320') for locale in ('en', 'zh-CN')]
 INTERACTIONS = {
     'website': ['P19-T025'], 'docs': ['P18-T019', 'P18-T020', 'P18-T021'],
     'auth': ['P15-T024'], 'workspace': ['P10-T016', 'P10-T017', 'P10-T018'],
@@ -45,6 +46,9 @@ def save_archive(directory, manifest, key, archive):
             if include:
                 save('prerequisite/artifacts/v10/P20/' + entry.filename, archive.read(entry))
         return
+    if key == 'website':
+        for name in MENU_TRACES:
+            save(f'website/menu-traces/{name}', member(archive, node, 'browser/' + name))
     for case in INTERACTIONS[key]:
         save(f'{key}/interactions/{case}.json', member(archive, node, f'browser/{case}.json'))
     for surface in surfaces:

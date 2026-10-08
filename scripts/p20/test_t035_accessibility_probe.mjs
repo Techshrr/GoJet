@@ -94,3 +94,19 @@ test('native inventory excludes unavailable anchors and closed details, not oper
   for (const change of [{disabled: true}, {inert: true}, {visible: false}, {tab_index: -1}])
     assert.equal(nativeTabCandidate({...link, ...change}), false);
 });
+
+const { popupRelationValid } = await import('./t035_accessibility_probe.mjs');
+test('popup review resolution requires exact reason and a unique named dialog with matching state', () => {
+  const node = {tag:'BUTTON', checks:[{id:'aria-valid-attr-value',message_key:'controlsWithinPopup'}],
+    popup_relation:{haspopup:'dialog',expanded:'false',control_count:1,target_count:1,
+      target_tag:'DIALOG',target_role:null,target_named:true,target_open:false}};
+  assert.equal(popupRelationValid(node),true);
+  assert.equal(unresolvedAxeRules({incomplete:[{id:'aria-valid-attr-value',nodes:[node]}]}).length,0);
+  for(const patch of [{haspopup:'menu'},{expanded:null},{control_count:2},{target_count:0},
+    {target_count:2},{target_tag:'DIV'},{target_role:'menu'},{target_named:false},{target_open:true}])
+    assert.equal(popupRelationValid({...node,popup_relation:{...node.popup_relation,...patch}}),false);
+  for(const checks of [[],[{id:'aria-valid-attr-value',message_key:'idrefs'}],
+    [{id:'other',message_key:'controlsWithinPopup'}]]) assert.equal(popupRelationValid({...node,checks}),false);
+  assert.equal(popupRelationValid({...node,tag:'DIV'}),false);
+  assert.equal(unresolvedAxeRules({incomplete:[{id:'other',nodes:[node]}]}).length,1);
+});

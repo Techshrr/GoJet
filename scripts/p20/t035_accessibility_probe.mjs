@@ -33,11 +33,26 @@ export function textareaContrast(node) {
   return {method: 'opaque-native-textarea-srgb', ratio, minimum: 4.5, pass: ratio >= 4.5};
 }
 
+// axe 4.10.3 explicitly marks aria-controls + aria-haspopup as controlsWithinPopup.
+// Resolve only the retained native-dialog relation, never other ARIA review items.
+export function popupRelationValid(node) {
+  const p = node.popup_relation;
+  return node.tag === 'BUTTON' && node.checks?.length > 0 &&
+    node.checks.every(c => c.id === 'aria-valid-attr-value' && c.message_key === 'controlsWithinPopup') &&
+    p?.haspopup === 'dialog' && ['true', 'false'].includes(p.expanded) &&
+    p.control_count === 1 && p.target_count === 1 && p.target_tag === 'DIALOG' &&
+    [null, 'dialog'].includes(p.target_role) &&
+    p.target_named === true && p.target_open === (p.expanded === 'true');
+}
+
 export function unresolvedAxeRules(axe) {
-  return axe.incomplete.filter(rule => rule.id !== 'color-contrast' || !rule.nodes?.length ||
-    rule.nodes.some(node => !node.checks?.length ||
-      node.checks.some(check => check.id !== 'color-contrast') ||
-      textareaContrast(node)?.pass !== true));
+  return axe.incomplete.filter(rule => {
+    if (!rule.nodes?.length) return true;
+    if (rule.id === 'aria-valid-attr-value') return rule.nodes.some(node => !popupRelationValid(node));
+    if (rule.id !== 'color-contrast') return true;
+    return rule.nodes.some(node => !node.checks?.length ||
+      node.checks.some(check => check.id !== 'color-contrast') || textareaContrast(node)?.pass !== true);
+  });
 }
 
 export function fragmentsUnobscured(fragments) {
@@ -130,14 +145,24 @@ export async function accessibilityProbe(page, node, surface) {
                 background_image: s.backgroundImage !== 'none', filter: s.filter,
                 blend: s.mixBlendMode});
             }
-            return {element_index: elements.indexOf(el), tag: el?.tagName || null,
+            const ids = (el?.getAttribute('aria-controls') || '').trim().split(/\s+/).filter(Boolean);
+            const targets = ids.length === 1 ? elements.filter(target => target.id === ids[0]) : [];
+            const target = targets.length === 1 ? targets[0] : null;
+            const popupRelation = el?.hasAttribute('aria-haspopup') ? {
+              haspopup: el.getAttribute('aria-haspopup'), expanded: el.getAttribute('aria-expanded'),
+              control_count: ids.length, target_count: targets.length, target_tag: target?.tagName || null,
+              target_role: target?.getAttribute('role') || null,
+              target_named: !!target?.getAttribute('aria-label')?.trim(),
+              target_open: target instanceof HTMLDialogElement ? target.open : null,
+            } : null;
+            return {element_index: elements.indexOf(el), tag: el?.tagName || null, popup_relation: popupRelation,
               computed: style ? {foreground: style.color, background: style.backgroundColor,
                 font_size: style.fontSize, font_weight: style.fontWeight,
                 text_fill: style.webkitTextFillColor, text_shadow: style.textShadow,
                 text_stroke_width: style.webkitTextStrokeWidth,
                 has_value: el instanceof HTMLTextAreaElement ? !!el.value : null,
                 ancestors} : null,
-              checks: [...n.any, ...n.all, ...n.none].map(c => ({id: c.id, impact: c.impact}))};
+              checks: [...n.any, ...n.all, ...n.none].map(c => ({id: c.id, impact: c.impact, message_key: typeof c.data?.messageKey === 'string' ? c.data.messageKey : null}))};
           })}));
         return {version: report.testEngine.version, violations: rules(report.violations), incomplete: rules(report.incomplete),
           passes: report.passes.map(x => x.id), inapplicable: report.inapplicable.map(x => x.id)};

@@ -4,7 +4,7 @@ import re
 import subprocess
 from t028_sources import require, digest
 from t034_matrix import inspect_files, inspect as inspect_t034
-from t035_sources import PRODUCERS, SIZES, INTERACTIONS, prerequisite_member
+from t035_sources import PRODUCERS, SIZES, INTERACTIONS, MENU_TRACES, prerequisite_member
 
 
 def inspect_collection(directory, manifest, head):
@@ -27,7 +27,32 @@ def inspect_collection(directory, manifest, head):
         for surface in surfaces:
             expected.add(f'{key}/{surface}.json')
             expected.update(f'{key}/{surface}-{size}-{theme}.png' for size in SIZES for theme in ('light', 'dark'))
+    expected.update('website/menu-traces/' + name for name in MENU_TRACES)
     inspect_files(directory, files, expected)
+
+
+def inspect_menu(directory, head):
+    data = json.loads((directory / 'website/interactions/P19-T025.json').read_bytes())
+    rows = data['details']['mobileMenu']
+    pairs = {(size, locale) for size in ('mobile', 'compact320') for locale in ('en', 'zh-CN')}
+    require(len(rows) == 4 and {(r['viewport'], r['locale']) for r in rows} == pairs, 'incomplete menu matrix')
+    for row in rows:
+        require(all(row.get(key) is True for key in ('enter_open', 'modal', 'forward_and_reverse_contained',
+            'escape_close', 'close_button', 'trigger_focus_returned', 'link_navigation'))
+            and row.get('rapid_reopen_cycles') == 5 and row.get('keyboard_controls') == 6,
+            'native menu interaction failed')
+        path = directory / f"website/menu-traces/T025-menu-{row['viewport']}-{row['locale']}.json"
+        trace = json.loads(path.read_bytes())
+        require(trace['implementation_commit'] == head and trace['errors'] == []
+                and trace['viewport'] == row['viewport'] and trace['locale'] == row['locale'], 'invalid menu trace')
+        steps = trace['steps']
+        require(len(steps) == 24 and [s['key'] for s in steps] == ['Tab'] * 12 + ['Shift+Tab'] * 12,
+                'incomplete menu keyboard trace')
+        for offset in (0, 12):
+            require({s['index'] for s in steps[offset:offset+12]} == set(range(6)), 'menu controls not covered')
+        require(all(s['inside'] is True and s['modal'] is True and s['document_has_focus'] is True
+                    and s['tag'] in ('BUTTON', 'A') for s in steps), 'menu focus escaped')
+    return {'variants': 4, 'raw_tab_steps': 96, 'rapid_reopen_cycles': 20}
 
 
 def inspect(root, head, source_root=None):
@@ -46,6 +71,7 @@ def inspect(root, head, source_root=None):
                     and data.get('status') == 'PASS'
                     and (data.get('errors', []) == [] if key == 'docs' else data.get('errors') == []),
                     'invalid native interaction evidence: ' + case)
+    menu = inspect_menu(directory, head)
     prerequisite = directory / 'prerequisite'
     formal = json.loads((prerequisite / 'artifacts/v10/P20/browser/P20-T034.json').read_bytes())
     details = inspect_t034(prerequisite, head, source_root=source_root)
@@ -62,7 +88,7 @@ def inspect(root, head, source_root=None):
     require(diagnostics['head'] == head and diagnostics['observations'] == 72
             and diagnostics['formal_p20_t035_claim'] is False, 'invalid native audit result')
     diagnostics['outstanding'] = ['interactive and manual WCAG review']
-    return {'diagnostics': diagnostics, 'collection_sha256': digest(manifest_path.read_bytes()),
+    return {'menu_interactions': menu, 'diagnostics': diagnostics, 'collection_sha256': digest(manifest_path.read_bytes()),
             'prerequisite': {'case': 'P20-T034', 'head': head, 'revalidated': True},
             'native_interaction_cases': [case for cases in INTERACTIONS.values() for case in cases],
             'formal_p20_t035_claim': False, 'next_case_unlocked': False}
