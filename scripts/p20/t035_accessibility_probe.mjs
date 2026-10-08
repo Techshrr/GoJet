@@ -44,6 +44,12 @@ export function fragmentsUnobscured(fragments) {
   return fragments.length > 0 && fragments.every(r => r.width > 0 && r.height > 0 && r.in_view && r.unobscured);
 }
 
+export function nativeTabCandidate(item) {
+  return item.tab_index >= 0 && !item.disabled && !item.inert && item.visible &&
+    !item.closed_details &&
+    (!['A', 'AREA'].includes(item.tag) || item.has_href || item.explicit_tabindex);
+}
+
 export function keyboardCoverage(expected, observed) {
   const visited = new Set(observed.map(item => item.element_index));
   return expected.length > 0 && new Set(expected).size === expected.length &&
@@ -148,13 +154,24 @@ export async function accessibilityProbe(page, node, surface) {
       const capture = `${surface}-${size}-${theme}.png`;
       const png = await page.screenshot({path: `${out}/${capture}`, fullPage: true});
       const keyboard = [];
-      const keyboardExpected = await page.evaluate(() => {
+      const keyboardInventory = await page.evaluate(() => {
         const elements = [...document.querySelectorAll('*')];
-        return elements.filter(el => el instanceof HTMLElement && el.tabIndex >= 0 &&
-          !el.matches(':disabled') && !el.closest('[inert]') &&
-          el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible')
-          .map(el => elements.indexOf(el));
+        return elements.filter(el => el instanceof HTMLElement).map(el => {
+          let closedDetails = false;
+          for (let p = el.parentElement; p; p = p.parentElement) {
+            if (p instanceof HTMLDetailsElement && !p.open) {
+              const summary = [...p.children].find(child => child.tagName === 'SUMMARY');
+              if (!summary || !(summary === el || summary.contains(el))) closedDetails = true;
+            }
+          }
+          return {element_index: elements.indexOf(el), tag: el.tagName, tab_index: el.tabIndex,
+            disabled: el.matches(':disabled'), inert: !!el.closest('[inert]'),
+            visible: el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible',
+            closed_details: closedDetails, has_href: el.hasAttribute('href'),
+            explicit_tabindex: el.hasAttribute('tabindex')};
+        });
       });
+      const keyboardExpected = keyboardInventory.filter(nativeTabCandidate).map(item => item.element_index);
       // Real Tab input; no click, synthetic focus target or test-only tabindex.
       // Traverse the visible native tab-stop inventory. Repeated focus on date
       // subfields must not terminate early. A safety cap fails coverage closed.
@@ -195,7 +212,7 @@ export async function accessibilityProbe(page, node, surface) {
           if (keyboardCoverage(keyboardExpected, keyboard)) break;
         }
       }
-      const row = {size, theme, viewport: dimensions, axe, layout, keyboard, keyboard_expected: keyboardExpected, keyboard_scope: 'visible native tab-stop inventory; 256-step safety cap',
+      const row = {size, theme, viewport: dimensions, axe, layout, keyboard, keyboard_expected: keyboardExpected, keyboard_inventory: keyboardInventory, keyboard_scope: 'visible native tab-stop inventory; 256-step safety cap',
         capture, capture_sha256: sha256(png)};
       row.supplemental_contrast = axe.incomplete.filter(r => r.id === 'color-contrast')
         .flatMap(r => r.nodes.map(n => ({element_index: n.element_index, measurement: textareaContrast(n)})));

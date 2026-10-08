@@ -80,3 +80,17 @@ test('keyboard traversal cannot stop at a repeated date subfield or omit later c
   assert.equal(keyboardCoverage([], seen), false);
   assert.equal(keyboardCoverage([1, 1], seen), false);
 });
+
+const { nativeTabCandidate } = await import('./t035_accessibility_probe.mjs');
+test('native inventory excludes unavailable anchors and closed details, not operable controls', () => {
+  const link = {tag: 'A', tab_index: 0, disabled: false, inert: false, visible: true,
+    closed_details: false, has_href: true, explicit_tabindex: false};
+  assert.equal(nativeTabCandidate(link), true);
+  assert.equal(nativeTabCandidate({...link, has_href: false}), false);
+  assert.equal(nativeTabCandidate({...link, has_href: false, explicit_tabindex: true}), true);
+  assert.equal(nativeTabCandidate({...link, closed_details: true}), false);
+  assert.equal(nativeTabCandidate({...link, tag: 'SUMMARY', has_href: false}), true);
+  assert.equal(nativeTabCandidate({...link, tag: 'BUTTON', has_href: false}), true);
+  for (const change of [{disabled: true}, {inert: true}, {visible: false}, {tab_index: -1}])
+    assert.equal(nativeTabCandidate({...link, ...change}), false);
+});
