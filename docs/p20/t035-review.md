@@ -54,3 +54,21 @@ interactive/manual review of the representative surfaces against T035 and the
 applicable G5 requirements, and wire the frozen `browser_matrix.py --case T035`
 formal admission only when that evidence is sufficient. No T036+ unlock or
 integration promotion is implied by diagnostic PASS.
+
+## 7c410e6 native verdict and follow-up
+
+P19 run 37800180630 failed at the new forward/reverse keyboard traversal:
+`keyboard focus escaped mobile menu`. The previous assertion did not retain the
+active element, so it does not prove whether focus reached the browser chrome,
+the dialog itself or another document element. The modal lifecycle alone did
+not satisfy the tested control cycle. Add explicit first/last control wrapping
+for Tab and Shift+Tab; keep all containment assertions. Retain per-step element
+index/tag, containment, document focus and modal state plus a failure capture,
+so any further failure is diagnosable from native evidence.
+
+T035 run 37800152559 correctly rejected the failed P19 producer. Separately,
+P15 run 37800159238/job 113389898823 passed its contract/coherence checks and
+T028 auth section, then artifact creation failed with `ECONNRESET`. This caused
+T028 and T029–T034 to fail by dependency. It is an upload transport failure,
+not an authentication assertion failure. New-head native execution and upload
+must succeed; older diagnostic PASS does not substitute for these results.

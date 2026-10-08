@@ -152,8 +152,10 @@ async function mobileMenuKeyboard() {
   for (const [viewportName, size] of [['mobile', viewports.mobile], ['compact320', viewports.compact320]]) {
     for (const [path, label] of [['/', 'Mobile navigation'], ['/zh-CN/', '移动导航']]) {
       const context = await browser.newContext({viewport: size, reducedMotion: 'reduce'});
+      const page = await context.newPage(); attach(page, `T025-menu-${viewportName}`);
+      const trace = {implementation_commit: implementationCommit, viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN', steps: [], errors: []};
+      const traceName = `T025-menu-${viewportName}-${trace.locale}`;
       try {
-        const page = await context.newPage(); attach(page, `T025-menu-${viewportName}`);
         await page.goto(`${baseUrl}${path}`, {waitUntil: 'networkidle'});
         const trigger = page.locator('.site-menu-trigger');
         for (let i = 0; i < 30 && !await trigger.evaluate(el => el === document.activeElement); i++)
@@ -170,9 +172,14 @@ async function mobileMenuKeyboard() {
         const seen = new Set();
         for (const key of ['Tab', 'Shift+Tab']) {
           for (let i = 0; i < count * 2; i++) {
-            const index = await dialog.evaluate(el => [...el.querySelectorAll('button,a[href]')].indexOf(document.activeElement));
-            if (index < 0) throw Error('keyboard focus escaped mobile menu');
-            seen.add(index);
+            const focus = await dialog.evaluate(el => ({
+              index: [...el.querySelectorAll('button,a[href]')].indexOf(document.activeElement),
+              tag: document.activeElement?.tagName, inside: el.contains(document.activeElement),
+              document_has_focus: document.hasFocus(), modal: el.matches(':modal'),
+            }));
+            trace.steps.push({key, ...focus});
+            if (focus.index < 0) throw Error('keyboard focus escaped mobile menu: ' + JSON.stringify(focus));
+            seen.add(focus.index);
             await page.keyboard.press(key);
           }
         }
@@ -196,7 +203,14 @@ async function mobileMenuKeyboard() {
         observations.push({viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN',
           enter_open: true, modal: true, keyboard_controls: seen.size, forward_and_reverse_contained: true,
           escape_close: true, close_button: true, trigger_focus_returned: true, link_navigation: true});
-      } finally { await context.close(); }
+      } catch (error) {
+        trace.errors.push(String(error));
+        await page.screenshot({path: `${capturesDir}/${traceName}-failure.png`, fullPage: true});
+        throw error;
+      } finally {
+        writeFileSync(`${outDir}/${traceName}.json`, JSON.stringify(trace, null, 2) + '\n');
+        await context.close();
+      }
     }
   }
   return observations;
