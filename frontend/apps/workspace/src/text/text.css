@@ -3,3 +3,6 @@
 @media(prefers-reduced-motion:reduce){.text-page *{scroll-behavior:auto!important}}
 
 .text-check input:focus-visible{outline:var(--gojet-focus-ring-width) solid var(--gojet-focus-ring);outline-offset:var(--gojet-focus-ring-offset)}
+
+/* Native date/time subfields may hold keyboard focus without :focus-visible. */
+.text-native-field input[type="datetime-local"]:focus-within{outline:var(--gojet-focus-ring-width) solid var(--gojet-focus-ring);outline-offset:var(--gojet-focus-ring-offset)}

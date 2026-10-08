@@ -8,12 +8,48 @@ const sampled = new Set();
 export const AXE_VERSION = '4.10.3';
 export const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
+// WCAG 2.2 SC 1.4.3: unrounded sRGB luminance, conservative 4.5:1
+// even for large text. Only filled, opaque, unfiltered native textareas qualify.
+// Raw axe incomplete records remain intact; unsupported rendering stays unresolved.
+export function textareaContrast(node) {
+  const c = node.computed;
+  const rgb = value => {
+    const match = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(value || '');
+    if (!match) return null;
+    const channels = match.slice(1).map(Number);
+    return channels.every(x => x >= 0 && x <= 255) ? channels : null;
+  };
+  const fg = rgb(c?.foreground), bg = rgb(c?.background);
+  if (node.tag !== 'TEXTAREA' || !c?.has_value || !fg || !bg ||
+      c.text_fill !== c.foreground || c.text_shadow !== 'none' ||
+      c.text_stroke_width !== '0px' || !c.ancestors?.length ||
+      c.ancestors.some(a => a.opacity !== '1' || a.background_image !== false ||
+        a.filter !== 'none' || a.blend !== 'normal')) return null;
+  const luminance = channels => channels.map(x => x / 255)
+    .map(x => x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, x, i) => sum + x * [0.2126, 0.7152, 0.0722][i], 0);
+  const a = luminance(fg), b = luminance(bg);
+  const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  return {method: 'opaque-native-textarea-srgb', ratio, minimum: 4.5, pass: ratio >= 4.5};
+}
+
+export function unresolvedAxeRules(axe) {
+  return axe.incomplete.filter(rule => rule.id !== 'color-contrast' || !rule.nodes?.length ||
+    rule.nodes.some(node => !node.checks?.length ||
+      node.checks.some(check => check.id !== 'color-contrast') ||
+      textareaContrast(node)?.pass !== true));
+}
+
+export function fragmentsUnobscured(fragments) {
+  return fragments.length > 0 && fragments.every(r => r.width > 0 && r.height > 0 && r.in_view && r.unobscured);
+}
+
 // Keep unresolved checks visible. Zero reported violations is insufficient.
 export function auditVerdict(row) {
   return {
     axe_executed: row.axe.version === AXE_VERSION && row.axe.passes.length > 0,
     no_axe_violations: row.axe.violations.length === 0,
-    no_unresolved_axe_checks: row.axe.incomplete.length === 0,
+    no_unresolved_axe_checks: unresolvedAxeRules(row.axe).length === 0,
     reflow: row.layout.scroll_width <= row.viewport.width + 1,
     reduced_motion: row.layout.reduced_motion && row.layout.active_animations === 0,
     keyboard_sample: row.keyboard.length > 0 && row.keyboard.every(x => x.visible_indicator && x.in_view && x.unobscured),
@@ -73,6 +109,8 @@ export async function accessibilityProbe(page, node, surface) {
             return {element_index: elements.indexOf(el), tag: el?.tagName || null,
               computed: style ? {foreground: style.color, background: style.backgroundColor,
                 font_size: style.fontSize, font_weight: style.fontWeight,
+                text_fill: style.webkitTextFillColor, text_shadow: style.textShadow,
+                text_stroke_width: style.webkitTextStrokeWidth,
                 has_value: el instanceof HTMLTextAreaElement ? !!el.value : null,
                 ancestors} : null,
               checks: [...n.any, ...n.all, ...n.none].map(c => ({id: c.id, impact: c.impact}))};
@@ -125,12 +163,16 @@ export async function accessibilityProbe(page, node, surface) {
             outline_width: style.outlineWidth, outline_style: style.outlineStyle};
         });
         if (item) {
+          item.union_box_unobscured = item.unobscured;
+          item.unobscured = fragmentsUnobscured(item.fragments);
           if (keyboard.some(x => x.element_index === item.element_index)) break;
           keyboard.push(item);
         }
       }
       const row = {size, theme, viewport: dimensions, axe, layout, keyboard, keyboard_scope: 'up to 12 successive Tab steps',
         capture, capture_sha256: sha256(png)};
+      row.supplemental_contrast = axe.incomplete.filter(r => r.id === 'color-contrast')
+        .flatMap(r => r.nodes.map(n => ({element_index: n.element_index, measurement: textareaContrast(n)})));
       row.checks = auditVerdict(row);
       result.observations.push(row);
       for (const [check, pass] of Object.entries(row.checks)) if (!pass) result.errors.push(`${size}/${theme}: ${check}`);
