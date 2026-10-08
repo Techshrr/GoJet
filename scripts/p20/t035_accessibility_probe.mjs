@@ -103,7 +103,20 @@ export async function accessibilityProbe(page, node, surface) {
           const x = Math.max(0, Math.min(innerWidth - 1, rect.x + rect.width / 2));
           const y = Math.max(0, Math.min(innerHeight - 1, rect.y + rect.height / 2));
           const hit = document.elementFromPoint(x, y);
+          // A wrapped inline link's union box can contain whitespace belonging
+          // to its parent. Retain each actual fragment hit, plus the old union
+          // hit, so review can distinguish whitespace from real obstruction.
+          const fragments = [...el.getClientRects()].map(r => {
+            const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+            const target = document.elementFromPoint(cx, cy);
+            return {x: r.x, y: r.y, width: r.width, height: r.height,
+              in_view: cx >= 0 && cx < innerWidth && cy >= 0 && cy < innerHeight,
+              unobscured: target === el || el.contains(target),
+              hit_tag: target?.tagName || null};
+          });
           return {element_index: [...document.querySelectorAll('*')].indexOf(el), tag: el.tagName,
+            input_type: el instanceof HTMLInputElement ? el.type : null,
+            focus_visible: el.matches(':focus-visible'), fragments,
             visible_indicator: (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none',
             in_view: rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight,
             unobscured: hit === el || el.contains(hit),

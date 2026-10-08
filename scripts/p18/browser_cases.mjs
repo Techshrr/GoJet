@@ -152,10 +152,10 @@ async function caseT019() {
   const drawerTrigger = drawerHost.locator('button').first();
   await drawerTrigger.waitFor({ state: 'visible', timeout: 12000 });
   await drawerTrigger.click();
-  const expanded = await drawerHost.getAttribute('aria-expanded');
+  const expanded = await drawerTrigger.getAttribute('aria-expanded');
   if (expanded !== 'true') throw new Error(`mobile navigation drawer did not enter expanded state: ${String(expanded)}`);
   await drawerTrigger.click();
-  const collapsed = await drawerHost.getAttribute('aria-expanded');
+  const collapsed = await drawerTrigger.getAttribute('aria-expanded');
   if (collapsed !== 'false') throw new Error(`mobile navigation drawer did not return to collapsed state: ${String(collapsed)}`);
   assertCleanDiagnostics(mobileDiagnostics, 'P18-T019/nav-drawer');
   await mobileContext.close();
