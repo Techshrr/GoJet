@@ -206,7 +206,7 @@ async function caseT019(browser) {
   await waitState(opened.page, '[data-page="workspace-overview"]', 'complete');
   const history = await states(opened.page);
   assert(history.includes('workspace-overview:loading'), `overview loading state missing ${JSON.stringify(history)}`);
-  const switcher = opened.page.getByLabel('Workspace switcher');
+  const switcher = opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true });
   await switcher.waitFor();
   assert(await switcher.locator('option').count() === 2, 'Workspace switcher did not list both memberships');
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Primary' }).count() === 1, 'primary Workspace authority missing');
@@ -215,7 +215,7 @@ async function caseT019(browser) {
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Alternate' }).count() === 1, 'Workspace switch did not change authority');
   const alternateSelected = await opened.page.evaluate(() => sessionStorage.getItem('gojet.p12.active-workspace'));
   assert(alternateSelected === ALT_WS, `alternate selection not persisted ${alternateSelected}`);
-  await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), opened.page.getByLabel('Workspace switcher').selectOption(WS)]);
+  await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true }).selectOption(WS)]);
   await screenshot(opened.page, 'P12-T019-overview-switcher');
   assertDiagnostics(opened.report, 'T019 overview/switcher');
   await opened.context.close();
@@ -367,7 +367,7 @@ async function caseT022(browser) {
   opened = await openPage(browser, OWNER_URL, '/app/notifications');
   await waitState(opened.page, '[data-page="workspace-notifications"]', 'complete');
   assert(await opened.page.getByText('2 unread', { exact: true }).count() === 1, 'initial unread count mismatch');
-  const settingsLink = opened.page.locator('a[href="/app/settings/workspace"]');
+  const settingsLink = opened.page.locator('[data-page="workspace-notifications"] a[href="/app/settings/workspace"]');
   assert(await settingsLink.count() === 1, 'authorized notification deep-link missing');
   await opened.page.getByRole('button', { name: 'Mark read' }).first().click();
   await opened.page.getByText('1 unread', { exact: true }).waitFor();

@@ -306,3 +306,30 @@ windows and DOM focus, then require the same fresh name/role and real
 speech-dispatcher receipts. This is a candidate repair requiring native CI,
 not an established explanation of the old silent samples. No speech is
 manually dispatched and no incomplete sample is waived.
+
+## 7f953932 native diagnostics complete; predecessor selector repair
+
+All nine original native T035 records independently pass auditFile: 72 standard
+observations and 892 Tab steps, plus all required zoom, text-spacing, mobile
+navigation and native-X11 Orca samples. This is diagnostic evidence, not formal
+admission. Website run37892918619 artifact11599894018 archive SHA256
+3b7161b63bf874cc05077252b2554f03f685b14cc960bef631a4e3407849d976.
+Docs run37892918631 attempt2 artifact11602044619 archive SHA256
+52a09d7c07287d6d8d760ba2e3471252ca0965041293e2478c7dc7edfc9e0e2e.
+Both archives and raw exact-head records verified. Docs attempt1 failed before
+browser execution when the Orca startup process exited; no page assertions
+were produced. Same-head attempt2 succeeded; do not claim that startup cause
+was diagnosed or repaired.
+
+P04 jobs113713916608 and P12 job113697651459 reveal a shared predecessor
+compatibility failure: old locators match both the visible desktop navigation
+and the newly retained hidden mobile tree. Preserve all existing membership,
+server mutation/version, SPA marker, viewport and route assertions. Resolve
+interactive switchers by their accessible combobox role/name, and SPA links by
+visibility; multiple visible controls remain strict failures. In the shared
+P12 driver, scope the notification deep link to the actual notification page,
+so a sidebar link cannot falsely satisfy notification authority. Keep the
+all-DOM unauthorized-membership inspection unchanged. This repair changes
+verification targeting only; it neither deletes the mobile navigation nor
+weakens business assertions. Native P04/P12 and new-head dependencies must pass
+before T035 formal acceptance. T036+ remains locked.
