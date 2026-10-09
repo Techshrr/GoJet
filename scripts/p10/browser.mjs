@@ -68,10 +68,11 @@ async function deleteText(item) {
 }
 function diagnostics() { return {console_errors:[],page_errors:[],http_errors:[],request_failures:[]}; }
 function attachDiagnostics(page, report) {
+  const responses = new WeakMap();
   page.on('console', (message) => { if (message.type()==='error') report.console_errors.push(message.text()); });
   page.on('pageerror', (error) => report.page_errors.push(String(error)));
-  page.on('response', (response) => { if (response.status()>=400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({status:response.status(),url:response.url()}); });
-  page.on('requestfailed', (request) => report.request_failures.push({url:request.url(),failure:request.failure()}));
+  page.on('response', (response) => { responses.set(response.request(), response.status()); if (response.status()>=400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({status:response.status(),url:response.url()}); });
+  page.on('requestfailed', (request) => report.request_failures.push({url:request.url(),method:request.method(),resource_type:request.resourceType(),navigation:request.isNavigationRequest(),response_status:responses.get(request)??null,failure:request.failure()}));
 }
 function assertDiagnostics(report, label, allowedStatuses=[]) {
   const httpErrors = report.http_errors.filter((entry) => !allowedStatuses.includes(entry.status));
@@ -184,7 +185,9 @@ async function caseT017(browser){
   await opened.page.waitForURL(/\/app\/text$/);
   assert((await fetch(`${PLATFORM_URL}/t/${encodeURIComponent(removable.public_slug)}`)).status===410,'confirmed deletion did not revoke public access');
   evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410};
-  assertDiagnostics(opened.report,'T017 confirmed deletion');await opened.context.close();
+  try { assertDiagnostics(opened.report,'T017 confirmed deletion'); }
+  catch(error) { error.details={...evidence,diagnostics:opened.report};throw error; }
+  await opened.context.close();
   return evidence;
 }
 
@@ -209,5 +212,5 @@ async function caseT018(browser){
 }
 
 const cases={'P10-T016':caseT016,'P10-T017':caseT017,'P10-T018':caseT018};
-async function main(){const index=process.argv.indexOf('--case');const id=index>=0?process.argv[index+1]:'all';if(id!=='all'&&!cases[id])throw new Error(`unsupported P10 browser case ${id}`);const browser=await chromium.launch({executablePath,headless:!process.env.P20_ORCA_LOG,args:['--no-sandbox', '--force-renderer-accessibility','--disable-dev-shm-usage']});try{for(const caseId of id==='all'?Object.keys(cases):[id]){let details={};const errors=[];try{details=await cases[caseId](browser);}catch(error){errors.push(error instanceof Error?`${error.name}: ${error.message}`:String(error));}writeResult(caseId,errors.length?'FAIL':'PASS',details,errors);if(errors.length)throw new Error(`${caseId}: ${errors.join('; ')}`);console.log(`${caseId} PASS on ${HEAD}`);}}finally{await browser.close();}}
+async function main(){const index=process.argv.indexOf('--case');const id=index>=0?process.argv[index+1]:'all';if(id!=='all'&&!cases[id])throw new Error(`unsupported P10 browser case ${id}`);const browser=await chromium.launch({executablePath,headless:!process.env.P20_ORCA_LOG,args:['--no-sandbox', '--force-renderer-accessibility','--disable-dev-shm-usage']});try{for(const caseId of id==='all'?Object.keys(cases):[id]){let details={};const errors=[];try{details=await cases[caseId](browser);}catch(error){details=error.details??details;errors.push(error instanceof Error?`${error.name}: ${error.message}`:String(error));}writeResult(caseId,errors.length?'FAIL':'PASS',details,errors);if(errors.length)throw new Error(`${caseId}: ${errors.join('; ')}`);console.log(`${caseId} PASS on ${HEAD}`);}}finally{await browser.close();}}
 main().catch((error)=>{console.error(error);process.exitCode=1;});

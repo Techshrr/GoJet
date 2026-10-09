@@ -29,6 +29,7 @@ def inspect_collection(directory, manifest, head):
             expected.update(f'{key}/{surface}-{size}-{theme}.png' for size in SIZES for theme in ('light', 'dark'))
     expected.update('website/menu-traces/' + name for name in MENU_TRACES)
     expected.add('workspace/interactions/P10-T017-delete-confirmation.png')
+    expected.update(f'{key}/{key}-navigation320-{theme}.png' for key in ('workspace','admin') for theme in ('light','dark'))
     inspect_files(directory, files, expected)
 
 
@@ -40,20 +41,20 @@ def inspect_menu(directory, head):
     for row in rows:
         require(all(row.get(key) is True for key in ('enter_open', 'modal', 'forward_and_reverse_contained',
             'escape_close', 'close_button', 'trigger_focus_returned', 'link_navigation'))
-            and row.get('rapid_reopen_cycles') == 5 and row.get('keyboard_controls') == 6,
+            and row.get('rapid_reopen_cycles') == 5 and row.get('keyboard_controls') == 8,
             'native menu interaction failed')
         path = directory / f"website/menu-traces/T025-menu-{row['viewport']}-{row['locale']}.json"
         trace = json.loads(path.read_bytes())
         require(trace['implementation_commit'] == head and trace['errors'] == []
                 and trace['viewport'] == row['viewport'] and trace['locale'] == row['locale'], 'invalid menu trace')
         steps = trace['steps']
-        require(len(steps) == 24 and [s['key'] for s in steps] == ['Tab'] * 12 + ['Shift+Tab'] * 12,
+        require(len(steps) == 32 and [s['key'] for s in steps] == ['Tab'] * 16 + ['Shift+Tab'] * 16,
                 'incomplete menu keyboard trace')
-        for offset in (0, 12):
-            require({s['index'] for s in steps[offset:offset+12]} == set(range(6)), 'menu controls not covered')
+        for offset in (0, 16):
+            require({s['index'] for s in steps[offset:offset+16]} == set(range(8)), 'menu controls not covered')
         require(all(s['inside'] is True and s['modal'] is True and s['document_has_focus'] is True
                     and s['tag'] in ('BUTTON', 'A') for s in steps), 'menu focus escaped')
-    return {'variants': 4, 'raw_tab_steps': 96, 'rapid_reopen_cycles': 20}
+    return {'variants': 4, 'raw_tab_steps': 128, 'rapid_reopen_cycles': 20}
 
 
 def inspect(root, head, source_root=None):

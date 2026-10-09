@@ -77,6 +77,25 @@ export function WorkspaceShell({
             <button type="button">Avatar</button>
           </div>
         </header>
+        <details className="workspace-mobile-navigation" data-mobile-navigation onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault(); event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }} onClick={event => {
+          if (event.target instanceof Element && event.target.closest('a[href]')) event.currentTarget.open = false;
+        }}>
+          <summary>Workspace navigation</summary>
+          {switcherOptions ? <label className="workspace-switcher-field"><span>Workspace</span>
+            <select className="workspace-switcher" aria-label="Workspace switcher" value={workspaceId ?? ''} onChange={changeWorkspace}>
+              {switcherOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select></label> : <span>{workspaceLabel}</span>}
+          <Button onClick={event => openOverlay('create', event)}>Create</Button>
+          <nav aria-label="Mobile Workspace navigation">
+            {groups.map(([group, items]) => <section key={group}><h2>{group}</h2>{items.map(([label, to]) => <Link key={to} to={to}>{label}</Link>)}</section>)}
+            <Link to="/app">Overview</Link><Link to="/app/support">Support</Link>
+          </nav>
+        </details>
         {state === 'api-offline' && <InlineMessage variant="warning">API is offline. Local navigation remains available.</InlineMessage>}
         {state === 'workspace-suspended' && <InlineMessage variant="danger">Workspace is suspended. Creation actions are unavailable.</InlineMessage>}
         {state === 'read-only-role' && <InlineMessage variant="info">You have read-only access to this workspace.</InlineMessage>}

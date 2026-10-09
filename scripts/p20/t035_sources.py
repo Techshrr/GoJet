@@ -51,6 +51,10 @@ def save_archive(directory, manifest, key, archive):
             save(f'website/menu-traces/{name}', member(archive, node, 'browser/' + name))
     if key == 'workspace':
         save('workspace/interactions/P10-T017-delete-confirmation.png', member(archive, node, 'captures/P10-T017-delete-confirmation.png'))
+    if key in ('workspace','admin'):
+        for theme in ('light','dark'):
+            name = f'{key}-navigation320-{theme}.png'
+            save(f'{key}/{name}', member(archive, node, 't035/' + name))
     for case in INTERACTIONS[key]:
         save(f'{key}/interactions/{case}.json', member(archive, node, f'browser/{case}.json'))
     for surface in surfaces:

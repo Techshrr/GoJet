@@ -36,8 +36,8 @@ export async function assistiveProbe(page, surface, out) {
   const savedScroll = await page.evaluate(() => ({x: scrollX, y: scrollY}));
   const focused = await page.evaluateHandle(() => document.activeElement);
   const session = await page.context().newCDPSession(page);
-  const result = {zoom: [], text_spacing: [], screen_reader: {engine: 'Orca', engine_version: process.env.P20_ORCA_VERSION,
-    scope: 'two distinct native Tab control announcements and dispatcher attempts; not audio playback or complete manual review', steps: []}};
+  const result = {zoom: [], text_spacing: [], navigation: [], screen_reader: {engine: 'Orca', engine_version: process.env.P20_ORCA_VERSION,
+    scope: 'two distinct native Tab control announcements and dispatcher attempts; not audio playback or complete manual review', steps: [], attempts: []}};
   try {
     // Same 1440x900 physical area at 200%: 720x450 CSS pixels, DPR 2.
     // This is explicitly device-metrics-equivalent evidence, not a claim that
@@ -71,6 +71,40 @@ export async function assistiveProbe(page, surface, out) {
           layout.scroll_width > 721 || !layout.main_visible) throw new Error(`200% equivalent reflow failed: ${theme}`);
     }
     await session.send('Emulation.clearDeviceMetricsOverride');
+    if (['workspace','admin'].includes(surface)) {
+      await page.setViewportSize({width:320,height:844});
+      for (const theme of ['light','dark']) {
+        await page.evaluate(value=>document.documentElement.setAttribute('data-theme',value),theme);
+        const summary=page.locator('[data-mobile-navigation] > summary');
+        for(let n=0;n<256 && !await summary.evaluate(el=>el===document.activeElement);n++) await page.keyboard.press('Tab');
+        if(!await summary.evaluate(el=>el===document.activeElement)) throw Error('mobile navigation summary unreachable');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(()=>document.querySelector('[data-mobile-navigation]')?.open);
+        const inventory=await page.locator('[data-mobile-navigation]').evaluate(el=>{
+          const links=[...el.querySelectorAll('a[href]')];
+          const desktop=[...document.querySelectorAll('aside a[href]')];
+          return {count:links.length,expected:desktop.length,
+            same_routes:desktop.every(a=>links.some(b=>a.getAttribute('href')===b.getAttribute('href'))),
+            controls:[...el.querySelectorAll('button,select,a[href]')].filter(x=>!x.disabled).map(x=>[...document.querySelectorAll('*')].indexOf(x))};
+        });
+        const seen=new Set();const steps=[];
+        for(let n=0;n<256 && seen.size<inventory.controls.length;n++) {
+          await page.keyboard.press('Tab');
+          const step=await page.locator('[data-mobile-navigation]').evaluate(el=>({
+            element_index:[...document.querySelectorAll('*')].indexOf(document.activeElement),
+            inside:el.contains(document.activeElement),tag:document.activeElement?.tagName}));
+          steps.push(step);if(!step.inside) throw Error('expanded mobile navigation omitted a control');
+          if(inventory.controls.includes(step.element_index))seen.add(step.element_index);
+        }
+        if(!inventory.same_routes || inventory.count!==inventory.expected || seen.size!==inventory.controls.length)
+          throw Error('mobile navigation loses desktop routes or keyboard controls');
+        const capture=`${surface}-navigation320-${theme}.png`;
+        const png=await page.screenshot({path:`${out}/${capture}`,fullPage:true});
+        await page.keyboard.press('Escape');
+        if(!await summary.evaluate(el=>el===document.activeElement&&!el.parentElement.open))throw Error('mobile navigation Escape/focus return failed');
+        result.navigation.push({theme,inventory,steps,escape_focus_return:true,capture,capture_sha256:hash(png)});
+      }
+    }
     // SC 1.4.12: real user stylesheet overrides, on the real current page.
     // This changes presentation only; no fixture content or API is inserted.
     await page.setViewportSize({width:320,height:844});
@@ -99,6 +133,7 @@ export async function assistiveProbe(page, surface, out) {
     await page.bringToFront();
     await page.waitForTimeout(1000);
     const visited = new Set();
+    const attempts = new Map();
     for (let i = 0; i < 128 && result.screen_reader.steps.length < 2; i++) {
       const start = statSync(log).size;
       process.kill(orcaPid, 0);
@@ -110,13 +145,22 @@ export async function assistiveProbe(page, surface, out) {
         return {name, role: el.tagName === 'A' ? 'link' : 'button', element_index: [...document.querySelectorAll('*')].indexOf(el)};
       });
       if (!target || visited.has(target.element_index) || !target.name || target.name.length > 80 || /[@\r\n]|https?:/i.test(target.name)) continue;
-      visited.add(target.element_index);
+      if((attempts.get(target.element_index)||0)>=3)continue;
+      attempts.set(target.element_index,(attempts.get(target.element_index)||0)+1);
       let receipt;
       for (let n = 0; n < 12 && !receipt; n++) {
         await page.waitForTimeout(250);
         receipt = speechReceipt(readFileSync(log).subarray(start).toString('utf8'), target.name, target.role);
       }
-      if (!receipt) continue;
+      if (!receipt) {
+        const segment=readFileSync(log).subarray(start).toString('utf8');
+        result.screen_reader.attempts.push({...target,input:'Tab',log_start:start,log_end:statSync(log).size,
+          document_has_focus:await page.evaluate(()=>document.hasFocus()),
+          speech_output_lines:segment.split('\n').filter(x=>x.includes('SPEECH OUTPUT:')).length,
+          dispatcher_lines:segment.split('\n').filter(x=>x.includes('SPEECH DISPATCHER:')&&x.includes('Speaking')).length});
+        continue;
+      }
+      visited.add(target.element_index);
       result.screen_reader.steps.push({...receipt, element_index: target.element_index, input: 'Tab',
         log_start: start, log_end: statSync(log).size});
     }

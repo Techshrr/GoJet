@@ -5,7 +5,7 @@ import {mkdtempSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {auditFile} from './t035_audit.mjs';
+import {auditFile, auditAssistive} from './t035_audit.mjs';
 
 const head = 'a'.repeat(40);
 const viewports = {desktop: {width:1440,height:900},tablet:{width:1024,height:768},mobile:{width:390,height:844},reflow320:{width:320,height:844}};
@@ -78,4 +78,31 @@ test('raw evidence audit rejects forged metadata, observations and captures', ()
       assert.throws(() => auditFile(path,head,viewports));
     }
   } finally { rmSync(directory,{recursive:true,force:true}); }
+});
+
+test('mobile navigation cannot omit desktop routes, Tab controls or Escape return', () => {
+  const directory=mkdtempSync(join(tmpdir(),'gojet-nav-unit-'));
+  try {
+    const source=fixture(directory); source.surface='admin';
+    // Supplemental capture names bind to the actual surface.
+    for(const rows of [source.assistive.zoom, source.assistive.text_spacing]) for(const row of rows) {
+      const old=row.capture;row.capture=old.replace('public-','admin-');
+      const png=old.includes('zoom200')?Buffer.alloc(24):Buffer.from([137,80,78,71,13,10,26,10]);
+      Buffer.from([137,80,78,71,13,10,26,10]).copy(png);if(old.includes('zoom200'))png.writeUInt32BE(1440,16);
+      writeFileSync(join(directory,row.capture),png);row.capture_sha256=createHash('sha256').update(png).digest('hex');
+    }
+    source.assistive.navigation=['light','dark'].map(theme=>{
+      const capture=`admin-navigation320-${theme}.png`,png=Buffer.from([137,80,78,71,13,10,26,10]);
+      writeFileSync(join(directory,capture),png);
+      return {theme,inventory:{count:13,expected:13,same_routes:true,controls:Array.from({length:13},(_,i)=>i)},
+        steps:Array.from({length:13},(_,i)=>({element_index:i,inside:true,tag:'A'})),escape_focus_return:true,
+        capture,capture_sha256:createHash('sha256').update(png).digest('hex')};
+    });
+    const path=join(directory,'admin.json');auditAssistive(source,path);
+    for(const mutate of [d=>d.assistive.navigation.pop(),d=>d.assistive.navigation[0].inventory.same_routes=false,
+      d=>d.assistive.navigation[0].steps.pop(),d=>d.assistive.navigation[0].escape_focus_return=false,
+      d=>d.assistive.navigation[0].inventory.count=12,d=>d.assistive.navigation[0].capture_sha256='forged']) {
+      const bad=structuredClone(source);mutate(bad);assert.throws(()=>auditAssistive(bad,path));
+    }
+  } finally {rmSync(directory,{recursive:true,force:true});}
 });

@@ -46,7 +46,7 @@ def validate_review(root, head, details, review):
     manifest = json.loads((source / 'collection.json').read_bytes())
     captures = {path: row['sha256'] for path, row in manifest['files'].items() if path.endswith('.png')
                 and not path.startswith('prerequisite/')}
-    require(len(captures) == 109 and review.get('captures') == captures, 'incomplete/stale capture review')
+    require(len(captures) == 113 and review.get('captures') == captures, 'incomplete/stale capture review')
     sources = review.get('source_files')
     require(isinstance(sources, dict) and bool(sources), 'source review absent')
     for path, expected in sources.items():

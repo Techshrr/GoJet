@@ -24,6 +24,19 @@ export function auditAssistive(data, path) {
       png.length >= 24 && png.readUInt32BE(16) === 1440 && hash(png) === row.capture_sha256, 'zoom capture digest/physical width mismatch');
   }
   const sr = a.screen_reader;
+  if (['workspace','admin'].includes(data.surface)) {
+    require(a.navigation?.length===2 && new Set(a.navigation.map(x=>x.theme)).size===2,'missing mobile navigation evidence');
+    for(const row of a.navigation) {
+      const expected=data.surface==='workspace'?19:13;
+      require(['light','dark'].includes(row.theme) && row.inventory.count===expected && row.inventory.expected===expected &&
+        row.inventory.same_routes===true && row.escape_focus_return===true && row.steps.length>0 &&
+        row.steps.every(s=>s.inside===true) && row.inventory.controls.length>=expected &&
+        new Set(row.inventory.controls).size===row.inventory.controls.length &&
+        row.inventory.controls.every(i=>row.steps.some(s=>s.element_index===i)),'mobile navigation lost routes/keyboard coverage');
+      const capture=`${data.surface}-navigation320-${row.theme}.png`;
+      require(row.capture===capture && hash(readFileSync(resolve(dirname(path),capture)))===row.capture_sha256,'mobile navigation capture mismatch');
+    }
+  }
   require(a.text_spacing?.length === 2 && new Set(a.text_spacing.map(x=>x.theme)).size === 2, 'missing text-spacing matrix');
   for (const row of a.text_spacing) {
     require(['light','dark'].includes(row.theme) && row.method==='WCAG-1.4.12-user-stylesheet' &&

@@ -13,7 +13,7 @@ class ReviewAdmissionTest(unittest.TestCase):
         source = root / 'frontend/reviewed.tsx'
         source.parent.mkdir()
         source.write_text('// synthetic test source')
-        captures = {f'website/sample-{i}.png': digest(str(i).encode()) for i in range(109)}
+        captures = {f'website/sample-{i}.png': digest(str(i).encode()) for i in range(113)}
         manifest = root / 'artifacts/v10/P20/runtime/t035-sources/collection.json'
         manifest.parent.mkdir(parents=True)
         manifest.write_text(json.dumps({'files': {p: {'sha256': h} for p, h in captures.items()}}))
@@ -34,7 +34,7 @@ class ReviewAdmissionTest(unittest.TestCase):
             root = Path(directory)
             details, review = self.fixture(root)
             result = validate_review(root, 'a'*40, details, review)
-            self.assertEqual((result['criteria'], result['captures']), (55, 109))
+            self.assertEqual((result['criteria'], result['captures']), (55, 113))
 
     def test_reject_missing_stale_unsupported_and_waived_review(self):
         mutations = [lambda r: r.update(implementation_commit='b'*40),

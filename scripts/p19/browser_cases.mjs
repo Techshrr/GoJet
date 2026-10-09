@@ -175,7 +175,7 @@ async function mobileMenuKeyboard() {
           throw Error('menu is not modal or initial focus escaped');
         const controls = dialog.locator('button,a[href]');
         const count = await controls.count();
-        if (count !== 6) throw Error('mobile menu control set incomplete');
+        if (count !== 8) throw Error('mobile menu control set incomplete');
         const seen = new Set();
         for (const key of ['Tab', 'Shift+Tab']) {
           for (let i = 0; i < count * 2; i++) {

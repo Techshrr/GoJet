@@ -212,3 +212,44 @@ pass. Fresh native CI remains required; T035/P20 are open and T036+ is locked.
 The e524 T028 retry also exposed P09 Evidence's earlier producer wait timeout;
 its four real producers subsequently succeeded. Recover that exact-head job,
 without treating a transport/queue recovery as a product-code correction.
+
+## Responsive functionality review and retained deletion failure
+
+Reviewed all 90 e524 images across the nine native states, both themes and five
+capture profiles. Source and images show Workspace/Admin sidebar routes vanish
+below the mobile breakpoint with no replacement. Website also hides its login
+header action while omitting it from the mobile menu. These are functionality
+losses; no conformance review is signed for either e524 or 86d654.
+
+Provide native details/summary navigation outside the sticky Workspace header,
+using the same route arrays as desktop. Include Workspace switcher/Create and
+Admin Audit/Overview. Escape closes the disclosure and returns summary focus;
+activated links close it. Website's modal adds Sign in/Get started in both
+locales, so native traces now require eight controls and 128 total Tab steps.
+Supplemental probe compares actual mobile/desktop routes, reaches every mobile
+control by Tab and retains four open-navigation captures in both themes.
+Current review inventory therefore requires 113 images.
+
+86d654 P10 run 37889587201/job 113687241909 fails at the final network diagnostic
+after cancellation-preservation, DELETE 204, redirect and public HTTP 410 checks
+execute. A request to text-shares/4 reports net::ERR_ABORTED. Old metadata omitted
+method/status, so do not assume a cancellation, product bug or harmless 204.
+Retain request method/type/navigation/observed status and complete deletion
+results even on failure. Keep the request-failure assertion; no waiver is added.
+
+React review: stable route arrays, no new dependencies or async fetching;
+native disclosure and existing overlay lifecycle reused. Workspace/Admin/Site
+TypeScript and 11 Python + 11 Node boundary tests pass. Fresh native navigation
+and deletion-network verdicts remain required. P20/T035 stay OPEN.
+
+86d654 Website native workflow succeeded, but its independently downloaded raw
+T035 record FAILED because Orca yielded zero admitted controls after the new
+spacing sample. Archive 11598455339 SHA-256
+`eff4236dd6906fa2b6d0a41bb61f63da6a530970d845ad119eaae964145b314a`
+verified; both zoom and both text-spacing observations pass. New current-name
+parser correctly replays all historical e524 receipts, so no parser exemption
+is added. Failed first focus attempts were marked visited and could never be
+sampled again. Restore fresh real Tab retries with a three-attempt-per-control
+bound, while only successfully announced controls become visited. Each failed
+attempt retains focus state, byte interval and output/dispatcher counts without
+full debug text. Two actual distinct valid announcements remain mandatory.
