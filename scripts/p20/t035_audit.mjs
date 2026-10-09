@@ -21,7 +21,7 @@ export function auditAssistive(data, path) {
     require(row.capture === capture, 'invalid zoom capture');
     const png = readFileSync(resolve(dirname(path), capture));
     require(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) &&
-      hash(png) === row.capture_sha256, 'zoom capture digest mismatch');
+      png.length >= 24 && png.readUInt32BE(16) === 1440 && hash(png) === row.capture_sha256, 'zoom capture digest/physical width mismatch');
   }
   const sr = a.screen_reader;
   require(sr?.engine === 'Orca' && typeof sr.engine_version === 'string' && /\d+\.\d+/.test(sr.engine_version) && sr.steps?.length === 2 &&

@@ -158,3 +158,18 @@ verdict is still required. No formal T035 acceptance, integration promotion or
 T036+ unlock follows from adding this tooling. Historical 6d666ab records remain
 valid for their diagnostic scope; they lack the new supplemental evidence and
 cannot be admitted as new-head supplemental proof.
+
+First native result at 3a14113: Docs run 37874842147, job 113640950677.
+Orca 46.1 and the AT-SPI registry start successfully. P18-T019 itself PASSES.
+The following wrapper fails because `speech-dispatcher --spawn` exits 1 for an
+already-running daemon. Independently, retained T035 JSON rejects dark zoom:
+light reports 720x450/DPR2, but dark reports 320x844/DPR1. Playwright fullPage
+capture competes with the supplemental CDP metrics session. Neither failure is
+waived. Connect/preflight the real eSpeak module via SSIP; capture zoom directly
+through its owning CDP session, explicitly reset each theme, and verify the PNG
+physical width is 1440. Preserve the zoom assertions. Fresh native results
+remain required; no screen-reader sampling PASS has yet been established.
+Each desktop command also owns a private runtime directory and a real
+PulseAudio virtual sink for eSpeak (the upstream audio default is PulseAudio).
+This avoids requiring a physical CI sound device or substituting a dummy
+speech module. It still does not claim audible playback verification.

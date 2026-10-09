@@ -1,5 +1,5 @@
 /** Supplemental native evidence, not a WCAG conformance declaration. */
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -35,6 +35,8 @@ export async function assistiveProbe(page, surface, out) {
     // This is explicitly device-metrics-equivalent evidence, not a claim that
     // the browser toolbar zoom setting was changed.
     for (const theme of ['light', 'dark']) {
+      await page.setViewportSize({width:720,height:450});
+      await session.send('Emulation.clearDeviceMetricsOverride');
       await session.send('Emulation.setDeviceMetricsOverride', {
         width: 720, height: 450, deviceScaleFactor: 2, mobile: false,
         screenWidth: 1440, screenHeight: 900,
@@ -46,12 +48,18 @@ export async function assistiveProbe(page, surface, out) {
       await page.waitForTimeout(400);
       const layout = await page.evaluate(() => ({width: innerWidth, height: innerHeight,
         dpr: devicePixelRatio, scroll_width: document.documentElement.scrollWidth,
+        scroll_height: Math.max(innerHeight, document.documentElement.scrollHeight),
         main_visible: [...document.querySelectorAll('main')].some(el => el.getClientRects().length > 0)}));
       const capture = `${surface}-zoom200-${theme}.png`;
-      const png = await page.screenshot({path: `${out}/${capture}`, fullPage: true});
+      // Playwright fullPage restores its own metrics, which competes with this
+      // supplemental CDP session. Capture directly on the owning session.
+      const shot = await session.send('Page.captureScreenshot', {format:'png',fromSurface:true,
+        captureBeyondViewport:true,clip:{x:0,y:0,width:720,height:layout.scroll_height,scale:1}});
+      const png = Buffer.from(shot.data, 'base64');
+      writeFileSync(`${out}/${capture}`, png);
       result.zoom.push({theme, method: '200%-device-metrics-equivalent', physical_viewport: {width:1440,height:900},
         layout, capture, capture_sha256: hash(png)});
-      if (layout.width !== 720 || layout.height !== 450 || layout.dpr !== 2 ||
+      if (layout.width !== 720 || layout.height !== 450 || layout.dpr !== 2 || png.readUInt32BE(16) !== 1440 ||
           layout.scroll_width > 721 || !layout.main_visible) throw new Error(`200% equivalent reflow failed: ${theme}`);
     }
     await session.send('Emulation.clearDeviceMetricsOverride');
