@@ -119,6 +119,12 @@ try {
   assert(history.includes('workspace-overview:loading'), `overview loading state missing ${JSON.stringify(history)}`);
   let switcher = opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true });
   await switcher.waitFor();
+  const switchNotice = await switcher.evaluate(el => {
+    const description = document.getElementById(el.getAttribute('aria-describedby') || '');
+    return { text: description?.textContent?.trim(), visible: !!description?.getClientRects().length, precedes_control: !!description && !!(description.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) };
+  });
+  assert(switchNotice.visible && switchNotice.precedes_control && switchNotice.text === 'Selecting a workspace reloads this page.', 'Workspace switch must explain its context change before selection');
+  details.workspace_switch_notice = switchNotice;
   assert(await switcher.locator('option').count() === 2, 'Workspace switcher did not list both memberships');
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Primary' }).count() === 1, 'primary Workspace authority missing');
   await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), switcher.selectOption(ALT_WS)]);

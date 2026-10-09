@@ -1,5 +1,5 @@
 import type { ChangeEvent, MouseEvent, ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button, Dialog, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
@@ -38,6 +38,7 @@ export function WorkspaceShell({
   notificationsContent,
 }: WorkspaceShellProps) {
   const [overlay, setOverlay] = useState<OverlayName | null>(null);
+  const switcherHintId = useId();
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   const viewport = useShellViewport();
   const openOverlay = (name: OverlayName, event: MouseEvent<HTMLButtonElement>) => { lastTrigger.current = event.currentTarget; setOverlay(name); };
@@ -56,7 +57,8 @@ export function WorkspaceShell({
         {switcherOptions ? (
           <label className="workspace-switcher-field">
             <span>Workspace</span>
-            <select className="workspace-switcher" aria-label="Workspace switcher" value={workspaceId ?? ''} onChange={changeWorkspace}>
+            <span id={`${switcherHintId}-desktop`}>Selecting a workspace reloads this page.</span>
+            <select className="workspace-switcher" aria-label="Workspace switcher" aria-describedby={`${switcherHintId}-desktop`} value={workspaceId ?? ''} onChange={changeWorkspace}>
               {switcherOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
@@ -87,7 +89,8 @@ export function WorkspaceShell({
         }}>
           <summary>Workspace navigation</summary>
           {switcherOptions ? <label className="workspace-switcher-field"><span>Workspace</span>
-            <select className="workspace-switcher" aria-label="Workspace switcher" value={workspaceId ?? ''} onChange={changeWorkspace}>
+            <span id={`${switcherHintId}-mobile`}>Selecting a workspace reloads this page.</span>
+            <select className="workspace-switcher" aria-label="Workspace switcher" aria-describedby={`${switcherHintId}-mobile`} value={workspaceId ?? ''} onChange={changeWorkspace}>
               {switcherOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select></label> : <span>{workspaceLabel}</span>}
           <Button onClick={event => openOverlay('create', event)}>Create</Button>

@@ -333,3 +333,26 @@ all-DOM unauthorized-membership inspection unchanged. This repair changes
 verification targeting only; it neither deletes the mobile navigation nor
 weakens business assertions. Native P04/P12 and new-head dependencies must pass
 before T035 formal acceptance. T036+ remains locked.
+
+## Manual representative review: non-text contrast and change of context
+
+SC1.4.11: Auth text-entry boundaries incorrectly used the decorative divider
+token. Source-derived unrounded sRGB ratios against adjacent canvas are
+1.4076927652721558 (light #CBD5E1/#F7F9FC) and 1.345385724619138
+(dark #1E293B/#070B14). Empty entry controls need a distinguishable boundary.
+Use the existing border-default token: ratios4.512008200191281 light and
+7.675877833480309 dark, also above3 against each input's own background.
+Do not change decorative dividers or disabled-control contrast exceptions.
+See https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html .
+This is a manual finding outside the existing axe text-contrast checks.
+
+SC3.2.2: the native P12 switcher reloads the page through the real Workspace
+authority. Add visible prior advice to both responsive switchers and bind
+each description with a unique aria-describedby ID. The visible name remains
+Workspace switcher. P12-T019 now verifies that the actual rendered description
+is visible before performing the same real membership switches and server
+settings mutation. No switch, navigation or permission assertion is removed.
+
+These findings prevent a clean formal review of the earlier diagnostic packet.
+A new-head packet must include the corrected product styles/description before
+manual admission. The earlier automated PASS remains only diagnostic evidence.
