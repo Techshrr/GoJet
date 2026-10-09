@@ -68,6 +68,8 @@ export async function run(browser) {
 
   await page.goto(`${ADMIN_URL}/admin/access/administrators`);
   await page.locator('[data-page="admin-access"]').waitFor({ state: 'visible' });
+  assert(await page.getByRole('searchbox', { name: 'Global search: permitted users, workspaces and resources', exact: true }).isVisible(), 'Admin search accessible name must include its visible Global search label');
+  checks.search_label_in_name = true;
   await page.getByRole('button', { name: 'Enroll TOTP' }).click();
   await waitState(page, 'admin-access', 'TOTP');
   details.states.push('TOTP');
@@ -75,7 +77,8 @@ export async function run(browser) {
   assert(secret.length >= 16, 'TOTP enrollment did not return one-time secret');
   const { totp } = await import('./browser_common.mjs');
   const code = totp(secret);
-  await page.getByLabel('TOTP confirmation code').fill(code);
+  await page.getByRole('textbox', { name: 'Six-digit code — TOTP confirmation code', exact: true }).fill(code);
+  checks.totp_label_in_name = true;
   await page.getByRole('button', { name: 'Confirm TOTP' }).click();
   await page.locator('[data-secret-once="true"]').waitFor({ state: 'detached' });
   checks.totp_enrolled = mysqlScalar(`SELECT state FROM admin_totp_credentials t JOIN admin_administrators a ON a.id=t.administrator_id WHERE a.email_normalized='${fixture.root_email}'`) === 'active';

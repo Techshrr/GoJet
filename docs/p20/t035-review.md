@@ -356,3 +356,18 @@ settings mutation. No switch, navigation or permission assertion is removed.
 These findings prevent a clean formal review of the earlier diagnostic packet.
 A new-head packet must include the corrected product styles/description before
 manual admission. The earlier automated PASS remains only diagnostic evidence.
+
+## Manual label-in-name review
+
+Source review found two Admin controls whose aria-label overrode their visible
+labels: Global search and Six-digit code. The accessible names now contain
+those exact visible strings, preserving the additional search scope and TOTP
+purpose. P17-T030 explicitly locates the actual searchbox and enrollment textbox
+by these names before continuing its real MFA and durable revocation checks.
+This repairs the SC 2.5.3 source finding; fresh native authority is still required.
+Reference: https://www.w3.org/WAI/WCAG22/Techniques/general/G208
+
+Separately, a74fd789 repairs the P12-T019 result serializer: the switch notice
+was assigned through an undefined details variable. Its evidence now belongs
+in the existing PASS result object. The visible/precedes-control assertion and
+all real membership, settings persistence and viewer restrictions remain.
