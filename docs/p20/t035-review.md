@@ -173,3 +173,42 @@ Each desktop command also owns a private runtime directory and a real
 PulseAudio virtual sink for eSpeak (the upstream audio default is PulseAudio).
 This avoids requiring a physical CI sound device or substituting a dummy
 speech module. It still does not claim audible playback verification.
+
+## Native e524e73 verdict and complete admission batch
+
+All five native producers succeeded on e524e73. Independent raw replay passed
+eight states and rejected Admin: a previous Revoke button's delayed role
+dispatch was retained as metadata for the current Confirm revoke control.
+Current combined label/role output was present, but the stored role field did
+not match its independent reconstruction. Preserve that failure. The parser
+now prefers current label+role output and allows only a bare role as a separate
+utterance. Another control's named utterance can never supply the current role.
+
+Source review also found durable Text deletion executed immediately on the
+first button activation. Add an inline, named confirmation with the server
+resource title, irreversible-action explanation and change reason. Cancel and
+Escape return focus to the trigger; real deletion requires explicit confirmation.
+Native P10-T017 verifies cancellation preserves the authenticated server record,
+then keyboard confirmation produces DELETE 204 and public HTTP 410. Its 320px
+confirmation capture is retained alongside the nine-state packet.
+
+Apply the SC 1.4.12 user stylesheet to all nine native states in both themes,
+retaining 18 additional 320px captures and raw overflow/clipping observations.
+Together with previous captures and deletion review this creates 109 images
+for the current representative review. No old image or raw record is upgraded.
+
+The frozen browser_matrix.py driver now supports T035 admission separately
+from diagnostic collection. Formal admission requires a review in tracker #188
+bound to the exact head, collection digest, every capture and reviewed source
+digests. All 55 WCAG 2.2 A/AA criteria need a reason and evidence for PASS or
+NOT_APPLICABLE; applicable obligations cannot be waived. This does not generate
+review or certify audible playback. Missing or stale review fails closed. The
+complete native packet must first pass independent replay and actual review;
+then the same-head formal job can be rerun without another source commit.
+
+Local validation: 11 Python admission/collection tests, 10 Node raw diagnostic
+and speech parser tests, Workspace TypeScript, workflow YAML and driver syntax
+pass. Fresh native CI remains required; T035/P20 are open and T036+ is locked.
+The e524 T028 retry also exposed P09 Evidence's earlier producer wait timeout;
+its four real producers subsequently succeeded. Recover that exact-head job,
+without treating a transport/queue recovery as a product-code correction.

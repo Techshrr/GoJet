@@ -24,7 +24,7 @@ function fixture(directory) {
       keyboard_expected:[1],keyboard:[{element_index:1,visible_indicator:true,in_view:true,unobscured:true,
         fragments:[{width:20,height:20,in_view:true,unobscured:true}]}]});
   }
-  data.assistive = {zoom:[], screen_reader:{engine:'Orca',engine_version:'46.1',scope:'synthetic unit fixture; not native evidence',steps:[]}};
+  data.assistive = {zoom:[], text_spacing:[], screen_reader:{engine:'Orca',engine_version:'46.1',scope:'synthetic unit fixture; not native evidence',steps:[]}};
   for (const theme of ['light','dark']) {
     const capture = `public-zoom200-${theme}.png`;
     const zoomPng = Buffer.alloc(24);png.copy(zoomPng);zoomPng.writeUInt32BE(1440,16);
@@ -32,6 +32,10 @@ function fixture(directory) {
     data.assistive.zoom.push({theme,method:'200%-device-metrics-equivalent',physical_viewport:{width:1440,height:900},
       layout:{width:720,height:450,dpr:2,scroll_width:720,main_visible:true},capture,
       capture_sha256:createHash('sha256').update(zoomPng).digest('hex')});
+  }
+  for(const theme of ['light','dark']) {
+    const capture=`public-textspacing320-${theme}.png`;writeFileSync(join(directory,capture),png);
+    data.assistive.text_spacing.push({theme,method:'WCAG-1.4.12-user-stylesheet',layout:{width:320,scroll_width:320,clipped:[]},capture,capture_sha256:createHash('sha256').update(png).digest('hex')});
   }
   for (const [i,name] of ['Open plain text','Download text'].entries()) data.assistive.screen_reader.steps.push({
     name,role:'link',element_index:i+1,input:'Tab',log_start:i*100,log_end:i*100+90,speech_output:`SPEECH OUTPUT: '${name} link' {}`,
@@ -64,6 +68,7 @@ test('raw evidence audit rejects forged metadata, observations and captures', ()
       d => d.assistive.zoom[0].layout.dpr = 1,
       d => d.assistive.zoom[0].layout.scroll_width = 1000,
       d => d.assistive.zoom[0].capture_sha256 = 'b'.repeat(64),
+      d => d.assistive.text_spacing[0].layout.clipped.push({element_index:1,tag:'BUTTON'}),
       d => d.assistive.screen_reader.steps[0].dispatcher_output = '',
       d => d.assistive.screen_reader.steps[0].log_end = 0,
       d => d.assistive.screen_reader.steps[1] = structuredClone(d.assistive.screen_reader.steps[0]),

@@ -28,6 +28,7 @@ def inspect_collection(directory, manifest, head):
             expected.add(f'{key}/{surface}.json')
             expected.update(f'{key}/{surface}-{size}-{theme}.png' for size in SIZES for theme in ('light', 'dark'))
     expected.update('website/menu-traces/' + name for name in MENU_TRACES)
+    expected.add('workspace/interactions/P10-T017-delete-confirmation.png')
     inspect_files(directory, files, expected)
 
 
@@ -72,6 +73,10 @@ def inspect(root, head, source_root=None):
                     and (data.get('errors', []) == [] if key == 'docs' else data.get('errors') == []),
                     'invalid native interaction evidence: ' + case)
     menu = inspect_menu(directory, head)
+    deletion = json.loads((directory / 'workspace/interactions/P10-T017.json').read_bytes())['details'].get('delete_confirmation', {})
+    require(all(deletion.get(key) is True for key in ('keyboard_open','cancel_escape','cancel_button','focus_return','cancel_keeps_resource'))
+            and deletion.get('confirmed_server_status') == 204 and deletion.get('confirmed_public_status') == 410,
+            'missing real keyboard deletion/cancellation authority')
     prerequisite = directory / 'prerequisite'
     formal = json.loads((prerequisite / 'artifacts/v10/P20/browser/P20-T034.json').read_bytes())
     details = inspect_t034(prerequisite, head, source_root=source_root)

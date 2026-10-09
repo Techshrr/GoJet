@@ -1,4 +1,4 @@
-"""Frozen T034 driver: native visual evidence plus recursively admitted authority."""
+"""Frozen T034/T035 driver: native authority and independently bound review."""
 import argparse
 import subprocess
 from t028_sources import require
@@ -17,19 +17,31 @@ def admit(root, head):
     return details
 
 
-def run_case():
+def admit_t035(root, head, review=None):
+    from t035_matrix import inspect as inspect_accessibility
+    from t035_review import load_review, validate_review
+    details = inspect_accessibility(root, head)
+    details['review'] = validate_review(root, head, details, review if review is not None else load_review())
+    details['formal_p20_t035_claim'] = True
+    details['next_case_unlocked'] = False
+    details['scope'] = 'nine representative native states; WCAG 2.2 A/AA review; sampled real Orca controls; no audible-playback certificate'
+    return details
+
+
+def run_case(case='T034'):
     from common import ROOT, HEAD, emit
     errors = []
-    details = {'formal_p20_t034_claim': False, 'next_case_unlocked': False}
+    details = {('formal_p20_t034_claim' if case == 'T034' else 'formal_p20_t035_claim'): False, 'next_case_unlocked': False}
     try:
-        details = admit(ROOT, HEAD)
+        details = admit(ROOT, HEAD) if case == 'T034' else admit_t035(ROOT, HEAD)
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
-        errors.append('T034 admission failed: ' + str(error))
-    return emit('P20-T034', 'browser', 'Release-wide Design System and visual consistency', errors, details)
+        errors.append(case + ' admission failed: ' + str(error))
+    name = 'Release-wide Design System and visual consistency' if case == 'T034' else 'Release-wide accessibility and responsive matrix'
+    return emit('P20-' + case, 'browser', name, errors, details)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--case', choices=['T034'], default='T034')
-    parser.parse_args()
-    raise SystemExit(run_case()['status'] != 'PASS')
+    parser.add_argument('--case', choices=['T034','T035'], default='T034')
+    args = parser.parse_args()
+    raise SystemExit(run_case(args.case)['status'] != 'PASS')

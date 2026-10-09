@@ -11,7 +11,7 @@ from t034_sources import PRODUCERS as VISUAL_PRODUCERS
 PRODUCERS = {key: value for key, value in VISUAL_PRODUCERS.items()
              if key not in ('prerequisite', 'foundation')}
 PRODUCERS['prerequisite'] = ('p20-t034-matrix.yml', 'p20-t034-native-matrix-', 'P20', None)
-SIZES = ('desktop', 'tablet', 'mobile', 'reflow320', 'zoom200')
+SIZES = ('desktop', 'tablet', 'mobile', 'reflow320', 'zoom200', 'textspacing320')
 MENU_TRACES = [f'T025-menu-{size}-{locale}.json' for size in ('mobile', 'compact320') for locale in ('en', 'zh-CN')]
 INTERACTIONS = {
     'website': ['P19-T025'], 'docs': ['P18-T019', 'P18-T020', 'P18-T021'],
@@ -49,6 +49,8 @@ def save_archive(directory, manifest, key, archive):
     if key == 'website':
         for name in MENU_TRACES:
             save(f'website/menu-traces/{name}', member(archive, node, 'browser/' + name))
+    if key == 'workspace':
+        save('workspace/interactions/P10-T017-delete-confirmation.png', member(archive, node, 'captures/P10-T017-delete-confirmation.png'))
     for case in INTERACTIONS[key]:
         save(f'{key}/interactions/{case}.json', member(archive, node, f'browser/{case}.json'))
     for surface in surfaces:

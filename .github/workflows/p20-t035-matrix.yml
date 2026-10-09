@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: read
 concurrency:
   group: p20-t035-matrix-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -32,7 +33,11 @@ jobs:
         run: python3 scripts/p20/t035_sources.py
       - name: Recompute accessibility diagnostics and prerequisite authority
         run: python3 scripts/p20/t035_matrix.py
-      - name: Preserve review packet (not formal T035 acceptance)
+      - name: Require independent exact-packet WCAG review before formal admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/browser_matrix.py --case T035
+      - name: Preserve formal result and complete review packet
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -40,5 +45,6 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: |
+            artifacts/v10/P20/browser/P20-T035.json
             artifacts/v10/P20/runtime/t035-sources/
             artifacts/v10/P20/runtime/t035-matrix/

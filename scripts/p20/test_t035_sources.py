@@ -41,6 +41,8 @@ class AccessibilitySourcesTest(unittest.TestCase):
                 paths += [f'{key}/interactions/{case}.json' for case in INTERACTIONS[key]]
             if key == 'website':
                 paths += ['website/menu-traces/' + name for name in MENU_TRACES]
+            if key == 'workspace':
+                paths += ['workspace/interactions/P10-T017-delete-confirmation.png']
             for path in paths:
                 target = directory / path
                 target.parent.mkdir(parents=True, exist_ok=True)

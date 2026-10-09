@@ -105,6 +105,16 @@ async function layout(page) {
 function assertLayout(value,label){assert(value.root_overflow_px===0&&value.body_overflow_px===0,`${label} root/body overflow ${JSON.stringify(value)}`);assert(value.clipped.length===0,`${label} clipped ${JSON.stringify(value.clipped)}`);}
 function writeResult(caseId,status,details,errors=[]){writeFileSync(`${browserDir}/${caseId}.json`,JSON.stringify({node:'P10',case_id:caseId,status,implementation_commit:HEAD,generated_at:new Date().toISOString(),environment:{browser:executablePath,workspace_owner:OWNER_URL,workspace_viewer:VIEWER_URL,platformapi:PLATFORM_URL,mysql:`${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`,canonical_viewports:viewports,authority:'real built owner/viewer Workspace + native Go platformapi + real MySQL; no request interception or fixture-only browser success'},details,errors},null,2)+'\n');}
 async function screenshot(page,name){const path=`${capturesDir}/${name}.png`;await page.screenshot({path,fullPage:true});return path.replace(`${ROOT}/`,'');}
+async function keyboardDeleteReview(page) {
+  const trigger = page.getByRole('button',{name:'Delete Text share',exact:true});
+  for(let n=0;n<100 && !(await trigger.evaluate(el=>el===document.activeElement));n++) await page.keyboard.press('Tab');
+  assert(await trigger.evaluate(el=>el===document.activeElement),'delete trigger is not keyboard reachable');
+  await page.keyboard.press('Enter');
+  const cancel = page.getByRole('button',{name:'Cancel',exact:true});
+  await cancel.waitFor();
+  await page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Cancel');
+  return {trigger,cancel};
+}
 
 async function caseT016(browser){
   resetText();
@@ -151,6 +161,30 @@ async function caseT017(browser){
   mysql('RENAME TABLE text_shares TO text_shares_p10_fault');
   try { opened=await openPage(browser,OWNER_URL,`/app/text/${base.id}`); await waitState(opened.page,'[data-page="text-detail"]','error'); evidence.error=true; assertDiagnostics(opened.report,'T017 controlled error',[500,502]); await opened.context.close(); }
   finally { mysql('RENAME TABLE text_shares_p10_fault TO text_shares'); }
+  // Real authenticated UI deletion: cancellation must preserve the server
+  // record; only the explicit confirmation may produce DELETE/HTTP 410.
+  const removable=await createText({title:'Review Text deletion',visibility:'public'});
+  opened=await openPage(browser,OWNER_URL,`/app/text/${removable.id}`,{width:320,height:800});
+  await waitState(opened.page,'[data-page="text-detail"]','edit');
+  let review=await keyboardDeleteReview(opened.page);
+  assert((await opened.page.getByRole('group',{name:'Confirm Text deletion'}).getByRole('status').textContent()).includes(removable.title),'deletion review omits server resource title');
+  assertLayout(await layout(opened.page),'320px deletion review');
+  evidence.delete_confirmation_capture=await screenshot(opened.page,'P10-T017-delete-confirmation');
+  await opened.page.keyboard.press('Escape');
+  await opened.page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Delete Text share');
+  assert((await api(`/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`)).response.status===200,'Escape deleted the server record');
+  review=await keyboardDeleteReview(opened.page);await opened.page.keyboard.press('Enter');
+  await opened.page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Delete Text share');
+  assert((await api(`/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`)).response.status===200,'Cancel deleted the server record');
+  review=await keyboardDeleteReview(opened.page);
+  await opened.page.keyboard.press('Tab');
+  assert(await opened.page.getByRole('button',{name:'Confirm delete Text share',exact:true}).evaluate(el=>el===document.activeElement),'confirmation is not keyboard reachable');
+  const removed=opened.page.waitForResponse(r=>r.request().method()==='DELETE' && r.url().endsWith(`/text-shares/${removable.id}`));
+  await opened.page.keyboard.press('Enter');assert((await removed).status()===204,'confirmed UI deletion did not settle');
+  await opened.page.waitForURL(/\/app\/text$/);
+  assert((await fetch(`${PLATFORM_URL}/t/${encodeURIComponent(removable.public_slug)}`)).status===410,'confirmed deletion did not revoke public access');
+  evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410};
+  assertDiagnostics(opened.report,'T017 confirmed deletion');await opened.context.close();
   return evidence;
 }
 

@@ -24,6 +24,15 @@ export function auditAssistive(data, path) {
       png.length >= 24 && png.readUInt32BE(16) === 1440 && hash(png) === row.capture_sha256, 'zoom capture digest/physical width mismatch');
   }
   const sr = a.screen_reader;
+  require(a.text_spacing?.length === 2 && new Set(a.text_spacing.map(x=>x.theme)).size === 2, 'missing text-spacing matrix');
+  for (const row of a.text_spacing) {
+    require(['light','dark'].includes(row.theme) && row.method==='WCAG-1.4.12-user-stylesheet' &&
+      row.layout.width===320 && row.layout.scroll_width<=321 && row.layout.clipped.length===0, 'text-spacing clipping/overflow');
+    const capture=`${data.surface}-textspacing320-${row.theme}.png`;
+    require(row.capture===capture, 'invalid text-spacing capture');
+    const png=readFileSync(resolve(dirname(path),capture));
+    require(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) && hash(png)===row.capture_sha256,'text-spacing capture digest mismatch');
+  }
   require(sr?.engine === 'Orca' && typeof sr.engine_version === 'string' && /\d+\.\d+/.test(sr.engine_version) && sr.steps?.length === 2 &&
     new Set(sr.steps.map(x => x.element_index)).size === 2, 'missing native screen-reader sample');
   for (const step of sr.steps) {
@@ -32,7 +41,7 @@ export function auditAssistive(data, path) {
       Number.isInteger(step.log_start) && Number.isInteger(step.log_end) && step.log_start >= 0 && step.log_end > step.log_start &&
       receipt && ['speech_output','dispatcher_output','role_speech_output','role_dispatcher_output'].every(key => receipt[key] === step[key]), 'invalid speech sample');
   }
-  return {zoom_observations:2, native_screen_reader_controls:2, screen_reader_engine:sr.engine_version, screen_reader_scope:sr.scope};
+  return {zoom_observations:2, text_spacing_observations:2, native_screen_reader_controls:2, screen_reader_engine:sr.engine_version, screen_reader_scope:sr.scope};
 }
 export function auditFile(path, head, viewports) {
   const data = JSON.parse(readFileSync(path, 'utf8'));

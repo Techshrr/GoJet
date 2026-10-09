@@ -16,7 +16,15 @@ export function speechReceipt(segment, name, role) {
   const named = line => line.toLowerCase().includes(name.toLowerCase());
   const typed = line => new RegExp(`\\b${role}\\b`, 'i').test(line);
   const utterance = output.find(named), sent = dispatch.find(named);
-  const roleUtterance = output.find(typed), roleSent = dispatch.find(typed);
+  const roleOnly = line => {
+    const match = /(?:SPEECH OUTPUT: |Speaking )'([^']+)'/.exec(line);
+    return match && /^(?:(?:visited|unvisited|push)\s+)?(?:link|button)[.\s]*$/i.test(match[1]);
+  };
+  // A prior control's delayed dispatch may land in this byte interval. Prefer
+  // this control's combined name+role; a separate role must contain ONLY the
+  // role, never another control's name.
+  const roleUtterance = output.find(line => named(line) && typed(line)) || output.find(line => typed(line) && roleOnly(line));
+  const roleSent = dispatch.find(line => named(line) && typed(line)) || dispatch.find(line => typed(line) && roleOnly(line));
   if (!utterance || !sent || !roleUtterance || !roleSent) return null;
   return {name, role, speech_output: utterance, dispatcher_output: sent,
     role_speech_output: roleUtterance, role_dispatcher_output: roleSent};
@@ -28,7 +36,7 @@ export async function assistiveProbe(page, surface, out) {
   const savedScroll = await page.evaluate(() => ({x: scrollX, y: scrollY}));
   const focused = await page.evaluateHandle(() => document.activeElement);
   const session = await page.context().newCDPSession(page);
-  const result = {zoom: [], screen_reader: {engine: 'Orca', engine_version: process.env.P20_ORCA_VERSION,
+  const result = {zoom: [], text_spacing: [], screen_reader: {engine: 'Orca', engine_version: process.env.P20_ORCA_VERSION,
     scope: 'two distinct native Tab control announcements and dispatcher attempts; not audio playback or complete manual review', steps: []}};
   try {
     // Same 1440x900 physical area at 200%: 720x450 CSS pixels, DPR 2.
@@ -63,6 +71,25 @@ export async function assistiveProbe(page, surface, out) {
           layout.scroll_width > 721 || !layout.main_visible) throw new Error(`200% equivalent reflow failed: ${theme}`);
     }
     await session.send('Emulation.clearDeviceMetricsOverride');
+    // SC 1.4.12: real user stylesheet overrides, on the real current page.
+    // This changes presentation only; no fixture content or API is inserted.
+    await page.setViewportSize({width:320,height:844});
+    const spacing = await page.addStyleTag({content:'* { line-height: 1.5 !important; letter-spacing: .12em !important; word-spacing: .16em !important; } p { margin-bottom: 2em !important; }'});
+    try {
+      for (const theme of ['light','dark']) {
+        await page.evaluate(value=>{document.documentElement.setAttribute('data-theme',value);scrollTo(0,0);},theme);
+        await page.waitForTimeout(300);
+        const layout = await page.evaluate(()=>({width:innerWidth,scroll_width:document.documentElement.scrollWidth,
+          clipped:[...document.querySelectorAll('main h1,main h2,main h3,main button,main a,main label,main dd,main code,main p')]
+            .filter(el=>el instanceof HTMLElement && el.getClientRects().length && el.clientWidth>0 &&
+              (el.scrollWidth>el.clientWidth+1 || el.scrollHeight>el.clientHeight+1))
+            .map(el=>({element_index:[...document.querySelectorAll('*')].indexOf(el),tag:el.tagName}))}));
+        const capture=`${surface}-textspacing320-${theme}.png`;
+        const png=await page.screenshot({path:`${out}/${capture}`,fullPage:true});
+        result.text_spacing.push({theme,method:'WCAG-1.4.12-user-stylesheet',layout,capture,capture_sha256:hash(png)});
+        if (layout.width!==320 || layout.scroll_width>321 || layout.clipped.length) throw new Error(`text-spacing reflow failed: ${theme}`);
+      }
+    } finally { await spacing.evaluate(el=>el.remove());await spacing.dispose(); }
     if (savedViewport) await page.setViewportSize(savedViewport);
     const log = process.env.P20_ORCA_LOG;
     if (!log) throw new Error('native Orca session was not started');
@@ -83,13 +110,13 @@ export async function assistiveProbe(page, surface, out) {
         return {name, role: el.tagName === 'A' ? 'link' : 'button', element_index: [...document.querySelectorAll('*')].indexOf(el)};
       });
       if (!target || visited.has(target.element_index) || !target.name || target.name.length > 80 || /[@\r\n]|https?:/i.test(target.name)) continue;
+      visited.add(target.element_index);
       let receipt;
       for (let n = 0; n < 12 && !receipt; n++) {
         await page.waitForTimeout(250);
         receipt = speechReceipt(readFileSync(log).subarray(start).toString('utf8'), target.name, target.role);
       }
       if (!receipt) continue;
-      visited.add(target.element_index);
       result.screen_reader.steps.push({...receipt, element_index: target.element_index, input: 'Tab',
         log_start: start, log_end: statSync(log).size});
     }
