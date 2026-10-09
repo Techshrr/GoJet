@@ -44,6 +44,13 @@ export async function visualProbe(page, node, surface) {
       await page.setViewportSize(canonical(size));
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      // Start descendant transitions before measuring their settling interval.
+      // Reading only the root token can leave descendant styles unapplied until
+      // the first subsequent frame, after the old wall-clock wait has elapsed.
+      await page.evaluate(() => {
+        document.getAnimations();
+        return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       // Sample the settled state, after bounded canonical feedback transitions.
       // Persistent/repeating motion remains observable and fails below.
       const settleMs = await page.evaluate(() => {
@@ -71,6 +78,13 @@ export async function visualProbe(page, node, surface) {
           broken_images: [...document.images].filter(image => visible(image) && (!image.complete || image.naturalWidth === 0)).length,
           placeholder_elements: [...document.querySelectorAll('[data-placeholder], img[src*="placeholder"]')].filter(visible).length,
           active_animations: document.getAnimations().filter(animation => animation.playState === 'running').length,
+          running_animation_details: document.getAnimations().filter(animation => animation.playState === 'running').map(animation => {
+            const timing = animation.effect?.getComputedTiming();
+            return { kind: animation.constructor.name, property: animation.transitionProperty || null,
+              target_tag: animation.effect?.target?.tagName || null, current_time: animation.currentTime,
+              duration: timing?.duration, delay: timing?.delay,
+              iterations: Number.isFinite(timing?.iterations) ? timing.iterations : 'unbounded' };
+          }),
           svg_icons: [...document.querySelectorAll('svg')].filter(visible).map(icon => ({view_box: icon.getAttribute('viewBox'), hidden: icon.getAttribute('aria-hidden'), role: icon.getAttribute('role')})),
           images: [...document.images].filter(visible).map(image => ({
             alt_present: image.hasAttribute('alt'), width: Number(image.getAttribute('width')), height: Number(image.getAttribute('height')),

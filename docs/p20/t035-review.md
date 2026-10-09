@@ -402,3 +402,25 @@ A sole retained artifact from an already-successful matrix job remains usable
 when only a different matrix job was retried. Real API metadata replay selects
 11622822498. Synthetic tests reject missing/ambiguous boundaries, expired and
 foreign-run/head/digest evidence. All34 T03-series Python tests pass locally.
+# cc40769 native verdict and T034 sampling correction
+
+All five native workflows, P20 Contract, Candidate Freeze and T028–T033 succeed
+on cc40769cf02801546c97836cf2e4ec0dd32106f0. All nine original T035 records
+independently pass (72 observations / 892 Tab steps). This does not admit T035.
+T034 run37968972909 artifact11636814705, verified ZIP SHA256
+5956790d0bec22ff09c55c38156880524e87decf6a44f46e358917b6bba23854,
+rejects Workspace mobile/dark: reduced_motion=true, active_animations=6.
+Other eight native T034 states pass; T035 fails on this required predecessor.
+
+The original record does not identify the six animations, so their exact cause
+is unproven. Source review finds the settle timer starts after reading only root
+tokens, before descendant transitions necessarily start. Flush document animation
+styles and cross two animation frames before starting the existing bounded wait.
+Keep the zero-running-animation requirement unchanged, and retain running
+animation type/property/tag/timing (without text, selectors or input values) for
+any subsequent failure. No animation cancellation, suppression or PASS rewrite.
+New native CI is required; the sampling correction is not yet a proven fix.
+
+Separate P18/P19 historical predecessor live-binding steps fail with HTTP404;
+these are not native browser failures and are not waived by this correction.
+P20/T035 remain OPEN; T036+ locked; PR189 remains CI-only/NEVER MERGE.
