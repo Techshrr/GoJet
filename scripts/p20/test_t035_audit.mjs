@@ -24,7 +24,7 @@ function fixture(directory) {
       keyboard_expected:[1],keyboard:[{element_index:1,visible_indicator:true,in_view:true,unobscured:true,
         fragments:[{width:20,height:20,in_view:true,unobscured:true}]}]});
   }
-  data.assistive = {zoom:[], text_spacing:[], screen_reader:{engine:'Orca',engine_version:'46.1',scope:'synthetic unit fixture; not native evidence',steps:[]}};
+  data.assistive = {zoom:[], text_spacing:[], screen_reader:{engine:'Orca',engine_version:'46.1',input_authority:'X11 XTEST keyboard; active Chrome window and DOM focus checked',scope:'synthetic unit fixture; not native evidence',steps:[]}};
   for (const theme of ['light','dark']) {
     const capture = `public-zoom200-${theme}.png`;
     const zoomPng = Buffer.alloc(24);png.copy(zoomPng);zoomPng.writeUInt32BE(1440,16);
@@ -35,10 +35,10 @@ function fixture(directory) {
   }
   for(const theme of ['light','dark']) {
     const capture=`public-textspacing320-${theme}.png`;writeFileSync(join(directory,capture),png);
-    data.assistive.text_spacing.push({theme,method:'WCAG-1.4.12-user-stylesheet',layout:{width:320,scroll_width:320,clipped:[]},capture,capture_sha256:createHash('sha256').update(png).digest('hex')});
+    data.assistive.text_spacing.push({theme,method:'WCAG-1.4.12-inspector-user-stylesheet',origin:'inspector',layout:{override:{font_size:16,line_height:24,letter_spacing:1.92,word_spacing:2.56},width:320,scroll_width:320,clipped:[],nodes:[{element_index:1,tag:'BUTTON',client_width:100,client_height:40,scroll_width:100,scroll_height:40,overflow_x:'visible',overflow_y:'visible'}]},capture,capture_sha256:createHash('sha256').update(png).digest('hex')});
   }
   for (const [i,name] of ['Open plain text','Download text'].entries()) data.assistive.screen_reader.steps.push({
-    name,role:'link',element_index:i+1,input:'Tab',log_start:i*100,log_end:i*100+90,speech_output:`SPEECH OUTPUT: '${name} link' {}`,
+    name,role:'link',element_index:i+1,input:'native-X11-Tab',log_start:i*100,log_end:i*100+90,speech_output:`SPEECH OUTPUT: '${name} link' {}`,
     dispatcher_output:`SPEECH DISPATCHER: Speaking '${name} link' as string`,
     role_speech_output:`SPEECH OUTPUT: '${name} link' {}`,
     role_dispatcher_output:`SPEECH DISPATCHER: Speaking '${name} link' as string`});
@@ -69,7 +69,12 @@ test('raw evidence audit rejects forged metadata, observations and captures', ()
       d => d.assistive.zoom[0].layout.scroll_width = 1000,
       d => d.assistive.zoom[0].capture_sha256 = 'b'.repeat(64),
       d => d.assistive.text_spacing[0].layout.clipped.push({element_index:1,tag:'BUTTON'}),
+      d => {d.assistive.text_spacing[0].layout.nodes[0].overflow_y='hidden';d.assistive.text_spacing[0].layout.nodes[0].scroll_height=100;},
+      d => delete d.assistive.text_spacing[0].layout.nodes,
+      d => d.assistive.text_spacing[0].layout.override.letter_spacing=0,
+      d => d.assistive.text_spacing[0].origin='regular',
       d => d.assistive.screen_reader.steps[0].dispatcher_output = '',
+      d => delete d.assistive.screen_reader.input_authority,
       d => d.assistive.screen_reader.steps[0].log_end = 0,
       d => d.assistive.screen_reader.steps[1] = structuredClone(d.assistive.screen_reader.steps[0]),
     ];

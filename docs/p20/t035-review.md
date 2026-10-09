@@ -267,3 +267,42 @@ proof. RFC9110 §15.3.5 defines HTTP204 as complete at its headers with no body:
 https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.5
 This is outcome classification, not a claim that the Chromium abort cause is
 fixed. Its native verdict and all remaining supplemental evidence are required.
+
+5ffc343 Docs native run37891224538 succeeds, but independent raw T035 audit
+rejects its text-spacing verdict. Archive11598328854 digest
+`b128232649be60afff11d8da40c8b180c0ca9875f11b41345a14ec4c455a2fd1`
+verified. The two flagged anchors correspond to Starlight heading permalinks;
+source allows visible icon overflow and retains screen-reader-only label text.
+Actual capture shows readable wrapping. scrollHeight/clientHeight mismatch alone
+does not establish clipping when overflow is visible. Retain each sampled
+node's client/scroll dimensions and computed overflow axes, and independently
+recompute clipping only for hidden/clip/auto/scroll axes. Root horizontal
+reflow remains mandatory; unknown metadata or forged clean clipping fails.
+Negative tests still reject real hidden-overflow cropping. No product CSS,
+permalink, focus or text-spacing override is removed to achieve a pass.
+
+5ffc343 native findings are retained, not rewritten as passing evidence.
+P10 run37891223026 archive11599135203 proves the cancel/confirm deletion
+operation, database tombstone, version1->2, one audit and public410.
+Workspace menu19 routes and Admin menu13 routes pass both theme traversals.
+Workspace textarea fragment centers fall below the viewport after keyboard
+focus: center the editor on focus-visible, preserving the strict fragment audit.
+Admin run37891223021 archive11597958394 shows actual root width339 at320
+under text spacing: allow long headings to wrap and header intrinsic shrink.
+
+Public's hash-only style CSP correctly rejects addStyleTag. Apply the user
+text-spacing override through an inspector-origin CSS stylesheet instead,
+verify its actual computed spacing, retain both captures and restore that
+stylesheet. Do not enable bypassCSP or change the immutable response policy.
+Docs retains computed overflow dimensions so decoration is distinguished
+from clipping; genuine clipping and horizontal root overflow still fail.
+
+Auth run37891224661 archive11598139700 and Website run37891224705
+archive11598578831 retain incomplete native Orca samples. Website archive
+digest: 01ca4975a4c6233197222962b4d6f045133804b48c834f327040dab3a1b777b1.
+DOM focus alone is insufficient evidence of native keyboard delivery. Use
+X11 XTEST Tab with the active window verified against visible Chrome class
+windows and DOM focus, then require the same fresh name/role and real
+speech-dispatcher receipts. This is a candidate repair requiring native CI,
+not an established explanation of the old silent samples. No speech is
+manually dispatched and no incomplete sample is waived.

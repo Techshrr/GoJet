@@ -1,8 +1,15 @@
 /** Supplemental native evidence, not a WCAG conformance declaration. */
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 const hash = data => createHash('sha256').update(data).digest('hex');
+
+export function textSpacingClipped(node) {
+  const clipped = value => ['hidden','clip','auto','scroll'].includes(value);
+  return (clipped(node.overflow_x) && node.scroll_width > node.client_width + 1) ||
+    (clipped(node.overflow_y) && node.scroll_height > node.client_height + 1);
+}
 
 // Orca logs SPEECH OUTPUT even without a speech server. Require the real
 // speech-dispatcher path too; a debug-only utterance cannot pass this sample.
@@ -108,22 +115,36 @@ export async function assistiveProbe(page, surface, out) {
     // SC 1.4.12: real user stylesheet overrides, on the real current page.
     // This changes presentation only; no fixture content or API is inserted.
     await page.setViewportSize({width:320,height:844});
-    const spacing = await page.addStyleTag({content:'* { line-height: 1.5 !important; letter-spacing: .12em !important; word-spacing: .16em !important; } p { margin-bottom: 2em !important; }'});
+    // Inspector user styles are not an untrusted inline <style>. Public Text
+    // keeps its immutable CSP; never enable bypassCSP or weaken that policy.
+    await session.send('DOM.enable');
+    await session.send('CSS.enable');
+    const origins=new Map();
+    session.on('CSS.styleSheetAdded',({header})=>origins.set(header.styleSheetId,header.origin));
+    const {frameTree}=await session.send('Page.getFrameTree');
+    const {styleSheetId}=await session.send('CSS.createStyleSheet',{frameId:frameTree.frame.id});
+    for(let i=0;i<20 && !origins.has(styleSheetId);i++)await page.waitForTimeout(50);
+    if(origins.get(styleSheetId)!=='inspector')throw Error('text-spacing user stylesheet origin unproven');
+    await session.send('CSS.setStyleSheetText',{styleSheetId,text:'* { line-height: 1.5 !important; letter-spacing: .12em !important; word-spacing: .16em !important; } p { margin-bottom: 2em !important; }'});
     try {
       for (const theme of ['light','dark']) {
         await page.evaluate(value=>{document.documentElement.setAttribute('data-theme',value);scrollTo(0,0);},theme);
         await page.waitForTimeout(300);
-        const layout = await page.evaluate(()=>({width:innerWidth,scroll_width:document.documentElement.scrollWidth,
-          clipped:[...document.querySelectorAll('main h1,main h2,main h3,main button,main a,main label,main dd,main code,main p')]
-            .filter(el=>el instanceof HTMLElement && el.getClientRects().length && el.clientWidth>0 &&
-              (el.scrollWidth>el.clientWidth+1 || el.scrollHeight>el.clientHeight+1))
-            .map(el=>({element_index:[...document.querySelectorAll('*')].indexOf(el),tag:el.tagName}))}));
+        const layout = await page.evaluate(()=>{const style=getComputedStyle(document.body);return {width:innerWidth,scroll_width:document.documentElement.scrollWidth,
+          override:{font_size:parseFloat(style.fontSize),line_height:parseFloat(style.lineHeight),letter_spacing:parseFloat(style.letterSpacing),word_spacing:parseFloat(style.wordSpacing)},
+          nodes:[...document.querySelectorAll('main h1,main h2,main h3,main button,main a,main label,main dd,main code,main p')]
+            .filter(el=>el instanceof HTMLElement && el.getClientRects().length && el.clientWidth>0)
+            .map(el=>{const style=getComputedStyle(el);return {
+              element_index:[...document.querySelectorAll('*')].indexOf(el),tag:el.tagName,
+              client_width:el.clientWidth,client_height:el.clientHeight,scroll_width:el.scrollWidth,scroll_height:el.scrollHeight,
+              overflow_x:style.overflowX,overflow_y:style.overflowY};})};});
+        layout.clipped=layout.nodes.filter(textSpacingClipped);
         const capture=`${surface}-textspacing320-${theme}.png`;
         const png=await page.screenshot({path:`${out}/${capture}`,fullPage:true});
-        result.text_spacing.push({theme,method:'WCAG-1.4.12-user-stylesheet',layout,capture,capture_sha256:hash(png)});
+        result.text_spacing.push({theme,method:'WCAG-1.4.12-inspector-user-stylesheet',origin:'inspector',layout,capture,capture_sha256:hash(png)});
         if (layout.width!==320 || layout.scroll_width>321 || layout.clipped.length) throw new Error(`text-spacing reflow failed: ${theme}`);
       }
-    } finally { await spacing.evaluate(el=>el.remove());await spacing.dispose(); }
+    } finally { await session.send('CSS.setStyleSheetText',{styleSheetId,text:''}); }
     if (savedViewport) await page.setViewportSize(savedViewport);
     const log = process.env.P20_ORCA_LOG;
     if (!log) throw new Error('native Orca session was not started');
@@ -132,12 +153,21 @@ export async function assistiveProbe(page, surface, out) {
     process.kill(orcaPid, 0);
     await page.bringToFront();
     await page.waitForTimeout(1000);
+    const windowId=execFileSync('xdotool',['getwindowfocus'],{encoding:'utf8'}).trim();
+    if(!/^\d+$/.test(windowId))throw Error('native screen-reader window binding absent');
+    // search --class is supported by Ubuntu's packaged xdotool versions;
+    // getwindowclassname is newer and unavailable on some CI images.
+    const chromeWindows=execFileSync('xdotool',['search','--onlyvisible','--class','chrome|chromium'],{encoding:'utf8'}).trim().split(/\s+/);
+    if(!chromeWindows.includes(windowId) || !await page.evaluate(()=>document.hasFocus()))
+      throw Error('native screen-reader Chrome window is not focused');
+    result.screen_reader.input_authority='X11 XTEST keyboard; active Chrome window and DOM focus checked';
     const visited = new Set();
     const attempts = new Map();
     for (let i = 0; i < 128 && result.screen_reader.steps.length < 2; i++) {
       const start = statSync(log).size;
       process.kill(orcaPid, 0);
-      await page.keyboard.press('Tab');
+      execFileSync('xdotool',['key','--clearmodifiers','Tab']);
+      await page.waitForTimeout(100);
       const target = await page.evaluate(() => {
         const el = document.activeElement;
         if (!el || !['A', 'BUTTON'].includes(el.tagName)) return null;
@@ -154,14 +184,14 @@ export async function assistiveProbe(page, surface, out) {
       }
       if (!receipt) {
         const segment=readFileSync(log).subarray(start).toString('utf8');
-        result.screen_reader.attempts.push({...target,input:'Tab',log_start:start,log_end:statSync(log).size,
+        result.screen_reader.attempts.push({...target,input:'native-X11-Tab',log_start:start,log_end:statSync(log).size,
           document_has_focus:await page.evaluate(()=>document.hasFocus()),
           speech_output_lines:segment.split('\n').filter(x=>x.includes('SPEECH OUTPUT:')).length,
           dispatcher_lines:segment.split('\n').filter(x=>x.includes('SPEECH DISPATCHER:')&&x.includes('Speaking')).length});
         continue;
       }
       visited.add(target.element_index);
-      result.screen_reader.steps.push({...receipt, element_index: target.element_index, input: 'Tab',
+      result.screen_reader.steps.push({...receipt, element_index: target.element_index, input: 'native-X11-Tab',
         log_start: start, log_end: statSync(log).size});
     }
     if (result.screen_reader.steps.length !== 2) throw new Error('Orca did not produce two fresh named-control speech receipts');

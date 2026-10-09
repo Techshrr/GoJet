@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { auditVerdict, nativeTabCandidate, fragmentsUnobscured, textareaContrast } from './t035_accessibility_probe.mjs';
-import { speechReceipt } from './t035_assistive_probe.mjs';
+import { speechReceipt, textSpacingClipped } from './t035_assistive_probe.mjs';
 
 const require = (value, message) => { if (!value) throw new Error(message); };
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -39,18 +39,29 @@ export function auditAssistive(data, path) {
   }
   require(a.text_spacing?.length === 2 && new Set(a.text_spacing.map(x=>x.theme)).size === 2, 'missing text-spacing matrix');
   for (const row of a.text_spacing) {
-    require(['light','dark'].includes(row.theme) && row.method==='WCAG-1.4.12-user-stylesheet' &&
+    require(['light','dark'].includes(row.theme) && row.method==='WCAG-1.4.12-inspector-user-stylesheet' && row.origin==='inspector' &&
       row.layout.width===320 && row.layout.scroll_width<=321 && row.layout.clipped.length===0, 'text-spacing clipping/overflow');
+    const override=row.layout.override;
+    require(override && override.font_size>0 &&
+      Math.abs(override.line_height/override.font_size-1.5)<0.01 &&
+      Math.abs(override.letter_spacing/override.font_size-0.12)<0.001 &&
+      Math.abs(override.word_spacing/override.font_size-0.16)<0.001,'text-spacing override not actually applied');
+    require(Array.isArray(row.layout.nodes) && row.layout.nodes.length>0 &&
+      row.layout.nodes.every(n=>Number.isInteger(n.element_index) && n.element_index>=0 &&
+        ['client_width','client_height','scroll_width','scroll_height'].every(k=>Number.isFinite(n[k])&&n[k]>=0) &&
+        ['overflow_x','overflow_y'].every(k=>['visible','hidden','clip','auto','scroll'].includes(n[k]))) &&
+      JSON.stringify(row.layout.nodes.filter(textSpacingClipped))===JSON.stringify(row.layout.clipped),
+      'unproven/forged text-spacing clipping verdict');
     const capture=`${data.surface}-textspacing320-${row.theme}.png`;
     require(row.capture===capture, 'invalid text-spacing capture');
     const png=readFileSync(resolve(dirname(path),capture));
     require(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) && hash(png)===row.capture_sha256,'text-spacing capture digest mismatch');
   }
-  require(sr?.engine === 'Orca' && typeof sr.engine_version === 'string' && /\d+\.\d+/.test(sr.engine_version) && sr.steps?.length === 2 &&
+  require(sr?.engine === 'Orca' && sr.input_authority==='X11 XTEST keyboard; active Chrome window and DOM focus checked' && typeof sr.engine_version === 'string' && /\d+\.\d+/.test(sr.engine_version) && sr.steps?.length === 2 &&
     new Set(sr.steps.map(x => x.element_index)).size === 2, 'missing native screen-reader sample');
   for (const step of sr.steps) {
     const receipt = speechReceipt([step.speech_output,step.dispatcher_output,step.role_speech_output,step.role_dispatcher_output].join('\n'), step.name, step.role);
-    require(step.input === 'Tab' && Number.isInteger(step.element_index) && step.element_index >= 0 &&
+    require(step.input === 'native-X11-Tab' && Number.isInteger(step.element_index) && step.element_index >= 0 &&
       Number.isInteger(step.log_start) && Number.isInteger(step.log_end) && step.log_start >= 0 && step.log_end > step.log_start &&
       receipt && ['speech_output','dispatcher_output','role_speech_output','role_dispatcher_output'].every(key => receipt[key] === step[key]), 'invalid speech sample');
   }
