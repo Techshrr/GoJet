@@ -66,6 +66,12 @@ async function noOverflow(page, label) {
 }
 async function maskInputs(page) { await page.evaluate(() => { for (const input of document.querySelectorAll('input')) input.value = ''; }); }
 async function capture(page, label) {
+  const inputPurposes = await page.locator('.p15-auth input[type="email"], .p15-auth input[type="password"]').evaluateAll(inputs => inputs.map(input => ({ id: input.id, type: input.type, autocomplete: input.getAttribute('autocomplete') })));
+  for (const input of inputPurposes) {
+    const expected = input.type === 'email' ? ['email'] : ['current-password', 'new-password'];
+    assert(expected.includes(input.autocomplete), `${label}: explicit input purpose missing for ${input.id}`);
+  }
+  inputPurposeEvidence.push({ state: label, inputs: inputPurposes });
   if (label === 'login-input-desktop') await visualProbe(page, 'P15', 'auth');
   if (label === 'login-invalid') await visualProbe(page, 'P15', 'auth-invalid');
   if (label === 'register-code-sent') await visualProbe(page, 'P15', 'auth-code-sent');
@@ -94,6 +100,7 @@ function resultPayload(status, details, errors = []) {
 function writeResult(status, details, errors = []) { writeFileSync(`${browserDir}/${caseId}.json`, `${JSON.stringify(resultPayload(status, details, errors), null, 2)}\n`); }
 
 const screenshots = [];
+const inputPurposeEvidence = [];
 const states = { login: [], register: [], verify: [], forgot: [], reset: [], oauth: [], social: [] };
 const diagnostics = { console_errors: [], page_errors: [], request_failures: [] };
 
@@ -204,7 +211,7 @@ try {
     provider_registry_count: 6,
     states,
     responsive_viewports: Object.keys(viewports),
-    accessibility: { keyboard_focus: true, error_focus: true, labels: true },
+    accessibility: { keyboard_focus: true, error_focus: true, labels: true, input_purposes: inputPurposeEvidence },
     security: { noindex: true, private_headers: true, secure_cookie: true, web_storage_secret_free: true, raw_callback_not_rendered: true },
     screenshot_count: screenshots.length,
     closure_claim: false,

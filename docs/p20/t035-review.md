@@ -371,3 +371,20 @@ Separately, a74fd789 repairs the P12-T019 result serializer: the switch notice
 was assigned through an undefined details variable. Its evidence now belongs
 in the existing PASS result object. The visible/precedes-control assertion and
 all real membership, settings persistence and viewer restrictions remain.
+
+## Identify-input-purpose manual finding
+
+On 2a404c65, native diagnostics pass but manual SC1.3.5 source review finds
+`verify-email` and `social-email` without an explicit autocomplete purpose.
+An email input type or browser heuristic alone does not identify the user's
+own email purpose. Both fields now declare autocomplete=email. The native
+P15-T024 capture path checks every rendered Auth email/password input and
+retains only id/type/autocomplete metadata, never the input value.
+No authentication behavior or frozen oracle changes. Fresh exact-head native
+evidence and final review are still required before formal acceptance.
+Reference: https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose
+
+2a404c65 recovery: P12 browser passed. P17-T030 initially exited at the Orca
+startup process check before browser execution; same-head retry succeeded
+(run37932655054/job113863097036). This is a recovered infrastructure attempt,
+not evidence that the intermittent startup cause was fixed.
