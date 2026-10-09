@@ -78,6 +78,20 @@ def inspect(root, head, source_root=None):
     require(all(deletion.get(key) is True for key in ('keyboard_open','cancel_escape','cancel_button','focus_return','cancel_keeps_resource'))
             and deletion.get('confirmed_server_status') == 204 and deletion.get('confirmed_public_status') == 410,
             'missing real keyboard deletion/cancellation authority')
+    durable = deletion.get('durable', {})
+    require(durable.get('client_redirect') is True and durable.get('database_tombstone') is True
+            and durable.get('server_status') == 204 and durable.get('public_status') == 410
+            and isinstance(durable.get('initial_version'), int) and durable['initial_version'] > 0
+            and durable.get('database_version') == durable['initial_version'] + 1
+            and durable.get('audit_count') == 1, 'deletion lacks durable idempotent authority')
+    diagnostics = json.loads((directory / 'workspace/interactions/P10-T017.json').read_bytes())['details'].get('diagnostics', {})
+    failures = diagnostics.get('request_failures')
+    require(isinstance(failures, list) and diagnostics.get('confirmed_no_content_completions') == failures,
+            'unclassified deletion network failure')
+    require(all(row.get('url') == durable.get('request_url') and row.get('method') == 'DELETE'
+                and row.get('resource_type') == 'fetch' and row.get('navigation') is False
+                and row.get('response_status') == 204 and row.get('failure', {}).get('errorText') == 'net::ERR_ABORTED'
+                for row in failures), 'unproven no-content completion')
     prerequisite = directory / 'prerequisite'
     formal = json.loads((prerequisite / 'artifacts/v10/P20/browser/P20-T034.json').read_bytes())
     details = inspect_t034(prerequisite, head, source_root=source_root)

@@ -1,4 +1,5 @@
 import { visualProbe } from '../p20/t034_visual_probe.mjs';
+import { confirmedNoContentDeletion } from './network_outcome.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -74,7 +75,7 @@ function attachDiagnostics(page, report) {
   page.on('response', (response) => { responses.set(response.request(), response.status()); if (response.status()>=400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({status:response.status(),url:response.url()}); });
   page.on('requestfailed', (request) => report.request_failures.push({url:request.url(),method:request.method(),resource_type:request.resourceType(),navigation:request.isNavigationRequest(),response_status:responses.get(request)??null,failure:request.failure()}));
 }
-function assertDiagnostics(report, label, allowedStatuses=[]) {
+function assertDiagnostics(report, label, allowedStatuses=[], deletionProof=null) {
   const httpErrors = report.http_errors.filter((entry) => !allowedStatuses.includes(entry.status));
   const consoleErrors = report.console_errors.filter((message) => {
     const match = /status of (\d{3})\b/.exec(message);
@@ -82,7 +83,9 @@ function assertDiagnostics(report, label, allowedStatuses=[]) {
   });
   assert(consoleErrors.length===0, `${label} console errors ${JSON.stringify(consoleErrors)}`);
   assert(report.page_errors.length===0, `${label} page errors ${JSON.stringify(report.page_errors)}`);
-  assert(report.request_failures.length===0, `${label} request failures ${JSON.stringify(report.request_failures)}`);
+  report.confirmed_no_content_completions=report.request_failures.filter(row=>confirmedNoContentDeletion(row,deletionProof));
+  const failures=report.request_failures.filter(row=>!confirmedNoContentDeletion(row,deletionProof));
+  assert(failures.length===0, `${label} request failures ${JSON.stringify(failures)}`);
   assert(httpErrors.length===0, `${label} HTTP errors ${JSON.stringify(httpErrors)}`);
 }
 async function openPage(browser, base, path, viewport=viewports.desktop, options={}) {
@@ -184,8 +187,16 @@ async function caseT017(browser){
   await opened.page.keyboard.press('Enter');assert((await removed).status()===204,'confirmed UI deletion did not settle');
   await opened.page.waitForURL(/\/app\/text$/);
   assert((await fetch(`${PLATFORM_URL}/t/${encodeURIComponent(removable.public_slug)}`)).status===410,'confirmed deletion did not revoke public access');
-  evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410};
-  try { assertDiagnostics(opened.report,'T017 confirmed deletion'); }
+  assert(Number.isSafeInteger(removable.id)&&removable.id>0,'unsafe fixture resource ID');
+  const durable=mysql(`SELECT CONCAT(IF(deleted_at IS NOT NULL,1,0),':',version) FROM text_shares WHERE id=${removable.id}`);
+  const auditCount=Number(mysql(`SELECT COUNT(*) FROM text_audit_events WHERE text_share_id=${removable.id} AND action='text.delete' AND result='success'`));
+  assert(durable===`1:${removable.version+1}` && auditCount===1,'confirmed deletion lacks one atomic tombstone/version/audit');
+  const deletionProof={request_url:`${OWNER_URL}/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`,
+    client_redirect:true,server_status:204,public_status:410,database_tombstone:true,
+    initial_version:removable.version,database_version:removable.version+1,audit_count:auditCount};
+  evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410,durable:deletionProof};
+  evidence.diagnostics=opened.report;
+  try { assertDiagnostics(opened.report,'T017 confirmed deletion',[],deletionProof); }
   catch(error) { error.details={...evidence,diagnostics:opened.report};throw error; }
   await opened.context.close();
   return evidence;

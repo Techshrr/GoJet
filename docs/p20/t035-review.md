@@ -253,3 +253,17 @@ sampled again. Restore fresh real Tab retries with a three-attempt-per-control
 bound, while only successfully announced controls become visited. Each failed
 attempt retains focus state, byte interval and output/dispatcher counts without
 full debug text. Two actual distinct valid announcements remain mandatory.
+
+1b35e50 P10 run37890537382/job113690227937 proves the retained network event is
+DELETE/fetch/non-navigation, HTTP204 already received, then net::ERR_ABORTED.
+The client fulfilled its operation and navigated; public access is HTTP410.
+Classify only this exact no-content deletion after additional real MySQL proof:
+non-null deleted_at, version increment exactly one, and one successful
+text.delete audit. Preserve every original requestfailed row in native evidence.
+No classification is possible for GET, unknown/failed status, another URL,
+missing redirect/tombstone, wrong version, duplicate/missing audit or other
+transport errors. T035 independently rechecks these raw fields and durable
+proof. RFC9110 §15.3.5 defines HTTP204 as complete at its headers with no body:
+https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.5
+This is outcome classification, not a claim that the Chromium abort cause is
+fixed. Its native verdict and all remaining supplemental evidence are required.

@@ -188,6 +188,9 @@ jobs:
           cat artifacts/v10/P10/runtime/browser-viewer.log || true
           exit 1
 
+      - name: Reject unproven network completion classifications
+        run: node --test scripts/p10/test_network_outcome.mjs
+
       - name: Run P10-T016 through P10-T018
         shell: bash
         run: |
