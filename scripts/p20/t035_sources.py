@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path, PurePosixPath
 from t028_sources import (download_archive, verified_archive, member, select_run,
-                          successful, require, digest, select_artifact)
+                          successful, require, digest, select_prefixed_artifact)
 from t034_sources import PRODUCERS as VISUAL_PRODUCERS
 
 PRODUCERS = {key: value for key, value in VISUAL_PRODUCERS.items()
@@ -95,9 +95,7 @@ def collect(root, head):
         run = selected[key]
         rows = api(base + f'/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
         require(len(rows) < 100, 'truncated artifact list')
-        names = {a['name'] for a in rows if a['name'].startswith(prefix) and a.get('expired') is False}
-        require(len(names) == 1, 'T035 artifact absent or ambiguous: ' + key)
-        artifact = select_artifact(rows, names.pop(), run)
+        artifact = select_prefixed_artifact(rows, prefix, run)
         raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archive = verified_archive(raw, artifact, head)
         manifest['artifacts'][key] = {'workflow': workflow, 'head_sha': head,

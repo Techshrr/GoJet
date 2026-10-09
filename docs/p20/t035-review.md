@@ -388,3 +388,17 @@ Reference: https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose
 startup process check before browser execution; same-head retry succeeded
 (run37932655054/job113863097036). This is a recovered infrastructure attempt,
 not evidence that the intermittent startup cause was fixed.
+
+## Retry archive-name boundary
+
+The recovered P17 run37932655054 retains failed merge-SHA-named archive
+11621272894 and successful head-SHA-named archive11622822498. Both share the
+same required prefix, so T031-T035 collectors rejected the two names before
+applying their existing attempt boundary. The shared selector now narrows
+multiple names to the admitted attempt start, then requires exactly one name
+and artifact. No fallback to an older attempt, arbitrary newest artifact or
+foreign run is allowed; SHA/digest/raw-result validation remains mandatory.
+A sole retained artifact from an already-successful matrix job remains usable
+when only a different matrix job was retried. Real API metadata replay selects
+11622822498. Synthetic tests reject missing/ambiguous boundaries, expired and
+foreign-run/head/digest evidence. All34 T03-series Python tests pass locally.

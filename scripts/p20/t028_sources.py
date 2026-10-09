@@ -51,6 +51,21 @@ def select_artifact(rows, name, run, job=None):
     return matches[0]
 
 
+def select_prefixed_artifact(rows, prefix, run):
+    """Resolve PR-merge/head upload names within the admitted retry attempt."""
+    matches = [a for a in rows if a['name'].startswith(prefix) and a.get('expired') is False]
+    names = {a['name'] for a in matches}
+    if len(names) > 1:
+        from datetime import datetime
+        boundary = run.get('run_started_at')
+        require(bool(boundary), 'artifact attempt boundary missing')
+        start = datetime.fromisoformat(boundary.replace('Z', '+00:00'))
+        matches = [a for a in matches if datetime.fromisoformat(a['created_at'].replace('Z', '+00:00')) >= start]
+        names = {a['name'] for a in matches}
+    require(len(names) == 1, 'artifact name absent or ambiguous: ' + prefix)
+    return select_artifact(matches, names.pop(), run)
+
+
 def require(ok, reason):
     if not ok:
         raise ValueError(reason)

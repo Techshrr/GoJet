@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from pathlib import Path, PurePosixPath
-from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest, select_artifact
+from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest, select_prefixed_artifact
 
 PRODUCERS = {
     'prerequisite': ('p20-t032-consistency.yml', 'p20-t032-formal-', 'P20', None),
@@ -45,9 +45,7 @@ def collect(root, head):
         require(len(rows) < 100, 'truncated artifact list')
         # Some predecessor workflows name uploads with the PR merge SHA.
         # Bind by workflow run and verified artifact head/digest, never by filename SHA.
-        names = {a['name'] for a in rows if a['name'].startswith(prefix) and a.get('expired') is False}
-        require(len(names) == 1, 'T033 artifact name absent or ambiguous: ' + key)
-        artifact = select_artifact(rows, names.pop(), run)
+        artifact = select_prefixed_artifact(rows, prefix, run)
         raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archive = verified_archive(raw, artifact, head)
         manifest['artifacts'][key] = {'workflow': workflow, 'head_sha': head, 'run_id': run['id'],
