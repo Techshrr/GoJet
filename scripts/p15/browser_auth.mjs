@@ -98,7 +98,7 @@ const states = { login: [], register: [], verify: [], forgot: [], reset: [], oau
 const diagnostics = { console_errors: [], page_errors: [], request_failures: [] };
 
 try {
-  const browser = await chromium.launch({ executablePath, headless: true });
+  const browser = await chromium.launch({ executablePath, headless: !process.env.P20_ORCA_LOG, args: ['--force-renderer-accessibility'] });
   const context = await browser.newContext({ viewport: viewports.desktop });
   const page = await context.newPage();
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().startsWith('Failed to load resource: the server responded with a status of ')) diagnostics.console_errors.push(message.text()); });

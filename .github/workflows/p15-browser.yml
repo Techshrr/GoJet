@@ -89,6 +89,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install native screen-reader desktop tooling
+        run: bash scripts/p20/install_screen_reader.sh
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -176,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
-          GITHUB_SHA="$exact_head" node scripts/p15/browser.mjs --case P15-T024
+          GITHUB_SHA="$exact_head" bash scripts/p20/run_screen_reader.sh node scripts/p15/browser.mjs --case P15-T024
 
       - name: Verify T025 callback UI branches with explicit protocol fixtures
         run: |

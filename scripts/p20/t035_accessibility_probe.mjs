@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { assistiveProbe } from './t035_assistive_probe.mjs';
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const sampled = new Set();
@@ -245,7 +246,9 @@ export async function accessibilityProbe(page, node, surface) {
       result.observations.push(row);
       for (const [check, pass] of Object.entries(row.checks)) if (!pass) result.errors.push(`${size}/${theme}: ${check}`);
     }
+    result.assistive = await assistiveProbe(page, surface, out);
   } catch (error) {
+    if (error.assistive) result.assistive = error.assistive;
     result.errors.push(`probe incomplete: ${error.message}`);
   } finally {
     result.status = result.errors.length ? 'FAIL' : 'PASS';

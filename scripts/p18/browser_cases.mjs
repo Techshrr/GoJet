@@ -25,7 +25,7 @@ const canonicalViewports = {
   reflow320: { width: 320, height: 800 },
 };
 
-const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath, headless: !process.env.P20_ORCA_LOG, args: ['--no-sandbox', '--force-renderer-accessibility'] });
 
 function attachDiagnostics(page) {
   const diagnostics = { console_errors: [], page_errors: [], external_requests: [], request_failures: [] };

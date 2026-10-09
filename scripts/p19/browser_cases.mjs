@@ -38,7 +38,7 @@ function writeCase(targetDir, caseId, name, errors, details) {
   for (const error of errors) console.log(`  - ${error}`);
   return payload.status === 'PASS';
 }
-const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath, headless: !process.env.P20_ORCA_LOG, args: ['--no-sandbox', '--force-renderer-accessibility'] });
 
 async function t023() {
   const errors = [];

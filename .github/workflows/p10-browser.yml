@@ -88,6 +88,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Install native screen-reader desktop tooling
+        run: bash scripts/p20/install_screen_reader.sh
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -191,9 +193,9 @@ jobs:
         run: |
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
-          GITHUB_SHA="$exact_head" node scripts/p10/browser.mjs --case P10-T016
-          GITHUB_SHA="$exact_head" node scripts/p10/browser.mjs --case P10-T017
-          GITHUB_SHA="$exact_head" node scripts/p10/browser.mjs --case P10-T018
+          GITHUB_SHA="$exact_head" bash scripts/p20/run_screen_reader.sh node scripts/p10/browser.mjs --case P10-T016
+          GITHUB_SHA="$exact_head" bash scripts/p20/run_screen_reader.sh node scripts/p10/browser.mjs --case P10-T017
+          GITHUB_SHA="$exact_head" bash scripts/p20/run_screen_reader.sh node scripts/p10/browser.mjs --case P10-T018
 
       - name: Verify exact-head browser evidence
         if: always()

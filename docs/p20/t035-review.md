@@ -127,3 +127,34 @@ orchestration recoveries do not solve legacy expired closure archives.
 Outstanding formal admission includes screen-reader evidence and complete
 zoom/manual review against G5. Current diagnostics and DOM/ARIA inspection
 must not be labeled actual screen-reader testing. T035 and P20 remain open.
+
+## 6d666ab complete packet and supplemental batch
+
+Recovered the original P14 contract job after its native producers completed;
+then reran T028–T035 on the SAME head. All eight workflows succeeded, without
+new commits or rerunning the already-successful product producers. T035 run
+37832440226 attempt 2 produced artifact 11591136808, archive digest
+`sha256:77243211b162a1a8ef1005ba878765d3ede801e9af5f5de129c1ceb427291fbc`.
+The complete 292-file packet retains all 72 diagnostic observations, 884 native
+Tab steps, four menu variants / 96 steps / 20 reopen cycles and the recursively
+validated T034 prerequisite. All diagnostic checks pass. Directly reviewed the
+nine 320px surfaces in both themes for wrapping, visible focus and textual
+error/success messages. This is a sample review, not full conformance.
+
+The next supplemental batch covers ALL nine native states together. It adds
+18 200% device-metrics-equivalent captures (1440x900 physical area, 720x450 CSS
+pixels at DPR 2), with explicit method and overflow checks. It does not claim
+that browser-toolbar zoom was changed. The headed native sessions run under
+Xvfb/Openbox/DBus with real Orca and speech-dispatcher. Two distinct controls per
+state must produce fresh real Orca label/role utterances and its corresponding
+dispatcher attempts after actual Tab input. Logs from a speechless Orca fallback
+cannot pass. Engine version, fresh log byte intervals and relevant original
+utterance lines are retained; complete desktop debug logs remain temporary.
+Separate label/role voices are supported without suppressing missing output.
+
+This is a screen-reader focus-announcement sample, not proof of audible playback,
+all state announcements, or complete manual WCAG review. Its first native CI
+verdict is still required. No formal T035 acceptance, integration promotion or
+T036+ unlock follows from adding this tooling. Historical 6d666ab records remain
+valid for their diagnostic scope; they lack the new supplemental evidence and
+cannot be admitted as new-head supplemental proof.
