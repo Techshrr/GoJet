@@ -97,8 +97,8 @@ export async function settleNativeVisualMotion(page, budget) {
         const started = performance.now();
         const samples = [];
         let failure = null;
-        // Wait on the browser's animation lifecycle, not a wall-clock sleep
-        // begun before a pending CSS transition receives its start time.
+        // Observe the browser's live animation state each frame, including
+        // transitions deferred inside closed native details.
         for (;;) {
           const running = document.getAnimations().filter(a => a.playState === 'running');
           samples.push(running.map(a => {
@@ -115,13 +115,17 @@ export async function settleNativeVisualMotion(page, budget) {
           const remaining = 1000 - (performance.now() - started);
           if (remaining <= 0) { failure = 'native transition completion timed out'; break; }
           let timer;
-          const finished = await Promise.race([
-            Promise.all(running.map(a => a.finished.then(() => true, () => false))).then(rows => rows.every(Boolean)),
+          // Deferred closed-details styles need a fresh browser state query;
+          // their finished promise may not resolve until that query occurs.
+          const advanced = await Promise.race([
+            new Promise(resolve => requestAnimationFrame(() => resolve(true))),
             new Promise(resolve => { timer = setTimeout(() => resolve(false), remaining); }),
           ]);
           clearTimeout(timer);
-          if (!finished) { failure = 'native transition cancelled or timed out'; break; }
-          await new Promise(resolve => requestAnimationFrame(resolve));
+          if (!advanced) { failure = 'native transition frame timed out'; break; }
+          if (running.some(a => a.playState === 'idle')) {
+            failure = 'native transition cancelled'; break;
+          }
         }
         return { samples, failure, elapsed_ms: performance.now() - started };
       }, budget);
