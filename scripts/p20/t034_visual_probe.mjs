@@ -61,6 +61,39 @@ export async function visualProbe(page, node, surface) {
       if (!Number.isFinite(settleMs) || settleMs > 1000) throw new Error('Invalid canonical motion duration');
       await page.waitForTimeout(settleMs);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const motionSettle = await page.evaluate(async budget => {
+        const started = performance.now();
+        const samples = [];
+        let failure = null;
+        // Wait on the browser's animation lifecycle, not a wall-clock sleep
+        // begun before a pending CSS transition receives its start time.
+        for (;;) {
+          const running = document.getAnimations().filter(a => a.playState === 'running');
+          samples.push(running.map(a => {
+            const t = a.effect?.getComputedTiming();
+            return { kind: a.constructor.name, property: a.transitionProperty || null,
+              duration: t?.duration, delay: t?.delay,
+              iterations: Number.isFinite(t?.iterations) ? t.iterations : 'unbounded' };
+          }));
+          if (!running.length) break;
+          if (samples.at(-1).some(t => t.kind !== 'CSSTransition' || t.iterations !== 1 ||
+              typeof t.duration !== 'number' || t.duration < 0 || t.delay < 0 || t.duration + t.delay > budget)) {
+            failure = 'noncanonical or repeating reduced-mode motion'; break;
+          }
+          const remaining = 1000 - (performance.now() - started);
+          if (remaining <= 0) { failure = 'native transition completion timed out'; break; }
+          let timer;
+          const finished = await Promise.race([
+            Promise.all(running.map(a => a.finished.then(() => true, () => false))).then(rows => rows.every(Boolean)),
+            new Promise(resolve => { timer = setTimeout(() => resolve(false), remaining); }),
+          ]);
+          clearTimeout(timer);
+          if (!finished) { failure = 'native transition cancelled or timed out'; break; }
+          await new Promise(resolve => requestAnimationFrame(resolve));
+        }
+        return { samples, failure, elapsed_ms: performance.now() - started };
+      }, settleMs);
+      if (motionSettle.failure) result.errors.push(`${size}/${theme}: ${motionSettle.failure}`);
       const observation = await page.evaluate(names => {
         const style = getComputedStyle(document.documentElement);
         const visible = element => element.getClientRects().length > 0;
@@ -113,7 +146,7 @@ export async function visualProbe(page, node, surface) {
         no_placeholder_elements: observation.placeholder_elements === 0 };
       const file = `${surface}-${size}-${theme}.png`;
       const png = await page.screenshot({ path: `${out}/${file}`, fullPage: true });
-      result.observations.push({ size, viewport: canonical(size), theme, expected_tokens: expected[theme], ...observation, checks,
+      result.observations.push({ size, viewport: canonical(size), theme, expected_tokens: expected[theme], motion_settle: motionSettle, ...observation, checks,
         capture: file, capture_sha256: createHash('sha256').update(png).digest('hex') });
       for (const [check, pass] of Object.entries(checks)) if (!pass) result.errors.push(`${size}/${theme}: ${check}`);
     }

@@ -424,3 +424,23 @@ New native CI is required; the sampling correction is not yet a proven fix.
 Separate P18/P19 historical predecessor live-binding steps fail with HTTP404;
 these are not native browser failures and are not waived by this correction.
 P20/T035 remain OPEN; T036+ locked; PR189 remains CI-only/NEVER MERGE.
+
+## c26a0c4 actual transition evidence and recovery
+
+P09 evidence37975397003 originally timed out while three native producers queued;
+all later succeeded. Same-head failed-job retry now succeeds. T028–T035 inherited
+that failure; no product assertion was waived. Contract/Freeze and five native
+browser workflows succeed. Original P10 artifact11643865319 SHA256
+4488e570191831beddbb0008152cfa19cc33cc144ea9a25d7012f004251abd9d
+still reports T034 Workspace mobile/dark FAIL. The two-frame correction alone
+was insufficient. Retained details identify exactly six BUTTON CSSTransitions:
+background-color, four border colors, color; each current_time=0,duration=120,
+delay=0,iterations=1. Other eight native T034 records pass; all nine T035 records
+report PASS (formal admission remains blocked by T034).
+
+After the existing canonical settling interval, await actual animation.finished
+only for single-iteration CSS transitions whose full duration+delay fits the
+canonical budget. Preserve every sampled transition and elapsed time. Reject
+noncanonical/repeating motion, cancellation, or a one-second overall timeout;
+never cancel/finish animations or hide original failure. Final zero-running
+assertion remains. Native verification required; no claim this candidate passed.
