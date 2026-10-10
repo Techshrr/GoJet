@@ -444,3 +444,47 @@ canonical budget. Preserve every sampled transition and elapsed time. Reject
 noncanonical/repeating motion, cancellation, or a one-second overall timeout;
 never cancel/finish animations or hide original failure. Final zero-running
 assertion remains. Native verification required; no claim this candidate passed.
+
+## Isolated native reproduction: deferred closed-details styles
+
+Formal candidate f492b24 still fails Workspace mobile/dark motion: the settle
+trace contains zero running animations, but subsequent layout reads start six.
+Verified P10 artifact11658249551 SHA256
+30b53e779bfc1b80ba52fff8e8801d164680ec1af3c1ac6a582c5090871705df.
+This disproves waiting-before-observation as a sufficient correction.
+
+Isolated diagnostic branch debug/p20-t035-motion-repro is NEVER MERGE and has
+only one push-triggered browser workflow (no PR/full matrix). Run38026754876
+job114139114285 on4eaa62163ea7c9b2da94c4c8ac4946081cf264d4 reproduces the exact
+six120ms transitions with repository token/UI CSS and a closed native details:
+getAnimations initially0; reading the hidden link getClientRects starts hidden
+BUTTON background/color/four-border transitions at time0; they naturally finish.
+With details open, the same read starts no transitions. This fixture is root-cause
+diagnosis only and must never substitute for native product evidence.
+
+Correction: perform the complete observation reads first, retain initial motion
+count, await the existing strict bounded natural completion, then read the final
+observation. Zero-running verdict, animation guard and timeout remain unchanged;
+no hidden-animation filtering or suppressed assertions. Export the same functions
+for browser regression testing, including a persistent animation negative case.
+Candidate publication requires the isolated regression to pass first.
+
+P15 required contract/coherence job recovered from502 on the same f492 SHA.
+P13 coherence restricts producer selection to pull_request, so a successful
+workflow_dispatch did not replace the cancelled PR run38019544892. Re-ran only
+its cancelled job114117257692; it now succeeds. P13 coherence recovery follows.
+
+Isolated regression run38040660579/job114179869422 on9f412d5f6fe98b833e93a1a12fde3c27f872760e
+PASS using the exact exported observation/settling functions: closed dark initial6
+transitions naturally settle in127.5ms, final0; closed/open light and open dark
+final0. Persistent CSS animation is rejected and remains running (not cancelled).
+Earlier diagnostic38040588384 showed finished promises can remain pending for
+deferred closed-details transitions. Final helper queries live state each frame
+instead; canonical duration, cancellation and1second timeout guards are retained.
+
+P13 PR integration38019544892 attempt2 succeeds but retains cancelled-attempt
+artifact11657558999 alongside successful11660890990 with identical names. Its
+coherence rejects duplicate names. Narrow duplicates to run_started_at before
+requiring exactly one; do not alter sole-artifact behavior or head/digest checks.
+Real metadata replay selects11660890990; embedded workflow Python compiles.
+This correction and motion sampling are one candidate batch, not formal closure.

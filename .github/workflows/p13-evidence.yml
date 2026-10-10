@@ -104,6 +104,11 @@ jobs:
                       artifacts = get(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts', [])
                       expected = required[name](sha)
                       matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
+                      # A cancelled attempt can retain its upload. Admit only
+                      # the successful attempt when duplicate names remain.
+                      if len(matches) > 1 and run.get('run_started_at'):
+                          started = datetime.fromisoformat(run['run_started_at'].replace('Z', '+00:00'))
+                          matches = [item for item in matches if datetime.fromisoformat(item['created_at'].replace('Z', '+00:00')) >= started]
                       if len(matches) != 1:
                           failed.append(f'{name}:artifact:{expected}')
                           continue
