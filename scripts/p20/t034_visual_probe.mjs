@@ -61,7 +61,39 @@ export async function visualProbe(page, node, surface) {
       if (!Number.isFinite(settleMs) || settleMs > 1000) throw new Error('Invalid canonical motion duration');
       await page.waitForTimeout(settleMs);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      const motionSettle = await page.evaluate(async budget => {
+      // Reading closed-details geometry can itself start deferred transitions.
+      // Perform all observation reads before waiting for their natural completion.
+      const initialObservation = await observeNativeVisual(page, names);
+      const motionSettle = await settleNativeVisualMotion(page, settleMs);
+      motionSettle.initial_active_animations = initialObservation.active_animations;
+      if (motionSettle.failure) result.errors.push(`${size}/${theme}: ${motionSettle.failure}`);
+      const observation = await observeNativeVisual(page, names);
+      const checks = { canonical_tokens: names.every(name => canonicalColor(observation.tokens[name]) === canonicalColor(expected[theme][name])),
+        reduced_motion: observation.reduced_motion && observation.active_animations === 0,
+        document_margin_reset: observation.body.margin === '0px',
+        themed_links: observation.browser_default_links === 0,
+        no_overflow: !observation.overflow, images_loaded: observation.broken_images === 0,
+        no_placeholder_elements: observation.placeholder_elements === 0 };
+      const file = `${surface}-${size}-${theme}.png`;
+      const png = await page.screenshot({ path: `${out}/${file}`, fullPage: true });
+      result.observations.push({ size, viewport: canonical(size), theme, expected_tokens: expected[theme], motion_settle: motionSettle, ...observation, checks,
+        capture: file, capture_sha256: createHash('sha256').update(png).digest('hex') });
+      for (const [check, pass] of Object.entries(checks)) if (!pass) result.errors.push(`${size}/${theme}: ${check}`);
+    }
+  } catch (error) {
+    result.errors.push(`probe incomplete: ${error.message}`);
+  } finally {
+    result.status = result.errors.length ? 'FAIL' : 'PASS';
+    writeFileSync(`${out}/${surface}.json`, JSON.stringify(result, null, 2) + '\n');
+    await page.evaluate(theme => theme === null ? document.documentElement.removeAttribute('data-theme') : document.documentElement.setAttribute('data-theme', theme), original.theme);
+    await page.emulateMedia({ reducedMotion: original.reduced ? 'reduce' : 'no-preference' });
+    if (viewport) await page.setViewportSize(viewport);
+  }
+  await accessibilityProbe(page, node, surface);
+}
+
+export async function settleNativeVisualMotion(page, budget) {
+  return await page.evaluate(async budget => {
         const started = performance.now();
         const samples = [];
         let failure = null;
@@ -92,9 +124,11 @@ export async function visualProbe(page, node, surface) {
           await new Promise(resolve => requestAnimationFrame(resolve));
         }
         return { samples, failure, elapsed_ms: performance.now() - started };
-      }, settleMs);
-      if (motionSettle.failure) result.errors.push(`${size}/${theme}: ${motionSettle.failure}`);
-      const observation = await page.evaluate(names => {
+      }, budget);
+}
+
+export async function observeNativeVisual(page, names) {
+  return await page.evaluate(names => {
         const style = getComputedStyle(document.documentElement);
         const visible = element => element.getClientRects().length > 0;
         return {
@@ -138,26 +172,4 @@ export async function visualProbe(page, node, surface) {
           }),
         };
       }, names);
-      const checks = { canonical_tokens: names.every(name => canonicalColor(observation.tokens[name]) === canonicalColor(expected[theme][name])),
-        reduced_motion: observation.reduced_motion && observation.active_animations === 0,
-        document_margin_reset: observation.body.margin === '0px',
-        themed_links: observation.browser_default_links === 0,
-        no_overflow: !observation.overflow, images_loaded: observation.broken_images === 0,
-        no_placeholder_elements: observation.placeholder_elements === 0 };
-      const file = `${surface}-${size}-${theme}.png`;
-      const png = await page.screenshot({ path: `${out}/${file}`, fullPage: true });
-      result.observations.push({ size, viewport: canonical(size), theme, expected_tokens: expected[theme], motion_settle: motionSettle, ...observation, checks,
-        capture: file, capture_sha256: createHash('sha256').update(png).digest('hex') });
-      for (const [check, pass] of Object.entries(checks)) if (!pass) result.errors.push(`${size}/${theme}: ${check}`);
-    }
-  } catch (error) {
-    result.errors.push(`probe incomplete: ${error.message}`);
-  } finally {
-    result.status = result.errors.length ? 'FAIL' : 'PASS';
-    writeFileSync(`${out}/${surface}.json`, JSON.stringify(result, null, 2) + '\n');
-    await page.evaluate(theme => theme === null ? document.documentElement.removeAttribute('data-theme') : document.documentElement.setAttribute('data-theme', theme), original.theme);
-    await page.emulateMedia({ reducedMotion: original.reduced ? 'reduce' : 'no-preference' });
-    if (viewport) await page.setViewportSize(viewport);
-  }
-  await accessibilityProbe(page, node, surface);
 }
