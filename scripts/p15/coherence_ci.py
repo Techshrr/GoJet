@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -53,6 +54,9 @@ def need_env(name: str) -> str:
     return value
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.ci.actions import github_json
+
 HEAD = need_env("EXACT_HEAD")
 REPOSITORY = need_env("REPOSITORY")
 TOKEN = need_env("GH_TOKEN")
@@ -67,12 +71,24 @@ HEADERS = {
 
 
 def api_get(url: str) -> dict:
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    return github_json(url, HEADERS)
 
 
-def artifact_for(run_id: int, mode: str, locator: str) -> dict | None:
+def exact_producer_runs() -> list[dict]:
+    runs = []
+    for page in range(1, 11):
+        query = urllib.parse.urlencode({"head_sha": HEAD, "event": "pull_request", "per_page": 100, "page": page})
+        payload = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}")
+        batch = payload["workflow_runs"]
+        if not isinstance(batch, list):
+            raise RuntimeError("invalid exact-head producer listing")
+        runs.extend(batch)
+        if len(batch) < 100:
+            return runs
+    raise RuntimeError("exact-head producer listing reached the 1,000-result cap")
+
+
+def artifact_for(run_id: int, mode: str, locator: str, created_after: str | None = None) -> dict | None:
     data = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{run_id}/artifacts?per_page=100")
     artifacts = [item for item in data.get("artifacts", []) if not item.get("expired")]
     if mode == "exact":
@@ -81,6 +97,18 @@ def artifact_for(run_id: int, mode: str, locator: str) -> dict | None:
         matches = [item for item in artifacts if isinstance(item.get("name"), str) and item["name"].startswith(locator)]
     else:
         raise SystemExit(f"unsupported artifact locator mode {mode}")
+    if created_after is not None:
+        boundary = datetime.fromisoformat(created_after.replace("Z", "+00:00"))
+        if boundary.utcoffset() is None:
+            raise RuntimeError("attempt boundary must include timezone")
+        current = []
+        for item in matches:
+            created = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+            if created.utcoffset() is None:
+                raise RuntimeError("artifact timestamp must include timezone")
+            if created >= boundary:
+                current.append(item)
+        matches = current
     if len(matches) != 1:
         return None
     item = matches[0]
@@ -95,12 +123,17 @@ def artifact_for(run_id: int, mode: str, locator: str) -> dict | None:
 def bind_producers() -> dict:
     ROOT.mkdir(parents=True, exist_ok=True)
     contract_name = f"p15-authentication-oauth-account-contract-guard-{HEAD}"
-    deadline = time.time() + 60 * 60
+    attempt_number = int(need_env("GITHUB_RUN_ATTEMPT"))
+    attempt = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs/{CURRENT_RUN_ID}/attempts/{attempt_number}")
+    if (attempt.get("id") != CURRENT_RUN_ID or attempt.get("head_sha") != HEAD
+            or attempt.get("run_attempt") != attempt_number):
+        raise RuntimeError("current attempt authority mismatch")
+    attempt_started = attempt["run_started_at"]
+    deadline = time.time() + 135 * 60
 
     while time.time() < deadline:
-        contract_artifact = artifact_for(CURRENT_RUN_ID, "exact", contract_name)
-        query = urllib.parse.urlencode({"head_sha": HEAD, "event": "pull_request", "per_page": 100})
-        runs = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}").get("workflow_runs", [])
+        contract_artifact = artifact_for(CURRENT_RUN_ID, "exact", contract_name, created_after=attempt_started)
+        runs = exact_producer_runs()
         latest: dict[str, dict] = {}
         for run in runs:
             name = run.get("name")
@@ -163,7 +196,7 @@ def bind_producers() -> dict:
             print(f"P15 T028 producer authority green for {HEAD}")
             return manifest
         print(f"Waiting P15 T028 producers missing={missing} pending={pending}", flush=True)
-        time.sleep(10)
+        time.sleep(60)
 
     raise SystemExit(f"timed out waiting for P15 T028 producers on {HEAD}")
 

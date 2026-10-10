@@ -1,5 +1,5 @@
 import type { ChangeEvent, MouseEvent, ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button, Dialog, InlineMessage, useShellViewport } from '@gojet/ui';
 import type { ShellState } from '@gojet/utils';
@@ -9,7 +9,7 @@ const groups = [
   ['INSIGHTS', [['Analytics', '/app/analytics']]],
   ['MANAGE', [['Domains', '/app/domains'], ['Organization', '/app/organization'], ['Campaigns', '/app/campaigns'], ['Tags', '/app/tags']]],
   ['DEVELOPER', [['API keys', '/app/api-keys'], ['Webhooks', '/app/webhooks']]],
-  ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings']]],
+  ['WORKSPACE', [['Billing', '/app/billing'], ['Members', '/app/members'], ['Notifications', '/app/notifications'], ['Workspace settings', '/app/settings/workspace'], ['Settings', '/app/settings/profile']]],
 ] as const;
 
 type OverlayName = 'create' | 'command' | 'notifications';
@@ -38,6 +38,7 @@ export function WorkspaceShell({
   notificationsContent,
 }: WorkspaceShellProps) {
   const [overlay, setOverlay] = useState<OverlayName | null>(null);
+  const switcherHintId = useId();
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   const viewport = useShellViewport();
   const openOverlay = (name: OverlayName, event: MouseEvent<HTMLButtonElement>) => { lastTrigger.current = event.currentTarget; setOverlay(name); };
@@ -56,7 +57,8 @@ export function WorkspaceShell({
         {switcherOptions ? (
           <label className="workspace-switcher-field">
             <span>Workspace</span>
-            <select className="workspace-switcher" aria-label="Workspace switcher" value={workspaceId ?? ''} onChange={changeWorkspace}>
+            <span id={`${switcherHintId}-desktop`}>Selecting a workspace reloads this page.</span>
+            <select className="workspace-switcher" aria-label="Workspace switcher" aria-describedby={`${switcherHintId}-desktop`} value={workspaceId ?? ''} onChange={changeWorkspace}>
               {switcherOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
@@ -77,6 +79,26 @@ export function WorkspaceShell({
             <button type="button">Avatar</button>
           </div>
         </header>
+        <details className="workspace-mobile-navigation" data-mobile-navigation onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault(); event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }} onClick={event => {
+          if (event.target instanceof Element && event.target.closest('a[href]')) event.currentTarget.open = false;
+        }}>
+          <summary>Workspace navigation</summary>
+          {switcherOptions ? <label className="workspace-switcher-field"><span>Workspace</span>
+            <span id={`${switcherHintId}-mobile`}>Selecting a workspace reloads this page.</span>
+            <select className="workspace-switcher" aria-label="Workspace switcher" aria-describedby={`${switcherHintId}-mobile`} value={workspaceId ?? ''} onChange={changeWorkspace}>
+              {switcherOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select></label> : <span>{workspaceLabel}</span>}
+          <Button onClick={event => openOverlay('create', event)}>Create</Button>
+          <nav aria-label="Mobile Workspace navigation">
+            {groups.map(([group, items]) => <section key={group}><h2>{group}</h2>{items.map(([label, to]) => <Link key={to} to={to}>{label}</Link>)}</section>)}
+            <Link to="/app">Overview</Link><Link to="/app/support">Support</Link>
+          </nav>
+        </details>
         {state === 'api-offline' && <InlineMessage variant="warning">API is offline. Local navigation remains available.</InlineMessage>}
         {state === 'workspace-suspended' && <InlineMessage variant="danger">Workspace is suspended. Creation actions are unavailable.</InlineMessage>}
         {state === 'read-only-role' && <InlineMessage variant="info">You have read-only access to this workspace.</InlineMessage>}

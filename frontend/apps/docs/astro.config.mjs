@@ -36,6 +36,7 @@ export default defineConfig({
       customCss: ['./src/styles/docs-shell.css'],
       components: {
         Head: './src/components/Head.astro',
+        MobileMenuToggle: './src/components/MobileMenuToggle.astro',
         SocialIcons: './src/components/WorkspaceLink.astro',
       },
     }),

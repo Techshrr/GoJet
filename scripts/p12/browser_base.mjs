@@ -206,7 +206,7 @@ async function caseT019(browser) {
   await waitState(opened.page, '[data-page="workspace-overview"]', 'complete');
   const history = await states(opened.page);
   assert(history.includes('workspace-overview:loading'), `overview loading state missing ${JSON.stringify(history)}`);
-  const switcher = opened.page.getByLabel('Workspace switcher');
+  const switcher = opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true });
   await switcher.waitFor();
   assert(await switcher.locator('option').count() === 2, 'Workspace switcher did not list both memberships');
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Primary' }).count() === 1, 'primary Workspace authority missing');
@@ -215,7 +215,7 @@ async function caseT019(browser) {
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Alternate' }).count() === 1, 'Workspace switch did not change authority');
   const alternateSelected = await opened.page.evaluate(() => sessionStorage.getItem('gojet.p12.active-workspace'));
   assert(alternateSelected === ALT_WS, `alternate selection not persisted ${alternateSelected}`);
-  await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), opened.page.getByLabel('Workspace switcher').selectOption(WS)]);
+  await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true }).selectOption(WS)]);
   await screenshot(opened.page, 'P12-T019-overview-switcher');
   assertDiagnostics(opened.report, 'T019 overview/switcher');
   await opened.context.close();
@@ -300,8 +300,12 @@ async function caseT021(browser) {
   await waitState(opened.page, '[data-page="workspace-organization"]', 'edit');
   await opened.page.getByLabel('Organization name').fill('P12 Organization Updated');
   await opened.page.getByLabel('Organization description').fill('Browser-governed organization metadata');
-  await opened.page.getByRole('button', { name: 'Save organization' }).click();
-  await opened.page.waitForFunction(() => document.querySelector('[data-page="workspace-organization"]')?.getAttribute('data-state') === 'edit');
+  const [saved] = await Promise.all([
+    opened.page.waitForResponse((response) => new URL(response.url()).pathname === `/api/workspaces/${WS}/organization` && response.request().method() === 'PATCH'),
+    opened.page.getByRole('button', { name: 'Save organization' }).click(),
+  ]);
+  assert(saved.status() === 200, `organization update HTTP status ${saved.status()}`);
+  await saved.finished();
   assert(mysqlScalar(`SELECT CONCAT(name,'|',version) FROM workspace_organizations WHERE workspace_id='${WS}'`) === 'P12 Organization Updated|2', 'organization update not persisted');
   assertDiagnostics(opened.report, 'T021 organization');
   await opened.context.close();
@@ -363,7 +367,7 @@ async function caseT022(browser) {
   opened = await openPage(browser, OWNER_URL, '/app/notifications');
   await waitState(opened.page, '[data-page="workspace-notifications"]', 'complete');
   assert(await opened.page.getByText('2 unread', { exact: true }).count() === 1, 'initial unread count mismatch');
-  const settingsLink = opened.page.locator('a[href="/app/settings/workspace"]');
+  const settingsLink = opened.page.locator('[data-page="workspace-notifications"] a[href="/app/settings/workspace"]');
   assert(await settingsLink.count() === 1, 'authorized notification deep-link missing');
   await opened.page.getByRole('button', { name: 'Mark read' }).first().click();
   await opened.page.getByText('1 unread', { exact: true }).waitFor();

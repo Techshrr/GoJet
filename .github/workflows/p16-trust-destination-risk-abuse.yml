@@ -5,6 +5,9 @@ on:
     branches:
       - main
     paths:
+      - 'internal/auth/**'
+      - 'services/platformapi/cmd/server/auth.go'
+      - '.github/workflows/p16-evidence.yml'
       - 'artifacts/v10/P16/test-plan.json'
       - 'artifacts/v10/P16/review.md'
       - 'scripts/p16/validate_contract.py'

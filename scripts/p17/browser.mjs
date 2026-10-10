@@ -21,8 +21,8 @@ if (!cases[caseId]) {
 
 const browser = await chromium.launch({
   executablePath,
-  headless: true,
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  headless: !process.env.P20_ORCA_LOG,
+  args: ['--no-sandbox', '--force-renderer-accessibility', '--disable-dev-shm-usage'],
 });
 
 try {

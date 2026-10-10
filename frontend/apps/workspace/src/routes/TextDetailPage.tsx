@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GoJetApiError, type TextUpdateInput, type TextVisibility } from '@gojet/api-client';
@@ -35,6 +35,16 @@ export default function TextDetailPage() {
   const [password, setPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
   const [changeReason, setChangeReason] = useState('Update Text share');
+  const [confirmDeletion, setConfirmDeletion] = useState(false);
+  const deleteTrigger = useRef<HTMLSpanElement>(null);
+  const deleteCancel = useRef<HTMLDivElement>(null);
+  const wasConfirming = useRef(false);
+  const confirmationId = useId();
+  useEffect(() => {
+    if (confirmDeletion) deleteCancel.current?.querySelector('button')?.focus();
+    else if (wasConfirming.current) deleteTrigger.current?.querySelector('button')?.focus();
+    wasConfirming.current = confirmDeletion;
+  }, [confirmDeletion]);
 
   const detailQuery = useQuery({
     queryKey: ['text-share', runtime?.workspaceId, numericId],
@@ -101,7 +111,7 @@ export default function TextDetailPage() {
             <div className="text-card-head"><div><p className="text-kicker">Resource authority</p><h2>Edit Text share</h2></div><strong className="text-status">v{item.version}</strong></div>
             <form className="text-form" onSubmit={submit}>
               <TextField id="text-detail-title" label="Title" required disabled={readOnly} value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
-              <label className="text-native-field" htmlFor="text-detail-content">Content<textarea id="text-detail-content" rows={12} required readOnly={readOnly} value={content} onChange={(event) => setContent(event.currentTarget.value)} /></label>
+              <label className="text-native-field" htmlFor="text-detail-content">Content<textarea id="text-detail-content" rows={12} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) event.currentTarget.scrollIntoView({ block: 'center', inline: 'nearest' }); }} required readOnly={readOnly} value={content} onChange={(event) => setContent(event.currentTarget.value)} /></label>
               <div className="text-form-grid">
                 <label className="text-native-field" htmlFor="text-detail-visibility">Visibility<select id="text-detail-visibility" disabled={readOnly} value={visibility} onChange={(event) => setVisibility(event.currentTarget.value as TextVisibility)}><option value="private">Private</option><option value="public">Public</option></select></label>
                 <TextField id="text-detail-password" label={item.password_required ? 'Replace password (optional)' : 'Password (optional)'} type="password" disabled={readOnly || clearPassword} value={password} onChange={(event) => setPassword(event.currentTarget.value)} />
@@ -115,7 +125,19 @@ export default function TextDetailPage() {
           </Card>
           <div className="text-detail-side">
             <Card as="section" className="text-detail-card"><p className="text-kicker">Lifecycle</p><h2>Current policy</h2><dl className="text-facts"><div><dt>Visibility</dt><dd>{item.visibility}</dd></div><div><dt>Password</dt><dd>{item.password_required ? 'Required' : 'None'}</dd></div><div><dt>One-time</dt><dd>{item.one_time ? 'Yes' : 'No'}</dd></div><div><dt>Consumed</dt><dd>{item.consumed_at ? 'Yes' : 'No'}</dd></div><div><dt>Expires</dt><dd>{item.expires_at ? new Date(item.expires_at).toLocaleString() : 'Never'}</dd></div><div><dt>Updated</dt><dd>{new Date(item.updated_at).toLocaleString()}</dd></div></dl><p className="text-public-path">Public path: <code>/t/{item.public_slug}</code></p><p>Public Text remains noindex and is never eligible for the Website or Docs sitemap.</p></Card>
-            <Card as="section" className="text-detail-card text-danger"><p className="text-kicker">Removal</p><h2>Delete Text share</h2><p>Removal is durable. Public access becomes HTTP 410 and stale writes cannot restore the resource.</p><Button variant="destructive" loading={deleteMutation.isPending} disabled={readOnly || !changeReason.trim()} onClick={() => deleteMutation.mutate()}>Delete Text share</Button></Card>
+            <Card as="section" className="text-detail-card text-danger"><p className="text-kicker">Removal</p><h2>Delete Text share</h2><p>Removal is durable. Public access becomes HTTP 410 and stale writes cannot restore the resource.</p>
+              {confirmDeletion ? <div role="group" aria-labelledby={confirmationId} onKeyDown={(event) => {
+                if (event.key === 'Escape' && !deleteMutation.isPending) { event.preventDefault(); setConfirmDeletion(false); }
+              }}>
+                <h3 id={confirmationId}>Confirm Text deletion</h3>
+                <p role="status">Delete “{item.title}”? This cannot be undone.</p>
+                <p>Change reason: {changeReason}</p>
+                <div className="text-actions" ref={deleteCancel}>
+                  <Button disabled={deleteMutation.isPending} onClick={() => setConfirmDeletion(false)}>Cancel</Button>
+                  <Button variant="destructive" loading={deleteMutation.isPending} disabled={readOnly || !changeReason.trim()} onClick={() => deleteMutation.mutate()}>Confirm delete Text share</Button>
+                </div>
+              </div> : <span ref={deleteTrigger} style={{display:'contents'}}><Button variant="destructive" disabled={readOnly || !changeReason.trim()} onClick={() => setConfirmDeletion(true)}>Delete Text share</Button></span>}
+            </Card>
           </div>
         </div> : null}
       </section>

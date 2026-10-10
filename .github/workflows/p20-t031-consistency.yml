@@ -1,0 +1,52 @@
+name: P20-T031 Navigation Route Consistency
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p20/**'
+      - 'scripts/p11/**'
+      - 'scripts/p16/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p20-t031-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: P20-T031 exact-head navigation consistency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Test parity evidence admission
+        run: python3 -m unittest discover -s scripts/p20 -p 'test_t031*.py'
+      - name: Bind same-head T030 and navigation producers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t031_sources.py
+      - name: Admit cross-surface navigation and deep links
+        run: python3 scripts/p20/consistency_cases.py --case T031
+      - name: Preserve parity proof and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t031-formal-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/consistency/P20-T031.json
+            artifacts/v10/P20/runtime/t031-sources/

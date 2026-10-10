@@ -2,14 +2,20 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import zipfile
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.ci.actions import workflow_runs, github_json
 
 ROOT = Path('artifacts/v10/P14')
 MANIFEST = ROOT / 'evidence-producer-manifest.json'
@@ -50,18 +56,16 @@ HEADERS = {
 
 
 def api_get(url: str) -> dict:
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    return github_json(url, HEADERS)
 
 
 def artifact_for(run_id: int, expected: str) -> dict | None:
     url = f'https://api.github.com/repos/{REPOSITORY}/actions/runs/{run_id}/artifacts?per_page=100'
     artifacts = api_get(url).get('artifacts', [])
     matches = [item for item in artifacts if item.get('name') == expected and not item.get('expired')]
-    if len(matches) != 1:
+    if not matches:
         return None
-    item = matches[0]
+    item = max(matches, key=lambda item: int(item['id']))
     return {
         'id': int(item['id']),
         'name': item['name'],
@@ -73,12 +77,10 @@ def artifact_for(run_id: int, expected: str) -> dict | None:
 def bind_producers() -> dict:
     ROOT.mkdir(parents=True, exist_ok=True)
     contract_expected = f'p14-support-tickets-mail-contract-{HEAD}'
-    deadline = time.time() + 35 * 60
+    deadline = time.time() + 90 * 60
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, contract_expected)
-        query = urllib.parse.urlencode({'head_sha': HEAD, 'event': 'pull_request', 'per_page': 100})
-        runs_url = f'https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}'
-        runs = api_get(runs_url).get('workflow_runs', [])
+        runs = workflow_runs(api_get, REPOSITORY, HEAD, event='pull_request')
         latest: dict[str, dict] = {}
         for run in runs:
             name = run.get('name')
@@ -150,23 +152,29 @@ def bind_producers() -> dict:
             print(f'P14 T024 producer authority green for {HEAD}')
             return manifest
         print(f'Waiting P14 T024 producers missing={missing} pending={pending}', flush=True)
-        time.sleep(10)
+        time.sleep(60)
 
     raise SystemExit(f'timed out waiting for P14 T024 producers on {HEAD}')
 
 
-def download(run_id: int, artifact_name: str, destination: Path) -> None:
+def download(artifact: dict, destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
-    subprocess.run(
-        [
-            'gh', 'run', 'download', str(run_id), '--repo', REPOSITORY,
-            '--name', artifact_name, '--dir', str(destination),
-        ],
-        check=True,
-        env={**os.environ, 'GH_TOKEN': TOKEN},
-    )
+    archive = destination.parent / f"{artifact['id']}.zip"
+    with archive.open('wb') as output:
+        subprocess.run(
+            ['gh', 'api', f"repos/{REPOSITORY}/actions/artifacts/{int(artifact['id'])}/zip"],
+            check=True, stdout=output, env={**os.environ, 'GH_TOKEN': TOKEN},
+        )
+    digest = 'sha256:' + hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != artifact.get('digest'):
+        raise SystemExit('P14 artifact digest mismatch')
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.infolist():
+            if not (destination / member.filename).resolve().is_relative_to(destination.resolve()):
+                raise SystemExit('unsafe P14 artifact path')
+        bundle.extractall(destination)
 
 
 def first_file(root: Path, name: str) -> Path:
@@ -213,7 +221,7 @@ def assemble_evidence(manifest: dict) -> None:
     }
     for name, destination in destinations.items():
         row = rows[name]
-        download(int(row['run_id']), row['artifact']['name'], destination)
+        download(row['artifact'], destination)
 
     for dirname in (
         'contract', 'api', 'rbac', 'security', 'entitlement', 'mail', 'notification',

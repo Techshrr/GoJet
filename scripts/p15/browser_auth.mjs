@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { createHmac } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -65,6 +66,16 @@ async function noOverflow(page, label) {
 }
 async function maskInputs(page) { await page.evaluate(() => { for (const input of document.querySelectorAll('input')) input.value = ''; }); }
 async function capture(page, label) {
+  const inputPurposes = await page.locator('.p15-auth input[type="email"], .p15-auth input[type="password"]').evaluateAll(inputs => inputs.map(input => ({ id: input.id, type: input.type, autocomplete: input.getAttribute('autocomplete') })));
+  for (const input of inputPurposes) {
+    const expected = input.type === 'email' ? ['email'] : ['current-password', 'new-password'];
+    assert(expected.includes(input.autocomplete), `${label}: explicit input purpose missing for ${input.id}`);
+  }
+  inputPurposeEvidence.push({ state: label, inputs: inputPurposes });
+  if (label === 'login-input-desktop') await visualProbe(page, 'P15', 'auth');
+  if (label === 'login-invalid') await visualProbe(page, 'P15', 'auth-invalid');
+  if (label === 'register-code-sent') await visualProbe(page, 'P15', 'auth-code-sent');
+  if (label === 'verify-success') await visualProbe(page, 'P15', 'auth-verified');
   await maskInputs(page);
   const path = `${capturesDir}/${caseId}-${label}.png`;
   await page.screenshot({ path, fullPage: true });
@@ -89,11 +100,12 @@ function resultPayload(status, details, errors = []) {
 function writeResult(status, details, errors = []) { writeFileSync(`${browserDir}/${caseId}.json`, `${JSON.stringify(resultPayload(status, details, errors), null, 2)}\n`); }
 
 const screenshots = [];
+const inputPurposeEvidence = [];
 const states = { login: [], register: [], verify: [], forgot: [], reset: [], oauth: [], social: [] };
 const diagnostics = { console_errors: [], page_errors: [], request_failures: [] };
 
 try {
-  const browser = await chromium.launch({ executablePath, headless: true });
+  const browser = await chromium.launch({ executablePath, headless: !process.env.P20_ORCA_LOG, args: ['--force-renderer-accessibility'] });
   const context = await browser.newContext({ viewport: viewports.desktop });
   const page = await context.newPage();
   page.on('console', (message) => { if (message.type() === 'error' && !message.text().startsWith('Failed to load resource: the server responded with a status of ')) diagnostics.console_errors.push(message.text()); });
@@ -199,7 +211,7 @@ try {
     provider_registry_count: 6,
     states,
     responsive_viewports: Object.keys(viewports),
-    accessibility: { keyboard_focus: true, error_focus: true, labels: true },
+    accessibility: { keyboard_focus: true, error_focus: true, labels: true, input_purposes: inputPurposeEvidence },
     security: { noindex: true, private_headers: true, secure_cookie: true, web_storage_secret_free: true, raw_callback_not_rendered: true },
     screenshot_count: screenshots.length,
     closure_claim: false,

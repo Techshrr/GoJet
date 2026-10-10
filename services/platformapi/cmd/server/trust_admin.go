@@ -241,7 +241,7 @@ func (h *trustAdminHTTPHandler) mutationSession(w http.ResponseWriter, r *http.R
 		return authn.Session{}, false
 	}
 	if _, err := authn.AuthorizeUnsafeMutation(r.Context(), r, session, h.origins, h.csrf, now); err != nil {
-		writeAuthServiceError(w, err, false)
+		writeAuthMutationError(w, err)
 		return authn.Session{}, false
 	}
 	if err := h.authorizer.Authorize(r.Context(), session.UserID, permission); err != nil {
