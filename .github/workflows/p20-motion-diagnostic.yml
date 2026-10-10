@@ -1,0 +1,19 @@
+name: P20 isolated motion diagnostic
+on:
+  push:
+    branches: [debug/p20-t035-motion-repro]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: npm install --prefix /tmp/gojet-motion --no-audit --no-fund playwright-core@1.58.2
+      - run: node scripts/p20/motion_diagnostic.mjs
