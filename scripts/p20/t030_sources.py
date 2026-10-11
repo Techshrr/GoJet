@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from pathlib import Path, PurePosixPath
-from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest
+from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest, select_artifact
 
 PRODUCERS = {
     'prerequisite': ('p20-t029-consistency.yml', 'p20-t029-formal-', 'P20', None),
@@ -49,10 +49,7 @@ def collect(root, head):
         run = selected[key]
         rows = api(base + f'/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
         require(len(rows) < 100, 'truncated artifact list')
-        matches = [a for a in rows if a['name'] == prefix + head and a['expired'] is False]
-        require(len(matches) == 1, 'T030 artifact absent or ambiguous: ' + key)
-        artifact = matches[0]
-        require(artifact.get('workflow_run', {}).get('id') == run['id'], 'artifact/run mismatch')
+        artifact = select_artifact(rows, prefix + head, run)
         raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archive = verified_archive(raw, artifact, head)
         manifest['artifacts'][key] = {'workflow': workflow, 'head_sha': head, 'run_id': run['id'],

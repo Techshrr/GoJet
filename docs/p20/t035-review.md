@@ -474,7 +474,7 @@ P13 coherence restricts producer selection to pull_request, so a successful
 workflow_dispatch did not replace the cancelled PR run38019544892. Re-ran only
 its cancelled job114117257692; it now succeeds. P13 coherence recovery follows.
 
-Isolated regression run38040660579/job114179869422 on9f412d5f6fe98b833e93a1a12fde3c27f872760e
+Isolated regression run38040660579/job114180079627 on9f412d5f6fe98b833e93a1a12fde3c27f872760e
 PASS using the exact exported observation/settling functions: closed dark initial6
 transitions naturally settle in127.5ms, final0; closed/open light and open dark
 final0. Persistent CSS animation is rejected and remains running (not cancelled).
@@ -488,3 +488,25 @@ coherence rejects duplicate names. Narrow duplicates to run_started_at before
 requiring exactly one; do not alter sole-artifact behavior or head/digest checks.
 Real metadata replay selects11660890990; embedded workflow Python compiles.
 This correction and motion sampling are one candidate batch, not formal closure.
+
+
+## 2026-10-11: complete retry binding in remaining collectors
+
+On exact9ec9c60, Support38040775596 attempt2 succeeded after the original
+P14-T010 transient fault-server port collision. T02838040775539 and
+T02938040775624 attempt2 then passed. T03038040775592 attempt2 failed at
+artifact collection, before product assertions: developer artifact ambiguous.
+Support retained failed-attempt11665587564 (09:21:53Z) and successful-attempt
+11667599034 (10:45:36Z), both with the exact same head/name. The admitted
+attempt started at10:33:16Z. T028 already selects the successful attempt;
+T029/T030 still used an unconditional exactly-one test.
+
+Both remaining collectors now reuse existing select_artifact with exact name,
+run identity and successful attempt boundary. No artifact is deleted; missing,
+multiple current-attempt, wrong-run, wrong-head and digest-invalid evidence
+remain rejected. T031-T035 already use this shared selector through their
+prefix helper. A live-metadata replay selects11667599034 and negative cases
+reject ambiguous current-attempt uploads. Product, frozen oracle and ledger
+remain unchanged. Native nine-state review on9ec contains72 observations,
+892 Tab steps and113 reviewed captures; this is not formal T035 admission.
+Any new candidate still requires its own exact-head packet and authorities.

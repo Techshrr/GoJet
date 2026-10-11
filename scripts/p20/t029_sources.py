@@ -4,7 +4,7 @@ import os
 from pathlib import Path, PurePosixPath
 import sys
 import time
-from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest
+from t028_sources import download_archive, verified_archive, member, select_run, successful, require, digest, select_artifact
 from t029_requirements import REQUIRED
 
 PRODUCERS = {
@@ -44,10 +44,7 @@ def collect(root, head):
         run = selected[node]
         rows = api(base + f'/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
         require(len(rows) < 100, 'artifact listing truncated')
-        matches = [a for a in rows if a['name'] == prefix + head and a['expired'] is False]
-        require(len(matches) == 1, 'required T029 artifact missing or ambiguous')
-        artifact = matches[0]
-        require(artifact.get('workflow_run', {}).get('id') == run['id'], 'artifact/run mismatch')
+        artifact = select_artifact(rows, prefix + head, run)
         raw = download_archive(base + f'/actions/artifacts/{artifact["id"]}/zip', headers)
         archive = verified_archive(raw, artifact, head)
         manifest['artifacts'][node] = {'workflow': workflow, 'head_sha': head, 'run_id': run['id'],
