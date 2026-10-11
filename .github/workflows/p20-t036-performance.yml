@@ -1,0 +1,39 @@
+name: P20-T036 Performance and Bundle Isolation
+on:
+  pull_request:
+    branches: [main]
+    paths: ['scripts/p20/**', 'scripts/p19/**', 'frontend/**', '.github/workflows/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p20-t036-performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  performance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Reject invalid performance evidence
+        run: python3 -m unittest discover -s scripts/p20 -p 'test_t036*.py'
+      - name: Collect original exact-head budget evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t036_sources.py
+      - name: Recompute performance and bundle isolation
+        run: python3 scripts/p20/performance_cases.py
+      - name: Preserve result and original performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t036-performance-${{ github.event.pull_request.head.sha || github.sha }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            artifacts/v10/P20/performance/P20-T036.json
+            artifacts/v10/P20/runtime/t036-sources/
