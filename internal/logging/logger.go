@@ -6,6 +6,7 @@ package logging
 import (
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 )
 
@@ -14,6 +15,14 @@ const redacted = "[redacted]"
 // New binds each record to its executable and prevents raw driver errors,
 // filesystem paths and opaque payloads from being serialized into service logs.
 func New(out io.Writer, service string) *slog.Logger {
+	if socket := os.Getenv("GOJET_LOG_SOCKET"); socket != "" && service != "logreceiver" {
+		out = &localForwarder{out: out, socket: socket, service: service}
+	}
+	return NewLocal(out, service)
+}
+
+// NewLocal emits sanitized records without forwarding; receiver output must use it.
+func NewLocal(out io.Writer, service string) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(out, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: safeAttribute,

@@ -25,9 +25,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/v10/P20/runtime/t037-defect
-          go test -race -json ./internal/logging | tee artifacts/v10/P20/runtime/t037-defect/redaction.jsonl
+          go test -race -json ./internal/logging ./internal/logreceiver | tee artifacts/v10/P20/runtime/t037-defect/redaction.jsonl
           go test ./...
-      - name: Seven actual executable startup records
+      - name: Eight actual executables and private receiver transport
         run: |
           set -euo pipefail
           python3 scripts/p20/t037_startup_probe.py
