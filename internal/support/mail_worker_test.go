@@ -2,6 +2,10 @@ package support
 
 import (
 	"context"
+	"bytes"
+	"strings"
+
+	"github.com/Techshrr/GoJet/internal/logging"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +16,7 @@ type fakeMailQueue struct {
 	claimErr      error
 	payload       MailDeliveryPayload
 	loadErr       error
+	completeErr   error
 	completed     bool
 	completeInput MailDeliveryResult
 	claimToken    string
@@ -27,6 +32,7 @@ func (f *fakeMailQueue) LoadDelivery(_ context.Context, _ ClaimedMail) (MailDeli
 }
 
 func (f *fakeMailQueue) Complete(_ context.Context, claimed ClaimedMail, rawClaimToken string, delivery MailDeliveryResult, now time.Time) (MailJob, error) {
+	if f.completeErr != nil { return MailJob{}, f.completeErr }
 	f.completed = true
 	f.completeInput = delivery
 	if rawClaimToken == "" || rawClaimToken != f.claimToken {
@@ -115,5 +121,21 @@ func TestMailWorkerTemplateFailureCompletesTerminalWithoutSend(t *testing.T) {
 	}
 	if sender.calls != 0 || !queue.completed || queue.completeInput.ErrorCode != "template_invalid" || queue.completeInput.Transient {
 		t.Fatalf("sender/completion mismatch calls=%d completed=%v result=%+v", sender.calls, queue.completed, queue.completeInput)
+	}
+}
+
+func TestMailCompletionLogsOnlyCommittedOutcome(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		queue := &fakeMailQueue{}
+		if failed { queue.completeErr = errors.New("secret-canary") }
+		worker, _ := NewMailWorker(queue, &fakeMailSender{})
+		var logs bytes.Buffer
+		worker.Logger = logging.NewLocal(&logs, "mailworker")
+		queue.claimToken = "claim-secret-canary"
+		job := MailJob{ID: "mail-123", ResourceID: "message-456", RecipientValue: "secret-canary@example.test", AttemptCount: 1}
+		_, err := worker.complete(context.Background(), ClaimedMail{Job: job}, queue.claimToken, MailDeliveryResult{Success: true}, time.Now())
+		if (err != nil) != failed || strings.Contains(logs.String(), "secret-canary") { t.Fatal("completion error/secret boundary lost") }
+		if strings.Contains(logs.String(), "completion persisted") == failed { t.Fatal("uncommitted outcome logged as durable") }
+		if !strings.Contains(logs.String(), logging.Fingerprint("mail_job", job.ID)) { t.Fatal("job correlation missing") }
 	}
 }

@@ -62,6 +62,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	worker.Logger = logger
+
 	interval := 2 * time.Second
 	if raw := strings.TrimSpace(os.Getenv("GOJET_MAILWORKER_INTERVAL")); raw != "" {
 		parsed, parseErr := time.ParseDuration(raw)
