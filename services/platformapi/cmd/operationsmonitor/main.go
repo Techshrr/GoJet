@@ -12,6 +12,7 @@ import (
 	"time"
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/trust"
 )
@@ -19,7 +20,7 @@ import (
 func main() {
 	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
 	flag.Parse()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "operationsmonitor")
 
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))

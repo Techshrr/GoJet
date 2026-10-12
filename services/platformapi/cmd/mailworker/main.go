@@ -2,19 +2,19 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/support"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "mailworker")
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	smtpAddress := strings.TrimSpace(os.Getenv("GOJET_SMTP_ADDR"))
 	smtpFrom := strings.TrimSpace(os.Getenv("GOJET_SMTP_FROM"))

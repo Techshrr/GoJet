@@ -12,11 +12,12 @@ import (
 	"time"
 
 	filedomain "github.com/Techshrr/GoJet/internal/files"
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "fileworker")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	storageRoot := strings.TrimSpace(os.Getenv("GOJET_FILE_STORAGE_ROOT"))
 	clamNetwork := strings.TrimSpace(os.Getenv("GOJET_CLAMAV_NETWORK"))

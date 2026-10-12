@@ -1,0 +1,40 @@
+name: P20-T037 Observability Defect Probe
+on:
+  push:
+    branches: [develop/p20-t037-observability]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p20-t037-observability-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Native redaction regression and repository baseline
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/t037-defect
+          go test -race -json ./internal/logging | tee artifacts/v10/P20/runtime/t037-defect/redaction.jsonl
+          go test ./...
+      - name: Seven actual executable startup records
+        run: |
+          set -euo pipefail
+          python3 scripts/p20/t037_startup_probe.py
+      - name: Retain partial defect evidence (not formal T037 PASS)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t037-defect-${{ github.sha }}
+          path: artifacts/v10/P20/runtime/t037-defect/
+          if-no-files-found: error
