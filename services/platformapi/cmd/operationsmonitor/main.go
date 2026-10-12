@@ -132,6 +132,8 @@ func main() {
 		}
 	}
 
+	if webhookAuthority != nil { webhookAuthority.Logger = logger }
+
 	runIteration := func(ctx context.Context) error {
 		worked, iterationErr := worker.RunOnce(ctx)
 		if iterationErr != nil {

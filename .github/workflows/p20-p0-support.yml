@@ -885,6 +885,9 @@ jobs:
           assert d['details']['next_case_unlocked'] is False
           PYCODE
 
+      - name: Verify eight-service T037 native business and audit correlation
+        run: python3 scripts/p20/consistency_cases.py --case T037
+
       - name: Diagnose T025 production OAuth callback boundary
         run: python3 scripts/p20/t025_availability.py
 
@@ -1108,6 +1111,8 @@ jobs:
             artifacts/v10/P20/p0/P20-T022.json
             artifacts/v10/P20/p0/P20-T023.json
             artifacts/v10/P20/runtime/t037-business/
+            artifacts/v10/P20/runtime/t037-formal/
+            artifacts/v10/P20/consistency/P20-T037.json
             artifacts/v10/P20/integration/P20-T024.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/

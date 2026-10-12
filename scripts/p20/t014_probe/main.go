@@ -149,6 +149,8 @@ func main() {
 		"GOJET_ANALYTICS_WORKER_CONSUMER":     "p20-t014-" + exactHead[:12],
 		"GOJET_ANALYTICS_WORKER_MAX_MESSAGES": "1",
 	})
+	_ = os.MkdirAll(filepath.Dir(outPath), 0o755)
+	_ = os.WriteFile(filepath.Join(filepath.Dir(outPath), "analyticsworker.jsonl"), []byte(workerLogs), 0o644)
 	result.Details["analyticsworker_logged_processing"] = strings.Contains(workerLogs, "analytics event processed")
 	if err != nil {
 		fail("T014 probe native analyticsworker failed")
@@ -183,6 +185,8 @@ func main() {
 		"GOJET_ANALYTICS_RECONCILER_ONCE":  "1",
 		"GOJET_ANALYTICS_RECONCILE_REPAIR": "1",
 	})
+	_ = os.MkdirAll(filepath.Dir(outPath), 0o755)
+	_ = os.WriteFile(filepath.Join(filepath.Dir(outPath), "analyticsreconciler-1.jsonl"), []byte(firstLogs), 0o644)
 	if err != nil {
 		fail("T014 probe first native reconciliation cycle failed")
 		return
@@ -211,6 +215,8 @@ func main() {
 		"GOJET_ANALYTICS_RECONCILER_ONCE":  "1",
 		"GOJET_ANALYTICS_RECONCILE_REPAIR": "1",
 	})
+	_ = os.MkdirAll(filepath.Dir(outPath), 0o755)
+	_ = os.WriteFile(filepath.Join(filepath.Dir(outPath), "analyticsreconciler-2.jsonl"), []byte(secondLogs), 0o644)
 	if err != nil {
 		fail("T014 probe second native reconciliation cycle failed")
 		return

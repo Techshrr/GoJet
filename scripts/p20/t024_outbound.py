@@ -6,6 +6,7 @@ import os
 import secrets
 import subprocess
 import time
+from pathlib import Path
 from datetime import datetime
 
 from t022_case import HEAD, http_json, mysql, scalar, q
@@ -18,6 +19,9 @@ class OutboundVerificationError(RuntimeError):
 def verify_outbound(workspace, auth_headers):
     stage = 'configuration'
     worker = None
+    log_directory = Path('artifacts/v10/P20/runtime/t037-business')
+    log_directory.mkdir(parents=True, exist_ok=True)
+    worker_log = (log_directory / 'operationsmonitor.jsonl').open('ab')
     hook_id = None
     receiver_created = False
     run_id = 'p20-' + HEAD[:12] + '-' + secrets.token_hex(8)
@@ -67,7 +71,7 @@ def verify_outbound(workspace, auth_headers):
         # This process uses the real producer, safe HTTP client, lease and clock.
         # Unrelated risk inspection has no authorized external provider here.
         worker = subprocess.Popen(['/tmp/gojet-p20-operationsmonitor'], env=env,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                  stdout=worker_log, stderr=worker_log)
 
     def deliveries():
         status, _, result = http_json('GET', path + '/' + hook_id + '/deliveries', headers=auth_headers)
@@ -171,6 +175,7 @@ def verify_outbound(workspace, auth_headers):
         raise OutboundVerificationError('outbound stage ' + stage + ': ' + type(exc).__name__) from None
     finally:
         stop()
+        worker_log.close()
         try:
             if hook_id:
                 status, _, body = http_json('POST', path + '/' + hook_id + '/disable', {}, headers())

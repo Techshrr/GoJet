@@ -67,13 +67,11 @@ func main() {
 	}
 
 	analyticsEnabled := os.Getenv("GOJET_ANALYTICS_ENABLED") == "1"
-	var handler http.Handler
+	var publisher links.AnalyticsEventPublisher
 	if analyticsEnabled {
-		analyticsPublisher := analytics.NewRedisStreamPublisher(redisClient)
-		handler = links.NewRedirectHandlerWithAnalytics(store, risk, analyticsPublisher, trustTestHeaders)
-	} else {
-		handler = links.NewRedirectHandler(store, risk, trustTestHeaders)
+		publisher = analytics.NewRedisStreamPublisher(redisClient)
 	}
+	handler := links.NewObservedRedirectHandler(store, risk, publisher, trustTestHeaders, logger)
 
 	address := strings.TrimSpace(os.Getenv("GOJET_REDIRECTENGINE_ADDR"))
 	if address == "" {
