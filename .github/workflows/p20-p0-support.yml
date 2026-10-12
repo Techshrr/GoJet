@@ -2,7 +2,7 @@ name: P20 P0 Support Timeline
 
 on:
   push:
-    branches: [develop/p20-t037-observability]
+    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel]
   pull_request:
     branches:
       - main
@@ -888,6 +888,10 @@ jobs:
       - name: Verify eight-service T037 native business and audit correlation
         run: python3 scripts/p20/consistency_cases.py --case T037
 
+      - name: Verify T038 notification mail audit cross-channel consistency
+        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel'
+        run: python3 scripts/p20/consistency_cases.py --case T038
+
       - name: Diagnose T025 production OAuth callback boundary
         run: python3 scripts/p20/t025_availability.py
 
@@ -1113,6 +1117,8 @@ jobs:
             artifacts/v10/P20/runtime/t037-business/
             artifacts/v10/P20/runtime/t037-formal/
             artifacts/v10/P20/consistency/P20-T037.json
+            artifacts/v10/P20/consistency/P20-T038.json
+            artifacts/v10/P20/runtime/t038/
             artifacts/v10/P20/integration/P20-T024.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
