@@ -135,7 +135,7 @@ func main() {
 			continue
 		}
 		processed++
-		logger.Info("file scan completed", "file_id", job.FileID, "attempt_id", job.AttemptID, "generation", job.Generation, "verdict", result.Verdict, "error_code", result.ErrorCode)
+		logger.Info("file scan completed", "file_id", job.FileID, "attempt_id", job.AttemptID, "generation", job.Generation, "verdict", string(result.Verdict), "error_code", result.ErrorCode)
 		if maxJobs > 0 && processed >= maxJobs {
 			logger.Info("fileworker job target reached", "processed", processed)
 			return
