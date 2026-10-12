@@ -182,7 +182,7 @@ func main() {
 	defer cancel()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	logger.Info("operationsmonitor started", "service_id", trust.OperationsMonitorServiceID, "interval", interval.String(), "webhook_delivery_enabled", webhookAuthority != nil)
+	logger.Info("operationsmonitor started", "trust_service_id", trust.OperationsMonitorServiceID, "interval", interval.String(), "webhook_delivery_enabled", webhookAuthority != nil)
 	for {
 		_ = runIteration(ctx)
 		select {
