@@ -115,6 +115,17 @@ jobs:
           --health-timeout=5s
           --health-retries=30
 
+      redis-predecessor:
+        # Frozen P16-T019 owns DB 0 and flushes it. Never share the P0 instance.
+        image: redis:7.4.10
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
     env:
       GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
       GOJET_REDIS_ADDR: 127.0.0.1:6379
@@ -978,19 +989,6 @@ jobs:
           assert data['details']['secret_material_recorded'] is False,data
           PY
 
-      - name: Stop exact-head native services
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          rm -f /tmp/gojet-p20-admin-handoff.json
-          for pidfile in artifacts/v10/P20/runtime/t018/test-auth-platformapi.pid artifacts/v10/P20/runtime/t009/platformapi.pid artifacts/v10/P20/runtime/t013/redirectengine.pid artifacts/v10/P20/runtime/t016/clamd.pid; do
-            if [ -f "$pidfile" ]; then
-              kill "$(cat "$pidfile")" 2>/dev/null || true
-            fi
-          done
-          true
-
       - name: Bind frozen P17 webhook authority to real T024 lifecycle
         shell: bash
         run: |
@@ -1008,6 +1006,7 @@ jobs:
 
       - name: Replay frozen OAuth and bot-protection authority for T025
         env:
+          GOJET_REDIS_ADDR: 127.0.0.1:6380
           GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_t025_predecessor?multiStatements=true&parseTime=true&charset=utf8mb4
           GOJET_REDIS_DB: "13"
         shell: bash
@@ -1021,8 +1020,8 @@ jobs:
             done
             node="${case:0:3}"
             if [ "$case" = P16-T019 ]; then
-              # Frozen P16 runner owns Redis DB 0 and a native HTTP service.
-              # The correlated P0 timeline has already finished and stopped.
+              # Frozen P16 runner owns DB 0 on its separate Redis instance.
+              # P0 services and their Redis authority remain live for recovery.
               export GOJET_TEST_TRUST_TURNSTILE_TOKEN=p16-trust-turnstile-ci-token
               export GOJET_PLATFORMAPI_URL=http://127.0.0.1:18089
               GOJET_PLATFORMAPI_ADDR=127.0.0.1:18089 GOJET_REDIS_DB=0 \
@@ -1073,6 +1072,19 @@ jobs:
         if: github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T043
 
+
+      - name: Stop exact-head native services
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          rm -f /tmp/gojet-p20-admin-handoff.json
+          for pidfile in artifacts/v10/P20/runtime/t018/test-auth-platformapi.pid artifacts/v10/P20/runtime/t009/platformapi.pid artifacts/v10/P20/runtime/t013/redirectengine.pid artifacts/v10/P20/runtime/t016/clamd.pid; do
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+            fi
+          done
+          true
 
       - name: Upload exact-head T024 availability evidence
         if: always()
