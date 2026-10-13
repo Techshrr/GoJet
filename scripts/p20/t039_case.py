@@ -61,11 +61,14 @@ def collect():
     observations={}
     try:
         deadline=time.monotonic()+15
+        health_status=None
         while True:
             try:
-                if request('/healthz')['status']==200:break
+                health_status=request('/healthz')['status']
+                if health_status==204:break
             except OSError:pass
-            require(redirect.poll() is None and time.monotonic()<deadline,'native redirect not ready');time.sleep(.1)
+            require(redirect.poll() is None and time.monotonic()<deadline,f'native redirect not ready: health_status={health_status}, exit_status={redirect.poll()}');time.sleep(.1)
+        (directory/'readiness.json').write_text(json.dumps({'implementation_commit':HEAD,'health_status':health_status,'native_process_running':redirect.poll() is None})+'\n')
         before=snapshot();require(before['outbox']==before['events']==before['aggregate'] and before['unpublished']==0,'initial event authority not drained')
         proxy.set_fault(all_connections=True)
         outage=request();require(outage['status']==503 and not outage['location_present'],'Redis outage allowed navigation')
@@ -104,7 +107,7 @@ def collect():
     (directory/'observations.json').write_text(json.dumps(observations,indent=2)+'\n')
     (directory/'P20-T038.json').write_bytes(previous.read_bytes())
     (directory/'P20-T013.json').write_text(json.dumps(t13)+'\n')
-    names=files+['redirectengine.jsonl','observations.json','P20-T038.json','P20-T013.json']
+    names=files+['redirectengine.jsonl','readiness.json','observations.json','P20-T038.json','P20-T013.json']
     for name in files+['redirectengine.jsonl']:
         raw=(directory/name).read_bytes()
         require(b'@example.test' not in raw and b'Bearer ' not in raw,'private material in recovery logs')
@@ -118,11 +121,13 @@ def collect():
 
 def inspect(directory,head):
     m=json.loads((directory/'manifest.json').read_bytes());require(m['implementation_commit']==head,'recovery source SHA mismatch')
-    names={'redirectengine.jsonl','reconciler-outage.jsonl','reconciler-blocked.jsonl','reconciler-replay.jsonl','worker-recovered.jsonl','reconciler-complete.jsonl','reconciler-repeat.jsonl','operationsmonitor-rebuild.jsonl','worker-after-cache-rebuild.jsonl','reconciler-final.jsonl','observations.json','P20-T038.json','P20-T013.json'}
+    names={'redirectengine.jsonl','readiness.json','reconciler-outage.jsonl','reconciler-blocked.jsonl','reconciler-replay.jsonl','worker-recovered.jsonl','reconciler-complete.jsonl','reconciler-repeat.jsonl','operationsmonitor-rebuild.jsonl','worker-after-cache-rebuild.jsonl','reconciler-final.jsonl','observations.json','P20-T038.json','P20-T013.json'}
     require(set(m['files'])==names,'recovery source inventory incomplete')
     raw={}
     for name,sha in m['files'].items():
         raw[name]=(directory/name).read_bytes();require(digest(raw[name])==sha,'recovery source digest mismatch')
+    readiness=json.loads(raw['readiness.json'])
+    require(readiness['implementation_commit']==head and readiness['health_status']==204 and readiness['native_process_running'] is True,'native redirect readiness contract mismatch')
     p=json.loads(raw['observations.json']);before=p['before'];final=p['final'];event=p['event'];risk=p['risk_input'];durable=p['durable_decision']
     for n in (13,38):
         case=json.loads(raw[f'P20-T{n:03d}.json']);require(case['status']=='PASS' and case['errors']==[] and case['implementation_commit']==head,'recovery predecessor invalid')
