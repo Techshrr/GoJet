@@ -1,7 +1,7 @@
 name: P20-T037 Native Observability and Guards
 on:
   push:
-    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel]
+    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel, develop/p20-t039-recovery]
   workflow_dispatch:
 permissions:
   contents: read

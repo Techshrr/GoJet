@@ -2,7 +2,7 @@ name: P20 P0 Support Timeline
 
 on:
   push:
-    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel]
+    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel, develop/p20-t039-recovery]
   pull_request:
     branches:
       - main
@@ -889,8 +889,12 @@ jobs:
         run: python3 scripts/p20/consistency_cases.py --case T037
 
       - name: Verify T038 notification mail audit cross-channel consistency
-        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel'
+        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel' || github.ref == 'refs/heads/develop/p20-t039-recovery'
         run: python3 scripts/p20/consistency_cases.py --case T038
+
+      - name: Verify T039 real Redis interruption and native recovery
+        if: github.ref == 'refs/heads/develop/p20-t039-recovery'
+        run: python3 scripts/p20/recovery_cases.py --case T039
 
       - name: Diagnose T025 production OAuth callback boundary
         run: python3 scripts/p20/t025_availability.py
@@ -1119,6 +1123,8 @@ jobs:
             artifacts/v10/P20/consistency/P20-T037.json
             artifacts/v10/P20/consistency/P20-T038.json
             artifacts/v10/P20/runtime/t038/
+            artifacts/v10/P20/recovery/P20-T039.json
+            artifacts/v10/P20/runtime/t039/
             artifacts/v10/P20/integration/P20-T024.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
