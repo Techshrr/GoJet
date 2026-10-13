@@ -2,7 +2,7 @@ name: P20 P0 Support Timeline
 
 on:
   push:
-    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel, develop/p20-t039-recovery, develop/p20-t040-t041-recovery]
+    branches: [develop/p20-t037-observability, develop/p20-t038-cross-channel, develop/p20-t039-recovery, develop/p20-t040-t041-recovery, develop/p20-t042-t043-recovery]
   pull_request:
     branches:
       - main
@@ -889,22 +889,12 @@ jobs:
         run: python3 scripts/p20/consistency_cases.py --case T037
 
       - name: Verify T038 notification mail audit cross-channel consistency
-        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel' || github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery'
+        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel' || github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
         run: python3 scripts/p20/consistency_cases.py --case T038
 
       - name: Verify T039 real Redis interruption and native recovery
-        if: github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery'
+        if: github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T039
-
-      - name: Verify T040 actual MySQL precommit crash and idempotent restart
-        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery'
-        env:
-          GOJET_P20_MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
-        run: python3 scripts/p20/recovery_cases.py --case T040
-
-      - name: Verify T041 actual worker pre-ACK crash and reconciler restart
-        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery'
-        run: python3 scripts/p20/recovery_cases.py --case T041
 
       - name: Diagnose T025 production OAuth callback boundary
         run: python3 scripts/p20/t025_availability.py
@@ -1065,6 +1055,25 @@ jobs:
       - name: Verify correlated whole-product P0 timeline
         run: python3 scripts/p20/p0_timeline.py --case P20-T026
 
+      - name: Verify T040 actual MySQL precommit crash and idempotent restart
+        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
+        env:
+          GOJET_P20_MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
+        run: python3 scripts/p20/recovery_cases.py --case T040
+
+      - name: Verify T041 actual worker pre-ACK crash and reconciler restart
+        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
+        run: python3 scripts/p20/recovery_cases.py --case T041
+
+      - name: Verify T042 fileworker uncertainty and real ClamAV recovery
+        if: github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
+        run: python3 scripts/p20/recovery_cases.py --case T042
+
+      - name: Verify T043 native mail retry backoff and recovery
+        if: github.ref == 'refs/heads/develop/p20-t042-t043-recovery'
+        run: python3 scripts/p20/recovery_cases.py --case T043
+
+
       - name: Upload exact-head T024 availability evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -1139,6 +1148,10 @@ jobs:
             artifacts/v10/P20/recovery/P20-T041.json
             artifacts/v10/P20/runtime/t040/
             artifacts/v10/P20/runtime/t041/
+            artifacts/v10/P20/recovery/P20-T042.json
+            artifacts/v10/P20/recovery/P20-T043.json
+            artifacts/v10/P20/runtime/t042/
+            artifacts/v10/P20/runtime/t043/
             artifacts/v10/P20/integration/P20-T024.json
             artifacts/v10/P14/api/
             artifacts/v10/P14/rbac/
