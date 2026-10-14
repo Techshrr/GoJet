@@ -235,16 +235,9 @@ jobs:
             from scripts.ci.actions import github_json
             return github_json(f'https://api.github.com/repos/{repo}{path}', headers)
 
-          p17_run=api('/actions/runs/33232541982')
-          p17_art=api('/actions/artifacts/9709093486')
-          if not (
-            p17_run.get('head_sha')=='5818406072a131db1c7d8aa7bc5ef8a7adc8d51f'
-            and p17_run.get('status')=='completed' and p17_run.get('conclusion')=='success'
-            and p17_art.get('digest')=='sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1'
-            and p17_art.get('expired') is False
-            and int(p17_art.get('workflow_run',{}).get('id',0))==33232541982
-          ):
-            raise SystemExit('P17 signed predecessor live metadata mismatch')
+          from scripts.ci.signed_authority import bind as bind_signed_authority
+          retained_authority=bind_signed_authority('P17', repo, token,
+              'artifacts/v10/P18/coherence/retained-authority')
 
           from scripts.p18.p04_replay import bind as bind_p04_replay
           p04_authority=bind_p04_replay(repo, token)
@@ -258,6 +251,7 @@ jobs:
               'artifact_id':9709093486,
               'artifact_digest':'sha256:72f8256b242c4412c82cfd4e69c653e4051dc2b7a951c10c9214c2db775805c1',
               'phase':'signed','merge_authoritative':True,
+              'retained_authority':retained_authority,
             },
             'p04':p04_authority,
           }
@@ -294,6 +288,7 @@ jobs:
           path: |
             artifacts/v10/P18/coherence/producer-manifest.json
             artifacts/v10/P18/coherence/inherited-authorities.json
+            artifacts/v10/P18/coherence/retained-authority/
             artifacts/v10/P18/coherence/evidence-index.json
             artifacts/v10/P18/coherence/contract-guard/
             artifacts/v10/P18/coherence/cases/P18-T*.json

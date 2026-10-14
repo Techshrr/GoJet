@@ -24,7 +24,7 @@ func New(out io.Writer, service string) *slog.Logger {
 // NewLocal emits sanitized records without forwarding; receiver output must use it.
 func NewLocal(out io.Writer, service string) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(out, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:       slog.LevelInfo,
 		ReplaceAttr: safeAttribute,
 	})).With("service_id", service)
 }

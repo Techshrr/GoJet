@@ -261,16 +261,9 @@ jobs:
           def ancestor(older,newer):
             return subprocess.run(['git','merge-base','--is-ancestor',older,newer],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
 
-          p18_run=api('/actions/runs/33260817755')
-          p18_art=api('/actions/artifacts/9717210947')
-          if not (
-            p18_run.get('head_sha')=='e8746159b02c729a877e3dcbd9655d415a5cc269'
-            and p18_run.get('status')=='completed' and p18_run.get('conclusion')=='success'
-            and p18_art.get('digest')=='sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4'
-            and p18_art.get('expired') is False
-            and int(p18_art.get('workflow_run',{}).get('id',0))==33260817755
-          ):
-            raise SystemExit('P18 signed predecessor live metadata mismatch')
+          from scripts.ci.signed_authority import bind as bind_signed_authority
+          retained_authority=bind_signed_authority('P18', repo, token,
+              'artifacts/v10/P19/coherence/retained-authority')
 
           authority=json.loads(Path('frontend/apps/site/src/website/authority.json').read_text(encoding='utf-8'))
           rows=[]
@@ -299,6 +292,7 @@ jobs:
               'artifact_id':9717210947,
               'artifact_digest':'sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4',
               'phase':'signed','review_phase':'signed','review_only_signed_child':True,'merge_authoritative':True,
+              'retained_authority':retained_authority,
             },
             'public_capabilities':rows,
           }

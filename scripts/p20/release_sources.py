@@ -11,7 +11,7 @@ from pathlib import Path
 
 from common import ROOT, HEAD
 from evidence_index import valid_case, unsafe_secret
-from release_matrix import validate_inventory, select_latest, admit_run, REPOSITORY
+from release_matrix import validate_inventory, select_latest, admit_run, REPOSITORY, JOB_AUTHORITY
 from t028_sources import require, digest, member, verified_archive, download_archive, select_prefixed_artifact
 
 SUPPORT = 'p20-p0-support.yml'
@@ -102,6 +102,15 @@ def collect(root, head):
     while True:
         runs = workflow_runs(api, REPOSITORY, head)
         selected = {w: select_latest(runs, w, head) for w in required}
+        # Do not bill a runner for hours after a required producer has failed.
+        # Historical combined-workflow signing jobs retain their scoped rules.
+        for workflow, run in selected.items():
+            if run and run['status'] == 'completed' and run['conclusion'] != 'success':
+                if workflow in JOB_AUTHORITY:
+                    jobs = list_complete(api, base + f'/actions/runs/{run["id"]}/jobs?filter=all', 'jobs')
+                    admit_run(run, jobs, workflow, head)
+                else:
+                    raise ValueError('required producer failed: ' + workflow + f' (run {run["id"]})')
         pending = [w for w, r in selected.items() if not r or r['status'] != 'completed']
         if not pending:
             break

@@ -37,10 +37,10 @@ func SendLocal(socket string, record []byte) error {
 }
 
 type localForwarder struct {
-	mu sync.Mutex
-	out io.Writer
-	socket string
-	service string
+	mu          sync.Mutex
+	out         io.Writer
+	socket      string
+	service     string
 	lastWarning time.Time
 }
 

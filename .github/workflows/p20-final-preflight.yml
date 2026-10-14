@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
+  actions: write
 jobs:
   native:
     runs-on: ubuntu-24.04
@@ -34,6 +34,38 @@ jobs:
           python3 scripts/p20/validate_contract.py
           python3 -m unittest discover -s scripts/p20 -p 'test_release*.py'
           python3 -m unittest discover -s scripts/p20 -p 'test_ci_workflow_pagination.py'
+      - name: Verify original signed predecessor reports and upload attestations live
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from scripts.ci.signed_authority import bind
+          for node in ('P17', 'P18'):
+              proof=bind(node, os.environ['GITHUB_REPOSITORY'], os.environ['GH_TOKEN'], '/tmp/p20-preflight/retained-authority')
+              print(node, proof['binding_mode'], proof['original_report_sha256'])
+          PY
+      - name: Run only affected native regression producers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          from scripts.ci.actions import github_json, regression_runs
+          repo=os.environ['GITHUB_REPOSITORY']; head=os.environ['GITHUB_SHA']; ref=os.environ['GITHUB_REF_NAME']
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'}
+          runs=regression_runs(lambda url: github_json(url,headers),repo,head)
+          workflows=('p20-p0-support.yml','p16-trust-destination-risk-abuse.yml',
+            'p09-integration.yml','p10-integration.yml','p13-integration.yml',
+            'p12-browser.yml','p20-t027-consistency.yml')
+          for workflow in workflows:
+              if any(r['path']=='.github/workflows/'+workflow for r in runs):
+                  print('Existing exact-head producer retained:',workflow)
+                  continue
+              current=subprocess.check_output(['gh','api',f'repos/{repo}/git/ref/heads/{ref}','--jq','.object.sha'],text=True).strip()
+              assert current==head
+              subprocess.run(['gh','workflow','run',workflow,'--repo',repo,'--ref',ref],check=True)
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
