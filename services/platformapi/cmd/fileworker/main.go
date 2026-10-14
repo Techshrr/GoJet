@@ -120,7 +120,7 @@ func main() {
 		}
 
 		result := filedomain.ScanResult{Verdict: filedomain.VerdictError, ErrorCode: "storage_read_failed", Reason: "Quarantine bytes could not be opened."}
-		quarantine, openErr := storage.OpenQuarantine(job.StorageKey)
+		quarantine, openErr := openClaimedQuarantine(storage, job.StorageKey)
 		if openErr != nil {
 			logger.Error("open quarantine bytes", "file_id", job.FileID, "attempt_id", job.AttemptID, "error", openErr)
 		} else {

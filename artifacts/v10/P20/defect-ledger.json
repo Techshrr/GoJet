@@ -3,7 +3,30 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [],
+  "open": [
+    {
+      "id": "P20-D021",
+      "severity": "P1",
+      "title": "Admin quarantine queues a rescan without returning published bytes to quarantine",
+      "case": "P20-T042",
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "68028bb087cc206a3b34c18206490a3d3052a6fd",
+      "discovery_workflow_run": 38444742851,
+      "discovery_workflow_job": 115460485232,
+      "discovery_artifact_id": 11839050122,
+      "discovery_artifact_digest": "sha256:b49b3b7523767373de1edf3a7fdec1da1c67255afad528156e76e5308a9765b2",
+      "failure": "Original T023 admin-quarantined file produces storage_read_failed before ClamAV; bytes remain in published storage.",
+      "status": "open",
+      "remediation": "After a durable scan claim only, recover missing quarantine bytes from native published storage and scan normally. Missing/invalid storage still fails closed. Native CI verification pending.",
+      "issue": 199
+    }
+  ],
   "closed": [
     {
       "id": "P20-D001",

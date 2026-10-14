@@ -76,7 +76,7 @@ def collect():
         finally:
             if unused is not None:unused.close()
             if server is not None:server.shutdown();server.server_close();thread.join(timeout=5)
-        failed=snapshot();require(failed['state']=='scan_error' and failed['attempt_status']=='error' and failed['published']==0 and failed['error_code'] in errors,'uncertainty did not fail closed with native error authority')
+        failed=snapshot();(directory/'last-scan.json').write_text(json.dumps({'implementation_commit':HEAD,'mode':mode,'state':failed},indent=2)+'\n');require(failed['state']=='scan_error' and failed['attempt_status']=='error' and failed['published']==0 and failed['error_code'] in errors,'uncertainty did not fail closed with native error authority')
         failed_denied=denied()
         code,_,_=action('rescan');require(code==202,'authorized recovery rescan failed')
         recovery_queued=snapshot();require(recovery_queued['generation']==failed['generation']+1 and recovery_queued['state']=='quarantined' and recovery_queued['attempt_status']=='queued','recovery bypassed scan generation')
