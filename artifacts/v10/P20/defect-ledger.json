@@ -3,30 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D022",
-      "issue": 203,
-      "severity": "P1",
-      "title": "Concurrent authenticated callback recovery fails T045",
-      "case": "P20-T045",
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "c32d3646043bfed3a69b782f935ba8b77978e3bd",
-      "discovery_workflow_run": 38503985982,
-      "discovery_workflow_job": 115657137308,
-      "discovery_artifact_id": 11867553682,
-      "discovery_artifact_digest": "sha256:827b8999030a94ffc2d6e4d4dd7fbf1152a93a0469cbb19e2cd887d9e0856ba9",
-      "failure": "Combined concurrent callback status/state assertion failed; initial snapshot was not retained, so double settlement is not established. Source shows missing-event gap lock acquired before order lock, permitting same-order deadlocks.",
-      "status": "open",
-      "remediation": "Lock authenticated order before callback-event lookup; retain strict four successful acknowledgements and one event receipt assertions. Capture safe concurrent observations before admission. Native verification pending."
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1382,7 +1359,7 @@
       "discovery_artifact_digest": "sha256:b49b3b7523767373de1edf3a7fdec1da1c67255afad528156e76e5308a9765b2",
       "failure": "Original T023 admin-quarantined file produces storage_read_failed before ClamAV; bytes remain in published storage.",
       "status": "closed",
-      "remediation": "After a durable scan claim only, recover missing quarantine bytes from native published storage and scan normally. Missing/invalid storage still fails closed. Native CI verification pending.",
+      "remediation": "After a durable scan claim only, recover missing quarantine bytes from native published storage and scan normally. Missing/invalid storage still fails closed. Native CI verification passed at the recorded verification head.",
       "issue": 199,
       "verification_head": "c32d3646043bfed3a69b782f935ba8b77978e3bd",
       "verification_workflow_run": 38503985982,
@@ -1393,6 +1370,38 @@
       "verification_collection_sha256": "sha256:498767bc7933e96db2485753192163229fb882602e5d1492eb1b7f455123e519",
       "resolution": "Native Go baseline and filesystem regression tests passed. Independently reproduced complete T042 PASS: five scanner uncertainty modes fail closed and five real ClamAV rescans preserve original content, generation and publication authorization. Later unrelated T045 failure does not constitute overall workflow acceptance.",
       "closed_at": "2026-10-14T03:22:52.175366+00:00"
+    },
+    {
+      "id": "P20-D022",
+      "issue": 203,
+      "severity": "P1",
+      "title": "Concurrent authenticated callback recovery fails T045",
+      "case": "P20-T045",
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "c32d3646043bfed3a69b782f935ba8b77978e3bd",
+      "discovery_workflow_run": 38503985982,
+      "discovery_workflow_job": 115657137308,
+      "discovery_artifact_id": 11867553682,
+      "discovery_artifact_digest": "sha256:827b8999030a94ffc2d6e4d4dd7fbf1152a93a0469cbb19e2cd887d9e0856ba9",
+      "failure": "Combined concurrent callback status/state assertion failed; initial snapshot was not retained, so double settlement is not established. Source shows missing-event gap lock acquired before order lock, permitting same-order deadlocks.",
+      "status": "closed",
+      "remediation": "Lock authenticated order before callback-event lookup; retain strict four successful acknowledgements and one event receipt assertions. Capture safe concurrent observations before admission. Native verification passed at the verification head.",
+      "verification_head": "4189f4c3cf8071ce87b2e7e7c06317190e423caa",
+      "verification_workflow_run": 38505957869,
+      "verification_workflow_job": 115663404217,
+      "verification_artifact_id": 11868665915,
+      "verification_artifact_digest": "sha256:08d808d996356dd73bf278bfdff5b404e68d9be6c9acbe2568b815e8891a16d9",
+      "verification_collection_sha256": "sha256:c8b45af9da209c5a90da1a041b4ed061687468d553629b0d065358a8fc69c15b",
+      "supporting_native_job": 115663402944,
+      "supporting_contract_job": 115663888524,
+      "closed_at": "2026-10-14T08:04:20.687008+00:00",
+      "resolution": "Original archive digest checked and T039-T046 independently reproduced. Four concurrent authenticated copies all return 200, add exactly one callback receipt, and retain exactly one transaction, payment notification, active grant and subscription. Full native Support workflow and Go/Contract baseline passed; Candidate Freeze blocks only this previously open ledger item. Closure-child gates still required."
     }
   ],
   "decision_required": [],
@@ -1403,5 +1412,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D020 closed with verified remediation evidence. T025 formal evidence PASS at f344a42196479a7f23141d92332118198844e801; formal promotion and T026+ remain gated by the closure child same-head Candidate Freeze and required regression authority."
+  "note": "D001-D022 closed with original remediation evidence; open P0/P1/decision-required = 0/0/0. T039-T046 independently reproduced at 4189f4c3cf8071ce87b2e7e7c06317190e423caa. Final exact-head regression matrix and T047-T049 remain required; this ledger is not P20 closure authority."
 }
