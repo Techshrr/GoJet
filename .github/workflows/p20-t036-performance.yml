@@ -205,8 +205,11 @@ jobs:
           assert data['implementation_commit']==os.environ['EXACT_HEAD'], data
           assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f', data
           assert data['case_range']=='P20-T001..P20-T049', data
-          assert data['review_phase']=='pending', data
-          assert data['mode']=='verification-guard' and data['implementation_authorized'] is True, data
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/p20')
+          from candidate_phase import verify
+          verify(data, Path.cwd(), os.environ['EXACT_HEAD'])
           assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
           PY
 

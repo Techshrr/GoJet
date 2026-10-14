@@ -3,27 +3,7 @@
   "node": "P20",
   "base_integration_commit": "6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c",
   "status": "ACTIVE",
-  "open": [
-    {
-      "id": "P20-D023",
-      "issue": 205,
-      "severity": "P1",
-      "title": "Whole-product predecessor regression compatibility blocks final closure",
-      "case": "P20-T048",
-      "release_blocking": true,
-      "gate_hard_failure": true,
-      "affected_gates": [
-        "G3",
-        "G6",
-        "G10"
-      ],
-      "discovered_head": "e610b94301433a342afc9151ad3c5d31cf804bb1",
-      "discovery_workflow_run": 38533542542,
-      "failure": "Full matrix found frozen P16 redirect seam modified by observability, Go formatting failures, shared P12/T027 concurrency cancellation and PR-only legacy regression collectors excluding exact-head dispatch evidence.",
-      "status": "open",
-      "remediation": "Restore exact frozen redirect blob and move observation to the existing publisher seam; native gofmt; separate caller concurrency; admit only trusted same-head PR/dispatch regression runs. Native verification pending."
-    }
-  ],
+  "open": [],
   "closed": [
     {
       "id": "P20-D001",
@@ -1422,6 +1402,41 @@
       "supporting_contract_job": 115663888524,
       "closed_at": "2026-10-14T08:04:20.687008+00:00",
       "resolution": "Original archive digest checked and T039-T046 independently reproduced. Four concurrent authenticated copies all return 200, add exactly one callback receipt, and retain exactly one transaction, payment notification, active grant and subscription. Full native Support workflow and Go/Contract baseline passed; Candidate Freeze blocks only this previously open ledger item. Closure-child gates still required."
+    },
+    {
+      "id": "P20-D023",
+      "issue": 205,
+      "severity": "P1",
+      "title": "Whole-product predecessor regression compatibility blocks final closure",
+      "case": "P20-T048",
+      "release_blocking": true,
+      "gate_hard_failure": true,
+      "affected_gates": [
+        "G3",
+        "G6",
+        "G10"
+      ],
+      "discovered_head": "e610b94301433a342afc9151ad3c5d31cf804bb1",
+      "discovery_workflow_run": 38533542542,
+      "failure": "Full matrix found frozen P16 redirect seam modified by observability, Go formatting failures, shared P12/T027 concurrency cancellation and PR-only legacy regression collectors excluding exact-head dispatch evidence.",
+      "status": "closed",
+      "remediation": "Frozen redirect blob restored with external observation adapter; native gofmt; caller-scoped browser concurrency; trusted same-head dispatch/PR collectors; original historical signed-job log attestations retained without reconstructing expired archives.",
+      "verification_head": "0e86db225ee243dd8a715d1c3a05a5b904d4dc11",
+      "verification_workflow_run": 38572326092,
+      "verification_workflow_job": 115880468485,
+      "verification_artifact_id": 11900195605,
+      "verification_artifact_digest": "sha256:92f6494b8d9eb769fa1844bce7a20d9c40fb849fc50ddda662c8f3cf680c8fd0",
+      "supporting_workflow_runs": [
+        38572199836,
+        38572332364,
+        38572338494,
+        38572346226,
+        38572352955,
+        38572359685,
+        38572367096
+      ],
+      "closed_at": "2026-10-14T18:22:05.975699+00:00",
+      "resolution": "All eight exact-head targeted/preflight workflows succeeded. Original Support archive digest checked and T037-T046 independently reproduced. Native all-Go baseline, P16 frozen seam, P09/P10/P13 integrations, concurrent P12/T027 browser producers and retained P17/P18 original signed logs verified. Native formatting patch is empty. Final full regression matrix remains a separate mandatory closure gate."
     }
   ],
   "decision_required": [],
@@ -1432,5 +1447,5 @@
     "lower_severity_requires_disposition": true,
     "gate_hard_failure_cannot_be_downgraded": true
   },
-  "note": "D001-D022 closed. T039-T046 passed with zero-defect child d5789045372a42578943ba2230d8fb98c825d694 and both Support/guards successful. Final full matrix exposed D023 (open P1); final P20 closure remains blocked until verified remediation and complete exact-head authority."
+  "note": "D001-D023 closed; P0/P1/decision-required 0/0/0. Targeted remediation verified at 0e86db225ee243dd8a715d1c3a05a5b904d4dc11. Full same-head T047-T049 matrix, fresh accessibility review and signed-child closure remain required; P20 is not complete."
 }
