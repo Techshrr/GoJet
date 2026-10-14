@@ -12,8 +12,8 @@ import (
 	"time"
 
 	filedomain "github.com/Techshrr/GoJet/internal/files"
-	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 func main() {

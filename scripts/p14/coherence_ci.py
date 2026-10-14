@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.ci.actions import workflow_runs, github_json
+from scripts.ci.actions import regression_runs, github_json
 
 ROOT = Path('artifacts/v10/P14')
 MANIFEST = ROOT / 'evidence-producer-manifest.json'
@@ -80,7 +80,7 @@ def bind_producers() -> dict:
     deadline = time.time() + 90 * 60
     while time.time() < deadline:
         contract_artifact = artifact_for(CURRENT_RUN_ID, contract_expected)
-        runs = workflow_runs(api_get, REPOSITORY, HEAD, event='pull_request')
+        runs = regression_runs(api_get, REPOSITORY, HEAD)
         latest: dict[str, dict] = {}
         for run in runs:
             name = run.get('name')

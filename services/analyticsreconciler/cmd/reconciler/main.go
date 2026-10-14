@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 func main() {

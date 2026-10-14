@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/support"
 )
 

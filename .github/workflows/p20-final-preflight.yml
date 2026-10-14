@@ -1,0 +1,43 @@
+name: P20 Final Candidate Preflight
+on:
+  push:
+    branches: [develop/p20-final-preflight]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Native formatter evidence for P20 Go changes
+        run: |
+          mkdir -p /tmp/p20-preflight
+          git diff --name-only -z 54a2881ae0d4dfce5aadfc05ce3b59e8b4b717c6 HEAD -- '*.go' | xargs -0 -r gofmt -w
+          git diff --binary > /tmp/p20-preflight/gofmt.patch
+          git rev-parse HEAD > /tmp/p20-preflight/source-head.txt
+          sha256sum /tmp/p20-preflight/gofmt.patch > /tmp/p20-preflight/patch.sha256
+      - name: Native compile, regression and frozen predecessor validation
+        run: |
+          go test ./...
+          go vet ./internal/links ./internal/logging ./services/redirectengine/cmd/server
+          python3 scripts/p16/validate_contract.py
+          python3 scripts/p20/validate_contract.py
+          python3 -m unittest discover -s scripts/p20 -p 'test_release*.py'
+          python3 -m unittest discover -s scripts/p20 -p 'test_ci_workflow_pagination.py'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p20-final-preflight-${{ github.sha }}
+          path: /tmp/p20-preflight/
+          if-no-files-found: error
+          retention-days: 30

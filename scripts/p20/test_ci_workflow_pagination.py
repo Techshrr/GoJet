@@ -17,18 +17,33 @@ def load_discovery(phase, request):
     namespace = {
         "urllib": urllib, "HEAD": "candidate-sha", "REPO": "owner/repo",
         "REPOSITORY": "owner/repo", "api": request, "request_json": request, "api_get": request,
+        "sys": __import__("sys"), "Path": Path, "__file__": str(path),
     }
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), "exec"), namespace)
     return namespace[name]
 
 
 class WorkflowDiscoveryTests(unittest.TestCase):
+    def test_regression_entry_points_reject_foreign_head_repository_and_event(self):
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from scripts.ci.actions import regression_runs
+        good = {"id": 1, "head_sha": "candidate", "head_repository": {"full_name": "owner/repo"},
+                "event": "pull_request", "status": "completed", "conclusion": "failure"}
+        rows = [good, {**good, "id": 2, "event": "workflow_dispatch"},
+                {**good, "id": 3, "head_sha": "other"},
+                {**good, "id": 4, "head_repository": {"full_name": "fork/repo"}},
+                {**good, "id": 5, "event": "pull_request_target"}]
+        self.assertEqual(regression_runs(lambda url: {"workflow_runs": rows}, "owner/repo", "candidate"), rows[:2])
+
     def test_all_pages_preserve_pending_and_failed_runs(self):
         for phase in (*range(14, 20), "15_coherence"):
             for size in (0, 99, 100, 130, 200, 999):
                 with self.subTest(phase=phase, size=size):
                     rows = [{"id": i, "status": "queued" if i % 2 else "completed",
-                             "conclusion": None if i % 2 else "failure"} for i in range(size)]
+                             "conclusion": None if i % 2 else "failure", "head_sha": "candidate-sha",
+                             "event": "workflow_dispatch" if i % 2 else "pull_request",
+                             "head_repository": {"full_name": "owner/repo"}} for i in range(size)]
                     calls = []
 
                     def request(url):
@@ -36,7 +51,7 @@ class WorkflowDiscoveryTests(unittest.TestCase):
                         self.assertEqual(query["head_sha"], ["candidate-sha"])
                         self.assertEqual(query["per_page"], ["100"])
                         if phase == "15_coherence":
-                            self.assertEqual(query["event"], ["pull_request"])
+                            self.assertNotIn("event", query)
                         page = int(query["page"][0])
                         calls.append(page)
                         return {"workflow_runs": rows[(page - 1) * 100:page * 100]}

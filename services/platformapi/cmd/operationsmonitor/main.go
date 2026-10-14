@@ -12,8 +12,8 @@ import (
 	"time"
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
-	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/trust"
 )
 

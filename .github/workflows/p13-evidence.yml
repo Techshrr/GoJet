@@ -88,8 +88,8 @@ jobs:
 
           deadline = time.time() + 90 * 60
           while time.time() < deadline:
-              from scripts.ci.actions import workflow_runs
-              runs = workflow_runs(get, repo, sha, event='pull_request')
+              from scripts.ci.actions import regression_runs
+              runs = regression_runs(get, repo, sha)
               latest = {}
               for run in runs:
                   name = run.get('name')

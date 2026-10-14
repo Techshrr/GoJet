@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 	qrcodes "github.com/Techshrr/GoJet/internal/qr"
 )
 

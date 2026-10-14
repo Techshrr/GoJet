@@ -75,17 +75,9 @@ def api_get(url: str) -> dict:
 
 
 def exact_producer_runs() -> list[dict]:
-    runs = []
-    for page in range(1, 11):
-        query = urllib.parse.urlencode({"head_sha": HEAD, "event": "pull_request", "per_page": 100, "page": page})
-        payload = api_get(f"https://api.github.com/repos/{REPOSITORY}/actions/runs?{query}")
-        batch = payload["workflow_runs"]
-        if not isinstance(batch, list):
-            raise RuntimeError("invalid exact-head producer listing")
-        runs.extend(batch)
-        if len(batch) < 100:
-            return runs
-    raise RuntimeError("exact-head producer listing reached the 1,000-result cap")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from scripts.ci.actions import regression_runs
+    return regression_runs(api_get, REPOSITORY, HEAD)
 
 
 def artifact_for(run_id: int, mode: str, locator: str, created_after: str | None = None) -> dict | None:

@@ -33,7 +33,7 @@ const (
 
 type WorkspaceWebhookAuthority struct {
 	// Logger is configured by operationsmonitor before processing deliveries.
-	Logger *slog.Logger
+	Logger   *slog.Logger
 	db       *sql.DB
 	redis    *redis.Client
 	cipher   *SecretCipher

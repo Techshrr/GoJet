@@ -83,7 +83,7 @@ jobs:
 
           import sys
           sys.path.insert(0, 'scripts')
-          from ci.actions import github_json, workflow_runs
+          from ci.actions import github_json, regression_runs
           headers = {
               'Accept': 'application/vnd.github+json',
               'Authorization': f'Bearer {token}',
@@ -91,8 +91,8 @@ jobs:
           }
 
           def fetch_runs():
-              return workflow_runs(lambda url: github_json(url, headers),
-                                   repository, sha, event='pull_request')
+              return regression_runs(lambda url: github_json(url, headers),
+                                   repository, sha)
 
           deadline = time.time() + 90 * 60
           while time.time() < deadline:

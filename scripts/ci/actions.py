@@ -52,3 +52,16 @@ def workflow_runs(api, repository, head_sha, *, event=None):
         if len(rows) < 100:
             return runs
     raise RuntimeError('Actions listing reached the 1000-run search limit; completeness is unproven')
+
+
+def regression_runs(api, repository, head_sha):
+    """Trusted same-head PR or manually dispatched regression producers.
+
+    Historical closure callers retain workflow_runs(event='pull_request').
+    Current regression collectors may use either execution entry point, with
+    repository, SHA and event checked again after the API query.
+    """
+    return [row for row in workflow_runs(api, repository, head_sha)
+            if row.get('head_sha') == head_sha
+            and row.get('head_repository', {}).get('full_name') == repository
+            and row.get('event') in ('pull_request', 'workflow_dispatch')]

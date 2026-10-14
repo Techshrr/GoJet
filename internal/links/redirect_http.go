@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,7 +19,6 @@ type AnalyticsEventPublisher interface {
 }
 
 type RedirectHandler struct {
-	logger *slog.Logger
 	store                   *MySQLStore
 	risk                    *RedisRiskStore
 	analyticsPublisher      AnalyticsEventPublisher
@@ -80,23 +78,18 @@ var passwordTemplate = template.Must(template.New("link-password").Parse(`<!doct
 </html>`))
 
 func NewRedirectHandler(store *MySQLStore, risk *RedisRiskStore, trustTestRoutingHeaders bool) http.Handler {
-	return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders, nil)
+	return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders)
 }
 
 func NewRedirectHandlerWithAnalytics(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool) http.Handler {
 	if publisher == nil {
-		return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders, nil)
+		return newRedirectHandler(store, risk, nil, trustTestRoutingHeaders)
 	}
-	return newRedirectHandler(store, risk, publisher, trustTestRoutingHeaders, nil)
+	return newRedirectHandler(store, risk, publisher, trustTestRoutingHeaders)
 }
 
-// NewObservedRedirectHandler logs only the accepted durable click identity.
-func NewObservedRedirectHandler(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool, logger *slog.Logger) http.Handler {
-	return newRedirectHandler(store, risk, publisher, trustTestRoutingHeaders, logger)
-}
-
-func newRedirectHandler(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool, logger *slog.Logger) http.Handler {
-	handler := &RedirectHandler{logger: logger, store: store, risk: risk, analyticsPublisher: publisher, trustTestRoutingHeaders: trustTestRoutingHeaders}
+func newRedirectHandler(store *MySQLStore, risk *RedisRiskStore, publisher AnalyticsEventPublisher, trustTestRoutingHeaders bool) http.Handler {
+	handler := &RedirectHandler{store: store, risk: risk, analyticsPublisher: publisher, trustTestRoutingHeaders: trustTestRoutingHeaders}
 	mux := http.NewServeMux()
 	// In Go's ServeMux, a GET method pattern also matches HEAD. Registering an
 	// additional generic HEAD /{code} conflicts with the more specific
@@ -241,10 +234,6 @@ func (h *RedirectHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	// the same MySQL claim transaction already persisted the deterministic
 	// outbox event, so transient Redis failure is recoverable rather than lost.
 	if analyticsEvent != nil {
-		if h.logger != nil {
-			h.logger.InfoContext(r.Context(), "redirect click committed", "event_id", analyticsEvent.EventID,
-				"workspace_id", analyticsEvent.WorkspaceID, "link_id", analyticsEvent.LinkID, "click_sequence", analyticsEvent.ClickSequence)
-		}
 		streamID, publishErr := h.analyticsPublisher.Publish(r.Context(), *analyticsEvent)
 		if publishErr != nil {
 			_ = h.store.RecordAnalyticsOutboxPublishFailure(r.Context(), analyticsEvent.EventID, publishErr)

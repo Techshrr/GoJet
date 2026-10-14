@@ -101,12 +101,11 @@ jobs:
             artifacts/v10/P14/review.md
 
       - name: Run P14-T024 exact-head evidence coherence
-        if: ${{ github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          EXACT_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXACT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
-          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
           python3 -m py_compile \
@@ -130,10 +129,10 @@ jobs:
           path: artifacts/v10/P20/consistency/P20-T028-support.json
 
       - name: Upload P14 T024 coherence evidence
-        if: ${{ always() && github.event_name == 'pull_request' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-v10-p14-evidence-${{ github.event.pull_request.head.sha }}
+          name: gojet-v10-p14-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |

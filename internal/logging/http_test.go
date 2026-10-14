@@ -31,7 +31,9 @@ func TestHTTPPreservesSemanticsAndHashesUntrustedIdentifiers(t *testing.T) {
 		t.Fatal("response changed or request material leaked")
 	}
 	var row map[string]any
-	if err := json.Unmarshal(logs.Bytes(), &row); err != nil { t.Fatal(err) }
+	if err := json.Unmarshal(logs.Bytes(), &row); err != nil {
+		t.Fatal(err)
+	}
 	if row["correlation_fingerprint"] != logging.Fingerprint("correlation", "secret-canary") || row["request_fingerprint"] != logging.Fingerprint("request", "secret-canary") {
 		t.Fatal("correlation fingerprints missing")
 	}
