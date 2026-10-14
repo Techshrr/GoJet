@@ -900,11 +900,9 @@ jobs:
         run: python3 scripts/p20/consistency_cases.py --case T037
 
       - name: Verify T038 notification mail audit cross-channel consistency
-        if: github.ref == 'refs/heads/develop/p20-t038-cross-channel' || github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/consistency_cases.py --case T038
 
       - name: Verify T039 real Redis interruption and native recovery
-        if: github.ref == 'refs/heads/develop/p20-t039-recovery' || github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T039
 
       - name: Diagnose T025 production OAuth callback boundary
@@ -1055,34 +1053,27 @@ jobs:
         run: python3 scripts/p20/p0_timeline.py --case P20-T026
 
       - name: Verify T040 actual MySQL precommit crash and idempotent restart
-        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         env:
           GOJET_P20_MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
         run: python3 scripts/p20/recovery_cases.py --case T040
 
       - name: Verify T041 actual worker pre-ACK crash and reconciler restart
-        if: github.ref == 'refs/heads/develop/p20-t040-t041-recovery' || github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T041
 
       - name: Verify T042 fileworker uncertainty and real ClamAV recovery
-        if: github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T042
 
       - name: Verify T043 native mail retry backoff and recovery
-        if: github.ref == 'refs/heads/develop/p20-t042-t043-recovery' || github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T043
 
 
       - name: Verify T044 risk provider failure, expiry and current fingerprint recovery
-        if: github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T044
 
       - name: Verify T045 authenticated payment callback ordering and invalid input
-        if: github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T045
 
       - name: Verify T046 truthful degraded HTML, HTTP and durable state correlation
-        if: github.ref == 'refs/heads/develop/p20-t044-t046-recovery'
         run: python3 scripts/p20/recovery_cases.py --case T046
 
       - name: Stop exact-head native services
