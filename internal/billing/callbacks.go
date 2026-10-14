@@ -28,6 +28,16 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 		return CallbackResult{}, err
 	}
 	defer tx.Rollback()
+	// Serialize authenticated callbacks for one order before the missing-event
+	// lookup acquires an InnoDB gap lock. Looking up the event first allows
+	// concurrent copies to hold compatible gap locks and deadlock on INSERT.
+	order, err := loadOrderForUpdate(ctx, tx, cmd.OrderID)
+	if err != nil {
+		return CallbackResult{}, err
+	}
+	if order.Money != cmd.Money {
+		return CallbackResult{}, ErrConflict
+	}
 	var existingID uint64
 	var existingProviderTransactionID, existingEventType string
 	if err := tx.QueryRowContext(ctx, `SELECT id,provider_transaction_id,event_type FROM payment_callback_events WHERE provider=? AND provider_event_id=? FOR UPDATE`, cmd.Provider, cmd.ProviderEventID).Scan(&existingID, &existingProviderTransactionID, &existingEventType); err == nil {
@@ -56,13 +66,6 @@ func (s *Store) ApplyAuthenticatedCallback(ctx context.Context, cmd CallbackComm
 		return CallbackResult{}, err
 	}
 
-	order, err := loadOrderForUpdate(ctx, tx, cmd.OrderID)
-	if err != nil {
-		return CallbackResult{}, err
-	}
-	if order.Money != cmd.Money {
-		return CallbackResult{}, ErrConflict
-	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO payment_callback_events (provider,provider_event_id,provider_transaction_id,event_type,status,received_at,correlation_id) VALUES (?,?,?,?, 'accepted',?,?)`, cmd.Provider, cmd.ProviderEventID, cmd.ProviderTransactionID, cmd.EventType, cmd.ReceivedAt.UTC(), cmd.CorrelationID)
 	if err != nil {
 		return CallbackResult{}, wrapConflict(err)

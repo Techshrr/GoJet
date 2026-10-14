@@ -23,6 +23,7 @@ def collect():
     require(intent and verified['real_mysql_crash_restart'] is True,'original recovery provider intent unavailable')
     def snapshot():
         return json.loads(mysql(f"SELECT JSON_OBJECT('order_status',(SELECT status FROM billing_orders WHERE id={q(oid)}),'invoice_status',(SELECT status FROM billing_invoices WHERE order_id={q(oid)}),'transactions',(SELECT COUNT(*) FROM billing_transactions WHERE order_id={q(oid)}),'transaction_status',(SELECT status FROM billing_transactions WHERE order_id={q(oid)}),'currency',(SELECT currency FROM billing_transactions WHERE order_id={q(oid)}),'amount',(SELECT amount_minor FROM billing_transactions WHERE order_id={q(oid)}),'wrong_tenant',(SELECT COUNT(*) FROM billing_transactions WHERE order_id={q(oid)} AND workspace_id<>{q(ws)}),'payment_notifications',(SELECT COUNT(*) FROM workspace_notifications WHERE resource_type='billing_order' AND resource_id={q(oid)} AND event_key='payment_succeeded'),'failed_notifications',(SELECT COUNT(*) FROM workspace_notifications WHERE resource_type='billing_order' AND resource_id={q(oid)} AND event_key='payment_failed'),'callbacks',(SELECT COUNT(*) FROM payment_callback_events WHERE provider='stripe' AND provider_transaction_id={q(intent)}),'active_subscriptions',(SELECT COUNT(*) FROM workspace_subscriptions WHERE workspace_id={q(ws)} AND status='active'),'active_grants',(SELECT COUNT(*) FROM entitlement_grants WHERE workspace_id={q(ws)} AND source_type='billing' AND revoked_at IS NULL))"))
+    directory=ROOT/'artifacts/v10/P20/runtime/t045';directory.mkdir(parents=True,exist_ok=True)
     suffix=HEAD[:12];initial=snapshot();require(initial['transactions']==initial['payment_notifications']==1 and initial['order_status']==initial['transaction_status']=='paid','original settled authority missing')
     original=stripe_event('evt_p20_t040_'+suffix,'payment_intent.succeeded',intent)
     response=signed_post(original)[0];require(response==200 and snapshot()==initial,'original callback replay changed recovery outcome')
@@ -50,7 +51,9 @@ def collect():
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         statuses=list(pool.map(lambda _:signed_post(new_event)[0],range(4)))
     expected={**initial,'callbacks':initial['callbacks']+1};final=snapshot()
-    require(statuses==[200]*4 and final==expected,'concurrent distinct event repeated settlement instead of only event receipt')
+    (directory/'concurrent-observation.json').write_text(json.dumps({'implementation_commit':HEAD,'statuses':statuses,'before':initial,'after':final,'expected':expected},indent=2)+'\n')
+    require(final==expected,'concurrent distinct event changed authoritative settlement totals')
+    require(statuses==[200]*4,'concurrent valid event did not acknowledge all authenticated replays')
     final_replay=signed_post(original)[0];require(final_replay==200 and snapshot()==final,'reordered original event changed final settlement')
     proof={'implementation_commit':HEAD,'workspace_id':ws,'order_sha256':fingerprint('order',oid),'initial':initial,'original_replay_status':response,'late_failure_status':late_status,'invalid':invalid,'stale_signature_status':stale_status,'browser_status':browser,'unsigned_status':unsigned,'concurrent_statuses':statuses,'final':final,'final_replay_status':final_replay,'t040_collection_sha256':verified['collection_sha256'],'provider_identifiers_recorded':False,'raw_callback_recorded':False,'manual_settlement_patch':False}
     directory=ROOT/'artifacts/v10/P20/runtime/t045';directory.mkdir(parents=True,exist_ok=True)
