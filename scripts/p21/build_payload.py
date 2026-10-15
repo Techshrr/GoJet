@@ -1,6 +1,5 @@
 """Assemble actual compiled output. No native apply/installer completeness claim."""
 import json
-import os
 from pathlib import Path
 import subprocess
 from urllib.parse import quote
@@ -9,6 +8,20 @@ from catalog import catalog
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/v10/P21/payload'
 def command(*args): return subprocess.check_output(args,cwd=ROOT,text=True)
+def validate_static(root, app, repository=ROOT):
+    if app == 'docs':
+        manifest=json.loads((repository/'frontend/apps/docs/src/data/content-manifest.json').read_text())
+        required={'404.html','en/search/index.html','zh-CN/search/index.html','pagefind/pagefind.js'}
+        for document in manifest['documents']:
+            canonical=document['canonicalPath']
+            if not canonical.startswith('/docs/') or '..' in canonical.split('/'):
+                raise ValueError('invalid Docs route authority')
+            required.add(canonical[len('/docs/'):].strip('/')+'/index.html')
+    else:
+        required={'index.html'}
+    missing=sorted(name for name in required if not (root/name).is_file())
+    if missing: raise ValueError('missing static app output: '+app+': '+', '.join(missing))
+
 def main():
     head=command('git','rev-parse','HEAD').strip()
     plan=json.loads((ROOT/'artifacts/v10/P21/test-plan.json').read_text())
@@ -25,7 +38,7 @@ def main():
     assert {n.split('/')[1] for n in files}==BINS
     for app in plan['apps']:
         root=ROOT/'frontend/apps'/app/'dist'
-        if not (root/'index.html').is_file(): raise ValueError('missing static app: '+app)
+        validate_static(root,app)
         for path in sorted(root.rglob('*')):
             if path.is_symlink(): raise ValueError('static symlink')
             if path.is_file(): add('static/'+app+'/'+path.relative_to(root).as_posix(),path)
