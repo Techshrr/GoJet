@@ -38,18 +38,31 @@ class P08DiscoveryTests(unittest.TestCase):
         for size in (0, 99, 100, 140, 200, 999):
             with self.subTest(size=size):
                 rows = [{'id': n, 'status': 'queued' if n % 2 else 'completed',
+                         'head_sha': 'exact-candidate',
+                         'head_repository': {'full_name': 'owner/repo'},
+                         'event': 'workflow_dispatch' if n % 2 else 'pull_request',
                          'conclusion': None if n % 2 else 'failure'} for n in range(size)]
                 pages = []
                 def open_url(request, timeout):
                     query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)
                     self.assertEqual(query['head_sha'], ['exact-candidate'])
-                    self.assertEqual(query['event'], ['pull_request'])
+                    self.assertNotIn('event', query)
                     self.assertEqual(query['per_page'], ['100'])
                     page = int(query['page'][0])
                     pages.append(page)
                     return io.StringIO(json.dumps({'workflow_runs': rows[(page-1)*100:page*100]}))
                 self.assertEqual(discovery(open_url)(), rows)
                 self.assertEqual(pages, list(range(1, size // 100 + 2)))
+
+    def test_rejects_foreign_head_repository_and_event(self):
+        valid={'id': 1, 'head_sha': 'exact-candidate',
+               'head_repository': {'full_name': 'owner/repo'},
+               'event': 'workflow_dispatch', 'status': 'completed', 'conclusion': 'failure'}
+        rows=[valid, {**valid, 'head_sha': 'other'},
+              {**valid, 'head_repository': {'full_name': 'foreign/repo'}},
+              {**valid, 'event': 'pull_request_target'}]
+        self.assertEqual(discovery(lambda request, timeout: io.StringIO(
+            json.dumps({'workflow_runs': rows})))(), [valid])
 
     def test_unavailable_or_incomplete_listing_never_becomes_success(self):
         for payload in ({}, {'workflow_runs': None}, {'workflow_runs': [{}] * 100}):

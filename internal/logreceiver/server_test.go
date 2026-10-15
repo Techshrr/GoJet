@@ -33,9 +33,23 @@ func TestRealSocketRoundTripAndRestart(t *testing.T) {
 			t.Fatal("socket not private")
 		}
 		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
 		var received, local bytes.Buffer
 		done := make(chan error, 1)
 		go func() { done <- logreceiver.Serve(ctx, listener, &received) }()
+		// Binding a socket does not prove the serving goroutine has run. Wait
+		// for a real health acknowledgement before measuring business delivery;
+		// never retry the business record or relax its forwarding assertion.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if err := logging.SendLocal(socket, []byte("{\"type\":\"health\"}\n")); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("receiver did not become ready")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		t.Setenv("GOJET_LOG_SOCKET", socket)
 		logging.New(&local, "platformapi").Info("resource updated", "request_id", "request-123", "workspace_id", "workspace-456", "event_id", "event-789", "access_token", "secret-canary")
 		if strings.Contains(local.String(), "forwarding unavailable") {
