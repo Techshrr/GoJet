@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import shutil
 from catalog import catalog
+from native_units import verify_units
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/v10/P21/build'
 def run(*args,**kwargs):
@@ -37,7 +38,8 @@ def main():
                 (OUT/'bin').mkdir(exist_ok=True)
                 shutil.copyfile(binary,OUT/'bin'/name)
             rows.append(dict(actual,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),daemon=name in plan['services']))
-    report={'source':head,'version':version,'native_version_checks':rows,'migration_catalog':catalog(ROOT/'migrations'),'package_completion_claim':False,'remaining':['static frontend/package','migration apply','native configuration','Installer/apply','upgrade/rollback','G11/closure']}
+        units=verify_units(ROOT,Path(d),plan['services'])
+    report={'native_units':units,'source':head,'version':version,'native_version_checks':rows,'migration_catalog':catalog(ROOT/'migrations'),'package_completion_claim':False,'remaining':['static frontend/package','migration apply','native configuration','Installer/apply','upgrade/rollback','G11/closure']}
     (OUT/'native-build.json').write_text(json.dumps(report,indent=2)+'\n')
     (OUT/'go-modules.json').write_text(run('go','list','-m','-json','all')+'\n')
     print(json.dumps({'native_binaries':8,'helpers':1,'migration_count':len(report['migration_catalog']['migrations']),'source':head,'package_completion_claim':False}))

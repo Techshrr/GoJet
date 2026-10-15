@@ -17,6 +17,9 @@ def allowed(name):
     if not name or str(p)!=name or p.is_absolute() or '..' in p.parts or '\\' in name: return False
     if any(x.startswith('.') or x.lower() in {'node_modules','docker','compose','dockerfile','node','npm','pnpm'} for x in p.parts): return False
     if name in META: return True
+    if name in {'deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf'}: return True
+    if name.startswith('deploy/systemd/'):
+        return name in {'deploy/systemd/gojet-'+n+'.service' for n in BINS-{'filepreflight'}}
     if p.parts[0]=='bin': return len(p.parts)==2 and p.name in BINS
     if p.parts[0]=='migrations': return len(p.parts)==2 and bool(re.fullmatch(r'\d{6}_[a-z0-9_]+\.sql',p.name))
     if name=='migration-catalog.json': return True
