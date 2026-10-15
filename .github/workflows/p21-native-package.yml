@@ -1,0 +1,38 @@
+name: P21 Native Release Package
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p21-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify frozen contract and inherited authority
+        run: python3 scripts/p21/validate_contract.py
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Native package implementation checks
+        run: |
+          if test -f scripts/p21/verify_build.py; then
+            python3 -m unittest discover -s scripts/p21 -p 'test_*.py'
+            python3 scripts/p21/verify_build.py
+          else
+            echo 'Contract-only revision; package implementation not yet present.'
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-${{ github.sha }}
+          path: artifacts/v10/P21/
+          retention-days: 30
