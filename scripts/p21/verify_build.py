@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
 from catalog import catalog
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/v10/P21/build'
@@ -32,6 +33,9 @@ def main():
             if 'INTERP' in program_headers: raise ValueError('dynamic interpreter dependency')
             actual=json.loads(run(str(binary),'--version',env={'PATH':os.environ['PATH']}))
             assert actual=={'service':name,'version':version,'commit':head}
+            if os.environ.get('P21_KEEP_BINARIES') == '1':
+                (OUT/'bin').mkdir(exist_ok=True)
+                shutil.copyfile(binary,OUT/'bin'/name)
             rows.append(dict(actual,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),daemon=name in plan['services']))
     report={'source':head,'version':version,'native_version_checks':rows,'migration_catalog':catalog(ROOT/'migrations'),'package_completion_claim':False,'remaining':['static frontend/package','migration apply','native configuration','Installer/apply','upgrade/rollback','G11/closure']}
     (OUT/'native-build.json').write_text(json.dumps(report,indent=2)+'\n')
