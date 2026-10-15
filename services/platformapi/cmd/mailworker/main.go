@@ -10,10 +10,14 @@ import (
 
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 	"github.com/Techshrr/GoJet/internal/support"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "mailworker", os.Stdout) {
+		return
+	}
 	logger := logging.New(os.Stdout, "mailworker")
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	smtpAddress := strings.TrimSpace(os.Getenv("GOJET_SMTP_ADDR"))

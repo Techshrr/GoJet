@@ -15,9 +15,13 @@ import (
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "redirectengine", os.Stdout) {
+		return
+	}
 	logger := logging.New(os.Stdout, "redirectengine")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))

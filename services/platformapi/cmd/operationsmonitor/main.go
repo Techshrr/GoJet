@@ -14,10 +14,14 @@ import (
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 	"github.com/Techshrr/GoJet/internal/trust"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "operationsmonitor", os.Stdout) {
+		return
+	}
 	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
 	flag.Parse()
 	logger := logging.New(os.Stdout, "operationsmonitor")
