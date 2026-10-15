@@ -4,11 +4,11 @@ Node: `P20`
 Issue: #53  
 Base integration commit: `6e628b9879eb4dddf335a324e4f4d7ae3a77cd5c`  
 Authority: `GJ-V10-MP-GREENFIELD-2026-08-20`, `GJ-V10-IA-GREENFIELD-2026-08-20`, `GJ-V10-DS-GREENFIELD-2026-08-20`  
-Status: **PENDING — CONTRACT DRAFTING / IMPLEMENTATION NOT AUTHORIZED**
+Status: **APPROVED — TECHNICAL REVIEW SIGNED / SAME-REVISION CI REQUIRED**
 
 ## 1. Review boundary
 
-This file establishes the P20 accountable-review contract before whole-product verification begins. It is not a PASS record, signature, release-candidate decision or merge authority.
+This review signs the independently verified pre-sign Whole Product evidence identified below. It does not itself grant merge authority: the direct review-only child must pass its own required exact-head evidence and T049 closure.
 
 P20 owns unified verification across the already integrated P00-P19 product, not new feature implementation. It must freeze and verify the candidate implementation commit, schema catalog, frontend build inventory, capability/route traceability, release-candidate evidence index, defect ledger, real correlated P0 workflows, cross-surface consistency and failure/recovery behavior.
 
@@ -112,42 +112,34 @@ Final merge authority requires:
 
 Until those conditions hold, P20 must not be merged and P21 must not start.
 
-## Accountable review placeholders
+## Accountable technical review — 2026-10-15
 
-### Product Owner — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Product Owner`  
-Decision: **PENDING**
+Reviewed pre-sign implementation SHA: `bd6743d11ca0a8062ab7e4b8876e9ec889cd886a`
+Pre-sign T049 closure run: `38701899140`
+Pre-sign T049 closure artifact: `11960447883`
+Pre-sign T049 closure digest: `sha256:079a632c197df02c93d20e80c98bafa0c48bee88b4730b4e5e059986a1d03ed5`
+Evidence disposition: `P20-T001..P20-T048 PASS`
+P0/P1/DECISION REQUIRED: `0/0/0`
 
-### Backend Lead — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Backend Lead`  
-Decision: **PENDING**
+Reviewer: `Codex — AI technical reviewer; role-based technical assessment, not external human signatures`
+Decision: **APPROVED FOR DIRECT REVIEW-ONLY SIGNED-CHILD VERIFICATION**
 
-### Frontend Lead — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Frontend Lead`  
-Decision: **PENDING**
+The original closure ZIP was independently downloaded and its SHA256 verified. Every retained source archive digest, exact-head T001-T046 admission, 94-workflow applicable matrix, T047 Gate ledger, T048 coherence and pre-sign T049 details was reproduced from that packet. The pre-sign report has merge_authoritative=false. D001-D023 are closed; no blocking defect or unresolved decision is hidden by this review.
 
-### Security Reviewer — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Security Reviewer`  
-Decision: **PENDING**
+### Role dispositions
 
-### SEO Owner — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as SEO Owner`  
-Decision: **PENDING**
+- Product Owner — APPROVED: frozen T001-T048 scope and integrated capability/route authorities are complete; no unplanned feature or later-stage completion claim.
+- Backend Lead — APPROVED: the real correlated P0 timeline, durable settlement, authorization and T039-T046 dependency recovery passed on the reviewed revision. Source packets preserve independent MySQL, Redis, worker, SMTP-sink and audit authorities.
+- Frontend Lead — APPROVED: current browser, route, HTTP, locale and responsive evidence T027-T035 passed; success states do not override server denials.
+- Security Reviewer — APPROVED: current tenant/RBAC/session/CSRF/risk/file/payment checks passed; original archive/SHA admission and secret checks fail closed. Controlled provider fixtures and local SMTP are not represented as live external-provider or external-mail proof.
+- SEO Owner — APPROVED: exact-head T030-T033 HTTP, navigation, indexation and locale parity passed; public UGC remains distinct from Website/Docs indexing authority.
+- Design Lead — APPROVED: live P03 authority and current T034 native visual evidence passed; current light/dark and responsive captures preserve the integrated design system.
+- Accessibility Reviewer — APPROVED WITH EXPLICIT SCOPE: all 113 current captures reviewed; 55 representative WCAG criterion dispositions and 14 unchanged reviewed source files bound in tracker188. Original T035 packet and recursive diagnostics independently reproduced; formal run38702163349 attempt2 succeeded. Orca samples prove sampled control announcements/dispatcher attempts, not full-page audible certification; device-metrics zoom is not browser-toolbar zoom. No claim covers untested third-party widgets.
+- Performance Owner — APPROVED: current T036 native performance evidence passed within frozen limits. CI laboratory measurements are not production field measurements.
+- QA Lead — APPROVED: all 94 applicable regression authorities passed under their declared scopes. P15 current contract/coherence succeeded; historical P15 re-signing is not current P20 authority. Original P17/P18 signed-log retention explicitly discloses expired ZIP unavailability and does not reconstruct or re-sign predecessor archives.
 
-### Design Lead — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Design Lead`  
-Decision: **PENDING**
+### Gate and release boundaries
 
-### Accessibility Reviewer — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Accessibility Reviewer`  
-Decision: **PENDING**
+G0/G3/G4/G5/G6/G7/G8/G9/G10 PASS. G2 is live-bound complete through P03 plus current UI evidence. G1 preserves the live P01 baseline and explicit P21/P22 CAP-NATIVE-INSTALL / CAP-NATIVE-ONLY-RELEASE carry-forward. G11-G13 remain outside P20.
 
-### Performance Owner — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as Performance Owner`  
-Decision: **PENDING**
-
-### QA Lead — PENDING
-Reviewer: `GPT-5.6 Sol — AI technical reviewer acting as QA Lead`  
-Decision: **PENDING**
-
-No signature is present in this contract-drafting state.
+This commit must change only this review file and be the single-parent direct child of the reviewed pre-sign SHA. Fresh signed-child T001-T048, applicable matrix and T049 remain mandatory. No integration promotion, production deployment, P21/P22 completion or final merge authority is asserted by the signature alone.
