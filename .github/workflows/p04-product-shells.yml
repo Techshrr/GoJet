@@ -57,6 +57,14 @@ jobs:
           pnpm run typecheck:apps
       - name: Build shell applications
         run: pnpm run build:apps
+      - name: Build isolated Workspace shell preview
+        # P04 owns shell layout/navigation, with no platformapi service. Keep
+        # session discovery disabled in this preview without supplying a fake
+        # actor or workspace. Real production-session coverage belongs to the
+        # P12/P20 native browser workflow, which builds with this flag disabled.
+        env:
+          VITE_GOJET_TEST_AUTH_ENABLED: '1'
+        run: pnpm --filter @gojet/workspace build
       - name: Validate native installer syntax
         run: |
           php -l installer/src/Shell.php

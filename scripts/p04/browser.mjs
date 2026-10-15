@@ -168,7 +168,9 @@ async function verifySpa(url, selector, expectedPath, surface) {
   await page.evaluate(() => { window.__gojetP04LayoutShift = 0; });
   const marker = `p04-${Date.now()}-${Math.random()}`;
   await page.evaluate((value) => { window.__gojetP04Marker = value; }, marker);
-  await page.locator(selector).click();
+  // A responsive shell retains an inactive navigation tree in the DOM.
+  // Exercise exactly the visible link; duplicate visible controls still fail strictness.
+  await page.locator(`${selector}:visible`).click();
   await page.waitForURL((next) => next.pathname === expectedPath);
   const result = await page.evaluate((value) => ({
     preserved: window.__gojetP04Marker === value,
@@ -193,8 +195,8 @@ await verifySpa(
   '/pricing',
   'website',
 );
-await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings"]', '/app/settings', 'workspace');
-await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations"]', '/admin/operations', 'admin');
+await verifySpa('http://127.0.0.1:4174/app', 'a[href="/app/settings/workspace"]', '/app/settings/workspace', 'workspace');
+await verifySpa('http://127.0.0.1:4175/admin', 'a[href="/admin/operations/jobs"]', '/admin/operations/jobs', 'admin');
 
 {
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1 });

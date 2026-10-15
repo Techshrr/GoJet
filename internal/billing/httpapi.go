@@ -16,6 +16,7 @@ var (
 	ErrWorkspaceForbidden        = errors.New("workspace forbidden")
 	ErrCallbackUnavailable       = errors.New("callback verifier unavailable")
 	ErrCallbackUnauthorized      = errors.New("callback unauthorized")
+	ErrCallbackIgnored           = errors.New("callback authenticated but ignored")
 )
 
 type RequestPrincipal struct {
@@ -34,6 +35,19 @@ type WorkspaceRoleResolver interface {
 
 type CallbackRequestVerifier interface {
 	VerifyAndNormalize(*http.Request, Provider) (CallbackCommand, error)
+}
+
+// CallbackAcknowledgement is a provider-owned success response. Production
+// callback adapters may expose one through CallbackSuccessAcknowledgementProvider
+// when their retry contract cannot safely use the generic Billing JSON ACK.
+type CallbackAcknowledgement struct {
+	StatusCode  int
+	ContentType string
+	Body        string
+}
+
+type CallbackSuccessAcknowledgementProvider interface {
+	SuccessAcknowledgement(Provider) CallbackAcknowledgement
 }
 
 type APIStore interface {
@@ -231,6 +245,15 @@ func (a *API) paymentCallback(w http.ResponseWriter, r *http.Request) {
 			writeBillingError(w, http.StatusServiceUnavailable, "callback_verifier_unavailable", "Payment callback verification is unavailable.")
 			return
 		}
+		if errors.Is(err, ErrCallbackIgnored) {
+			ack, ok, ackErr := callbackSuccessAcknowledgement(a.callbacks, provider)
+			if ackErr != nil || !ok {
+				writeBillingError(w, http.StatusServiceUnavailable, "callback_ack_unavailable", "Payment callback acknowledgement is unavailable.")
+				return
+			}
+			writeBillingCallbackAcknowledgement(w, ack)
+			return
+		}
 		writeBillingError(w, http.StatusUnauthorized, "callback_unauthorized", "Payment callback authentication failed.")
 		return
 	}
@@ -238,13 +261,51 @@ func (a *API) paymentCallback(w http.ResponseWriter, r *http.Request) {
 		writeBillingError(w, http.StatusUnauthorized, "callback_unauthorized", "Payment callback authentication failed.")
 		return
 	}
+
+	// Validate any provider-owned success ACK before durable settlement. A bad
+	// ACK contract must fail closed without first changing financial state and
+	// then causing a provider retry loop.
+	ack, hasProviderACK, ackErr := callbackSuccessAcknowledgement(a.callbacks, provider)
+	if ackErr != nil {
+		writeBillingError(w, http.StatusServiceUnavailable, "callback_ack_unavailable", "Payment callback acknowledgement is unavailable.")
+		return
+	}
 	result, err := a.store.ApplyAuthenticatedCallback(r.Context(), cmd)
 	if err != nil {
 		writeBillingStoreError(w, err)
 		return
 	}
-	// Provider-safe ACK only: do not echo payment, entitlement or customer data.
+	if hasProviderACK {
+		writeBillingCallbackAcknowledgement(w, ack)
+		return
+	}
+	// The generic JSON ACK is retained for existing deterministic/test verifiers.
+	// Production provider adapters with a provider-specific retry contract expose
+	// CallbackSuccessAcknowledgementProvider instead.
 	writeBillingJSON(w, http.StatusOK, map[string]any{"ok": true, "duplicate": result.Duplicate})
+}
+
+func callbackSuccessAcknowledgement(verifier CallbackRequestVerifier, provider Provider) (CallbackAcknowledgement, bool, error) {
+	ackProvider, ok := verifier.(CallbackSuccessAcknowledgementProvider)
+	if !ok {
+		return CallbackAcknowledgement{}, false, nil
+	}
+	ack := ackProvider.SuccessAcknowledgement(provider)
+	if ack.StatusCode < http.StatusOK || ack.StatusCode > 299 || len(ack.Body) > 4<<10 || len(ack.ContentType) > 128 || strings.ContainsAny(ack.ContentType, "\r\n") || (ack.StatusCode == http.StatusNoContent && ack.Body != "") {
+		return CallbackAcknowledgement{}, true, ErrCallbackUnavailable
+	}
+	return ack, true, nil
+}
+
+func writeBillingCallbackAcknowledgement(w http.ResponseWriter, ack CallbackAcknowledgement) {
+	w.Header().Del("Content-Type")
+	if ack.ContentType != "" {
+		w.Header().Set("Content-Type", ack.ContentType)
+	}
+	w.WriteHeader(ack.StatusCode)
+	if ack.Body != "" {
+		_, _ = w.Write([]byte(ack.Body))
+	}
 }
 
 func (a *API) workspaceActor(w http.ResponseWriter, r *http.Request) (RequestPrincipal, string, bool) {

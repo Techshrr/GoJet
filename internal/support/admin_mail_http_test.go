@@ -63,6 +63,8 @@ func TestAdminMailAllSurfacesRequireMailManageBeforeStore(t *testing.T) {
 	}{
 		{http.MethodGet, "/api/admin/mail/queue", ""},
 		{http.MethodGet, "/api/admin/mail/templates", ""},
+		{http.MethodPatch, "/api/admin/mail/templates/mail-test", `{}`},
+		{http.MethodPost, "/api/admin/mail/templates/mail-test/preview", `{}`},
 		{http.MethodGet, "/api/admin/mail/settings", ""},
 		{http.MethodPatch, "/api/admin/mail/settings", `{"enabled":false,"expected_version":1}`},
 		{http.MethodPost, "/api/admin/mail/test", `{"recipient":"admin@example.test"}`},

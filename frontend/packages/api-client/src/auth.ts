@@ -1,10 +1,10 @@
 import { GoJetApiError } from './links';
 import type { ApiTransport } from './links';
 
-export type AuthProvider = { provider: 'google' | 'facebook' | 'github' | 'qq' | 'wechat' | 'rainbow'; enabled: boolean };
+export type AuthProvider = { provider: 'google' | 'facebook' | 'github' | 'qq' | 'wechat' | 'rainbow' | 'x' | 'linkedin'; enabled: boolean };
 export type AuthProvidersResponse = { providers: AuthProvider[] };
 export type AuthStatusResponse = { status: string; expires_at?: string; verified_at?: string };
-export type OAuthCallbackResponse = { status: 'handoff_ready'; handoff_code: string; expires_at: string };
+export type OAuthCallbackResponse = { status: 'handoff_ready'; handoff_code: string; expires_at: string } | { status: 'binding_required' };
 export type OAuthHandoffResponse =
   | { status: 'authenticated'; expires_at: string }
   | { status: 'registration_required'; registration_code: string; expires_at: string };
@@ -41,6 +41,7 @@ export class GoJetAuthClient {
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(this.headers?.());
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     headers.set('Accept', 'application/json');
     if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
     const response = await this.doFetch(`${this.baseUrl}${path}`, { ...init, headers, credentials: 'include' });
@@ -127,6 +128,15 @@ export class GoJetAuthClient {
   oauthCallback(provider: string, state: string, code: string): Promise<OAuthCallbackResponse> {
     const query = new URLSearchParams({ state, code });
     return this.request(`/api/public/auth/${encodeURIComponent(provider)}/callback?${query}`);
+  }
+
+  async completeConnectedAccount(provider: string, state: string, code: string): Promise<{ status: 'connected' }> {
+    const current = await this.request<{ csrf_token: string }>('/api/me');
+    return this.request(`/api/me/connected-accounts/${encodeURIComponent(provider)}/complete`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': current.csrf_token },
+      body: JSON.stringify({ state, code }),
+    });
   }
 
   exchangeHandoff(code: string): Promise<OAuthHandoffResponse> {

@@ -1,0 +1,50 @@
+name: P20-T035 Accessibility Evidence Review
+on:
+  pull_request:
+    branches: [main]
+    paths: ['scripts/p20/**', 'frontend/**', 'internal/**', 'services/**', '.github/workflows/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  issues: read
+concurrency:
+  group: p20-t035-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Reject invalid accessibility evidence
+        run: |
+          python3 -m unittest discover -s scripts/p20 -p 'test_t03[45]*.py'
+          node --test scripts/p20/test_t035*.mjs
+      - name: Collect exact-head native evidence and T034 authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t035_sources.py
+      - name: Recompute accessibility diagnostics and prerequisite authority
+        run: python3 scripts/p20/t035_matrix.py
+      - name: Require independent exact-packet WCAG review before formal admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/browser_matrix.py --case T035
+      - name: Preserve formal result and complete review packet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t035-accessibility-review-${{ github.event.pull_request.head.sha || github.sha }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            artifacts/v10/P20/browser/P20-T035.json
+            artifacts/v10/P20/runtime/t035-sources/
+            artifacts/v10/P20/runtime/t035-matrix/

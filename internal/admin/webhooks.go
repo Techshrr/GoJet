@@ -11,12 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/trust"
 	"github.com/redis/go-redis/v9"
 )
@@ -30,6 +32,8 @@ const (
 )
 
 type WorkspaceWebhookAuthority struct {
+	// Logger is configured by operationsmonitor before processing deliveries.
+	Logger   *slog.Logger
 	db       *sql.DB
 	redis    *redis.Client
 	cipher   *SecretCipher
@@ -570,6 +574,7 @@ func (a *WorkspaceWebhookAuthority) markDeliverySuccess(ctx context.Context, row
 		return ErrConflict
 	}
 	a.auditBestEffort(ctx, row.Delivery.WorkspaceID, "operationsmonitor", "webhook.delivery.delivered", row.Delivery.ID, "operationsmonitor-"+row.Delivery.ID, "success", map[string]any{"webhook_id": row.Delivery.WebhookID, "event_type": row.Delivery.EventType, "attempts": attempts, "status_code": statusCode}, now)
+	a.logDelivery(ctx, row, "delivered", attempts)
 	return nil
 }
 
@@ -597,6 +602,7 @@ func (a *WorkspaceWebhookAuthority) markDeliveryFailure(ctx context.Context, row
 		auditResult = "conflict"
 	}
 	a.auditBestEffort(ctx, row.Delivery.WorkspaceID, "operationsmonitor", "webhook.delivery."+status, row.Delivery.ID, "operationsmonitor-"+row.Delivery.ID, auditResult, map[string]any{"webhook_id": row.Delivery.WebhookID, "event_type": row.Delivery.EventType, "attempts": attempts, "error_code": errorCode}, now)
+	a.logDelivery(ctx, row, status, attempts)
 	return nil
 }
 
@@ -699,4 +705,16 @@ func (a *WorkspaceWebhookAuthority) auditBestEffort(ctx context.Context, workspa
 	}
 	raw, _ := json.Marshal(metadata)
 	_, _ = a.db.ExecContext(ctx, `INSERT INTO workspace_audit_events(workspace_id,actor_id,action,resource_type,resource_id,reason,request_correlation_id,result,metadata_json,created_at) SELECT ?,?,?,?,?,NULL,?,?,?,? FROM workspaces WHERE id=?`, workspaceID, actorID, action, "webhook", resourceID, correlationID, result, raw, now.UTC(), workspaceID)
+}
+
+// logDelivery is called after the guarded durable UPDATE. Audit persistence is
+// independently verified; a log record cannot replace or claim audit authority.
+func (a *WorkspaceWebhookAuthority) logDelivery(ctx context.Context, row webhookWorkerDelivery, status string, attempts int) {
+	if a.Logger != nil {
+		a.Logger.InfoContext(ctx, "webhook delivery persisted",
+			"delivery_fingerprint", logging.Fingerprint("webhook_delivery", row.Delivery.ID),
+			"event_fingerprint", logging.Fingerprint("webhook_event", row.Delivery.EventID),
+			"correlation_fingerprint", logging.Fingerprint("correlation", "operationsmonitor-"+row.Delivery.ID),
+			"status", status, "attempt_count", attempts)
+	}
 }

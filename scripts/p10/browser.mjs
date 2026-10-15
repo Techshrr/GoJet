@@ -1,3 +1,5 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
+import { confirmedNoContentDeletion } from './network_outcome.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -67,12 +69,13 @@ async function deleteText(item) {
 }
 function diagnostics() { return {console_errors:[],page_errors:[],http_errors:[],request_failures:[]}; }
 function attachDiagnostics(page, report) {
+  const responses = new WeakMap();
   page.on('console', (message) => { if (message.type()==='error') report.console_errors.push(message.text()); });
   page.on('pageerror', (error) => report.page_errors.push(String(error)));
-  page.on('response', (response) => { if (response.status()>=400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({status:response.status(),url:response.url()}); });
-  page.on('requestfailed', (request) => report.request_failures.push({url:request.url(),failure:request.failure()}));
+  page.on('response', (response) => { responses.set(response.request(), response.status()); if (response.status()>=400 && !response.url().endsWith('/favicon.ico')) report.http_errors.push({status:response.status(),url:response.url()}); });
+  page.on('requestfailed', (request) => report.request_failures.push({url:request.url(),method:request.method(),resource_type:request.resourceType(),navigation:request.isNavigationRequest(),response_status:responses.get(request)??null,failure:request.failure()}));
 }
-function assertDiagnostics(report, label, allowedStatuses=[]) {
+function assertDiagnostics(report, label, allowedStatuses=[], deletionProof=null) {
   const httpErrors = report.http_errors.filter((entry) => !allowedStatuses.includes(entry.status));
   const consoleErrors = report.console_errors.filter((message) => {
     const match = /status of (\d{3})\b/.exec(message);
@@ -80,7 +83,9 @@ function assertDiagnostics(report, label, allowedStatuses=[]) {
   });
   assert(consoleErrors.length===0, `${label} console errors ${JSON.stringify(consoleErrors)}`);
   assert(report.page_errors.length===0, `${label} page errors ${JSON.stringify(report.page_errors)}`);
-  assert(report.request_failures.length===0, `${label} request failures ${JSON.stringify(report.request_failures)}`);
+  report.confirmed_no_content_completions=report.request_failures.filter(row=>confirmedNoContentDeletion(row,deletionProof));
+  const failures=report.request_failures.filter(row=>!confirmedNoContentDeletion(row,deletionProof));
+  assert(failures.length===0, `${label} request failures ${JSON.stringify(failures)}`);
   assert(httpErrors.length===0, `${label} HTTP errors ${JSON.stringify(httpErrors)}`);
 }
 async function openPage(browser, base, path, viewport=viewports.desktop, options={}) {
@@ -104,6 +109,16 @@ async function layout(page) {
 function assertLayout(value,label){assert(value.root_overflow_px===0&&value.body_overflow_px===0,`${label} root/body overflow ${JSON.stringify(value)}`);assert(value.clipped.length===0,`${label} clipped ${JSON.stringify(value.clipped)}`);}
 function writeResult(caseId,status,details,errors=[]){writeFileSync(`${browserDir}/${caseId}.json`,JSON.stringify({node:'P10',case_id:caseId,status,implementation_commit:HEAD,generated_at:new Date().toISOString(),environment:{browser:executablePath,workspace_owner:OWNER_URL,workspace_viewer:VIEWER_URL,platformapi:PLATFORM_URL,mysql:`${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`,canonical_viewports:viewports,authority:'real built owner/viewer Workspace + native Go platformapi + real MySQL; no request interception or fixture-only browser success'},details,errors},null,2)+'\n');}
 async function screenshot(page,name){const path=`${capturesDir}/${name}.png`;await page.screenshot({path,fullPage:true});return path.replace(`${ROOT}/`,'');}
+async function keyboardDeleteReview(page) {
+  const trigger = page.getByRole('button',{name:'Delete Text share',exact:true});
+  for(let n=0;n<100 && !(await trigger.evaluate(el=>el===document.activeElement));n++) await page.keyboard.press('Tab');
+  assert(await trigger.evaluate(el=>el===document.activeElement),'delete trigger is not keyboard reachable');
+  await page.keyboard.press('Enter');
+  const cancel = page.getByRole('button',{name:'Cancel',exact:true});
+  await cancel.waitFor();
+  await page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Cancel');
+  return {trigger,cancel};
+}
 
 async function caseT016(browser){
   resetText();
@@ -150,6 +165,40 @@ async function caseT017(browser){
   mysql('RENAME TABLE text_shares TO text_shares_p10_fault');
   try { opened=await openPage(browser,OWNER_URL,`/app/text/${base.id}`); await waitState(opened.page,'[data-page="text-detail"]','error'); evidence.error=true; assertDiagnostics(opened.report,'T017 controlled error',[500,502]); await opened.context.close(); }
   finally { mysql('RENAME TABLE text_shares_p10_fault TO text_shares'); }
+  // Real authenticated UI deletion: cancellation must preserve the server
+  // record; only the explicit confirmation may produce DELETE/HTTP 410.
+  const removable=await createText({title:'Review Text deletion',visibility:'public'});
+  opened=await openPage(browser,OWNER_URL,`/app/text/${removable.id}`,{width:320,height:800});
+  await waitState(opened.page,'[data-page="text-detail"]','edit');
+  let review=await keyboardDeleteReview(opened.page);
+  assert((await opened.page.getByRole('group',{name:'Confirm Text deletion'}).getByRole('status').textContent()).includes(removable.title),'deletion review omits server resource title');
+  assertLayout(await layout(opened.page),'320px deletion review');
+  evidence.delete_confirmation_capture=await screenshot(opened.page,'P10-T017-delete-confirmation');
+  await opened.page.keyboard.press('Escape');
+  await opened.page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Delete Text share');
+  assert((await api(`/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`)).response.status===200,'Escape deleted the server record');
+  review=await keyboardDeleteReview(opened.page);await opened.page.keyboard.press('Enter');
+  await opened.page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='Delete Text share');
+  assert((await api(`/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`)).response.status===200,'Cancel deleted the server record');
+  review=await keyboardDeleteReview(opened.page);
+  await opened.page.keyboard.press('Tab');
+  assert(await opened.page.getByRole('button',{name:'Confirm delete Text share',exact:true}).evaluate(el=>el===document.activeElement),'confirmation is not keyboard reachable');
+  const removed=opened.page.waitForResponse(r=>r.request().method()==='DELETE' && r.url().endsWith(`/text-shares/${removable.id}`));
+  await opened.page.keyboard.press('Enter');assert((await removed).status()===204,'confirmed UI deletion did not settle');
+  await opened.page.waitForURL(/\/app\/text$/);
+  assert((await fetch(`${PLATFORM_URL}/t/${encodeURIComponent(removable.public_slug)}`)).status===410,'confirmed deletion did not revoke public access');
+  assert(Number.isSafeInteger(removable.id)&&removable.id>0,'unsafe fixture resource ID');
+  const durable=mysql(`SELECT CONCAT(IF(deleted_at IS NOT NULL,1,0),':',version) FROM text_shares WHERE id=${removable.id}`);
+  const auditCount=Number(mysql(`SELECT COUNT(*) FROM text_audit_events WHERE text_share_id=${removable.id} AND action='text.delete' AND result='success'`));
+  assert(durable===`1:${removable.version+1}` && auditCount===1,'confirmed deletion lacks one atomic tombstone/version/audit');
+  const deletionProof={request_url:`${OWNER_URL}/api/workspaces/${encodeURIComponent(WORKSPACE)}/text-shares/${removable.id}`,
+    client_redirect:true,server_status:204,public_status:410,database_tombstone:true,
+    initial_version:removable.version,database_version:removable.version+1,audit_count:auditCount};
+  evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410,durable:deletionProof};
+  evidence.diagnostics=opened.report;
+  try { assertDiagnostics(opened.report,'T017 confirmed deletion',[],deletionProof); }
+  catch(error) { error.details={...evidence,diagnostics:opened.report};throw error; }
+  await opened.context.close();
   return evidence;
 }
 
@@ -157,7 +206,7 @@ async function caseT018(browser){
   resetText(); const item=await createText({title:'Responsive public Text',content:'Responsive and accessible public Text content.',visibility:'public'}); const captures=[]; const layouts=[];
   for (const [name,viewport] of Object.entries(viewports)) {
     for (const [surface,base,path] of [['list',OWNER_URL,'/app/text'],['detail',OWNER_URL,`/app/text/${item.id}`],['public',PLATFORM_URL,`/t/${item.public_slug}`]]) {
-      const opened=await openPage(browser,base,path,viewport); const value=await layout(opened.page); assertLayout(value,`${name} ${surface}`); layouts.push({name,surface,...value}); captures.push(await screenshot(opened.page,`P10-T018-${name}-${surface}`)); await opened.context.close();
+      const opened=await openPage(browser,base,path,viewport); const value=await layout(opened.page); assertLayout(value,`${name} ${surface}`); layouts.push({name,surface,...value}); if (name === 'desktop' && ['detail','public'].includes(surface)) await visualProbe(opened.page, 'P10', surface === 'detail' ? 'workspace' : 'public'); captures.push(await screenshot(opened.page,`P10-T018-${name}-${surface}`)); await opened.context.close();
     }
   }
   for (const [surface,base,path] of [['detail',OWNER_URL,`/app/text/${item.id}`],['public',PLATFORM_URL,`/t/${item.public_slug}`]]) {
@@ -174,5 +223,5 @@ async function caseT018(browser){
 }
 
 const cases={'P10-T016':caseT016,'P10-T017':caseT017,'P10-T018':caseT018};
-async function main(){const index=process.argv.indexOf('--case');const id=index>=0?process.argv[index+1]:'all';if(id!=='all'&&!cases[id])throw new Error(`unsupported P10 browser case ${id}`);const browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});try{for(const caseId of id==='all'?Object.keys(cases):[id]){let details={};const errors=[];try{details=await cases[caseId](browser);}catch(error){errors.push(error instanceof Error?`${error.name}: ${error.message}`:String(error));}writeResult(caseId,errors.length?'FAIL':'PASS',details,errors);if(errors.length)throw new Error(`${caseId}: ${errors.join('; ')}`);console.log(`${caseId} PASS on ${HEAD}`);}}finally{await browser.close();}}
+async function main(){const index=process.argv.indexOf('--case');const id=index>=0?process.argv[index+1]:'all';if(id!=='all'&&!cases[id])throw new Error(`unsupported P10 browser case ${id}`);const browser=await chromium.launch({executablePath,headless:!process.env.P20_ORCA_LOG,args:['--no-sandbox', '--force-renderer-accessibility','--disable-dev-shm-usage']});try{for(const caseId of id==='all'?Object.keys(cases):[id]){let details={};const errors=[];try{details=await cases[caseId](browser);}catch(error){details=error.details??details;errors.push(error instanceof Error?`${error.name}: ${error.message}`:String(error));}writeResult(caseId,errors.length?'FAIL':'PASS',details,errors);if(errors.length)throw new Error(`${caseId}: ${errors.join('; ')}`);console.log(`${caseId} PASS on ${HEAD}`);}}finally{await browser.close();}}
 main().catch((error)=>{console.error(error);process.exitCode=1;});

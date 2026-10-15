@@ -1,0 +1,72 @@
+name: P20 Whole Product Closure
+on:
+  push:
+    branches: [develop/p20-release-candidate]
+  workflow_dispatch:
+    inputs:
+      launch_missing:
+        description: Start missing exact-head regression producers once
+        type: boolean
+        default: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p20-closure-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate closure provenance and frozen contract
+        run: |
+          python3 scripts/p20/validate_contract.py
+          python3 -m unittest discover -s scripts/p20 -p 'test_release*.py'
+      - name: Launch only missing exact-head producers
+        if: github.event_name == 'push' || inputs.launch_missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/release_dispatch.py
+  closure:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Collect complete exact-head regression and original evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/release_sources.py
+      - name: Verify G0-G10 dispositions
+        run: python3 scripts/p20/gate_ledger.py
+      - name: Verify exact-head T001-T047 evidence coherence
+        run: python3 scripts/p20/evidence_coherence.py
+      - name: Verify accountable pre-sign or signed-child closure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/closure_ci.py
+      - name: Preserve original source packets and closure verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v10-p20-closure-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/gates/
+            artifacts/v10/P20/coherence/
+            artifacts/v10/P20/closure/
+            artifacts/v10/P20/runtime/closure-sources/

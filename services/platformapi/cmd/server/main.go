@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,11 +14,12 @@ import (
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 	qrcodes "github.com/Techshrr/GoJet/internal/qr"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "platformapi")
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
 	if dsn == "" || redisAddr == "" {
@@ -78,19 +78,61 @@ func main() {
 		qrQuota = parsed
 	}
 
-	linksAPI := links.NewAPI(store, testAuth)
-	domainsAPI := domains.NewWorkspaceDomainsAPI(domainStore, testAuth)
-	analyticsAPI := analytics.NewAPI(analytics.NewStore(db), testAuth, analyticsEnabled)
-	qrAPI := qrcodes.NewAPI(qrcodes.NewStore(db, qrQuota), store, risk, testAuth)
+	var linksAPI *links.API
+	if testAuth {
+		linksAPI = links.NewAPI(store, true)
+	} else {
+		linksAuthority, authorityErr := buildLinksSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Links authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		linksAPI = links.NewAPIWithActorResolver(store, linksAuthority.resolve)
+	}
+	var domainsAPI *domains.WorkspaceDomainsAPI
+	if testAuth {
+		domainsAPI = domains.NewWorkspaceDomainsAPI(domainStore, true)
+	} else {
+		domainsAuthority, authorityErr := buildDomainsSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Domains authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		domainsAPI = domains.NewWorkspaceDomainsAPIWithActorResolver(domainStore, domainsAuthority.resolve)
+	}
+	var analyticsAPI *analytics.API
+	analyticsStore := analytics.NewStore(db)
+	if testAuth {
+		analyticsAPI = analytics.NewAPI(analyticsStore, true, analyticsEnabled)
+	} else {
+		analyticsAuthority, authorityErr := buildAnalyticsSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure Analytics authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		analyticsAPI = analytics.NewAPIWithActorResolver(analyticsStore, analyticsAuthority.resolve, analyticsEnabled)
+	}
+	var qrAPI *qrcodes.API
+	qrStore := qrcodes.NewStore(db, qrQuota)
+	if testAuth {
+		qrAPI = qrcodes.NewAPI(qrStore, store, risk, true)
+	} else {
+		qrAuthority, authorityErr := buildQRSessionAuthority(db, redisClient)
+		if authorityErr != nil {
+			logger.Error("configure QR authentication authority", "error", authorityErr)
+			os.Exit(1)
+		}
+		qrAPI = qrcodes.NewAPIWithActorResolver(qrStore, store, risk, qrAuthority.resolve)
+	}
 	domainsHandler := domainsAPI.Handler()
 	analyticsHandler := analyticsAPI.Handler()
 	qrHandler := qrAPI.Handler()
-	filesHandler, filesEnabled, err := buildFilesHandler(db, testAuth)
+	filesHandler, filesEnabled, err := buildFilesHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure files", "error", err)
 		os.Exit(1)
 	}
-	textHandler, textEnabled, err := buildTextHandler(db, testAuth)
+	textHandler, textEnabled, err := buildTextHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Text Sharing", "error", err)
 		os.Exit(1)
@@ -100,12 +142,12 @@ func main() {
 		logger.Error("configure Bio", "error", err)
 		os.Exit(1)
 	}
-	workspaceHandler, workspaceEnabled, err := buildWorkspaceHandler(db, testAuth)
+	workspaceHandler, workspaceEnabled, err := buildWorkspaceHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Workspace organization", "error", err)
 		os.Exit(1)
 	}
-	billingHandler, billingEnabled, err := buildBillingHandler(db, testAuth)
+	billingHandler, billingEnabled, err := buildBillingHandler(db, redisClient, testAuth)
 	if err != nil {
 		logger.Error("configure Billing, Payments and Entitlements", "error", err)
 		os.Exit(1)
@@ -119,6 +161,19 @@ func main() {
 	if err != nil {
 		logger.Error("configure Authentication, OAuth and Account", "error", err)
 		os.Exit(1)
+	}
+	if authEnabled {
+		authRateMiddleware, rateErr := buildAuthRateMiddleware(redisClient)
+		if rateErr != nil {
+			logger.Error("configure Authentication rate protection", "error", rateErr)
+			os.Exit(1)
+		}
+		challengeGate, challengeErr := buildAuthChallengeGate(db, redisClient)
+		if challengeErr != nil {
+			logger.Error("configure Authentication challenge protection")
+			os.Exit(1)
+		}
+		authHandler = authRateMiddleware(challengeGate.wrap(authHandler))
 	}
 	accountHandler, accountEnabled, err := buildAccountHandler(db, redisClient)
 	if err != nil {
@@ -224,7 +279,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           root,
+		Handler:           logging.HTTP(logger, root),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

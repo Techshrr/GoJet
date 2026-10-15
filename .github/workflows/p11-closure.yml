@@ -174,7 +174,7 @@ jobs:
                   print(f'P00-P11 affected exact-head matrix is green for {sha}')
                   break
               print(f'Waiting for exact-head matrix: missing={missing} pending={pending}')
-              time.sleep(10)
+              time.sleep(60)
           else:
               raise SystemExit(f'timed out waiting for exact-head workflows for {sha}')
           PY

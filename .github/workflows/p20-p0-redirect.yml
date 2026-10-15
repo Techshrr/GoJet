@@ -1,0 +1,268 @@
+name: P20 P0 Redirect Timeline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/p20/p0_timeline.py'
+      - 'scripts/p20/t010_runner/**'
+      - 'scripts/p20/t011_runner/**'
+      - 'scripts/p20/t012_runner/**'
+      - 'scripts/p20/t013_runner/**'
+      - 'scripts/p20/common.py'
+      - 'scripts/p20/validate_contract.py'
+      - 'services/platformapi/cmd/server/**'
+      - 'services/redirectengine/cmd/server/**'
+      - 'internal/auth/**'
+      - 'internal/workspace/**'
+      - 'internal/links/**'
+      - 'internal/analytics/**'
+      - 'internal/domains/**'
+      - 'internal/support/**'
+      - 'internal/securetoken/**'
+      - 'migrations/**'
+      - 'artifacts/v10/P20/test-plan.json'
+      - 'artifacts/v10/P20/defect-ledger.json'
+      - '.github/workflows/p20-p0-redirect.yml'
+      - '.github/workflows/p20-candidate-freeze.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p20-p0-redirect-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  t009-t013:
+    name: P20-T009/T013 real auth Link and redirect workflow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_test?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+      GOJET_PLATFORMAPI_ADDR: 127.0.0.1:18081
+      GOJET_P20_API_BASE: http://127.0.0.1:18081
+      GOJET_REDIRECTENGINE_ADDR: 127.0.0.1:18080
+      GOJET_P20_REDIRECT_BASE: http://127.0.0.1:18080
+      GOJET_ANALYTICS_ENABLED: '1'
+      GOJET_TEST_ROUTING_HEADERS: '0'
+      GOJET_AUTH_ENABLED: '1'
+      GOJET_AUTH_RATE_LIMIT: '4'
+      GOJET_AUTH_RATE_WINDOW_SECONDS: '60'
+      GOJET_ACCOUNT_ENABLED: '1'
+      GOJET_WORKSPACE_ENABLED: '1'
+      GOJET_TEST_AUTH_ENABLED: '0'
+      GOJET_AUTH_ALLOWED_ORIGIN: http://localhost:4185
+      GOJET_AUTH_CSRF_KEY_HEX: 102132435465768798a9babbdcddfe0f00112233445566778899aabbccddeeff
+      GOJET_AUTH_GRANT_KEY_ID: p20-t009-grant-v1
+      GOJET_AUTH_GRANT_KEY_HEX: 00112233445566778899aabbccddeeff102132435465768798a9babbdcddfe0f
+      GOJET_OAUTH_KEY_ID: p20-t009-oauth-v1
+      GOJET_OAUTH_KEY_HEX: 89abcdef0123456776543210fedcba98102132435465768798a9babbdcddfe0f
+      GOJET_TEST_MYSQL_HOST: 127.0.0.1
+      GOJET_TEST_MYSQL_PORT: '3306'
+      GOJET_TEST_MYSQL_USER: root
+      GOJET_TEST_MYSQL_PASSWORD: root
+      GOJET_TEST_MYSQL_DATABASE: gojet_test
+
+    steps:
+      - name: Checkout exact P20 candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go from repository contract
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify runtime clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq default-mysql-client redis-tools
+          mysql --version
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify P20 T009-T013 source and frozen contract boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod verify
+          python3 -m py_compile scripts/p20/common.py scripts/p20/p0_timeline.py scripts/p20/validate_contract.py
+          gofmt -d scripts/p20/t010_runner/main.go scripts/p20/t011_runner/main.go scripts/p20/t012_runner/main.go scripts/p20/t013_runner/main.go | tee /tmp/p20-t009-t013-gofmt.diff
+          test ! -s /tmp/p20-t009-t013-gofmt.diff
+          go test ./internal/auth ./internal/workspace ./internal/links ./internal/analytics ./internal/domains ./internal/support ./services/platformapi/cmd/server ./services/redirectengine/cmd/server ./scripts/p20/t010_runner ./scripts/p20/t011_runner ./scripts/p20/t012_runner ./scripts/p20/t013_runner
+          python3 scripts/p20/validate_contract.py > /tmp/p20-contract-guard.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/p20-contract-guard.json',encoding='utf-8'))
+          assert data['status']=='PASS',data
+          assert data['contract_authority']=='050fd7052d71ff77858b153abcbc466a1243af2f',data
+          assert data['frozen_contract_preserved'] is True,data
+          PY
+
+      - name: Apply immutable migrations through exact candidate head
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MYSQL_PWD=root
+          for attempt in $(seq 1 60); do
+            if mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e 'SELECT VERSION()'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            echo "Applying ${migration}"
+            mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root --default-character-set=utf8mb4 gojet_test < "$migration"
+          done
+
+      - name: Build and start exact-head native platform API and redirectengine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P20/runtime/t009 artifacts/v10/P20/runtime/t013
+          go build -trimpath -o /tmp/gojet-p20-platformapi ./services/platformapi/cmd/server
+          go build -trimpath -o /tmp/gojet-p20-redirectengine ./services/redirectengine/cmd/server
+          sha256sum /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+          sha256sum /tmp/gojet-p20-redirectengine > artifacts/v10/P20/runtime/t013/native-redirectengine.sha256
+          /tmp/gojet-p20-platformapi > artifacts/v10/P20/runtime/t009/platformapi.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t009/platformapi.pid
+          /tmp/gojet-p20-redirectengine > artifacts/v10/P20/runtime/t013/redirectengine.log 2>&1 &
+          echo $! > artifacts/v10/P20/runtime/t013/redirectengine.pid
+          platform_ready=0
+          redirect_ready=0
+          for attempt in $(seq 1 60); do
+            platform_status="$(curl -sS -o /tmp/p20-me.json -w '%{http_code}' http://127.0.0.1:18081/api/me || true)"
+            redirect_status="$(curl -sS -o /tmp/p20-redirect-health -w '%{http_code}' http://127.0.0.1:18080/healthz || true)"
+            [ "$platform_status" = 401 ] && platform_ready=1
+            [ "$redirect_status" = 204 ] && redirect_ready=1
+            if [ "$platform_ready" = 1 ] && [ "$redirect_ready" = 1 ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat artifacts/v10/P20/runtime/t009/platformapi.log || true
+          cat artifacts/v10/P20/runtime/t013/redirectengine.log || true
+          exit 1
+
+      - name: Run frozen P20-T009 through P20-T013 in order
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in P20-T009 P20-T010 P20-T011 P20-T012 P20-T013; do
+            echo "Running ${case}"
+            python3 scripts/p20/p0_timeline.py --case "$case"
+          done
+
+      - name: Verify exact-head T009-T013 evidence shape and secret exclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact_head="$(git rev-parse HEAD)"
+          EXACT_HEAD="$exact_head" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('artifacts/v10/P20/p0')
+          cases=['P20-T009','P20-T010','P20-T011','P20-T012','P20-T013']
+          docs={}
+          errors=[]
+          for case in cases:
+              path=root/f'{case}.json'
+              if not path.is_file():
+                  errors.append(f'missing {path}')
+                  continue
+              data=json.loads(path.read_text(encoding='utf-8'))
+              docs[case]=data
+              if data.get('node')!='P20': errors.append(f'{case} node mismatch')
+              if data.get('case')!=case: errors.append(f'{case} case mismatch')
+              if data.get('implementation_commit')!=os.environ['EXACT_HEAD']: errors.append(f'{case} exact-head mismatch')
+              if data.get('status') not in {'PASS','FAIL'}: errors.append(f'{case} invalid status')
+          t13=docs.get('P20-T013')
+          if t13:
+              d=t13.get('details',{})
+              for key in ('real_redirectengine','real_mysql','real_redis','real_p05_links'):
+                  if d.get(key) is not True: errors.append(f'T013 {key} evidence missing')
+              for key in ('mock_authority','test_header_authority','secret_material_recorded'):
+                  if d.get(key) is not False: errors.append(f'T013 {key} policy violation')
+              for key in ('t012_user_correlation_preserved','t012_workspace_correlation_preserved','t012_link_correlation_preserved'):
+                  if d.get(key) is not True: errors.append(f'T013 missing {key}')
+              if t13.get('status')=='PASS':
+                  required_true=(
+                      'link_fixture_fingerprint_changed','redirect_status_semantics','routing_precedes_ab','utm_finalization',
+                      'spoofed_test_country_ignored','customer_location_emitted_after_allow','click_identity_correlated',
+                      'analytics_outbox_published','analytics_redis_transport_seeded','blocked_fail_closed','review_fail_closed',
+                      'stale_fail_closed','unknown_fail_closed','risk_before_routing_and_click_identity',
+                      'risk_fail_closed_no_destination_leak','risk_authority_restored','real_redirect_flow'
+                  )
+                  for key in required_true:
+                      if d.get(key) is not True: errors.append(f'T013 PASS missing {key}')
+                  if d.get('redirect_http_status') != 307: errors.append('T013 redirect status mismatch')
+                  if d.get('click_sequence') != 1: errors.append('T013 click sequence mismatch')
+                  if d.get('next_case') != 'P20-T014': errors.append('T013 next-case authorization mismatch')
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print(f"P20 T009-T013 evidence bound to {os.environ['EXACT_HEAD']}; T013={docs['P20-T013']['status']}")
+          PY
+          ! grep -RIE 'gvc_|grp_|glc_|goh_|gsr_|gos_|gpk_|gst_|gcs_|gcf_|P20-T009!Strong-Passphrase|@example\.test|001122334455|89abcdef01234567|102132435465|authorization:' artifacts/v10/P20/p0 artifacts/v10/P20/runtime/t009 artifacts/v10/P20/runtime/t013 --exclude='*.pid' || { echo 'unsafe P20 T009-T013 evidence content detected' >&2; exit 1; }
+
+      - name: Stop T009-T013 native services
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pidfile in artifacts/v10/P20/runtime/t009/platformapi.pid artifacts/v10/P20/runtime/t013/redirectengine.pid; do
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+            fi
+          done
+
+      - name: Upload exact-head P20-T009/T013 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t009-t013-real-redirect-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/p0/P20-T009.json
+            artifacts/v10/P20/p0/P20-T010.json
+            artifacts/v10/P20/p0/P20-T011.json
+            artifacts/v10/P20/p0/P20-T012.json
+            artifacts/v10/P20/p0/P20-T013.json
+            artifacts/v10/P20/runtime/t009/native-platformapi.sha256
+            artifacts/v10/P20/runtime/t009/platformapi.log
+            artifacts/v10/P20/runtime/t013/native-redirectengine.sha256
+            artifacts/v10/P20/runtime/t013/redirectengine.log

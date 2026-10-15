@@ -13,10 +13,11 @@ import (
 
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "analyticsreconciler")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
 	if mysqlDSN == "" || redisAddr == "" {

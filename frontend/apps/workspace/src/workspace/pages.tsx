@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, EmptyState, InlineMessage, TextField } from '@gojet/ui';
 import type { WorkspaceCampaign, WorkspaceRole } from '@gojet/api-client';
-import { P12Shell, useP12Authority } from './authority';
-import { createP12Client, readP12Runtime } from './runtime';
+import { P12Shell, useP12Authority, useP12Session } from './authority';
 
 function message(error: unknown): string { return error instanceof Error ? error.message : 'The request could not be completed.'; }
 function canManageWorkspace(role: WorkspaceRole | undefined): boolean { return role === 'owner' || role === 'admin'; }
@@ -174,8 +173,7 @@ export function NotificationsPage() {
 }
 
 export function InvitationPage() {
-  const runtime = useMemo(() => readP12Runtime(), []);
-  const client = useMemo(() => runtime ? createP12Client(runtime) : null, [runtime]);
+  const { runtime, client } = useP12Session();
   const token = useMemo(() => decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() ?? ''), []);
   const query = useQuery({ queryKey: ['p12-invitation', token, runtime?.email], enabled: !!client && !!token, queryFn: () => client!.inspectInvitation(token) });
   const accept = useMutation({ mutationFn: () => client!.acceptInvitation(token) });

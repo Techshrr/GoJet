@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -37,7 +38,7 @@ function writeCase(targetDir, caseId, name, errors, details) {
   for (const error of errors) console.log(`  - ${error}`);
   return payload.status === 'PASS';
 }
-const browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath, headless: !process.env.P20_ORCA_LOG, args: ['--no-sandbox', '--force-renderer-accessibility'] });
 
 async function t023() {
   const errors = [];
@@ -146,6 +147,92 @@ async function t024() {
   return writeCase(outDir, 'P19-T024', 'Responsive and 320 CSS px reflow matrix', errors, { matrix });
 }
 
+async function mobileMenuKeyboard() {
+  const observations = [];
+  for (const [viewportName, size] of [['mobile', viewports.mobile], ['compact320', viewports.compact320]]) {
+    for (const [path, label] of [['/', 'Mobile navigation'], ['/zh-CN/', '移动导航']]) {
+      const context = await browser.newContext({viewport: size, reducedMotion: 'reduce'});
+      const page = await context.newPage(); attach(page, `T025-menu-${viewportName}`);
+      const trace = {implementation_commit: implementationCommit, viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN', steps: [], errors: []};
+      const traceName = `T025-menu-${viewportName}-${trace.locale}`;
+      try {
+        await page.goto(`${baseUrl}${path}`, {waitUntil: 'networkidle'});
+        await page.evaluate(() => {
+          window.__menuLifecycle = [];
+          const menu = document.querySelector('.site-mobile-sheet');
+          for (const type of ['cancel', 'close']) menu.addEventListener(type, () => {
+            window.__menuLifecycle.push({type, open: menu.open, modal: menu.matches(':modal')});
+          });
+        });
+        const trigger = page.locator('.site-menu-trigger');
+        for (let i = 0; i < 30 && !await trigger.evaluate(el => el === document.activeElement); i++)
+          await page.keyboard.press('Tab');
+        if (!await trigger.evaluate(el => el === document.activeElement)) throw Error('menu trigger unreachable');
+        await page.keyboard.press('Enter');
+        const dialog = page.getByRole('dialog', {name: label, exact: true});
+        await dialog.waitFor({state: 'visible'});
+        if (!await dialog.evaluate(el => el.matches(':modal') && el.contains(document.activeElement)))
+          throw Error('menu is not modal or initial focus escaped');
+        const controls = dialog.locator('button,a[href]');
+        const count = await controls.count();
+        if (count !== 8) throw Error('mobile menu control set incomplete');
+        const seen = new Set();
+        for (const key of ['Tab', 'Shift+Tab']) {
+          for (let i = 0; i < count * 2; i++) {
+            const focus = await dialog.evaluate(el => ({
+              index: [...el.querySelectorAll('button,a[href]')].indexOf(document.activeElement),
+              tag: document.activeElement?.tagName, inside: el.contains(document.activeElement),
+              document_has_focus: document.hasFocus(), modal: el.matches(':modal'),
+            }));
+            trace.steps.push({key, ...focus});
+            if (focus.index < 0) throw Error('keyboard focus escaped mobile menu: ' + JSON.stringify(focus));
+            seen.add(focus.index);
+            await page.keyboard.press(key);
+          }
+        }
+        if (seen.size !== count) throw Error('mobile menu keyboard coverage incomplete');
+        await page.screenshot({path: `${capturesDir}/T025-menu-${viewportName}-${path === '/' ? 'en' : 'zh'}.png`, fullPage: true});
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({state: 'hidden'});
+        await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        if (await trigger.getAttribute('aria-expanded') !== 'false') throw Error('stale menu expanded state');
+        for (let repeat = 0; repeat < 5; repeat++) {
+          await page.keyboard.press('Enter');
+          await dialog.waitFor({state: 'visible'});
+          if (!await dialog.evaluate(el => el.matches(':modal') && el.contains(document.activeElement)))
+            throw Error('reopened menu lost modal focus');
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({state: 'hidden'});
+          await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        }
+        await page.keyboard.press('Enter');
+        await dialog.waitFor({state: 'visible'});
+        await page.keyboard.press('Enter'); // initially focused close button
+        await dialog.waitFor({state: 'hidden'});
+        await page.waitForFunction(() => document.activeElement?.matches('.site-menu-trigger'));
+        await page.keyboard.press('Enter');
+        await dialog.waitFor({state: 'visible'});
+        await page.keyboard.press('Tab'); // first navigation link
+        await page.keyboard.press('Enter');
+        await page.waitForURL(`${baseUrl}${path === '/' ? '/products' : '/zh-CN/products'}`);
+        await dialog.waitFor({state: 'hidden'});
+        observations.push({viewport: viewportName, locale: path === '/' ? 'en' : 'zh-CN',
+          enter_open: true, modal: true, keyboard_controls: seen.size, forward_and_reverse_contained: true,
+          escape_close: true, rapid_reopen_cycles: 5, close_button: true, trigger_focus_returned: true, link_navigation: true});
+      } catch (error) {
+        trace.errors.push(String(error));
+        await page.screenshot({path: `${capturesDir}/${traceName}-failure.png`, fullPage: true});
+        throw error;
+      } finally {
+        trace.lifecycle = await page.evaluate(() => window.__menuLifecycle || []);
+        writeFileSync(`${outDir}/${traceName}.json`, JSON.stringify(trace, null, 2) + '\n');
+        await context.close();
+      }
+    }
+  }
+  return observations;
+}
+
 async function t025() {
   const errors = []; const checks = [];
   const context = await browser.newContext({ viewport: viewports.desktop, deviceScaleFactor: 1, reducedMotion: 'reduce' });
@@ -190,7 +277,8 @@ async function t025() {
   const visibleFocus = focus && ((focus.outlineStyle !== 'none' && parseFloat(focus.outlineWidth) > 0) || focus.boxShadow !== 'none');
   if (!visibleFocus) errors.push(`keyboard focus is not visibly styled: ${JSON.stringify(focus)}`);
   await context.close();
-  return writeCase(outDir, 'P19-T025', 'Accessibility semantic and interaction matrix', errors, { checks, keyboardFocus: focus, visibleFocus });
+  const mobileMenu = await mobileMenuKeyboard();
+  return writeCase(outDir, 'P19-T025', 'Accessibility semantic and interaction matrix', errors, { checks, keyboardFocus: focus, visibleFocus, mobileMenu });
 }
 
 async function t026() {
@@ -213,6 +301,7 @@ async function t026() {
       routeId: document.querySelector('article.website-page')?.getAttribute('data-route-id') || null,
     }));
     if (dom.brokenImages || dom.placeholderIcons || dom.suspiciousCopy) errors.push(`${label}: placeholder/broken visual artifact detected`);
+    if (label === 'home-en') await visualProbe(page, 'P19', 'website');
     const file = `gjv10__website__p19__${label}__light__${viewportName}.png`; await page.screenshot({ path: `${capturesDir}/${file}`, fullPage: true });
     captures.push({ label, path, viewport: viewportName, dimensions: size, routeId: dom.routeId, file: `artifacts/v10/P19/captures/${file}` }); await context.close();
   }

@@ -132,6 +132,7 @@ jobs:
           git rev-parse HEAD:artifacts/v10/P19/test-plan.json > artifacts/v10/P19/quality-authority/test_plan_blob.txt
           git rev-parse HEAD:artifacts/v10/P19/review.md > artifacts/v10/P19/quality-authority/review_blob.txt
       - name: Upload exact-head performance runtime determinism evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gojet-v10-p19-quality-${{ env.EXACT_HEAD }}

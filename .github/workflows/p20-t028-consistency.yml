@@ -1,0 +1,51 @@
+name: P20-T028 Safety Consistency
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p20/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p20-t028-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    name: P20-T028 exact-head safety admission
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Test fail-closed evidence admission
+        run: python3 -m unittest discover -s scripts/p20 -p 'test_t028*.py'
+      - name: Collect same-head successful producers and verify archive digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/p20/t028_sources.py
+      - name: Revalidate raw safety sources and T027 prerequisite
+        run: python3 scripts/p20/consistency_cases.py --case T028
+      - name: Preserve T028 evidence and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-formal-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/v10/P20/consistency/P20-T028.json
+            artifacts/v10/P20/runtime/t028/

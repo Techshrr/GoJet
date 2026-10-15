@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/p20/t034_visual_probe.mjs'
+      - 'scripts/p20/t035_accessibility_probe.mjs'
+      - 'scripts/p20/test_t035_accessibility_probe.mjs'
+      - 'scripts/p20/install_accessibility_engine.sh'
       - 'frontend/apps/admin/**'
       - 'frontend/apps/workspace/**'
       - 'frontend/packages/**'
@@ -80,6 +84,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install native screen-reader desktop tooling
+        run: bash scripts/p20/install_screen_reader.sh
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -115,6 +121,7 @@ jobs:
           mkdir -p artifacts/v10/P17/browser artifacts/v10/P17/captures artifacts/v10/P17/runtime/browser
           go mod verify
           pnpm install --frozen-lockfile
+          bash scripts/p20/install_accessibility_engine.sh
           node --check scripts/p17/browser_common.mjs
           node --check scripts/p17/browser_030.mjs
           node --check scripts/p17/browser_031.mjs
@@ -216,7 +223,7 @@ jobs:
         run: |
           set -euo pipefail
           exact_head="$(git rev-parse HEAD)"
-          GITHUB_SHA="$exact_head" node scripts/p17/browser.mjs --case "$P17_BROWSER_CASE"
+          GITHUB_SHA="$exact_head" bash scripts/p20/run_screen_reader.sh node scripts/p17/browser.mjs --case "$P17_BROWSER_CASE"
 
       - name: Verify exact-head P17 browser evidence
         id: evidence
@@ -284,6 +291,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
+            artifacts/v10/P17/t034/
+            artifacts/v10/P17/t035/
             artifacts/v10/P17/browser/${{ matrix.case }}.json
             artifacts/v10/P17/captures/${{ matrix.case }}-*.png
             artifacts/v10/P17/test-plan.json

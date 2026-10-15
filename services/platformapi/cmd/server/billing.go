@@ -12,6 +12,7 @@ import (
 
 	"github.com/Techshrr/GoJet/internal/billing"
 	"github.com/Techshrr/GoJet/internal/workspace"
+	"github.com/redis/go-redis/v9"
 )
 
 type billingPrincipalResolver struct {
@@ -97,13 +98,22 @@ func (v deterministicBillingCallbackVerifier) VerifyAndNormalize(req *http.Reque
 	}, nil
 }
 
-func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_BILLING_ENABLED") != "1" {
 		return nil, false, nil
 	}
 	store := billing.NewStore(db)
 	membershipStore := workspace.NewStore(db)
-	principalResolver := billingPrincipalResolver{testAuth: testAuth}
+	var principalResolver billing.PrincipalResolver
+	if testAuth {
+		principalResolver = billingPrincipalResolver{testAuth: true}
+	} else {
+		sessionResolver, err := buildBillingSessionPrincipalResolver(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		principalResolver = sessionResolver
+	}
 	membershipResolver := billingMembershipResolver{store: membershipStore}
 	var callbackVerifier billing.CallbackRequestVerifier
 	if testAuth && os.Getenv("GOJET_TEST_BILLING_CALLBACKS_ENABLED") == "1" {
@@ -116,6 +126,67 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 			secrets[provider] = append([]byte(nil), secret...)
 		}
 		callbackVerifier = deterministicBillingCallbackVerifier{verifier: billing.DeterministicTestVerifier{Secrets: secrets}}
+	}
+	var productionEpayCallback http.Handler
+	if !testAuth {
+		dispatcher, err := buildProductionBillingCallbackDispatcher(store)
+		if err != nil {
+			return nil, false, err
+		}
+		wechatVerifier, enabled, err := buildProductionWeChatCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderWeChat] = wechatVerifier
+			dispatcher = productionDispatcher
+		}
+		paypalVerifier, enabled, err := buildProductionPayPalCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderPayPal] = paypalVerifier
+			dispatcher = productionDispatcher
+		}
+		alipayVerifier, enabled, err := buildProductionAlipayCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderAlipay] = alipayVerifier
+			dispatcher = productionDispatcher
+		}
+		cryptoVerifier, enabled, err := buildProductionCryptoCallbackVerifier(store)
+		if err != nil {
+			return nil, false, err
+		}
+		if enabled {
+			productionDispatcher, ok := dispatcher.(productionBillingCallbackDispatcher)
+			if !ok || productionDispatcher.adapters == nil {
+				return nil, false, billing.ErrCallbackUnavailable
+			}
+			productionDispatcher.adapters[billing.ProviderCrypto] = cryptoVerifier
+			dispatcher = productionDispatcher
+		}
+		callbackVerifier = dispatcher
+		handler, err := buildProductionEpayCallbackHandler(store)
+		if err != nil {
+			return nil, false, err
+		}
+		productionEpayCallback = handler
 	}
 	api := billing.NewAPI(
 		store,
@@ -136,6 +207,9 @@ func buildBillingHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) 
 	}
 	combined := http.NewServeMux()
 	combined.Handle("GET /api/workspaces/{workspaceId}/billing", billing.NewWorkspaceBillingSummaryHandler(store, principalResolver, membershipResolver))
+	if productionEpayCallback != nil {
+		combined.Handle("GET /api/payments/callbacks/epay", productionEpayCallback)
+	}
 	combined.Handle("/", api.Handler())
 	return combined, true, nil
 }
@@ -160,6 +234,7 @@ func mountBillingRoutes(root *http.ServeMux, handler http.Handler) {
 		"GET /api/admin/fx",
 		"PUT /api/admin/fx/{base}/{quote}",
 		"POST /api/admin/fx/{base}/{quote}/provider-error",
+		"GET /api/payments/callbacks/epay",
 		"POST /api/payments/callbacks/{provider}",
 	}
 	for _, pattern := range patterns {

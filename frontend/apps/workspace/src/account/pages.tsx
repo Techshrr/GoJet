@@ -9,6 +9,7 @@ export type AccountState =
   | 'read-only'
   | 'validation-error'
   | 'session-revoked'
+  | 'csrf-expired'
   | 'provider-error'
   | 'destructive-confirm';
 
@@ -45,12 +46,12 @@ type MeResponse = {
 
 type ApiFailure = Error & { status?: number };
 
-const providers = ['google', 'facebook', 'github', 'qq', 'wechat', 'rainbow'] as const;
 const accountTabs = [
   ['Profile', '/app/settings/profile'],
   ['Security', '/app/settings/security'],
   ['Sessions', '/app/settings/sessions'],
   ['Connected accounts', '/app/settings/connected-accounts'],
+  ['Danger zone', '/app/settings/danger'],
 ] as const;
 
 async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -68,6 +69,7 @@ async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> 
 
 function stateForFailure(error: unknown, validation = false): AccountState {
   const status = (error as ApiFailure)?.status;
+  if (status === 419) return 'csrf-expired';
   if (status === 401 || status === 410) return 'session-revoked';
   if (validation && (status === 400 || status === 409)) return 'validation-error';
   return 'provider-error';
@@ -111,6 +113,10 @@ function AccountFrame({ title, state, children }: { title: string; state: Accoun
             );
           })}
         </nav>
+        {state === 'csrf-expired' && <div className="p15-account__message" role="alert">
+          <p>Your request token has expired. Refresh the page, then try your change again.</p>
+          <Button onClick={() => window.location.reload()}>Refresh page</Button>
+        </div>}
         {children}
       </section>
     </WorkspaceShell>
@@ -245,6 +251,47 @@ export function SecuritySettingsPage() {
   );
 }
 
+export function DangerSettingsPage() {
+  const [state, setState] = useState<AccountState>('loading');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    currentAccount().then(() => { if (active) setState('success'); })
+      .catch(error => { if (active) setState(stateForFailure(error)); });
+    return () => { active = false; };
+  }, []);
+  const revoke = async () => {
+    if (busy || confirmation !== 'SIGN OUT') return;
+    setBusy(true);
+    try {
+      const me = await currentAccount();
+      await requestJSON<{ status: string }>(`/api/me/sessions/${encodeURIComponent(me.session.id)}`, {
+        method: 'DELETE', headers: { 'X-CSRF-Token': me.csrf_token },
+      });
+      setConfirmation('');
+      setState('session-revoked');
+    } catch (error) { setState(stateForFailure(error)); }
+    finally { setBusy(false); }
+  };
+  return <AccountFrame title="Danger zone" state={state}>
+    {state === 'loading' ? <p role="status">Checking your session…</p> : null}
+    <StateMessage state={state} />
+    {state === 'success' || state === 'destructive-confirm' ? <>
+      <h2>Revoke this session</h2>
+      <p>This signs you out on this browser. Your account, Workspace and resources remain available.</p>
+      <Button variant="destructive" disabled={busy} onClick={() => setState('destructive-confirm')}>Revoke current session</Button>
+      <p><a href="/app/settings/sessions">Manage other sessions</a></p>
+    </> : null}
+    {state === 'destructive-confirm' ? <form role="alertdialog" aria-label="Confirm sign out" onSubmit={event => { event.preventDefault(); void revoke(); }}>
+      <label>Type SIGN OUT<input value={confirmation} onChange={event => setConfirmation(event.target.value)} required disabled={busy} /></label>
+      <Button type="submit" variant="destructive" disabled={busy || confirmation !== 'SIGN OUT'}>Confirm sign out</Button>
+      <Button type="button" disabled={busy} variant="ghost" onClick={() => { setConfirmation(''); setState('success'); }}>Cancel</Button>
+    </form> : null}
+    {state === 'session-revoked' ? <a href="/login">Sign in again</a> : null}
+  </AccountFrame>;
+}
+
 export function SessionsSettingsPage() {
   const [state, setState] = useState<AccountState>('loading');
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -314,6 +361,7 @@ export function SessionsSettingsPage() {
 }
 
 export function ConnectedAccountsPage() {
+  const [providers, setProviders] = useState<string[]>([]);
   const [state, setState] = useState<AccountState>('loading');
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [target, setTarget] = useState<ConnectedAccount | null>(null);
@@ -323,7 +371,11 @@ export function ConnectedAccountsPage() {
     setState('loading');
     try {
       await currentAccount();
-      const response = await requestJSON<{ accounts: ConnectedAccount[] }>('/api/me/connected-accounts');
+      const [response, registry] = await Promise.all([
+        requestJSON<{ accounts: ConnectedAccount[] }>('/api/me/connected-accounts'),
+        requestJSON<{ providers: { provider: string }[] }>('/api/public/auth/providers'),
+      ]);
+      setProviders(registry.providers.map((item) => item.provider));
       setAccounts(response.accounts);
       setTarget(null);
       setMessage('');
@@ -362,8 +414,9 @@ export function ConnectedAccountsPage() {
         headers: { 'X-CSRF-Token': me.csrf_token },
         body: JSON.stringify({}),
       });
-      setMessage(`Provider authorization is ready for ${provider}: ${new URL(result.authorization_url).origin}`);
-      setState('success');
+      const authorization = new URL(result.authorization_url);
+      if (authorization.protocol !== 'https:' || authorization.username || authorization.password) throw new Error('Invalid authorization URL');
+      window.location.assign(authorization.href);
     } catch (error) {
       setMessage(`The ${provider} provider is unavailable or incomplete.`);
       setState(stateForFailure(error));

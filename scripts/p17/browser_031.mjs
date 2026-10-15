@@ -43,6 +43,30 @@ export async function run(browser) {
   attachDiagnostics(page, report, { allowStatuses: [401, 403, 409, 428] });
   const secret = await establishFreshMFA(page, context);
   checks.fresh_mfa_for_high_risk = true;
+  details.resource_routes = [];
+  for (const kind of ['links', 'domains', 'qr', 'text', 'bio', 'files']) {
+    const route = kind === 'files' ? '/admin/files' : `/admin/resources/${kind}`;
+    const api = ['links', 'domains', 'files'].includes(kind) ? `/api/admin/${kind}` : `/api/admin/resources/${kind}`;
+    await page.goto(`${ADMIN_URL}${route}`);
+    await page.locator(`[data-page="admin-resources-${kind}"][data-state="ready"], [data-page="admin-resources-${kind}"][data-state="empty"]`).waitFor();
+    const response = await page.request.get(`${ADMIN_URL}${api}`);
+    assert(response.status() === 200, `native inventory failed: ${kind}`);
+    const { items } = await response.json();
+    assert(Array.isArray(items), `invalid inventory: ${kind}`);
+    if (kind === 'links') assert(items.length > 0, 'seeded link must be visible');
+    if (items.length) {
+      const id = items[0].id;
+      await page.locator(`a[href="${route}/${id}"]`).click();
+      await page.waitForURL(url => url.pathname === `${route}/${id}`);
+      await waitState(page, `admin-resources-${kind}`, 'detail');
+      const detail = await page.request.get(`${ADMIN_URL}${api}/${id}`);
+      assert(detail.status() === 200, `native detail failed: ${kind}`);
+    }
+    details.resource_routes.push({ kind, route, native_status: response.status(), count: items.length, detail_checked: items.length > 0 });
+  }
+  checks.resource_inventory_routes = details.resource_routes.length === 6;
+  checks.resource_link_deep_link = details.resource_routes.some(row => row.kind === 'links' && row.detail_checked);
+
 
   await page.goto(`${ADMIN_URL}/admin/users`);
   await waitState(page, 'admin-users', 'ready');
@@ -108,6 +132,20 @@ export async function run(browser) {
   await waitState(page, 'admin-domain-entitlements', 'permission-denied');
   details.states.push('permission-denied');
   checks.direct_route_permission_denied = true;
+  for (const kind of ['links', 'domains', 'qr', 'text', 'bio', 'files']) {
+    const route = kind === 'files' ? '/admin/files' : `/admin/resources/${kind}`;
+    const api = ['links', 'domains', 'files'].includes(kind) ? `/api/admin/${kind}` : `/api/admin/resources/${kind}`;
+    for (const suffix of ['', '/1']) {
+      await page.goto(`${ADMIN_URL}${route}${suffix}`);
+      await waitState(page, `admin-resources-${kind}`, 'permission-denied');
+      const response = await page.request.get(`${ADMIN_URL}${api}${suffix}`);
+      assert(response.status() === 403, `resource permission leaked: ${kind}${suffix}`);
+      const body = await response.json();
+      assert(!body.items && !body.link && !body.domain && !body.resource && !body.file, 'denial exposed resource data');
+    }
+  }
+  checks.resource_routes_permission_denied = true;
+
 
   await context.clearCookies();
   await adminLogin(page, fixture.root_email, fixture.root_password, totp(secret));

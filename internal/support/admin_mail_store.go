@@ -27,6 +27,7 @@ type AdminMailQueueItem struct {
 }
 
 type AdminMailTemplateView struct {
+	InternalOnly      bool      `json:"-"`
 	Key               string    `json:"key"`
 	Locale            string    `json:"locale"`
 	Version           uint64    `json:"version"`
@@ -83,7 +84,7 @@ func (s *Store) ListAdminMailTemplates(ctx context.Context) ([]AdminMailTemplate
 	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT template_key,locale,version,subject_template,text_template,html_template,
-       variable_allowlist_json,enabled,updated_at
+       variable_allowlist_json,internal_only,enabled,updated_at
 FROM mail_templates ORDER BY template_key,locale,version DESC`)
 	if err != nil {
 		return nil, err
@@ -95,7 +96,7 @@ FROM mail_templates ORDER BY template_key,locale,version DESC`)
 		var allowlist []byte
 		var enabled bool
 		if err := rows.Scan(&item.Key, &item.Locale, &item.Version, &item.SubjectTemplate, &item.TextTemplate,
-			&item.HTMLTemplate, &allowlist, &enabled, &item.UpdatedAt); err != nil {
+			&item.HTMLTemplate, &allowlist, &item.InternalOnly, &enabled, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(allowlist, &item.VariableAllowlist); err != nil {
@@ -175,12 +176,16 @@ func (s *Store) EnqueueAdminTestMail(ctx context.Context, input AdminMailTestInp
 		return AdminMailQueueItem{}, false, err
 	}
 	now := time.Now().UTC()
+	var templateVersion uint64
+	if err := s.db.QueryRowContext(ctx, `SELECT version FROM mail_templates WHERE template_key='mail-test' AND locale='en' AND enabled=1 ORDER BY version DESC LIMIT 1`).Scan(&templateVersion); err != nil {
+		return AdminMailQueueItem{}, false, err
+	}
 	result, err := s.db.ExecContext(ctx, `
 INSERT INTO mail_jobs
 (id,template_key,template_locale,template_version,recipient_kind,recipient_value,resource_type,resource_id,
  status,attempt_count,next_attempt_at,idempotency_key_hash,claim_token_hash,claim_expires_at,last_error_code,created_at,updated_at)
-VALUES (?,'mail-test','en',1,'admin_test',?,'mail_test',?,'queued',0,NULL,?,NULL,NULL,NULL,?,?)
-ON DUPLICATE KEY UPDATE id=id`, jobID, input.Recipient, resourceID, logicalHash[:], now, now)
+VALUES (?,'mail-test','en',?,'admin_test',?,'mail_test',?,'queued',0,NULL,?,NULL,NULL,NULL,?,?)
+ON DUPLICATE KEY UPDATE id=id`, jobID, templateVersion, input.Recipient, resourceID, logicalHash[:], now, now)
 	if err != nil {
 		return AdminMailQueueItem{}, false, err
 	}

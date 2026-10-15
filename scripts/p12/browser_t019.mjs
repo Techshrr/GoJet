@@ -117,15 +117,20 @@ try {
   await waitState(opened.page, '[data-page="workspace-overview"]', 'complete');
   const history = await opened.page.evaluate(() => window.__gojetP12States ?? []);
   assert(history.includes('workspace-overview:loading'), `overview loading state missing ${JSON.stringify(history)}`);
-  let switcher = opened.page.getByLabel('Workspace switcher');
+  let switcher = opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true });
   await switcher.waitFor();
+  const switchNotice = await switcher.evaluate(el => {
+    const description = document.getElementById(el.getAttribute('aria-describedby') || '');
+    return { text: description?.textContent?.trim(), visible: !!description?.getClientRects().length, precedes_control: !!description && !!(description.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) };
+  });
+  assert(switchNotice.visible && switchNotice.precedes_control && switchNotice.text === 'Selecting a workspace reloads this page.', 'Workspace switch must explain its context change before selection');
   assert(await switcher.locator('option').count() === 2, 'Workspace switcher did not list both memberships');
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Primary' }).count() === 1, 'primary Workspace authority missing');
   await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), switcher.selectOption(ALT_WS)]);
   await waitState(opened.page, '[data-page="workspace-overview"]', 'complete');
   assert(await opened.page.getByRole('heading', { name: 'P12 Browser Alternate' }).count() === 1, 'Workspace switch did not change authority');
   assert(await opened.page.evaluate(() => sessionStorage.getItem('gojet.p12.active-workspace')) === ALT_WS, 'alternate Workspace selection not persisted');
-  switcher = opened.page.getByLabel('Workspace switcher');
+  switcher = opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true });
   await Promise.all([opened.page.waitForNavigation({ waitUntil: 'networkidle' }), switcher.selectOption(WS)]);
   await waitState(opened.page, '[data-page="workspace-overview"]', 'complete');
   await screenshot(opened.page, 'P12-T019-overview-switcher');
@@ -144,7 +149,7 @@ try {
     const select = document.querySelector('select[aria-label="Workspace switcher"]');
     return select instanceof HTMLSelectElement && select.selectedOptions[0]?.textContent?.trim() === 'P12 Browser Renamed';
   });
-  const selectedWorkspaceLabel = await opened.page.getByLabel('Workspace switcher').locator('option:checked').textContent();
+  const selectedWorkspaceLabel = await opened.page.getByRole('combobox', { name: 'Workspace switcher', exact: true }).locator('option:checked').textContent();
   assert(selectedWorkspaceLabel?.trim() === 'P12 Browser Renamed', `renamed Workspace authority did not refresh: ${selectedWorkspaceLabel}`);
   assert(mysqlScalar(`SELECT CONCAT(name,'|',version) FROM workspaces WHERE id='${WS}'`) === 'P12 Browser Renamed|2', 'workspace settings did not persist/version');
   await screenshot(opened.page, 'P12-T019-workspace-settings');
@@ -158,6 +163,7 @@ try {
   await opened.context.close();
 
   writeResult('PASS', {
+    workspace_switch_notice: switchNotice,
     workspace_switch: { primary: WS, alternate: ALT_WS },
     settings_persisted: true,
     settings_version: 2,

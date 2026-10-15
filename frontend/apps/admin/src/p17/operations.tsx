@@ -1,3 +1,4 @@
+import { GoogleOneTapSettings } from './GoogleOneTapSettings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@gojet/ui';
 import { adminRequest, ErrorNotice, JsonPreview, ProtectedLayout, type JsonObject, useAdminSession } from './api';
@@ -51,7 +52,7 @@ function PlatformReadPage({ page, title, endpoint, responseKey }: { page: string
   const load = useCallback(async () => { if (!auth.session) return; setBusy(true); setError(''); try { const result = await adminRequest<JsonObject>(endpoint); setValue(result[responseKey]); } catch (err) { setError(err instanceof Error ? err.message : 'internal_error'); } finally { setBusy(false); } }, [auth.session, endpoint, responseKey]); useEffect(() => { void load(); }, [load]);
   const providerState = value && typeof value === 'object' && !Array.isArray(value) ? String(value.provider_state || value.https_state || '') : '';
   const state = auth.error || error ? (auth.error === 'forbidden' || error === 'forbidden' ? 'permission-denied' : 'error') : auth.busy || busy ? 'loading' : providerState === 'provider_error' || providerState === 'failed' ? 'error' : Array.isArray(value) && value.length === 0 ? 'empty' : 'ready';
-  return <ProtectedLayout state={state === 'permission-denied' ? 'permission-denied' : 'normal'}><section className="p17-admin-page" data-page={page} data-state={state}><header><p className="p17-kicker">Platform</p><h1>{title}</h1></header><ErrorNotice error={auth.error || error} />{!busy && !error && <JsonPreview value={value} />}</section></ProtectedLayout>;
+  return <ProtectedLayout state={state === 'permission-denied' ? 'permission-denied' : 'normal'}><section className="p17-admin-page" data-page={page} data-state={state}><header><p className="p17-kicker">Platform</p><h1>{title}</h1></header><ErrorNotice error={auth.error || error} />{page === "admin-platform-general" && <GoogleOneTapSettings session={auth.session} />}{!busy && !error && <JsonPreview value={value} />}</section></ProtectedLayout>;
 }
 
 export function PlatformGeneralPage() { return <PlatformReadPage page="admin-platform-general" title="General settings" endpoint="/api/admin/settings/general" responseKey="setting" />; }

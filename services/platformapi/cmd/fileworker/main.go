@@ -13,10 +13,11 @@ import (
 
 	filedomain "github.com/Techshrr/GoJet/internal/files"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "fileworker")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	storageRoot := strings.TrimSpace(os.Getenv("GOJET_FILE_STORAGE_ROOT"))
 	clamNetwork := strings.TrimSpace(os.Getenv("GOJET_CLAMAV_NETWORK"))
@@ -119,7 +120,7 @@ func main() {
 		}
 
 		result := filedomain.ScanResult{Verdict: filedomain.VerdictError, ErrorCode: "storage_read_failed", Reason: "Quarantine bytes could not be opened."}
-		quarantine, openErr := storage.OpenQuarantine(job.StorageKey)
+		quarantine, openErr := openClaimedQuarantine(storage, job.StorageKey)
 		if openErr != nil {
 			logger.Error("open quarantine bytes", "file_id", job.FileID, "attempt_id", job.AttemptID, "error", openErr)
 		} else {
@@ -134,7 +135,7 @@ func main() {
 			continue
 		}
 		processed++
-		logger.Info("file scan completed", "file_id", job.FileID, "attempt_id", job.AttemptID, "generation", job.Generation, "verdict", result.Verdict, "error_code", result.ErrorCode)
+		logger.Info("file scan completed", "file_id", job.FileID, "attempt_id", job.AttemptID, "generation", job.Generation, "verdict", string(result.Verdict), "error_code", result.ErrorCode)
 		if maxJobs > 0 && processed >= maxJobs {
 			logger.Info("fileworker job target reached", "processed", processed)
 			return

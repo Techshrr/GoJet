@@ -1,3 +1,4 @@
+import { visualProbe } from '../p20/t034_visual_probe.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -65,6 +66,7 @@ export function assertCleanDiagnostics(report, label) {
 }
 
 export async function screenshot(page, caseId, label) {
+  if (caseId === 'P17-T030') await visualProbe(page, 'P17', 'admin');
   const path = `${capturesDir}/${caseId}-${label}.png`;
   await page.screenshot({ path, fullPage: true });
   return path.replace(`${root}/`, '');

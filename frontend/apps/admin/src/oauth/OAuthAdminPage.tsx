@@ -40,6 +40,15 @@ const emptyForm: FormState = {
 
 function formFor(config: OAuthProviderConfig | undefined): FormState {
   if (!config) return { ...emptyForm };
+  if (config.provider === 'rainbow' && !config.configured) return {
+    ...emptyForm,
+    clientID: config.client_id,
+    authorizationURL: 'https://auth.idcli.com/connect.php',
+    tokenURL: 'https://auth.idcli.com/connect.php',
+    userInfoURL: 'https://auth.idcli.com/connect.php',
+    redirectURI: config.redirect_uri,
+    scopes: config.scopes.length === 1 ? config.scopes[0]! : 'qq',
+  };
   return {
     enabled: config.configured ? config.enabled : true,
     clientID: config.client_id,
@@ -63,6 +72,8 @@ export default function OAuthAdminPage() {
   const [state, setState] = useState<AdminOAuthState>('loading');
   const [shellState, setShellState] = useState<ShellState>('normal');
   const [message, setMessage] = useState('');
+  const [administratorAuthority, setAdministratorAuthority] = useState(false);
+  const [reason, setReason] = useState('');
   const alertRef = useRef<HTMLDivElement>(null);
 
   const selectedConfig = useMemo(() => providers.find((item) => item.provider === selected), [providers, selected]);
@@ -72,9 +83,11 @@ export default function OAuthAdminPage() {
     try {
       const response = await listOAuthProviders();
       const actual = response.providers.map((item) => item.provider);
-      if (actual.length !== frozenProviders.length || actual.some((provider, index) => provider !== frozenProviders[index])) {
+      const expected = response.authority === 'administrator' ? [...frozenProviders, 'x', 'linkedin'] : [...frozenProviders];
+      if (actual.length !== expected.length || actual.some((provider, index) => provider !== expected[index])) {
         throw new Error('Provider registry mismatch');
       }
+      setAdministratorAuthority(response.authority === 'administrator');
       setProviders(response.providers);
       const current = response.providers.find((item) => item.provider === selected) ?? response.providers.at(0);
       if (!current) throw new Error('Provider registry is empty');
@@ -117,10 +130,11 @@ export default function OAuthAdminPage() {
       scopes: form.scopes.split(/\s+/).map((value) => value.trim()).filter(Boolean),
     };
     try {
-      const updated = await updateOAuthProvider(selected, input);
+      const updated = await updateOAuthProvider(selected, input, { expected_version: selectedConfig?.version ?? 0, reason });
       const next = providers.map((item) => item.provider === selected ? updated : item);
       setProviders(next);
       setForm(formFor(updated));
+      setReason('');
       setShellState('normal');
       setState('configured');
       setMessage('Provider configuration saved. Client secret remains masked.');
@@ -158,7 +172,7 @@ export default function OAuthAdminPage() {
         {state === 'loading' && <p role="status">Loading provider registry…</p>}
         <div ref={alertRef} tabIndex={-1}>
           {state === 'provider-error' && <InlineMessage variant="danger">{message}</InlineMessage>}
-          {state === 'empty' && <InlineMessage variant="info">No OAuth provider is configured yet. The frozen six-provider registry is available below.</InlineMessage>}
+          {state === 'empty' && <InlineMessage variant="info">No OAuth provider is configured yet. Available providers are listed below; enable only the ones you configure.</InlineMessage>}
           {state === 'incomplete' && <InlineMessage variant="warning">This provider is incomplete and cannot be enabled for customer authentication.</InlineMessage>}
           {state === 'secret-masked' && <InlineMessage variant="success">Client secret is configured. The stored value is never returned to the browser.</InlineMessage>}
           {state === 'test-result' && <InlineMessage variant="success">{message}</InlineMessage>}
@@ -179,6 +193,9 @@ export default function OAuthAdminPage() {
                 <div><span>Provider</span><h2>{selected}</h2></div>
                 <label className="p15-admin-oauth__toggle"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.currentTarget.checked })} /> Enabled</label>
               </div>
+              {selected === 'x' && <p>Use an X Web App client ID and client secret. The required login scopes are tweet.read and users.read; callback URI ends in /oauth/x/callback.</p>}
+              {selected === 'linkedin' && <p>Enable Sign In with LinkedIn using OpenID Connect for your application. Use openid profile email scopes and a callback URI ending in /oauth/linkedin/callback.</p>}
+              {selected === 'rainbow' && <p>Use your auth.idcli.com appid as Client ID and appkey as Client secret. Scopes selects one aggregate channel: qq, wx, alipay, baidu, huawei, google, facebook, twitter, dingtalk, gitee or github. Redirect URI must end in /oauth/rainbow/callback. Keep the three endpoint URLs set to https://auth.idcli.com/connect.php.</p>}
               <label><span>Client ID</span><input aria-label="Client ID" value={form.clientID} onChange={(event) => setForm({ ...form, clientID: event.currentTarget.value })} autoComplete="off" /></label>
               <label><span>Client secret</span><input aria-label="Client secret" type="password" value={form.clientSecret} onChange={(event) => setForm({ ...form, clientSecret: event.currentTarget.value })} autoComplete="off" spellCheck={false} data-private-secret="true" /></label>
               <p className="p15-admin-oauth__secret-status">Secret status: {secretMasked ? 'Configured · masked' : 'Not configured'}</p>
@@ -187,6 +204,8 @@ export default function OAuthAdminPage() {
               <label><span>User info URL</span><input aria-label="User info URL" value={form.userInfoURL} onChange={(event) => setForm({ ...form, userInfoURL: event.currentTarget.value })} /></label>
               <label><span>Redirect URI</span><input aria-label="Redirect URI" value={form.redirectURI} onChange={(event) => setForm({ ...form, redirectURI: event.currentTarget.value })} /></label>
               <label><span>Scopes</span><input aria-label="Scopes" value={form.scopes} onChange={(event) => setForm({ ...form, scopes: event.currentTarget.value })} /></label>
+              {administratorAuthority && <p>Changes require recent administrator MFA verification. Leave the client secret blank to keep the stored secret.</p>}
+              {administratorAuthority && <label><span>Reason for change</span><input required maxLength={500} value={reason} onChange={(event) => setReason(event.currentTarget.value)} /></label>}
               <div className="p15-admin-oauth__actions">
                 <Button type="submit">Save provider</Button>
                 <Button type="button" variant="ghost" disabled={!selectedConfig?.configured || !selectedConfig?.enabled} onClick={() => void testProvider()}>Test provider</Button>

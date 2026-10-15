@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/actions.py'
+      - 'scripts/ci/test_actions.py'
       - 'frontend/apps/site/**'
       - 'frontend/apps/docs/src/data/content-manifest.json'
       - 'frontend/packages/**'
@@ -99,6 +101,9 @@ jobs:
           dispatched=set(); deadline=time.time()+135*60
 
           def api(url, *, method='GET', body=None):
+            if method == 'GET':
+              from scripts.ci.actions import github_json
+              return github_json(url, headers)
             data=None if body is None else json.dumps(body).encode()
             req=urllib.request.Request(url,data=data,method=method,headers=headers)
             with urllib.request.urlopen(req,timeout=30) as response:
@@ -111,8 +116,8 @@ jobs:
                 method='POST',body={'ref':ref})
 
           while time.time()<deadline:
-            query=urllib.parse.urlencode({'head_sha':sha,'per_page':100})
-            runs=api(f'https://api.github.com/repos/{repo}/actions/runs?{query}').get('workflow_runs',[])
+            from scripts.ci.actions import workflow_runs
+            runs = workflow_runs(api, repo, sha)
             latest={}
             for run in runs:
               name=run.get('name')
@@ -166,7 +171,7 @@ jobs:
                 dispatch(required[name]['workflow'])
                 dispatched.add(name)
             print(f'Waiting P19 producers missing={missing} pending={pending}',flush=True)
-            time.sleep(10)
+            time.sleep(60)
           else:
             raise SystemExit(f'timed out waiting for P19 producers on {sha}')
           PY
@@ -251,22 +256,14 @@ jobs:
           repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']; head=os.environ['EXACT_HEAD']
           headers={'Accept':'application/vnd.github+json','Authorization':f'Bearer {token}','X-GitHub-Api-Version':'2022-11-28'}
           def api(path):
-            req=urllib.request.Request(f'https://api.github.com/repos/{repo}{path}',headers=headers)
-            with urllib.request.urlopen(req,timeout=30) as response:
-              return json.loads(response.read())
+            from scripts.ci.actions import github_json
+            return github_json(f'https://api.github.com/repos/{repo}{path}', headers)
           def ancestor(older,newer):
             return subprocess.run(['git','merge-base','--is-ancestor',older,newer],check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
 
-          p18_run=api('/actions/runs/33260817755')
-          p18_art=api('/actions/artifacts/9717210947')
-          if not (
-            p18_run.get('head_sha')=='e8746159b02c729a877e3dcbd9655d415a5cc269'
-            and p18_run.get('status')=='completed' and p18_run.get('conclusion')=='success'
-            and p18_art.get('digest')=='sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4'
-            and p18_art.get('expired') is False
-            and int(p18_art.get('workflow_run',{}).get('id',0))==33260817755
-          ):
-            raise SystemExit('P18 signed predecessor live metadata mismatch')
+          from scripts.ci.signed_authority import bind as bind_signed_authority
+          retained_authority=bind_signed_authority('P18', repo, token,
+              'artifacts/v10/P19/coherence/retained-authority')
 
           authority=json.loads(Path('frontend/apps/site/src/website/authority.json').read_text(encoding='utf-8'))
           rows=[]
@@ -295,6 +292,7 @@ jobs:
               'artifact_id':9717210947,
               'artifact_digest':'sha256:3e403765409b3ab273be1c35a9d88b565505c416a47364d9a6f0339cc130efe4',
               'phase':'signed','review_phase':'signed','review_only_signed_child':True,'merge_authoritative':True,
+              'retained_authority':retained_authority,
             },
             'public_capabilities':rows,
           }

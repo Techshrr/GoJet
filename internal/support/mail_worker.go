@@ -5,7 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"time"
+
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 type MailQueue interface {
@@ -23,6 +26,8 @@ type MailSender interface {
 }
 
 type MailWorker struct {
+	// Logger is optional; configure once before starting the worker.
+	Logger *slog.Logger
 	queue  MailQueue
 	sender MailSender
 	now    func() time.Time
@@ -65,7 +70,7 @@ func (w *MailWorker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	payload, err := w.queue.LoadDelivery(ctx, claimed)
 	if err != nil {
-		_, completeErr := w.queue.Complete(ctx, claimed, claimToken, MailDeliveryResult{ErrorCode: "payload_invalid"}, w.now())
+		_, completeErr := w.complete(ctx, claimed, claimToken, MailDeliveryResult{ErrorCode: "payload_invalid"}, w.now())
 		if completeErr != nil {
 			return true, completeErr
 		}
@@ -73,14 +78,14 @@ func (w *MailWorker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	rendered, err := RenderMailTemplate(payload.Template, payload.Values)
 	if err != nil {
-		_, completeErr := w.queue.Complete(ctx, claimed, claimToken, MailDeliveryResult{ErrorCode: "template_invalid"}, w.now())
+		_, completeErr := w.complete(ctx, claimed, claimToken, MailDeliveryResult{ErrorCode: "template_invalid"}, w.now())
 		if completeErr != nil {
 			return true, completeErr
 		}
 		return true, err
 	}
 	result := w.sender.Send(ctx, payload.Recipient, rendered)
-	_, err = w.queue.Complete(ctx, claimed, claimToken, result, w.now())
+	_, err = w.complete(ctx, claimed, claimToken, result, w.now())
 	return true, err
 }
 
@@ -90,4 +95,21 @@ func newMailClaimToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(raw[:]), nil
+}
+
+// complete logs only the durable store result, never an SMTP success before
+// commit. It excludes recipient, template values, claim tokens and raw errors.
+func (w *MailWorker) complete(ctx context.Context, claimed ClaimedMail, claimToken string, result MailDeliveryResult, now time.Time) (MailJob, error) {
+	job, err := w.queue.Complete(ctx, claimed, claimToken, result, now)
+	if w.Logger != nil {
+		if err != nil {
+			w.Logger.WarnContext(ctx, "mail job completion unavailable", "mail_job_fingerprint", logging.Fingerprint("mail_job", claimed.Job.ID))
+		} else {
+			w.Logger.InfoContext(ctx, "mail job completion persisted",
+				"mail_job_fingerprint", logging.Fingerprint("mail_job", job.ID),
+				"resource_fingerprint", logging.Fingerprint("mail_resource", job.ResourceID),
+				"status", string(job.Status), "attempt_count", job.AttemptCount)
+		}
+	}
+	return job, err
 }

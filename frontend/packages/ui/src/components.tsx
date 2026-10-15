@@ -241,7 +241,7 @@ export function Card({ selected = false, elevated = false, as = 'div', className
   );
 }
 
-function FeedbackIcon({ variant }: { variant: FeedbackVariant }) {
+export function FeedbackIcon({ variant }: { variant: FeedbackVariant }) {
   if (variant === 'success') return <CheckCircle2 aria-hidden="true" />;
   if (variant === 'warning') return <AlertTriangle aria-hidden="true" />;
   if (variant === 'danger') return <CircleAlert aria-hidden="true" />;

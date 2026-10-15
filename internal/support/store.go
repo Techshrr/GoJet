@@ -391,6 +391,11 @@ func newOpaqueID(prefix string) (string, error) {
 }
 
 func enqueueMailTx(ctx context.Context, tx *sql.Tx, templateKey, locale, recipientKind, recipientValue, resourceType, resourceID string, now time.Time) error {
+	var templateVersion uint64
+	if err := tx.QueryRowContext(ctx, `SELECT version FROM mail_templates WHERE template_key=? AND locale=? AND enabled=1 ORDER BY version DESC LIMIT 1`, templateKey, locale).Scan(&templateVersion); err != nil {
+		return err
+	}
+	// Preserve the established logical dedupe key across template revisions.
 	hash, err := MailLogicalIdempotencyHash(templateKey, 1, recipientKind, resourceType, resourceID)
 	if err != nil {
 		return err
@@ -403,7 +408,7 @@ func enqueueMailTx(ctx context.Context, tx *sql.Tx, templateKey, locale, recipie
 INSERT INTO mail_jobs
 (id,template_key,template_locale,template_version,recipient_kind,recipient_value,resource_type,resource_id,status,attempt_count,next_attempt_at,idempotency_key_hash,claim_token_hash,claim_expires_at,last_error_code,created_at,updated_at)
 VALUES (?,?,?,?,?,?,?,?,'queued',0,NULL,?,NULL,NULL,NULL,?,?)
-ON DUPLICATE KEY UPDATE id=id`, jobID, templateKey, locale, 1, recipientKind, strings.TrimSpace(recipientValue), resourceType, resourceID, hash[:], now.UTC(), now.UTC())
+ON DUPLICATE KEY UPDATE id=id`, jobID, templateKey, locale, templateVersion, recipientKind, strings.TrimSpace(recipientValue), resourceType, resourceID, hash[:], now.UTC(), now.UTC())
 	return err
 }
 

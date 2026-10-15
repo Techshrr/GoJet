@@ -46,7 +46,9 @@ function producer(...args) { return JSON.parse(execFileSync(PRODUCER, args, { en
 async function openPage(browser, base, path, viewport = { width: 1440, height: 900 }, contextOptions = {}) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1, ...contextOptions });
   const page = await context.newPage();
-  await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
+  // Each caller waits for its explicit application state below. Background
+  // session requests must not block navigation completion.
+  await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
   return { context, page };
 }
 async function waitState(page, selector, state) {

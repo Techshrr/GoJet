@@ -66,6 +66,7 @@ export class GoJetSupportClient {
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(this.headers?.());
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     headers.set('Accept', 'application/json');
     if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const response = await this.doFetch(`${this.baseUrl}${path}`, { credentials: 'same-origin', ...init, headers });

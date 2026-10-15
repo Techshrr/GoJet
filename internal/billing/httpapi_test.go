@@ -59,6 +59,15 @@ func (f *fakeCallbackVerifier) VerifyAndNormalize(*http.Request, Provider) (Call
 	return f.cmd, f.err
 }
 
+type fakeCallbackAcknowledgingVerifier struct {
+	*fakeCallbackVerifier
+	ack CallbackAcknowledgement
+}
+
+func (f *fakeCallbackAcknowledgingVerifier) SuccessAcknowledgement(Provider) CallbackAcknowledgement {
+	return f.ack
+}
+
 func TestCallbackVerificationPrecedesMutation(t *testing.T) {
 	store := &fakeAPIStore{}
 	verifier := &fakeCallbackVerifier{err: ErrCallbackUnauthorized}
@@ -81,6 +90,63 @@ func TestCallbackSafeAck(t *testing.T) {
 	body := w.Body.String()
 	if w.Code != http.StatusOK || !strings.Contains(body, `"duplicate":true`) || strings.Contains(body, "secret-order") || strings.Contains(body, "provider-secret") {
 		t.Fatalf("status=%d body=%s", w.Code, body)
+	}
+}
+
+func TestAuthenticatedIgnoredCallbackUsesProviderAckWithoutMutation(t *testing.T) {
+	store := &fakeAPIStore{}
+	verifier := &fakeCallbackAcknowledgingVerifier{
+		fakeCallbackVerifier: &fakeCallbackVerifier{err: ErrCallbackIgnored},
+		ack:                  CallbackAcknowledgement{StatusCode: http.StatusNoContent},
+	}
+	api := NewAPI(store, fakePrincipal{}, fakeMembership{role: "owner"}, verifier)
+	r := httptest.NewRequest(http.MethodPost, "/api/payments/callbacks/stripe", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	api.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent || verifier.calls != 1 || store.callbackCalls != 0 || w.Body.Len() != 0 {
+		t.Fatalf("status=%d verifier=%d store=%d body=%q", w.Code, verifier.calls, store.callbackCalls, w.Body.String())
+	}
+}
+
+func TestAuthenticatedIgnoredCallbackWithoutProviderAckFailsClosed(t *testing.T) {
+	store := &fakeAPIStore{}
+	verifier := &fakeCallbackVerifier{err: ErrCallbackIgnored}
+	api := NewAPI(store, fakePrincipal{}, fakeMembership{role: "owner"}, verifier)
+	r := httptest.NewRequest(http.MethodPost, "/api/payments/callbacks/stripe", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	api.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable || verifier.calls != 1 || store.callbackCalls != 0 || !strings.Contains(w.Body.String(), "callback_ack_unavailable") {
+		t.Fatalf("status=%d verifier=%d store=%d body=%q", w.Code, verifier.calls, store.callbackCalls, w.Body.String())
+	}
+}
+
+func TestProviderAckIsValidatedBeforeMutation(t *testing.T) {
+	store := &fakeAPIStore{}
+	verifier := &fakeCallbackAcknowledgingVerifier{
+		fakeCallbackVerifier: &fakeCallbackVerifier{cmd: CallbackCommand{Provider: ProviderStripe}},
+		ack:                  CallbackAcknowledgement{StatusCode: http.StatusNoContent, Body: "not-allowed"},
+	}
+	api := NewAPI(store, fakePrincipal{}, fakeMembership{role: "owner"}, verifier)
+	r := httptest.NewRequest(http.MethodPost, "/api/payments/callbacks/stripe", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	api.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable || store.callbackCalls != 0 || !strings.Contains(w.Body.String(), "callback_ack_unavailable") {
+		t.Fatalf("status=%d store=%d body=%q", w.Code, store.callbackCalls, w.Body.String())
+	}
+}
+
+func TestProviderAckOverridesGenericJSONAfterMutation(t *testing.T) {
+	store := &fakeAPIStore{callback: CallbackResult{Duplicate: true}}
+	verifier := &fakeCallbackAcknowledgingVerifier{
+		fakeCallbackVerifier: &fakeCallbackVerifier{cmd: CallbackCommand{Provider: ProviderStripe}},
+		ack:                  CallbackAcknowledgement{StatusCode: http.StatusOK, ContentType: "text/plain; charset=utf-8", Body: "ok"},
+	}
+	api := NewAPI(store, fakePrincipal{}, fakeMembership{role: "owner"}, verifier)
+	r := httptest.NewRequest(http.MethodPost, "/api/payments/callbacks/stripe", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	api.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusOK || store.callbackCalls != 1 || w.Body.String() != "ok" || w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+		t.Fatalf("status=%d store=%d body=%q content-type=%q", w.Code, store.callbackCalls, w.Body.String(), w.Header().Get("Content-Type"))
 	}
 }
 

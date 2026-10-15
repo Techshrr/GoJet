@@ -13,13 +13,14 @@ import (
 
 	adminaccess "github.com/Techshrr/GoJet/internal/admin"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/trust"
 )
 
 func main() {
 	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
 	flag.Parse()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "operationsmonitor")
 
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
@@ -131,6 +132,10 @@ func main() {
 		}
 	}
 
+	if webhookAuthority != nil {
+		webhookAuthority.Logger = logger
+	}
+
 	runIteration := func(ctx context.Context) error {
 		worked, iterationErr := worker.RunOnce(ctx)
 		if iterationErr != nil {
@@ -145,6 +150,12 @@ func main() {
 		}
 		webhookWorked := false
 		if webhookAuthority != nil {
+			if _, queueErr := webhookAuthority.QueueLinkEvents(ctx, 100); queueErr != nil {
+				logger.Warn("operationsmonitor webhook event reconciliation failed")
+				if iterationErr == nil {
+					iterationErr = queueErr
+				}
+			}
 			var webhookErr error
 			webhookWorked, webhookErr = webhookAuthority.RunDeliveryOnce(ctx, time.Now().UTC())
 			if webhookErr != nil {
@@ -173,7 +184,7 @@ func main() {
 	defer cancel()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	logger.Info("operationsmonitor started", "service_id", trust.OperationsMonitorServiceID, "interval", interval.String(), "webhook_delivery_enabled", webhookAuthority != nil)
+	logger.Info("operationsmonitor started", "trust_service_id", trust.OperationsMonitorServiceID, "interval", interval.String(), "webhook_delivery_enabled", webhookAuthority != nil)
 	for {
 		_ = runIteration(ctx)
 		select {

@@ -171,10 +171,11 @@ jobs:
           printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact-head P17 T006-T009 evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p17-t006-t009-domain-entitlement-${{ steps.evidence.outputs.sha }}
-          if-no-files-found: error
+          name: p17-t006-t009-domain-entitlement-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
           retention-days: 30
           path: |
             artifacts/v10/P17/domain/P17-T006.json

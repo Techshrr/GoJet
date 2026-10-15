@@ -26,6 +26,7 @@ on:
       - 'scripts/p06/redirect_driver/**'
       - 'scripts/p06/parity_driver/**'
       - 'scripts/p06/validate.py'
+      - 'scripts/p20/t028_domain.py'
       - 'artifacts/v10/P06/test-plan.json'
       - 'artifacts/v10/P06/review.md'
       - '.github/workflows/p05-*.yml'
@@ -177,6 +178,18 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT link_id,workspace_id,version,actor_id,change_reason,risk_fingerprint FROM link_versions ORDER BY id" > artifacts/v10/P06/runtime/mysql-link-versions.tsv 2> artifacts/v10/P06/runtime/mysql-link-versions.err
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -N -B gojet_test -e "SELECT workspace_id,link_id,action,result,request_correlation_id FROM link_audit_events ORDER BY id" > artifacts/v10/P06/runtime/mysql-link-audit.tsv 2> artifacts/v10/P06/runtime/mysql-link-audit.err
           true
+
+      - name: Verify P20 T028 domain safety section
+        run: python3 scripts/p20/t028_domain.py
+
+      - name: Upload P20 domain section separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-t028-domain-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/v10/P20/consistency/P20-T028-domain.json
 
       - name: Upload P06 early real integration evidence
         if: always()

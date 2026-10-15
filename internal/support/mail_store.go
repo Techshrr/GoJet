@@ -185,22 +185,22 @@ WHERE t.id=?`, job.ResourceID).Scan(&id, &subject, &status, &displayName)
 		}
 		return map[string]string{"ticket_id": id, "subject": subject, "status": status, "display_name": displayName}, nil
 	case "ticket_message":
-		var ticketID, subject, status, displayName, body string
+		var ticketID, subject, displayName, body string
 		err := s.db.QueryRowContext(ctx, `
-SELECT t.id,t.subject,t.status,
+SELECT t.id,t.subject,
        COALESCE(NULLIF(wm.display_name,''),NULLIF(pc.name,''),'Customer'),m.body
 FROM support_ticket_messages m
 JOIN support_tickets t ON t.id=m.ticket_id
 LEFT JOIN workspace_memberships wm ON wm.workspace_id=t.workspace_id AND wm.user_id=t.requester_user_id
 LEFT JOIN support_public_contacts pc ON pc.id=t.public_contact_id
-WHERE m.id=?`, job.ResourceID).Scan(&ticketID, &subject, &status, &displayName, &body)
+WHERE m.id=?`, job.ResourceID).Scan(&ticketID, &subject, &displayName, &body)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrInvalidInput
 		}
 		if err != nil {
 			return nil, err
 		}
-		return map[string]string{"ticket_id": ticketID, "subject": subject, "status": status, "display_name": displayName, "message_body": body}, nil
+		return map[string]string{"ticket_id": ticketID, "subject": subject, "display_name": displayName, "message_body": body}, nil
 	case "public_contact":
 		var name, subject, message string
 		err := s.db.QueryRowContext(ctx, `

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,10 +14,11 @@ import (
 	"github.com/Techshrr/GoJet/internal/analytics"
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
+	"github.com/Techshrr/GoJet/internal/logging"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(os.Stdout, "redirectengine")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))
 	if mysqlDSN == "" || redisAddr == "" {
@@ -67,13 +67,11 @@ func main() {
 	}
 
 	analyticsEnabled := os.Getenv("GOJET_ANALYTICS_ENABLED") == "1"
-	var handler http.Handler
+	var publisher links.AnalyticsEventPublisher
 	if analyticsEnabled {
-		analyticsPublisher := analytics.NewRedisStreamPublisher(redisClient)
-		handler = links.NewRedirectHandlerWithAnalytics(store, risk, analyticsPublisher, trustTestHeaders)
-	} else {
-		handler = links.NewRedirectHandler(store, risk, trustTestHeaders)
+		publisher = analytics.NewRedisStreamPublisher(redisClient)
 	}
+	handler := links.NewObservedRedirectHandler(store, risk, publisher, trustTestHeaders, logger)
 
 	address := strings.TrimSpace(os.Getenv("GOJET_REDIRECTENGINE_ADDR"))
 	if address == "" {

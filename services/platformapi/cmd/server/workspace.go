@@ -6,14 +6,22 @@ import (
 	"os"
 
 	"github.com/Techshrr/GoJet/internal/workspace"
+	"github.com/redis/go-redis/v9"
 )
 
-func buildWorkspaceHandler(db *sql.DB, testAuth bool) (http.Handler, bool, error) {
+func buildWorkspaceHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (http.Handler, bool, error) {
 	if os.Getenv("GOJET_WORKSPACE_ENABLED") != "1" {
 		return nil, false, nil
 	}
 	store := workspace.NewStore(db)
-	return workspace.NewAPI(store, testAuth).Handler(), true, nil
+	if testAuth {
+		return workspace.NewAPI(store, true).Handler(), true, nil
+	}
+	authority, err := buildWorkspaceSessionAuthority(db, redisClient)
+	if err != nil {
+		return nil, false, err
+	}
+	return workspace.NewAPIWithPrincipalResolver(store, authority.resolve).Handler(), true, nil
 }
 
 func mountWorkspaceRoutes(root *http.ServeMux, handler http.Handler) {

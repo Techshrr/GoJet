@@ -58,10 +58,26 @@ async function t028() {
   const errors = [];
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   await context.addInitScript(() => {
-    window.__p19Perf = { lcp: 0, cls: 0, events: [] };
+    window.__p19Perf = { lcp: 0, cls: 0, events: [], longTasks: [],
+      longTasksSupported: PerformanceObserver.supportedEntryTypes.includes('longtask') };
+    // Preserve every native Long Tasks entry; never filter slow startup work.
+    // https://www.w3.org/TR/longtasks-1/ defines the native 50ms threshold.
+    if (window.__p19Perf.longTasksSupported) new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) window.__p19Perf.longTasks.push({
+        name: entry.name, entryType: entry.entryType, startTime: entry.startTime,
+        duration: entry.duration, attribution: entry.attribution.map((a) => ({
+          name: a.name, containerType: a.containerType,
+        })),
+      });
+    }).observe({ type: 'longtask', buffered: true });
     if (PerformanceObserver.supportedEntryTypes.includes('largest-contentful-paint')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) window.__p19Perf.lcp = Math.max(window.__p19Perf.lcp, entry.startTime || entry.renderTime || entry.loadTime || 0); }).observe({ type: 'largest-contentful-paint', buffered: true });
     if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__p19Perf.cls += entry.value; }).observe({ type: 'layout-shift', buffered: true });
-    if (PerformanceObserver.supportedEntryTypes.includes('event')) new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (entry.interactionId) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId }); }).observe({ type: 'event', durationThreshold: 0 });
+    // Event Timing clamps durationThreshold to 16ms. The first-input entry is
+    // reported even for faster trusted interactions (W3C Event Timing §1.3).
+    // Retain actual durations; never synthesize a zero or slow down the page.
+    const record = list => { for (const entry of list.getEntries()) if (entry.interactionId > 0) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId, entryType: entry.entryType }); };
+    if (PerformanceObserver.supportedEntryTypes.includes('event')) new PerformanceObserver(record).observe({ type: 'event', durationThreshold: 16, buffered: true });
+    if (PerformanceObserver.supportedEntryTypes.includes('first-input')) new PerformanceObserver(record).observe({ type: 'first-input', buffered: true });
   });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
@@ -74,7 +90,22 @@ async function t028() {
     ...window.__p19Perf,
     supported: PerformanceObserver.supportedEntryTypes,
     resources: performance.getEntriesByType('resource').map((entry) => ({ name: entry.name, initiatorType: entry.initiatorType, duration: entry.duration, transferSize: entry.transferSize })),
-    renderedImages: [...document.images].map((img) => ({ src: img.currentSrc || img.src, width: img.width, height: img.height, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight })),
+    observedUntilMs: performance.now(),
+    navigation: performance.getEntriesByType('navigation').map((n) => ({
+      startTime: n.startTime, domContentLoadedEventEnd: n.domContentLoadedEventEnd,
+      loadEventEnd: n.loadEventEnd,
+    })),
+    fontFaces: [...document.fonts].map((font) => ({
+      status: font.status, display: font.display, unicodeRange: font.unicodeRange,
+    })),
+    renderedImages: [...document.images].map((img) => ({
+      src: img.currentSrc || img.src, width: img.width, height: img.height,
+      naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight,
+      widthAttribute: img.getAttribute('width'), heightAttribute: img.getAttribute('height'),
+      complete: img.complete, srcset: img.srcset, sizes: img.sizes,
+      pictureSources: [...(img.closest('picture')?.querySelectorAll('source') || [])]
+        .map((source) => ({ type: source.type, srcset: source.srcset, sizes: source.sizes })),
+    })),
   }));
   const interactions = new Map(); for (const event of metrics.events) interactions.set(event.interactionId, Math.max(interactions.get(event.interactionId) || 0, event.duration));
   const inp = interactions.size ? Math.max(...interactions.values()) : null;
@@ -82,6 +113,12 @@ async function t028() {
   if (metrics.cls > 0.1) errors.push(`CLS ${metrics.cls} exceeds 0.1`);
   if (inp === null) errors.push('no trusted Event Timing interaction was captured for INP evidence');
   else if (inp > 200) errors.push(`INP ${inp}ms exceeds 200ms`);
+  if (!metrics.longTasksSupported) errors.push('native Long Tasks API unavailable');
+  if (metrics.longTasks.length) errors.push(`native long main-thread tasks: ${metrics.longTasks.length}`);
+  for (const img of metrics.renderedImages) {
+    if (!(Number(img.widthAttribute) > 0 && Number(img.heightAttribute) > 0 && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) errors.push('principal image lacks explicit dimensions or completed decode');
+    if (!['image/avif', 'image/webp'].every((type) => img.pictureSources.some((s) => s.type === type && s.srcset && s.sizes))) errors.push('principal image lacks responsive AVIF/WebP alternatives');
+  }
   const fontResources = metrics.resources.filter((resource) => resource.initiatorType === 'font' || /\.(?:woff2?|ttf|otf)(?:\?|$)/i.test(resource.name));
   const remoteFonts = fontResources.filter((resource) => new URL(resource.name).origin !== new URL(baseUrl).origin);
   if (remoteFonts.length) errors.push(`remote font requests violate Website font boundary: ${remoteFonts.map((x) => x.name).join(', ')}`);
@@ -98,7 +135,14 @@ async function t028() {
     eventEntries: metrics.events, renderedPrincipalImageCount: metrics.renderedImages.length,
     imageContract: metrics.renderedImages.length ? 'rendered images must provide intrinsic dimensions' : 'no principal rendered Website image; responsive AVIF/WebP transfer is not invoked',
     fontStrategy: fontResources.length ? 'same-origin font assets only' : 'no network webfont dependency; Design System local/system fallback avoids invisible-text blocking',
-    fontResources, cache: { hashedAsset, hashedCache, socialCard: '/assets/social/gojet-en.png', socialCache },
+    fontResources, nativePerformance: {
+      supportedEntryTypes: metrics.supported, longTasks: metrics.longTasks,
+      observationStartMs: 0, observedUntilMs: metrics.observedUntilMs,
+      navigation: metrics.navigation, renderedImages: metrics.renderedImages,
+      fontFaces: metrics.fontFaces, resources: metrics.resources,
+      fieldData: 'unavailable: CI lab profile, not production telemetry',
+    },
+    cache: { hashedAsset, hashedCache, socialCard: '/assets/social/gojet-en.png', socialCache },
   });
 }
 
