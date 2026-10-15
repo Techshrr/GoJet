@@ -79,6 +79,9 @@ final class Migrations
         $rows = self::load($root, $catalogHash); // Snapshot and parse ALL files before any database mutation.
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         if (!preg_match('/^8\./', (string)$db->query('SELECT VERSION()')->fetchColumn()) || $db->inTransaction()) { throw new RuntimeException('native MySQL8 autocommit required'); }
+        $settings = $db->query('SELECT @@autocommit, @@log_bin, @@log_bin_trust_function_creators')->fetch(PDO::FETCH_NUM);
+        if ((int)$settings[0] !== 1) { throw new RuntimeException('autocommit required for durable migration journal'); }
+        if ((int)$settings[1] === 1 && (int)$settings[2] !== 1) { throw new RuntimeException('database administrator must authorize trigger creation before migrations'); }
         $database = $db->query('SELECT DATABASE()')->fetchColumn();
         if (!is_string($database) || $database === '') { throw new RuntimeException('database selection required'); }
         $lock = 'gojet-migrate-'.substr(hash('sha256', $database), 0, 40);
@@ -104,7 +107,9 @@ final class Migrations
                     ++$count;
                 } catch (Throwable $error) {
                     try { $stmt = $db->prepare("UPDATE gojet_schema_migrations SET status='failed' WHERE id=? AND status='started'"); $stmt->execute([$row['id']]); } catch (Throwable $ignored) { /* Durable started is also a recovery barrier. */ }
-                    throw new RuntimeException('migration '.$row['id'].' failed; verified database restore/recovery required');
+                    $state = $error instanceof \PDOException ? (string)($error->errorInfo[0] ?? 'unknown') : 'internal';
+                    $driver = $error instanceof \PDOException ? (int)($error->errorInfo[1] ?? 0) : 0;
+                    throw new RuntimeException('migration '.$row['id'].' failed; verified database restore/recovery required; SQLSTATE='.$state.' driver='.$driver);
                 }
             }
             return ['applied_now' => $count, 'total' => count($rows), 'source' => $source];
