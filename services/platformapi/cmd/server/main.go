@@ -15,8 +15,8 @@ import (
 	"github.com/Techshrr/GoJet/internal/domains"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
-	"github.com/Techshrr/GoJet/internal/releaseinfo"
 	qrcodes "github.com/Techshrr/GoJet/internal/qr"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
