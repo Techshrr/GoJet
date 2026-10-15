@@ -55,7 +55,7 @@ def main():
     migration_catalog=catalog(ROOT/'migrations')
     files['migration-catalog.json']=encode(migration_catalog)
     for row in migration_catalog['migrations']: add(row['path'],ROOT/row['path'])
-    for name in ['installer/public/index.php','installer/public/favicon.ico','installer/public/assets/shell.css','installer/src/Shell.php','installer/src/FilePreflight.php','frontend/packages/tokens/generated/tokens.css']:
+    for name in ['installer/public/index.php','installer/public/favicon.ico','installer/public/assets/shell.css','installer/src/Shell.php','installer/src/FilePreflight.php','installer/src/Migrations.php','frontend/packages/tokens/generated/tokens.css']:
         add(name,ROOT/name)
     # Dependencies are taken from installed frozen-lock build inputs, not guessed
     # from package.json's direct dependency list. Build-only tools are not shipped.
