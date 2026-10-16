@@ -56,6 +56,26 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
     while not baseline['checks']['clamav'] and time.monotonic() < deadline:
         time.sleep(1)
         baseline = call()
+    if not baseline['ready']:
+        diagnostic = subprocess.run(['runuser','-u','gojet','--',str(release/'bin/filepreflight')],
+            capture_output=True, timeout=15, cwd=root, env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin',
+                'GOJET_FILE_STORAGE_ROOT':str(storage), 'GOJET_CLAMAV_NETWORK':'unix',
+                'GOJET_CLAMAV_ADDRESS':plan['clamav_socket']})
+        try:
+            health = json.loads(diagnostic.stdout)
+            print(json.dumps({'native_file_probe': {key:health.get(key) for key in ['ready','status','storage','clamav']}}), file=sys.stderr)
+        except (ValueError, TypeError):
+            print('Native file probe returned no health JSON', file=sys.stderr)
+        import socket
+        try:
+            with socket.socket(socket.AF_UNIX) as connection:
+                connection.settimeout(3)
+                connection.connect(plan['clamav_socket'])
+                connection.sendall(b'zVERSION\x00')
+                version = connection.recv(4096).decode('utf-8', 'replace').strip('\x00\r\n')
+                print(json.dumps({'native_clamd_version_reply':version}), file=sys.stderr)
+        except OSError as error:
+            print(json.dumps({'native_clamd_socket_errno':error.errno}), file=sys.stderr)
     assert baseline['ready'], 'Native preflight failed checks: '+str(baseline['checks'])
     for name in ['database','redis']:
         bad = copy.deepcopy(plan)
