@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import pwd
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
@@ -77,6 +78,37 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
         except OSError as error:
             print(json.dumps({'native_clamd_socket_errno':error.errno}), file=sys.stderr)
     assert baseline['ready'], 'Native preflight failed checks: '+str(baseline['checks'])
+    # Real protocol rejection, distinct from a missing socket or stale signatures.
+    clamd_config = Path('/etc/clamav/clamd.conf')
+    original_config = clamd_config.read_text()
+    def wait_version(disabled):
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            try:
+                with socket.socket(socket.AF_UNIX) as connection:
+                    connection.settimeout(2)
+                    connection.connect(plan['clamav_socket'])
+                    connection.sendall(b'zVERSION\x00')
+                    reply = connection.recv(4096).decode().strip('\x00\r\n')
+                    expected = reply == 'COMMAND UNAVAILABLE' if disabled else reply.startswith('ClamAV ')
+                    if expected:
+                        return
+            except OSError:
+                pass
+            time.sleep(0.2)
+        raise AssertionError('Native clamd did not reach requested protocol configuration')
+    without_version = '\n'.join(line for line in original_config.splitlines() if not line.strip().startswith('EnableVersionCommand '))
+    try:
+        clamd_config.write_text(without_version+'\nEnableVersionCommand no\n')
+        subprocess.run(['systemctl','restart','clamav-daemon.service'], check=True, capture_output=True, timeout=60)
+        wait_version(True)
+        report = call()
+        assert not report['ready'] and not report['checks']['clamav'] and report['checks']['storage']
+    finally:
+        clamd_config.write_text(original_config)
+        subprocess.run(['systemctl','restart','clamav-daemon.service'], check=True, capture_output=True, timeout=60)
+    wait_version(False)
+    assert call()['ready']
     for name in ['database','redis']:
         bad = copy.deepcopy(plan)
         bad[name]['port'] = 1
@@ -117,6 +149,6 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, real_native_dependencies=True, baseline=baseline['checks'],
     stopped_nginx_fpm_rejected=True, unreachable_mysql_redis_rejected=True,
-    bad_database_redis_credentials_rejected=True, missing_clamav_rejected=True,
+    bad_database_redis_credentials_rejected=True, missing_clamav_rejected=True, disabled_version_command_rejected=True,
     unsafe_storage_rejected=True, untrusted_helper_not_executed=True, root_only=True,
     dependencies_restored=True, final_lock_written=False, full_p21_t010_acceptance=False)))

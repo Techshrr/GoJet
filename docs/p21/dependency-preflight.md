@@ -19,7 +19,12 @@ and authenticated Redis SELECT/PING. ClamAV freshness/version and storage probes
 reuse the shipped Go filepreflight helper, executed as the actual `gojet` account
 only after the entire release passes integrity verification. Provision storage,
 quarantine and published directories with gojet ownership and mode0700; grant
-gojet access to the actual clamd socket via its service group. The verifier does
+gojet access to the actual clamd socket via its service group. The clamd
+configuration must permit its read-only `VERSION` command (`EnableVersionCommand
+yes` on versions supporting this directive), because the inherited authority
+requires actual engine/signature metadata and freshness. A running daemon with
+`VERSION` disabled is not healthy for GoJet. Do not enable administrative RELOAD
+or SHUTDOWN commands for this probe. The verifier does
 not grant permissions, change database settings, install packages or start units.
 
 A missing or failed check blocks aggregate readiness. Results are snapshots;

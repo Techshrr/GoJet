@@ -64,6 +64,9 @@ jobs:
           sudo usermod -a -G clamav gojet
           sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket
           sudo timeout 150 freshclam --stdout
+          # Health authority requires engine/signature metadata; no admin commands.
+          sudo sed -i '/^[[:space:]]*EnableVersionCommand[[:space:]]/d' /etc/clamav/clamd.conf
+          printf '%s\n' 'EnableVersionCommand yes' | sudo tee -a /etc/clamav/clamd.conf > /dev/null
           sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_preflight; CREATE USER 'gojet_preflight'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT SELECT ON gojet_p21_preflight.* TO 'gojet_preflight'@'127.0.0.1';"
           sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
