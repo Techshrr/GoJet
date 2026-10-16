@@ -23,6 +23,13 @@ func main() {
 	if releaseinfo.Print(os.Args[1:], "platformapi", os.Stdout) {
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--bootstrap-admin" {
+		if len(os.Args) != 2 || bootstrapInitialAdministrator(os.Stdin, os.Stdout) != nil {
+			_, _ = os.Stderr.WriteString("initial administrator creation refused\n")
+			os.Exit(1)
+		}
+		return
+	}
 	logger := logging.New(os.Stdout, "platformapi")
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))

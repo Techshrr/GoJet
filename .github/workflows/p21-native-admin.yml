@@ -1,0 +1,60 @@
+name: P21 Native Initial Administrator
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+    paths: ['services/platformapi/**', 'internal/admin/**', 'scripts/p21/native_admin_test.py', '.github/workflows/p21-native-admin.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  initial-admin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache: true
+      - name: Validate contract and local request parsing
+        run: |
+          python3 scripts/p21/validate_contract.py
+          test -z "$(gofmt -l services/platformapi/cmd/server/install_admin*.go services/platformapi/cmd/server/main.go)"
+          go test ./services/platformapi/cmd/server -run TestInitialAdminRequestBounds -count=1
+          go build -o /tmp/gojet-p21-platformapi ./services/platformapi/cmd/server
+      - name: Prepare native dependencies and original schema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-mysql redis-server
+          sudo systemctl start mysql redis-server
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_admin CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE USER 'gojet_test'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_admin.* TO 'gojet_test'@'127.0.0.1';"
+          python3 - <<'PY'
+          import json,sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts/p21')
+          from catalog import catalog
+          Path('migration-catalog.json').write_text(json.dumps(catalog(Path('migrations'))))
+          PY
+          php8.3 -r 'require "installer/src/Migrations.php"; $db=new PDO("mysql:host=127.0.0.1;dbname=gojet_p21_admin;charset=utf8mb4","gojet_test","p21-ci-only"); GoJet\Installer\Migrations::apply($db,getcwd(),hash_file("sha256","migration-catalog.json"),getenv("GITHUB_SHA"),"10.0.0-rc.1");'
+      - name: Exercise root-only native initial administrator mode
+        env:
+          GOJET_MYSQL_DSN: gojet_test:p21-ci-only@tcp(127.0.0.1:3306)/gojet_p21_admin?parseTime=true&charset=utf8mb4
+          GOJET_REDIS_ADDR: 127.0.0.1:6379
+          GOJET_REDIS_DB: '3'
+          GOJET_ADMIN_ACCESS_ENABLED: '1'
+          GOJET_ADMIN_TOTP_KEY_ID: p21-ci-only
+          GOJET_ADMIN_TOTP_KEY_HEX: '6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d'
+          GOJET_ADMIN_ALLOWED_ORIGIN: https://admin.p21.test
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P21/native-admin
+          python3 scripts/p21/native_admin_test.py /tmp/gojet-p21-platformapi | tee artifacts/v10/P21/native-admin/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-native-admin-${{ github.sha }}
+          path: artifacts/v10/P21/native-admin/
+          retention-days: 30
