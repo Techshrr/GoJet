@@ -1,0 +1,87 @@
+name: P21 Native Payload Build
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+    paths:
+      - 'scripts/p21/**'
+      - 'internal/releaseinfo/**'
+      - 'services/**'
+      - 'frontend/**'
+      - 'installer/**'
+      - 'migrations/**'
+      - '.github/workflows/p21-payload-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p21-payload-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  payload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - name: Verify contract and archive rejection tests
+        run: |
+          python3 scripts/p21/validate_contract.py
+          python3 -m unittest discover -s scripts/p21 -p 'test_*.py'
+      - name: Compile and verify native executables
+        env:
+          P21_KEEP_BINARIES: '1'
+        run: python3 scripts/p21/verify_build.py
+      - name: Compile static frontend from frozen lock
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run build
+      - name: Assemble and independently read back reproducible payload
+        run: python3 scripts/p21/build_payload.py
+      - name: Verify extracted release with target-host PHP preflight
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/PackageIntegrity.php
+          php8.3 -l installer/bin/verify-package.php
+          sudo python3 scripts/p21/native_package_integrity_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/target-integrity.json
+      - name: Prepare native dependencies for aggregate preflight
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx php8.3-fpm php8.3-mysql redis-server clamav clamav-daemon clamav-freshclam
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
+          sudo usermod -a -G clamav gojet
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket
+          sudo timeout 150 freshclam --stdout
+          # Health authority requires engine/signature metadata; no admin commands.
+          sudo sed -i '/^[[:space:]]*EnableVersionCommand[[:space:]]/d' /etc/clamav/clamd.conf
+          printf '%s\n' 'EnableVersionCommand yes' | sudo tee -a /etc/clamav/clamd.conf > /dev/null
+          sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_preflight; CREATE USER 'gojet_preflight'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT SELECT ON gojet_p21_preflight.* TO 'gojet_preflight'@'127.0.0.1';"
+          sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
+      - name: Verify aggregate native preflight and real dependency failures
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/DependencyPreflight.php
+          php8.3 -l installer/bin/preflight.php
+          sudo python3 scripts/p21/native_dependency_preflight_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/dependency-preflight.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-payload-${{ github.sha }}
+          retention-days: 30
+          path: |
+            artifacts/v10/P21/payload/
+            artifacts/v10/P21/build/native-build.json
+            artifacts/v10/P21/build/go-test.log

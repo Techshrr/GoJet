@@ -9,9 +9,13 @@ import (
 
 	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/logreceiver"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "logreceiver", os.Stdout) {
+		return
+	}
 	check := flag.Bool("check", false, "check the private receiver socket")
 	flag.Parse()
 	logger := logging.NewLocal(os.Stdout, "logreceiver")
