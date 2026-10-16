@@ -46,7 +46,7 @@ jobs:
           GOJET_REDIS_DB: '3'
           GOJET_ADMIN_ACCESS_ENABLED: '1'
           GOJET_ADMIN_TOTP_KEY_ID: p21-ci-only
-          GOJET_ADMIN_TOTP_KEY_HEX: '6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d'
+          GOJET_ADMIN_TOTP_KEY_HEX: '6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d'
           GOJET_ADMIN_ALLOWED_ORIGIN: https://admin.p21.test
         run: |
           set -euo pipefail

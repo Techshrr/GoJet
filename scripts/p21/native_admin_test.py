@@ -7,6 +7,7 @@ import secrets
 import subprocess
 import sys
 
+assert len(bytes.fromhex(os.environ['GOJET_ADMIN_TOTP_KEY_HEX'])) == 32, 'Invalid CI Admin encryption key length'
 binary = sys.argv[1]
 password = secrets.token_urlsafe(32)
 email = 'initial-admin@p21.test'
