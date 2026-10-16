@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y nginx php8.3-cli php8.3-fpm
-          sudo systemd-sysusers deploy/sysusers/gojet.conf
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
       - name: Exercise native TLS and dedicated PHP pool
         run: |
           set -euo pipefail

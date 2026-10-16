@@ -19,7 +19,10 @@ PHP = 'php8.3'
 
 
 def command(args, **kwargs):
-    return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs)
+    result = subprocess.run(args, capture_output=True, text=True, **kwargs)
+    if result.returncode:
+        raise RuntimeError('Native command failed: '+args[0]+'; '+result.stderr[-2000:])
+    return result
 
 
 def main():
