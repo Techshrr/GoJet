@@ -1,9 +1,8 @@
 # Private Installer state boundary
 
-`installer/src/InstallState.php` is an internal PHP 8.3 component, not yet an
-HTTP endpoint or a complete privileged installation worker. It does not change
-the existing Installer shell, claim T009/T012/T013 complete, or make the payload
-installable.
+`installer/src/InstallState.php` is an internal PHP 8.3 component, now protected by the
+HTTP entrypoint, but not a complete privileged installation worker. It retains the existing Installer shell design and does not claim
+T009/T012/T013 complete or make the payload installable.
 
 Provision an absolute canonical directory outside every document root, mode
 0700, owned by the dedicated Installer process account. Its ancestors must be
@@ -32,13 +31,35 @@ create an installed lock or report completed installation. An existing
 stable state lock when committing completion, and must own the final lock
 boundary so a compromised web process cannot reopen installation.
 
-The pending HTTP adapter must enforce TLS, POST-only mutation, exact trusted
-Origin, request size limits, secure/HttpOnly/SameSite=Strict cookies scoped to
-`/install`, no-store/noindex, and uniform post-lock 404 before rendering or
-starting sessions. Bootstrap authentication needs request throttling. None of
-those HTTP/browser properties are claimed by the CLI component tests.
+The public entrypoint now requires provisioned `GOJET_INSTALL_STATE_DIR`,
+`GOJET_INSTALL_BOOTSTRAP_SHA256`, and an exact HTTPS `GOJET_INSTALL_ORIGIN`
+without a trailing slash. Missing/unsafe provisioning fails closed. State schema
+2 includes the durable bootstrap throttle (10 attempts per 60-second window);
+older provisional state is rejected, never implicitly reset. This is not an
+upgrade mechanism for an installed system.
+
+Authenticate with a same-origin JSON POST to `/install/` containing only
+`bootstrap_token`. The response sets an opaque Secure/HttpOnly/SameSite=Strict
+cookie scoped to `/install` and returns the CSRF token, current step and status.
+It never returns the session token in JSON. Do not log request/response bodies.
+All mutations require exact Origin and a bounded JSON body. Only the web
+server's `HTTPS=on` variable is trusted; forwarded headers are insufficient.
+The trusted Nginx/FPM configuration must preserve this boundary. Authentication
+is throttled durably and rotates prior sessions. Responses are no-store/noindex
+with frame/base/form restrictions. Installation locks yield 404 on every route.
+
+Authenticated GET can render the existing welcome/current-step shell. Future
+steps return409. POST step execution currently returns503 without running any
+validator or applying any configuration; no arbitrary client success field can
+advance state. Complete/health/services are unavailable until worker integration.
+The interactive login/step forms, native configuration/apply/health, real TLS
+server configuration and desktop/mobile browser verification remain outstanding.
 
 Native CI exercises real filesystem persistence, process termination during a
 validator, independent file-lock contention, secret omission, session rotation
 and expiry, CSRF replay, step skipping, corrupted/symlink state and lock denial.
-The JSON output explicitly states that web/privileged apply is not verified.
+A real PHP HTTP server additionally tests the production entrypoint, cookie
+flags/rotation, request bounds/origin, route order, bootstrap throttling and
+post-lock404. Its unshipped router sets a test TLS server variable; this does not
+claim real TLS or browser verification. A separate HTTP probe with that variable
+off rejects spoofed forwarded HTTPS headers. Evidence flags preserve these limits.

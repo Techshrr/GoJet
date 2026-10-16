@@ -24,8 +24,8 @@ final class InstallState
             if (file_exists($this->directory.'/state.json') || is_link($this->directory.'/state.json')) {
                 throw new \RuntimeException('Installer already initialized');
             }
-            $this->save(['schema' => 1, 'step' => 0, 'status' => 'ready', 'session' => null,
-                'expires' => 0, 'csrf' => null]);
+            $this->save(['schema' => 2, 'step' => 0, 'status' => 'ready', 'session' => null,
+                'expires' => 0, 'csrf' => null, 'attempts' => 0, 'retry_at' => 0]);
         });
     }
 
@@ -34,6 +34,10 @@ final class InstallState
     {
         return $this->locked(function () use ($bootstrap): array {
             $s = $this->read();
+            if ($s['retry_at'] <= time()) { $s['attempts'] = 0; $s['retry_at'] = time() + 60; }
+            if ($s['attempts'] >= 10) { throw new \RuntimeException('Installer authentication rate limited'); }
+            $s['attempts']++;
+            $this->save($s);
             if (strlen($bootstrap) < 32 || strlen($bootstrap) > 256
                 || !hash_equals($this->bootstrapHash, hash('sha256', $bootstrap))) {
                 throw new \RuntimeException('Installer authentication failed');
@@ -106,9 +110,10 @@ final class InstallState
         if (filesize($path) > 4096) { throw new \RuntimeException('Invalid installer state'); }
         try { $s = json_decode((string)file_get_contents($path), true, 16, JSON_THROW_ON_ERROR); }
         catch (\Throwable) { throw new \RuntimeException('Invalid installer state'); }
-        if (!is_array($s) || array_keys($s) !== ['schema', 'step', 'status', 'session', 'expires', 'csrf']
-            || $s['schema'] !== 1 || !is_int($s['step']) || $s['step'] < 0 || $s['step'] > 6
+        if (!is_array($s) || array_keys($s) !== ['schema', 'step', 'status', 'session', 'expires', 'csrf', 'attempts', 'retry_at']
+            || $s['schema'] !== 2 || !is_int($s['step']) || $s['step'] < 0 || $s['step'] > 6
             || !in_array($s['status'], ['ready', 'checking', 'failed'], true) || !is_int($s['expires'])
+            || !is_int($s['attempts']) || $s['attempts'] < 0 || $s['attempts'] > 10 || !is_int($s['retry_at'])
             || !$this->digestOrNull($s['session']) || !$this->digestOrNull($s['csrf'])) {
             throw new \RuntimeException('Invalid installer state');
         }
