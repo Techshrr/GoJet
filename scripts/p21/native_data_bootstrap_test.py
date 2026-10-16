@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from catalog import catalog
 
 repo = Path(__file__).resolve().parents[2]
@@ -104,13 +105,48 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     (failed / 'request.json').write_text(json.dumps(failed_plan))
     refused(call(failed))
     assert (failed / 'journal.json').read_bytes() == before
-    # Explicit interrupted-journal fixture; does not claim a process-kill test.
-    interrupted = job('interrupted')
-    marker = interrupted / 'journal.json'
-    marker.write_text(json.dumps(dict(schema=1, source=source,
-        request_sha256=sha(interrupted / 'request.json'), phase='admin-started')))
-    marker.chmod(0o600)
+    # Freeze writes in this disposable MySQL instance, then kill the actual worker
+    # while its real CREATE TABLE is blocked. No fabricated progress journal.
+    root_env = os.environ | {'MYSQL_PWD': 'root'}
+    root_mysql = ['mysql', '-h127.0.0.1', '-uroot', '-NB']
+    subprocess.run(root_mysql + ['-e', "CREATE DATABASE gojet_p21_data_interrupted; GRANT ALL ON gojet_p21_data_interrupted.* TO 'gojet_test'@'127.0.0.1';"],
+        env=root_env, check=True, capture_output=True, timeout=10)
+    interrupted_plan = copy.deepcopy(plan)
+    interrupted_plan['database']['name'] = 'gojet_p21_data_interrupted'
+    interrupted = job('interrupted', interrupted_plan)
+    holder = subprocess.Popen(root_mysql + ['--unbuffered'], env=root_env,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    worker = None
+    try:
+        holder.stdin.write("FLUSH TABLES WITH READ LOCK; SELECT 1;\n")
+        holder.stdin.flush()
+        assert holder.stdout.readline().strip() == '1'
+        worker = subprocess.Popen(['php8.3', str(release / 'installer/bin/data-bootstrap.php'), str(interrupted)],
+            cwd=root, env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        deadline = time.monotonic() + 6
+        while True:
+            waiting = subprocess.check_output(root_mysql + ['-e', "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB='gojet_p21_data_interrupted' AND STATE='Waiting for global read lock'"],
+                env=root_env, text=True, timeout=3).strip()
+            if waiting == '1':
+                break
+            assert worker.poll() is None and time.monotonic() < deadline, 'Worker did not reach blocked native DDL'
+            time.sleep(0.05)
+        marker = interrupted / 'journal.json'
+        before = marker.read_bytes()
+        assert json.loads(before)['phase'] == 'migrating'
+        worker.kill()
+        stdout, stderr = worker.communicate(timeout=5)
+        assert worker.returncode == -9 and not stdout and not stderr
+    finally:
+        if worker is not None and worker.poll() is None:
+            worker.kill()
+            worker.communicate(timeout=5)
+        holder.stdin.close()
+        holder.wait(timeout=5)
+        holder.stdout.close()
     refused(call(interrupted))
+    assert marker.read_bytes() == before
+    assert 'admin_administrators' not in sql('gojet_p21_data_interrupted', 'SHOW TABLES')
     for directory in [success, failed, interrupted]:
         raw = (directory / 'journal.json').read_text()
         assert plan['admin']['password'] not in raw and plan['admin_cipher']['key_hex'] not in raw
@@ -120,5 +156,5 @@ print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_appl
     inherited_admin_created=True, repeat_noop=True, private_request_enforced=True,
     root_only=True, immutable_input_rejections=True, native_identity_checked=True,
     job_lock_rejected=True, real_post_migration_failure=True, failed_retry_blocked=True,
-    changed_request_retry_blocked=True, interrupted_journal_fixture_blocked=True,
+    changed_request_retry_blocked=True, actual_worker_sigkill=True, native_ddl_wait_observed=True, interrupted_retry_blocked=True,
     secrets_not_in_journal=True, final_installation_lock_written=False, installation_complete=False)))

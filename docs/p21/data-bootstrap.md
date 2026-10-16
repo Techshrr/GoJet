@@ -37,6 +37,8 @@ job. There is no automatic DDL rollback or administrator password reset.
 
 The native CI fixture verifies all 31 original migrations followed by one actual
 administrator/audit creation, repeat no-op, rejected inputs/lock/non-root access,
-and real Redis failure after migrations with blocked retries. Its interrupted
-journal check is an explicit fixture, not evidence of a killed process. None of
+and real Redis failure after migrations with blocked retries. The interruption test holds a real MySQL global read lock in its disposable
+CI instance, observes the worker waiting on native DDL, sends SIGKILL, and
+verifies that the original durable journal blocks retries after releasing the
+database lock. No synthetic progress journal is substituted. None of
 these checks constitutes complete P21 installation or G11 acceptance.
