@@ -2,7 +2,7 @@ name: P21 Native Migration Execution
 on:
   push:
     branches: [develop/p21-native-release-package]
-    paths: ['installer/src/Migrations.php', 'scripts/p21/php/**', 'scripts/p21/catalog.py', '.github/workflows/p21-native-migrations.yml']
+    paths: ['installer/src/**', 'scripts/p21/php/**', 'scripts/p21/catalog.py', '.github/workflows/p21-native-migrations.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,6 +42,12 @@ jobs:
           PY
           mkdir -p artifacts/v10/P21/migrations
           P21_MIGRATION_ROOT="$PWD" php8.3 scripts/p21/php/migrations_test.php | tee artifacts/v10/P21/migrations/native.json
+      - name: Verify private durable installer state
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/InstallState.php
+          php8.3 -l scripts/p21/php/install_state_test.php
+          php8.3 scripts/p21/php/install_state_test.php | tee artifacts/v10/P21/migrations/installer-state.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
