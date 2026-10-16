@@ -29,6 +29,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     release = root / 'release'
     (release / 'bin').mkdir(parents=True)
     shutil.copytree(repo / 'migrations', release / 'migrations')
+    shutil.copytree(repo / 'installer', release / 'installer')
     shutil.copyfile(binary, release / 'bin/platformapi')
     (release / 'bin/platformapi').chmod(0o755)
     (release / 'migration-catalog.json').write_text(json.dumps(catalog(release / 'migrations')))
@@ -49,13 +50,13 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
         return directory
 
     def call(directory, nonroot=False):
-        command = ['php8.3', str(repo / 'installer/bin/data-bootstrap.php'), str(directory)]
+        command = ['php8.3', str(release / 'installer/bin/data-bootstrap.php'), str(directory)]
         return subprocess.run((['runuser', '-u', 'nobody', '--'] if nonroot else []) + command,
-            capture_output=True, timeout=100)
+            capture_output=True, timeout=100, cwd=root, env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin'})
 
     def refused(result):
         assert result.returncode == 1 and not result.stdout, 'Expected refusal'
-        assert result.stderr == b'Root data bootstrap refused; inspect private journal and verify recovery.\n', 'Unredacted diagnostic'
+        assert result.stderr == b'Root data bootstrap refused; inspect private journal and verify recovery.\n', 'Unexpected refusal diagnostic: '+repr(result.stderr)
 
     permissions = job('permissions')
     (permissions / 'request.json').chmod(0o644)
