@@ -1,0 +1,36 @@
+name: P21 Native Installer Web
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+    paths: ['installer/**', 'deploy/sysusers/**', 'scripts/p21/native_web_test.py', '.github/workflows/p21-native-web.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate immutable contract
+        run: python3 scripts/p21/validate_contract.py
+      - name: Prepare native web dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx php8.3-cli php8.3-fpm
+          sudo systemd-sysusers deploy/sysusers/gojet.conf
+      - name: Exercise native TLS and dedicated PHP pool
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/NativeWebConfig.php
+          mkdir -p artifacts/v10/P21/native-web
+          sudo python3 scripts/p21/native_web_test.py | tee artifacts/v10/P21/native-web/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-native-web-${{ github.sha }}
+          path: artifacts/v10/P21/native-web/
+          retention-days: 30
