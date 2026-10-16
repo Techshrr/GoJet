@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 namespace GoJet\Installer;
+require_once __DIR__.'/CompletionLock.php';
 
 /** Internal state authority. HTTP and privileged apply adapters must not accept state from clients. */
 final class InstallState
 {
     private const STEPS = ['environment', 'data', 'site', 'admin', 'services', 'health', 'complete'];
 
-    public function __construct(private readonly string $directory, private readonly string $bootstrapHash)
+    public function __construct(private readonly string $directory, private readonly string $bootstrapHash, private readonly ?CompletionLock $completion = null)
     {
         if (!preg_match('/^[a-f0-9]{64}$/D', $bootstrapHash)
             || realpath($directory) !== $directory || !is_dir($directory)
@@ -163,7 +164,7 @@ final class InstallState
     private function locked(callable $operation): mixed
     {
         // Provisioned by the future root worker outside the web root; never writable by other users.
-        if (file_exists($this->directory.'/installed.lock') || is_link($this->directory.'/installed.lock')) {
+        if ($this->completion?->exists() || file_exists($this->directory.'/installed.lock') || is_link($this->directory.'/installed.lock')) {
             throw new \RuntimeException('Installer unavailable');
         }
         $path = $this->directory.'/state.lock';
@@ -176,7 +177,7 @@ final class InstallState
         try {
             $this->privateFile($path);
             if (!flock($f, LOCK_EX | LOCK_NB)) { throw new \RuntimeException('Installer busy'); }
-            if (file_exists($this->directory.'/installed.lock') || is_link($this->directory.'/installed.lock')) {
+            if ($this->completion?->exists() || file_exists($this->directory.'/installed.lock') || is_link($this->directory.'/installed.lock')) {
                 throw new \RuntimeException('Installer unavailable');
             }
             return $operation();

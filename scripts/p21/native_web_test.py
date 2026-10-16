@@ -40,6 +40,9 @@ def main():
         private = base/'private'
         private.mkdir(mode=0o700)
         os.chown(private, account.pw_uid, account.pw_gid)
+        authority = base/'authority'
+        authority.mkdir(mode=0o755)
+        completion = authority/'installed.lock'
         runtime = base/'runtime'
         runtime.mkdir(mode=0o755)
         cert, key = base/'test-cert.pem', base/'test-key.pem'
@@ -53,14 +56,14 @@ def main():
         token = secrets.token_hex(32)
         settings = dict(origin=origin, release=str(release), state=str(private),
                         bootstrap_sha256=hashlib.sha256(token.encode()).hexdigest(),
-                        certificate=str(cert), private_key=str(key), socket=str(runtime/'fpm.sock'))
+                        certificate=str(cert), private_key=str(key), socket=str(runtime/'fpm.sock'), completion=str(completion))
         render = 'require '+json.dumps(str(release/'installer/src/NativeWebConfig.php'))+';'
         render += 'echo json_encode(GoJet\\Installer\\NativeWebConfig::render(json_decode(stream_get_contents(STDIN),true)),JSON_THROW_ON_ERROR);'
         configs = json.loads(command([PHP, '-r', render], input=json.dumps(settings)).stdout)
         # Reject directive injection, relative/traversal paths and public state before any file writes.
         for field, value in [('origin', 'https://localhost/evil'), ('release', '/opt/gojet;evil'),
                              ('state', str(release)+'/private'), ('socket', '/tmp/../socket'),
-                             ('bootstrap_sha256', 'invalid')]:
+                             ('bootstrap_sha256', 'invalid'), ('completion', str(private/'installed.lock'))]:
             bad = subprocess.run([PHP, '-r', render], input=json.dumps(settings | {field: value}),
                                  capture_output=True, text=True)
             assert bad.returncode != 0, field
@@ -121,7 +124,18 @@ def main():
             # Verify the actual FPM worker is unprivileged, not merely a rendered pool declaration.
             workers = command(['ps', '-eo', 'user=,args=']).stdout.splitlines()
             assert any(line.strip().startswith('gojet-i') and 'php-fpm: pool gojet-installer' in line for line in workers)
-            (private/'installed.lock').touch()
+            completion.touch(mode=0o644)
+            # Even code executing as the FPM service account cannot remove or
+            # replace root's final authority, or mutate its containing directory.
+            for command_line in [['rm', '-f', str(completion)],
+                                 ['touch', str(authority/'replacement')],
+                                 ['mv', str(authority), str(base/'moved-authority')]]:
+                denied = subprocess.run(['runuser', '-u', 'gojet-installer', '--']+command_line,
+                                        capture_output=True)
+                assert denied.returncode != 0, 'FPM account changed completion authority'
+            # Resetting all writable PHP state still cannot reopen the installation.
+            for file in private.iterdir():
+                file.unlink()
             for route in ['', '/', '/environment', '/data', '/site', '/admin', '/services', '/health', '/complete']:
                 assert request('/install'+route, headers={'Cookie': cookie})[0] == 404
             assert request(data=payload)[0] == 404
@@ -133,7 +147,8 @@ def main():
         # Do not export configs, keys, session cookies or raw request/response bodies.
         print(json.dumps({'native_nginx_fpm': True, 'certificate_verified_tls': True,
             'render_injection_rejected': True, 'dedicated_unprivileged_fpm': True,
-            'private_files_not_served': True, 'request_boundaries': True, 'post_lock_404': True,
+            'private_files_not_served': True, 'root_completion_cannot_be_removed': True,
+            'writable_state_reset_cannot_reopen': True, 'request_boundaries': True, 'post_lock_404': True,
             'full_product_vhost_verified': False, 'privileged_apply_verified': False,
             'browser_verified': False}))
 

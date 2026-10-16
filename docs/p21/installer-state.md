@@ -63,3 +63,27 @@ flags/rotation, request bounds/origin, route order, bootstrap throttling and
 post-lock404. Its unshipped router sets a test TLS server variable; this does not
 claim real TLS or browser verification. A separate HTTP probe with that variable
 off rejects spoofed forwarded HTTPS headers. Evidence flags preserve these limits.
+
+## Root-owned completion authority
+
+The public entrypoint now requires `GOJET_INSTALL_COMPLETION_FILE`, pointing to
+`installed.lock` in a canonical root-owned directory that is not group/world
+writable. Provision `/var/lib/gojet-installer-authority` through the packaged
+tmpfiles configuration. Regenerate older provisional FPM configurations; missing
+completion authority fails closed with503. No implicit migration/reset occurs.
+
+Before writing FPM configuration, NativeWebConfig verifies root ownership of the
+ancestor chain as well. FPM's restricted filesystem access permits reading only
+the release, private state and completion directory. HTTP checks the root lock
+before authentication/rendering, and state operations check it again under their
+state mutex. Any existing lock node, including a dangling symlink, closes the
+entrypoint. The old writable-state lock remains an additional fail-closed local
+barrier but cannot replace the independently configured root authority.
+
+There is deliberately no public or PHP-service-account finalize operation.
+The pending root apply worker must perform real service/dependency health checks
+and atomically commit the root lock. Tests inject the lock from the isolated
+root fixture solely to verify the read boundary; they do not claim health or
+installation completion. Native TLS tests prove that the actual FPM account
+cannot delete the lock, create files in its directory, or rename that directory.
+Even deleting all PHP-writable state cannot reopen the Installer.

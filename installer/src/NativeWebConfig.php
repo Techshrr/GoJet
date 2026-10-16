@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 namespace GoJet\Installer;
+require_once __DIR__.'/CompletionLock.php';
 
 /** Render only; root-owned provisioning/apply must validate ownership before installing these files. */
 final class NativeWebConfig
 {
     public static function render(array $input): array
     {
-        $keys = ['origin', 'release', 'state', 'bootstrap_sha256', 'certificate', 'private_key', 'socket'];
+        $keys = ['origin', 'release', 'state', 'bootstrap_sha256', 'certificate', 'private_key', 'socket', 'completion'];
         if (array_diff($keys, array_keys($input)) || array_diff(array_keys($input), $keys)) {
             throw new \InvalidArgumentException('Invalid native web configuration');
         }
@@ -25,7 +26,7 @@ final class NativeWebConfig
         }
         $port = $url['port'] ?? 443;
         if ($port < 1 || $port > 65535) { throw new \InvalidArgumentException('Invalid HTTPS port'); }
-        foreach (['release', 'state', 'certificate', 'private_key', 'socket'] as $key) {
+        foreach (['release', 'state', 'certificate', 'private_key', 'socket', 'completion'] as $key) {
             $path = $input[$key];
             if (preg_match('~^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$~D', $path) !== 1
                 || in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true)) {
@@ -38,6 +39,13 @@ final class NativeWebConfig
         if ($input['state'] === $input['release'] || str_starts_with($input['state'], $input['release'].'/')) {
             throw new \InvalidArgumentException('Private state must be outside release');
         }
+        if (basename($input['completion']) !== 'installed.lock'
+            || str_starts_with($input['completion'], $input['state'].'/')
+            || str_starts_with($input['completion'], $input['release'].'/')) {
+            throw new \InvalidArgumentException('Completion authority must be outside writable state and release');
+        }
+        CompletionLock::verifyProvisioningPath($input['completion']);
+        $completion = $input['completion']; $completionDirectory = dirname($completion);
         $host = $url['host']; $origin = $input['origin']; $release = $input['release'];
         $state = $input['state']; $hash = $input['bootstrap_sha256'];
         $certificate = $input['certificate']; $privateKey = $input['private_key']; $socket = $input['socket'];
@@ -96,12 +104,13 @@ catch_workers_output = yes
 php_admin_flag[display_errors] = off
 php_admin_flag[log_errors] = on
 php_admin_value[expose_php] = Off
-php_admin_value[open_basedir] = {$release}:{$state}
+php_admin_value[open_basedir] = {$release}:{$state}:{$completionDirectory}
 php_admin_value[upload_max_filesize] = 4K
 php_admin_value[post_max_size] = 8K
 env[GOJET_INSTALL_STATE_DIR] = {$state}
 env[GOJET_INSTALL_BOOTSTRAP_SHA256] = {$hash}
 env[GOJET_INSTALL_ORIGIN] = {$origin}
+env[GOJET_INSTALL_COMPLETION_FILE] = {$completion}
 FPM;
         return ['nginx' => $nginx."\n", 'fpm' => $fpm."\n"];
     }

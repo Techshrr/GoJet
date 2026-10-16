@@ -16,7 +16,7 @@ $body = $input === false ? '' : (string)stream_get_contents($input, 4097);
 if (is_resource($input)) { fclose($input); }
 [$status, $headers, $result] = HttpAccess::handle($_SERVER, $_COOKIE, $body,
     (string)getenv('GOJET_INSTALL_STATE_DIR'), (string)getenv('GOJET_INSTALL_BOOTSTRAP_SHA256'),
-    (string)getenv('GOJET_INSTALL_ORIGIN'));
+    (string)getenv('GOJET_INSTALL_ORIGIN'), (string)getenv('GOJET_INSTALL_COMPLETION_FILE'));
 http_response_code($status);
 foreach ($headers as $name => $value) { header($name.': '.$value); }
 if ($status === 200 && str_starts_with($headers['Content-Type'], 'text/html')) {

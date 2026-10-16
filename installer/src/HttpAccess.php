@@ -10,17 +10,17 @@ final class HttpAccess
     private const ROUTES = ['/install', '/install/', '/install/environment', '/install/data',
         '/install/site', '/install/admin', '/install/services', '/install/health', '/install/complete'];
 
-    public static function handle(array $server, array $cookies, string $body, string $directory, string $hash, string $origin): array
+    public static function handle(array $server, array $cookies, string $body, string $directory, string $hash, string $origin, string $completionFile): array
     {
         $headers = ['X-Robots-Tag' => 'noindex, nofollow', 'Cache-Control' => 'no-store',
             'X-Content-Type-Options' => 'nosniff', 'Referrer-Policy' => 'no-referrer',
             'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
             'Content-Type' => 'application/json; charset=utf-8'];
         $reply = static fn(int $status, string $error): array => [$status, $headers, ['error' => $error]];
-        // Test the final lock before session creation, request parsing, or any shell output.
-        if ($directory !== '' && (file_exists($directory.'/installed.lock') || is_link($directory.'/installed.lock'))) {
-            return $reply(404, 'Not found');
-        }
+        // Root-owned final authority is checked before authentication or rendering.
+        try { $completion = new CompletionLock($completionFile); }
+        catch (\Throwable) { return $reply(503, 'Installer unavailable'); }
+        if ($completion->exists()) { return $reply(404, 'Not found'); }
         $uri = $server['REQUEST_URI'] ?? '';
         if (!is_string($uri) || !in_array($uri, self::ROUTES, true)) { return $reply(404, 'Not found'); }
         $url = parse_url($origin);
@@ -42,7 +42,7 @@ final class HttpAccess
             }
         }
         try {
-            $state = new InstallState($directory, $hash);
+            $state = new InstallState($directory, $hash, $completion);
             if ($method === 'POST' && in_array($uri, ['/install', '/install/'], true)) {
                 try { $data = json_decode($body, true, 8, JSON_THROW_ON_ERROR); }
                 catch (\Throwable) { return $reply(400, 'Invalid request'); }

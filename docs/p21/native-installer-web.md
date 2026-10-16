@@ -45,3 +45,13 @@ site/API/workspace/admin/proxy configuration. Interactive forms, full dependency
 preflight, Admin bootstrap, privileged apply, service health, root-owned final
 lock and upgrade/restore are still pending. Browser and full-product-vhost
 verification remain false in this evidence.
+
+The renderer also requires a `completion` input, normally
+`/var/lib/gojet-installer-authority/installed.lock`. Its root-owned directory must
+already exist outside both the release and PHP-writable state. Rendering verifies
+canonical ownership and ancestor protection before returning configuration.
+FPM receives `GOJET_INSTALL_COMPLETION_FILE` and read access to this directory;
+it never receives filesystem write authority over it. Native TLS tests check
+actual permission denial under `gojet-installer` and post-lock404 even after
+all writable state is removed. The privileged worker's health-gated atomic lock
+write remains pending.

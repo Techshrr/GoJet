@@ -25,10 +25,13 @@ class InstallerHTTP(unittest.TestCase):
             base = Path(temp)
             state = base / 'private'
             state.mkdir(mode=0o700)
+            authority = base / 'authority'
+            subprocess.run(['sudo', 'install', '-d', '-m', '0755', str(authority)], check=True)
+            completion = authority / 'installed.lock'
             token = secrets.token_hex(32)
             env = os.environ | {'GOJET_INSTALL_STATE_DIR': str(state),
                 'GOJET_INSTALL_BOOTSTRAP_SHA256': hashlib.sha256(token.encode()).hexdigest(),
-                'GOJET_INSTALL_ORIGIN': 'https://installer.test', 'P21_TEST_TLS': 'on'}
+                'GOJET_INSTALL_ORIGIN': 'https://installer.test', 'GOJET_INSTALL_COMPLETION_FILE': str(completion), 'P21_TEST_TLS': 'on'}
             init = "require " + json.dumps(str(ROOT / 'installer/src/InstallState.php')) + ";"
             init += "(new GoJet\\Installer\\InstallState(getenv('GOJET_INSTALL_STATE_DIR'),getenv('GOJET_INSTALL_BOOTSTRAP_SHA256')))->initialize();"
             subprocess.run([PHP, '-r', init], env=env, check=True, capture_output=True)
@@ -100,16 +103,16 @@ class InstallerHTTP(unittest.TestCase):
                 durable = (state/'state.json').read_text()
                 self.assertNotIn(token, durable)
                 self.assertNotIn(auth['csrf'], durable)
-                (state/'installed.lock').touch()
+                subprocess.run(['sudo', 'touch', str(completion)], check=True)
                 for suffix in ROUTES:
                     self.assertEqual(request('/install'+suffix, headers=cookie_header)[0], 404)
                 self.assertEqual(request(data=payload)[0], 404)
             finally:
                 process.terminate()
                 process.wait(timeout=5)
+                subprocess.run(['sudo', 'rm', '-f', str(completion)], check=True)
             # Forwarded headers cannot substitute for the trusted server TLS variable.
             env['P21_TEST_TLS'] = 'off'
-            (state/'installed.lock').unlink()
             process = subprocess.Popen([PHP, '-S', f'127.0.0.1:{port}', str(router)], env=env,
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
