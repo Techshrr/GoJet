@@ -1,0 +1,34 @@
+name: P21 Native Service Environment
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+    paths: ['installer/**', 'scripts/p21/native_environment_test.py', '.github/workflows/p21-native-environment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  environment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate contract and provision native test account
+        run: |
+          python3 scripts/p21/validate_contract.py
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
+          php8.3 -l installer/src/ServiceEnvironment.php
+          php8.3 -l installer/bin/create-environment.php
+      - name: Verify private environment bundle with real systemd
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P21/environment
+          sudo python3 scripts/p21/native_environment_test.py | tee artifacts/v10/P21/environment/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-environment-${{ github.sha }}
+          path: artifacts/v10/P21/environment/
+          retention-days: 30
