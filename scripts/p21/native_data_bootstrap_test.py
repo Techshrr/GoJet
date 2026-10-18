@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 from catalog import catalog
+from native_configuration_test import verify_configuration
 
 repo = Path(__file__).resolve().parents[2]
 binary, source = sys.argv[1:3]
@@ -89,6 +90,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
     assert sql(plan['database']['name'], 'SELECT COUNT(*) FROM admin_administrators') == '1'
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
+    verify_configuration(repo, root, binary, plan)
     # The actual non-root operationsmonitor must select the same Redis DB as API/redirect.
     monitor_binary = sys.argv[3]
     monitor_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin',
@@ -193,6 +195,8 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
 print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_applied=31,
     inherited_admin_created=True, repeat_noop=True, private_request_enforced=True,
     root_only=True, immutable_input_rejections=True, native_identity_checked=True,
+    typed_configuration_rejected_unsafe_input=True, typed_eight_service_pid1_roundtrip=True,
+    actual_platformapi_generated_configuration=True, inherited_session_boundaries_preserved=True,
     operationsmonitor_native_redis_db_selection=True, operationsmonitor_invalid_redis_db_rejected=True,
     job_lock_rejected=True, real_post_migration_failure=True, failed_retry_blocked=True,
     changed_request_retry_blocked=True, actual_worker_sigkill=True, native_ddl_wait_observed=True, interrupted_retry_blocked=True,

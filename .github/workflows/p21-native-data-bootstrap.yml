@@ -2,7 +2,7 @@ name: P21 Native Data Bootstrap
 on:
   push:
     branches: [develop/p21-native-release-package]
-    paths: ['installer/**', 'services/platformapi/**', 'internal/admin/**', 'migrations/**', 'scripts/p21/native_data_bootstrap_test.py', '.github/workflows/p21-native-data-bootstrap.yml']
+    paths: ['installer/**', 'services/platformapi/**', 'internal/admin/**', 'migrations/**', 'scripts/p21/native_data_bootstrap_test.py', 'scripts/p21/native_configuration_test.py', '.github/workflows/p21-native-data-bootstrap.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +30,8 @@ jobs:
           sudo apt-get install -y php8.3-cli php8.3-mysql redis-server
           sudo systemctl start mysql redis-server
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_data_success CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE gojet_p21_data_failure CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE USER 'gojet_test'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_data_success.* TO 'gojet_test'@'127.0.0.1'; GRANT ALL ON gojet_p21_data_failure.* TO 'gojet_test'@'127.0.0.1';"
+          php8.3 -l installer/src/NativeConfiguration.php
+          php8.3 -l installer/bin/configure-services.php
           php8.3 -l installer/src/DataBootstrap.php
           php8.3 -l installer/bin/data-bootstrap.php
       - name: Execute root data phase and recovery barriers
