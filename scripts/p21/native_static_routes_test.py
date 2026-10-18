@@ -137,7 +137,7 @@ def main():
                     path = route+'?opaque=a%2Fb&x=1&x=2'
                     status, headers, body = request(path, data, {'Cookie': 'session=opaque',
                         'Authorization': 'Bearer probe-only', 'X-Forwarded-For': '203.0.113.1',
-                        'X-Real-IP': '203.0.113.2', 'X-Forwarded-Proto': 'https',
+                        'X-Real-IP': '203.0.113.2', 'X-Forwarded-Proto': 'http',
                         'X-Forwarded-Host': 'evil.test', 'X-Forwarded-Port': '9999',
                         'Forwarded': 'for=203.0.113.3;proto=https'})
                     assert status == 418 and headers['Set-Cookie'] == 'probe=retained; HttpOnly'
