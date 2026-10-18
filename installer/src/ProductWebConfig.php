@@ -31,7 +31,7 @@ final class ProductWebConfig
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         $keys = ['origin', 'release', 'certificate', 'private_key', 'max_body_bytes'];
-        if (array_diff($keys, array_keys($input)) || array_diff(array_keys($input), $keys)) {
+        if (array_diff($keys, array_keys($input)) || array_diff(array_keys($input), [...$keys, 'http_port'])) {
             throw new \InvalidArgumentException('Invalid product configuration');
         }
         foreach (['origin', 'release', 'certificate', 'private_key'] as $key) {
@@ -47,6 +47,11 @@ final class ProductWebConfig
         }
         $port = $url['port'] ?? 443;
         if ($port < 1 || $port > 65535) { throw new \InvalidArgumentException('Invalid port'); }
+        $httpPort = $input['http_port'] ?? null;
+        if (array_key_exists('http_port', $input) && (!is_int($httpPort) || $httpPort < 1
+            || $httpPort > 65535 || $httpPort === $port)) {
+            throw new \InvalidArgumentException('Invalid HTTP port');
+        }
         $limit = $input['max_body_bytes'];
         if (!is_int($limit) || $limit < 1 || $limit > 1073741824) { throw new \InvalidArgumentException('Invalid body limit'); }
         $release = $input['release']; self::path($release);
@@ -65,7 +70,33 @@ final class ProductWebConfig
         // PackageIntegrity must first bind these trusted root files to approved release evidence.
         $routes = implode("\n", $fragments);
         $bareHost = $port === 443 ? 'if ($http_host = "'.$host.'") { set $gojet_authority_valid 1; }' : '';
-        return <<<NGINX
+        $http = '';
+        if ($httpPort !== null) {
+            // Never construct a redirect authority from request headers.
+            $target = 'https://'.$host.($port === 443 ? '' : ':'.$port);
+            $httpBareHost = $httpPort === 80 ? 'if ($http_host = "'.$host.'") { set $gojet_http_authority_valid 1; }' : '';
+            $http = <<<NGINX
+server {
+    listen {$httpPort} default_server;
+    server_name _;
+    access_log off;
+    return 421;
+}
+server {
+    listen {$httpPort};
+    server_name {$host};
+    access_log off;
+    set \$gojet_http_authority_valid 0;
+    if (\$http_host = "{$host}:{$httpPort}") { set \$gojet_http_authority_valid 1; }
+    {$httpBareHost}
+    if (\$gojet_http_authority_valid = 0) { return 421; }
+    add_header Cache-Control "no-store" always;
+    return 308 {$target}\$request_uri;
+}
+
+NGINX;
+        }
+        return $http.<<<NGINX
 server {
     listen {$port} ssl default_server;
     server_name _;

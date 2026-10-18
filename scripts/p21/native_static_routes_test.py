@@ -1,5 +1,6 @@
 """Read the actual verified archive and request its compiled pages/assets through Nginx."""
 import json
+import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import os
@@ -31,9 +32,11 @@ def main():
         # verify_archive above has rejected links/devices/traversal/duplicates.
         with tarfile.open(archive, 'r:gz') as tar:
             tar.extractall(release, filter='data')
-        with socket.socket() as sock:
-            sock.bind(('127.0.0.1', 0))
-            port = sock.getsockname()[1]
+        with socket.socket() as tls_sock, socket.socket() as http_sock:
+            tls_sock.bind(('127.0.0.1', 0))
+            http_sock.bind(('127.0.0.1', 0))
+            port = tls_sock.getsockname()[1]
+            http_port = http_sock.getsockname()[1]
         fragment = (release/'deploy/nginx/static-apps.conf').read_text().replace(PREFIX, str(release))
         # Transport probe only: this is not a replacement for real Go business authority.
         class Probe(BaseHTTPRequestHandler):
@@ -64,7 +67,7 @@ def main():
                         '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
         key.chmod(0o600)
         settings = dict(origin=f'https://localhost:{port}', release=str(release),
-                        certificate=str(cert), private_key=str(key), max_body_bytes=8192)
+                        certificate=str(cert), private_key=str(key), max_body_bytes=8192, http_port=http_port)
         render = 'require '+json.dumps(str(release/'installer/src/ProductWebConfig.php'))+';'
         render += 'echo GoJet\\Installer\\ProductWebConfig::render(json_decode(stream_get_contents(STDIN),true));'
         def render_config(values):
@@ -73,6 +76,8 @@ def main():
         assert rendered.returncode == 0, rendered.stderr
         for field, value in [('origin', 'https://localhost/evil'), ('origin', 'https://localhost;evil'),
                              ('origin', 'https://127.0.0.1'), ('release', str(release)+'/../release'),
+                             ('http_port', port), ('http_port', 0), ('http_port', 65536),
+                             ('http_port', '80'), ('http_port', None), ('http_port', True),
                              ('max_body_bytes', 0), ('max_body_bytes', '8192')]:
             assert render_config(settings | {field: value}).returncode != 0
         key.chmod(0o644)
@@ -109,6 +114,23 @@ def main():
                 time.sleep(.05)
             else:
                 raise AssertionError('Static entry not ready')
+            # Do not auto-follow: prove exact status, authority and raw URI for each method.
+            for method in ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS']:
+                for path in ['/app?opaque=a%2Fb&x=1&x=2', '//evil.test/path?next=https%3A%2F%2Fevil.test', '/install']:
+                    connection = http.client.HTTPConnection('127.0.0.1', http_port, timeout=5)
+                    connection.request(method, path, headers={'Host': f'localhost:{http_port}',
+                                       'X-Forwarded-Host': 'evil.test', 'Forwarded': 'host=evil.test'})
+                    response = connection.getresponse()
+                    assert response.status == 308
+                    assert response.getheader('Location') == f'https://localhost:{port}'+path
+                    assert response.getheader('Cache-Control') == 'no-store'
+                    response.read(); connection.close()
+            for host in ['evil.test', f'localhost:{port}', 'localhost', f'localhost:{http_port}.evil.test']:
+                connection = http.client.HTTPConnection('127.0.0.1', http_port, timeout=5)
+                connection.request('GET', '/', headers={'Host': host})
+                response = connection.getresponse()
+                assert response.status == 421 and response.getheader('Location') is None
+                response.read(); connection.close()
             assert request('/', headers={'Host': 'evil.test'})[0] == 421
             assert request('/install')[0] == 404 and request('/install/environment')[0] == 404
             assert request('/api/auth/login', b'x'*8193)[0] == 413
@@ -183,6 +205,7 @@ def main():
     print(json.dumps(dict(source=source, actual_compiled_archive=True, four_static_apps=True,
                          exact_asset_bytes=True, assets_checked=len(assets), private_shell_headers=True,
                          inherited_docs_statuses=True, private_paths_not_served=True,
+                         canonical_http_redirect_verified=True, http_authority_injection_rejected=True,
                          certificate_verified_product_tls=True, wrong_host_sni_rejected=True,
                          unsafe_tls_inputs_rejected=True, request_body_bound_enforced=True,
                          auth_shell_routes=True, proxy_transport_verified=True, redirect_transport_verified=True,

@@ -1,7 +1,7 @@
 # Product HTTPS configuration
 
-`ProductWebConfig::render()` is a root-only renderer taking exactly origin,
-release, certificate, private_key and max_body_bytes. It reads the three packaged
+`ProductWebConfig::render()` is a root-only renderer taking required origin,
+release, certificate, private_key and max_body_bytes, with optional http_port. It reads the three packaged
 static/platform/redirect fragments and produces a product HTTPS virtual host plus
 a rejecting default TLS host. It does not write Nginx configuration, reload a
 service, advance Installer state or claim installation completion.
@@ -28,6 +28,18 @@ body limit enforcement and unsafe render inputs/private-key modes. Only the SNI
 negative probe disables client hostname comparison, so its failure must come from
 the server rather than a client certificate-name error; trusted CA verification
 remains enabled. Proxy upstreams are still explicitly labelled transport probes,
-not real Go business proof. Full site/custom-domain certificates, HTTP-to-HTTPS
-entry, host conflicts, real business/service health and safe root apply remain
+not real Go business proof. Full site/custom-domain certificates, host conflicts, real business/service health and safe root apply remain
 pending before P21 closure. No production deployment is performed.
+
+When http_port is supplied, it must be an integer TCP port distinct from the TLS
+port. The renderer adds an HTTP default host rejecting unknown authorities with
+421 and a named host returning308 to the configured HTTPS origin. Host must match
+the configured HTTP port (bare hostname also permitted on80). The destination
+never uses request Host or forwarding headers. Raw path and query are retained;
+308 preserves the method on conforming clients. HTTP responses use no-store and
+access logging is disabled. No request is proxied or served over cleartext.
+Omitting http_port preserves the TLS-only configuration. The real Nginx fixture
+checks six methods, encoded/duplicate query parameters, a double-slash path,
+Installer path, forged forwarding headers and wrong Host/port. TLS certificate
+issuance, HTTP ACME challenge handling and custom-domain provisioning remain the
+responsibility of the later privileged installation integration.
