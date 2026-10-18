@@ -4,7 +4,9 @@ on:
     branches: [develop/p21-native-release-package]
     paths:
       - 'scripts/p21/**'
-      - 'internal/releaseinfo/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'services/**'
       - 'frontend/**'
       - 'installer/**'
