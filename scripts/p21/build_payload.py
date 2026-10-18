@@ -50,7 +50,7 @@ def main():
                 add('static/'+app+'/'+relative,path)
     for source in sorted((ROOT/'deploy/systemd').glob('*.service')):
         add(source.relative_to(ROOT).as_posix(),source)
-    for name in ['deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf']:
+    for name in ['deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf','deploy/logrotate/gojet-nginx']:
         add(name,ROOT/name)
     migration_catalog=catalog(ROOT/'migrations')
     files['migration-catalog.json']=encode(migration_catalog)

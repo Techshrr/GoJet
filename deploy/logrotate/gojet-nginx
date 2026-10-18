@@ -1,0 +1,18 @@
+# Service stdout/stderr stays in journald. Only the native Nginx file logs rotate here.
+/var/log/gojet/nginx/*.log {
+    daily
+    rotate 14
+    maxsize 100M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 www-data adm
+    su root adm
+    sharedscripts
+    postrotate
+        if /usr/bin/systemctl is-active --quiet nginx.service; then
+            /usr/bin/systemctl kill --kill-whom=main --signal=USR1 nginx.service
+        fi
+    endscript
+}

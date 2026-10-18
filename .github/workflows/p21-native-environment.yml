@@ -2,7 +2,7 @@ name: P21 Native Service Environment
 on:
   push:
     branches: [develop/p21-native-release-package]
-    paths: ['installer/**', 'scripts/p21/native_environment_test.py', '.github/workflows/p21-native-environment.yml']
+    paths: ['installer/**', 'scripts/p21/native_environment_test.py', 'scripts/p21/native_logrotate_test.py', 'deploy/logrotate/**', 'deploy/tmpfiles/**', '.github/workflows/p21-native-environment.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +26,12 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/v10/P21/environment
           sudo python3 scripts/p21/native_environment_test.py | tee artifacts/v10/P21/environment/result.json
+      - name: Verify native Nginx log rotation and descriptor reopen
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nginx logrotate
+          sudo python3 scripts/p21/native_logrotate_test.py | tee artifacts/v10/P21/environment/logrotate.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
