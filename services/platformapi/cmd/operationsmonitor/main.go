@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -41,6 +42,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisDB := 0
+	if raw := strings.TrimSpace(os.Getenv("GOJET_REDIS_DB")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 0 {
+			logger.Error("invalid GOJET_REDIS_DB")
+			os.Exit(1)
+		}
+		redisDB = parsed
+	}
+
 	db, err := links.OpenMySQL(dsn)
 	if err != nil {
 		logger.Error("operationsmonitor database unavailable")
@@ -55,7 +66,7 @@ func main() {
 	}
 	pingCancel()
 
-	redisClient := links.NewRedisClient(redisAddr, os.Getenv("GOJET_REDIS_PASSWORD"), 0)
+	redisClient := links.NewRedisClient(redisAddr, os.Getenv("GOJET_REDIS_PASSWORD"), redisDB)
 	defer redisClient.Close()
 	runtimeRisk := links.NewRedisRiskStore(redisClient)
 	redisCtx, redisCancel := context.WithTimeout(context.Background(), 5*time.Second)

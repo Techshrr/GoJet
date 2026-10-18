@@ -89,6 +89,44 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
     assert sql(plan['database']['name'], 'SELECT COUNT(*) FROM admin_administrators') == '1'
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
+    # The actual non-root operationsmonitor must select the same Redis DB as API/redirect.
+    monitor_binary = sys.argv[3]
+    monitor_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin',
+        'GOJET_MYSQL_DSN': 'gojet_test:p21-ci-only@tcp(127.0.0.1:3306)/gojet_p21_data_success?parseTime=true',
+        'GOJET_REDIS_ADDR': '127.0.0.1:6379', 'GOJET_RISK_PROVIDER_NAME': 'native-config-probe',
+        'GOJET_RISK_PROVIDER_ENDPOINT': 'https://unused.invalid', 'GOJET_RISK_POLICY_VERSION': 'native-config-probe'}
+    def redis_clients():
+        output = subprocess.check_output(['redis-cli', '--raw', 'CLIENT', 'LIST'], text=True)
+        return {row['id']: row for line in output.splitlines()
+                if (row := dict(item.split('=', 1) for item in line.split()))['cmd'] != 'client|list'}
+    for configured, expected in [(None, '0'), ('4', '4')]:
+        env = monitor_env.copy()
+        if configured is not None:
+            env['GOJET_REDIS_DB'] = configured
+        before_clients = redis_clients()
+        with tempfile.TemporaryFile() as logs:
+            process = subprocess.Popen(['runuser', '-u', 'nobody', '--', monitor_binary],
+                env=env, stdout=logs, stderr=logs, cwd='/tmp')
+            try:
+                for _ in range(100):
+                    assert process.poll() is None, 'Operationsmonitor exited before readiness'
+                    logs.seek(0)
+                    if b'operationsmonitor started' in logs.read():
+                        break
+                    time.sleep(.05)
+                else:
+                    raise AssertionError('Operationsmonitor did not start')
+                clients = redis_clients()
+                new = [row for identity, row in clients.items() if identity not in before_clients]
+                assert new and all(row['db'] == expected for row in new), 'Wrong actual Redis database'
+            finally:
+                process.terminate()
+                process.wait(timeout=10)
+    for value in ['-1', 'invalid', '999999999999999999999999999999999999']:
+        result = subprocess.run(['runuser', '-u', 'nobody', '--', monitor_binary, '--once'],
+            env=monitor_env | {'GOJET_REDIS_DB': value}, capture_output=True, timeout=10, cwd='/tmp')
+        assert result.returncode != 0 and b'invalid GOJET_REDIS_DB' in result.stdout
+        assert b'p21-ci-only' not in result.stdout + result.stderr
     # Real post-migration failure: deliberately unavailable local Redis endpoint.
     failed_plan = copy.deepcopy(plan)
     failed_plan['database']['name'] = 'gojet_p21_data_failure'
@@ -155,6 +193,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
 print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_applied=31,
     inherited_admin_created=True, repeat_noop=True, private_request_enforced=True,
     root_only=True, immutable_input_rejections=True, native_identity_checked=True,
+    operationsmonitor_native_redis_db_selection=True, operationsmonitor_invalid_redis_db_rejected=True,
     job_lock_rejected=True, real_post_migration_failure=True, failed_retry_blocked=True,
     changed_request_retry_blocked=True, actual_worker_sigkill=True, native_ddl_wait_observed=True, interrupted_retry_blocked=True,
     secrets_not_in_journal=True, final_installation_lock_written=False, installation_complete=False)))

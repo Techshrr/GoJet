@@ -28,3 +28,13 @@ semantically validated settings. PID1 can read root-private EnvironmentFiles
 before dropping to the `gojet` identity; the service account cannot read the files
 directly. Native CI verifies this behavior with actual transient systemd probes
 for all eight files, including special-character roundtrips and negative cases.
+
+The operationsmonitor now reads GOJET_REDIS_DB with the same nonnegative integer
+and default-zero semantics as platformapi, redirectengine and analytics services.
+Previously it always connected to DB0, splitting risk projections from readers
+when an installation selected a nonzero database. The data bootstrap native test
+starts the actual monitor as nobody against migrated MySQL and real Redis, checks
+CLIENT LIST for its selected DB0/default and DB4 connections, and rejects invalid,
+negative and overflowing values. This proves runtime configuration selection;
+it does not claim completed risk-provider business verification or eight-service
+installation health. Every Redis-using service must receive the same selected DB.
