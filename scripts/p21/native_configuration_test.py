@@ -100,15 +100,40 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
         subprocess.run(['systemd-run', '--quiet', '--unit='+unit, '--property=User=nobody',
             '--property=EnvironmentFile='+str(destination/'platformapi.env'), platform_binary],
             check=True, capture_output=True, timeout=10)
+        last_status = None
         for _ in range(100):
             try:
-                if request('/api/public/auth/providers')[0] == 200:
+                last_status = request('/api/public/auth/providers')[0]
+                if last_status == 200:
                     break
             except OSError:
                 pass
             time.sleep(.1)
         else:
-            raise AssertionError('Actual platformapi did not start with generated configuration')
+            # Retain only source-owned startup event names and numeric process status.
+            # Never emit raw journals, configuration, response bodies or driver errors.
+            raw = subprocess.check_output(['journalctl', '-u', unit, '--no-pager', '-o', 'cat'], text=True)
+            allowed = {'required configuration missing', 'open mysql', 'mysql unavailable', 'redis unavailable',
+                'configure Links authentication authority', 'configure Domains authentication authority',
+                'configure Analytics authentication authority', 'configure QR authentication authority',
+                'configure files', 'configure Text Sharing', 'configure Bio', 'configure Workspace organization',
+                'configure Billing, Payments and Entitlements', 'configure Support Tickets and Mail',
+                'configure Authentication, OAuth and Account', 'configure Authentication rate protection',
+                'configure Authentication challenge protection', 'configure Account settings', 'configure Admin OAuth',
+                'configure Trust, Destination Risk and Abuse', 'configure Admin Access and Audit',
+                'platformapi listening', 'platformapi failed'}
+            events = []
+            for line in raw.splitlines():
+                try:
+                    message = json.loads(line).get('msg')
+                except (ValueError, AttributeError):
+                    continue
+                if message in allowed:
+                    events.append(message)
+            exit_status = subprocess.check_output(['systemctl', 'show', unit, '--property=ExecMainStatus', '--value'], text=True).strip()
+            assert exit_status.isdigit()
+            raise AssertionError('Actual API readiness failed: '+json.dumps(dict(http_status=last_status,
+                exit_status=int(exit_status), startup_events=events)))
         for path in ['/api/workspaces/1/files', '/api/workspaces/1/text-shares', '/api/workspaces/1/bio-pages',
                      '/api/workspaces/1/domains', '/api/workspaces/1/qr-codes']:
             assert request(path)[0] in [401, 403], 'Generated configuration bypassed inherited authentication'
