@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -57,19 +58,42 @@ def main():
         redirect = redirect.replace('127.0.0.1:8080', '127.0.0.1:'+str(redirect_upstream.server_port))
         proxy = (release/'deploy/nginx/platform-proxy.conf').read_text()
         proxy = proxy.replace('127.0.0.1:8081', '127.0.0.1:'+str(upstream.server_port))
+        cert, key = base/'cert.pem', base/'key.pem'
+        subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+                        '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost',
+                        '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
+        key.chmod(0o600)
+        settings = dict(origin=f'https://localhost:{port}', release=str(release),
+                        certificate=str(cert), private_key=str(key), max_body_bytes=8192)
+        render = 'require '+json.dumps(str(release/'installer/src/ProductWebConfig.php'))+';'
+        render += 'echo GoJet\\Installer\\ProductWebConfig::render(json_decode(stream_get_contents(STDIN),true));'
+        def render_config(values):
+            return subprocess.run(['php8.3', '-r', render], input=json.dumps(values), capture_output=True, text=True)
+        rendered = render_config(settings)
+        assert rendered.returncode == 0, rendered.stderr
+        for field, value in [('origin', 'https://localhost/evil'), ('origin', 'https://localhost;evil'),
+                             ('origin', 'https://127.0.0.1'), ('release', str(release)+'/../release'),
+                             ('max_body_bytes', 0), ('max_body_bytes', '8192')]:
+            assert render_config(settings | {field: value}).returncode != 0
+        key.chmod(0o644)
+        assert render_config(settings).returncode != 0
+        key.chmod(0o600)
+        # Only upstream ports change for the explicitly labelled transport probes.
+        product_config = rendered.stdout.replace('127.0.0.1:8081', '127.0.0.1:'+str(upstream.server_port))
+        product_config = product_config.replace('127.0.0.1:8080', '127.0.0.1:'+str(redirect_upstream.server_port))
+        context = ssl.create_default_context(cafile=str(cert))
         config = base/'nginx.conf'
         config.write_text('user www-data;\npid '+str(base/'nginx.pid')+';\n'
                           'error_log '+str(base/'error.log')+';\nevents {}\nhttp {\n'
-                          'include /etc/nginx/mime.types;\naccess_log off;\nserver {\n'
-                          f'listen 127.0.0.1:{port};\n'+proxy+'\n'+fragment+'\n'+redirect+'\n}\n}\n')
+                          'include /etc/nginx/mime.types;\naccess_log off;\n'+product_config+'\n}\n')
         checked = subprocess.run(['nginx', '-t', '-c', str(config)], capture_output=True, text=True)
         assert checked.returncode == 0, checked.stderr
         process = subprocess.Popen(['nginx', '-c', str(config), '-g', 'daemon off;'],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         def request(path, data=None, headers=None):
             try:
-                req = urllib.request.Request(f'http://127.0.0.1:{port}'+path, data=data, headers=headers or {})
-                response = urllib.request.urlopen(req, timeout=5)
+                req = urllib.request.Request(f'https://localhost:{port}'+path, data=data, headers=headers or {})
+                response = urllib.request.urlopen(req, context=context, timeout=5)
             except urllib.error.HTTPError as error:
                 response = error
             with response:
@@ -85,6 +109,18 @@ def main():
                 time.sleep(.05)
             else:
                 raise AssertionError('Static entry not ready')
+            assert request('/', headers={'Host': 'evil.test'})[0] == 421
+            assert request('/install')[0] == 404 and request('/install/environment')[0] == 404
+            assert request('/api/auth/login', b'x'*8193)[0] == 413
+            sni_context = ssl.create_default_context(cafile=str(cert))
+            sni_context.check_hostname = False  # Negative probe must prove server rejection, not client hostname checks.
+            with socket.create_connection(('127.0.0.1', port), timeout=5) as connection:
+                try:
+                    sni_context.wrap_socket(connection, server_hostname='unknown.test')
+                except ssl.SSLError:
+                    pass
+                else:
+                    raise AssertionError('Unknown SNI accepted')
             for url, app in [('/', 'site'), ('/app', 'workspace'), ('/app/billing', 'workspace'),
                              ('/admin', 'admin'), ('/admin/users', 'admin')]:
                 status, headers, body = request(url)
@@ -113,8 +149,8 @@ def main():
                     h = {k.lower(): v for k, v in result['headers'].items()}
                     assert h['cookie'] == 'session=opaque' and h['authorization'] == 'Bearer probe-only'
                     assert h['x-forwarded-for'] == h['x-real-ip'] == '127.0.0.1'
-                    assert h['x-forwarded-proto'] == 'http' and 'forwarded' not in h
-                    assert h['x-forwarded-host'] == h['host'] == f'127.0.0.1:{port}'
+                    assert h['x-forwarded-proto'] == 'https' and 'forwarded' not in h
+                    assert h['x-forwarded-host'] == h['host'] == f'localhost:{port}'
                     assert h['x-forwarded-port'] == str(port)
             assets = re.findall(r'location = (/assets/[^ ]+) \{\n    alias ([^;]+);', fragment)
             assert assets, 'Missing compiled assets'
@@ -147,6 +183,8 @@ def main():
     print(json.dumps(dict(source=source, actual_compiled_archive=True, four_static_apps=True,
                          exact_asset_bytes=True, assets_checked=len(assets), private_shell_headers=True,
                          inherited_docs_statuses=True, private_paths_not_served=True,
+                         certificate_verified_product_tls=True, wrong_host_sni_rejected=True,
+                         unsafe_tls_inputs_rejected=True, request_body_bound_enforced=True,
                          auth_shell_routes=True, proxy_transport_verified=True, redirect_transport_verified=True,
                          forged_forwarding_headers_replaced=True, real_business_proxy_verified=False,
                          full_product_proxy=False, production_deployment=False)))
