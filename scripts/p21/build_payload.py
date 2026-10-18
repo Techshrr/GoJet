@@ -51,7 +51,7 @@ def main():
                 add('static/'+app+'/'+relative,path)
     for source in sorted((ROOT/'deploy/systemd').glob('*.service')):
         add(source.relative_to(ROOT).as_posix(),source)
-    for name in ['deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf','deploy/logrotate/gojet-nginx','deploy/nginx/platform-proxy.conf']:
+    for name in ['deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf','deploy/logrotate/gojet-nginx','deploy/nginx/platform-proxy.conf','deploy/nginx/redirect-proxy.conf']:
         add(name,ROOT/name)
     files['deploy/nginx/static-apps.conf']=render_static_routes(files,
         (ROOT/'deploy/nginx/site-p19.conf').read_text(),

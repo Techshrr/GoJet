@@ -39,7 +39,7 @@ def main():
             def do_GET(self):
                 body = self.rfile.read(int(self.headers.get('Content-Length', '0')))
                 result = json.dumps(dict(path=self.path, method=self.command,
-                    body=body.decode(), headers=dict(self.headers))).encode()
+                    body=body.decode(), upstream_port=self.server.server_port, headers=dict(self.headers))).encode()
                 self.send_response(418)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Set-Cookie', 'probe=retained; HttpOnly')
@@ -51,13 +51,17 @@ def main():
                 pass
         upstream = ThreadingHTTPServer(('127.0.0.1', 0), Probe)
         threading.Thread(target=upstream.serve_forever, daemon=True).start()
+        redirect_upstream = ThreadingHTTPServer(('127.0.0.1', 0), Probe)
+        threading.Thread(target=redirect_upstream.serve_forever, daemon=True).start()
+        redirect = (release/'deploy/nginx/redirect-proxy.conf').read_text()
+        redirect = redirect.replace('127.0.0.1:8080', '127.0.0.1:'+str(redirect_upstream.server_port))
         proxy = (release/'deploy/nginx/platform-proxy.conf').read_text()
         proxy = proxy.replace('127.0.0.1:8081', '127.0.0.1:'+str(upstream.server_port))
         config = base/'nginx.conf'
         config.write_text('user www-data;\npid '+str(base/'nginx.pid')+';\n'
                           'error_log '+str(base/'error.log')+';\nevents {}\nhttp {\n'
                           'include /etc/nginx/mime.types;\naccess_log off;\nserver {\n'
-                          f'listen 127.0.0.1:{port};\n'+proxy+'\n'+fragment+'\nlocation / { return 404; }\n}\n}\n')
+                          f'listen 127.0.0.1:{port};\n'+proxy+'\n'+fragment+'\n'+redirect+'\n}\n}\n')
         checked = subprocess.run(['nginx', '-t', '-c', str(config)], capture_output=True, text=True)
         assert checked.returncode == 0, checked.stderr
         process = subprocess.Popen(['nginx', '-c', str(config), '-g', 'daemon off;'],
@@ -92,7 +96,7 @@ def main():
                 status, headers, body = request('/'+route+'?state=opaque')
                 assert status == 200 and body == (release/'static/site/index.html').read_bytes()
                 assert headers['Cache-Control'] == 'no-store' and 'noindex' in headers['X-Robots-Tag']
-            for route in ['/api/auth/login', '/api/public/auth/google/callback', '/f/sample', '/t/sample', '/p/sample']:
+            for route in ['/api/auth/login', '/api/public/auth/google/callback', '/f/sample', '/t/sample', '/p/sample', '/short-code']:
                 for data in [None, b'payload-with-exact-bytes']:
                     path = route+'?opaque=a%2Fb&x=1&x=2'
                     status, headers, body = request(path, data, {'Cookie': 'session=opaque',
@@ -102,6 +106,8 @@ def main():
                         'Forwarded': 'for=203.0.113.3;proto=https'})
                     assert status == 418 and headers['Set-Cookie'] == 'probe=retained; HttpOnly'
                     result = json.loads(body)
+                    expected_port = redirect_upstream.server_port if route == '/short-code' else upstream.server_port
+                    assert result['upstream_port'] == expected_port
                     assert result['path'] == path and result['body'] == (data or b'').decode()
                     assert result['method'] == ('POST' if data else 'GET')
                     h = {k.lower(): v for k, v in result['headers'].items()}
@@ -129,17 +135,19 @@ def main():
             for path in ['/guides/legacy-deployment', '/docs/en/legacy-api']:
                 assert request(path)[0] == 410
             for path in ['/assets/not-present.js', '/docs/not-present', '/installer/src/InstallState.php',
-                         '/manifest.json', '/.env']:
+                         '/manifest.json', '/.env', '/healthz', '/too/many/segments']:
                 assert request(path)[0] == 404, path
         finally:
             process.terminate()
             process.wait(timeout=10)
             upstream.shutdown()
             upstream.server_close()
+            redirect_upstream.shutdown()
+            redirect_upstream.server_close()
     print(json.dumps(dict(source=source, actual_compiled_archive=True, four_static_apps=True,
                          exact_asset_bytes=True, assets_checked=len(assets), private_shell_headers=True,
                          inherited_docs_statuses=True, private_paths_not_served=True,
-                         auth_shell_routes=True, proxy_transport_verified=True,
+                         auth_shell_routes=True, proxy_transport_verified=True, redirect_transport_verified=True,
                          forged_forwarding_headers_replaced=True, real_business_proxy_verified=False,
                          full_product_proxy=False, production_deployment=False)))
 

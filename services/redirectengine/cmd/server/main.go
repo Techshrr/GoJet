@@ -77,6 +77,15 @@ func main() {
 	}
 	handler := links.NewObservedRedirectHandler(store, risk, publisher, trustTestHeaders, logger)
 
+	proxyMode := os.Getenv("GOJET_REDIRECT_TRUST_LOOPBACK_PROXY")
+	if proxyMode != "" && proxyMode != "0" && proxyMode != "1" {
+		logger.Error("invalid GOJET_REDIRECT_TRUST_LOOPBACK_PROXY")
+		os.Exit(1)
+	}
+	if proxyMode == "1" {
+		handler = links.WithLoopbackClientAddress(handler)
+	}
+
 	address := strings.TrimSpace(os.Getenv("GOJET_REDIRECTENGINE_ADDR"))
 	if address == "" {
 		address = "127.0.0.1:8080"
