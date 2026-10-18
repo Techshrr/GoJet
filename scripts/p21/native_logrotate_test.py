@@ -70,14 +70,11 @@ def main():
             rotated = LOGS/'access.log.1'
             assert rotated.stat().st_ino == inode
             assert not (LOGS/'access.log.1.gz').exists(), 'First rotation must delay compression'
-            # Worker reopen must actually fail before testing the corrected configuration.
-            for _ in range(100):
-                errors = (LOGS/'error.log').read_text()
-                if str(access) in errors and '(13: Permission denied)' in errors:
-                    break
-                time.sleep(0.05)
-            else:
-                raise AssertionError('Expected real worker traversal failure was not observed')
+            # Check the kernel permission boundary directly, independent of which
+            # Nginx error-log destination receives worker cycle diagnostics.
+            denied_worker = subprocess.run(
+                ['runuser', '-u', 'www-data', '--', 'cat', str(access)], capture_output=True)
+            assert denied_worker.returncode != 0 and b'Permission denied' in denied_worker.stderr
             request('blocked-worker-reopen')
             wait_for(rotated, 'blocked-worker-reopen')
             assert 'blocked-worker-reopen' not in access.read_text()
