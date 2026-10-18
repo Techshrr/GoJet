@@ -9,9 +9,9 @@ import (
 func TestLoopbackClientAddressBoundary(t *testing.T) {
 	cases := []struct {
 		name, peer string
-		forwarded []string
-		want string
-		status int
+		forwarded  []string
+		want       string
+		status     int
 	}{
 		{"local-ipv4", "127.0.0.1:1234", []string{"198.51.100.4"}, "198.51.100.4:0", 204},
 		{"local-ipv6", "[::1]:1234", []string{"2001:db8::4"}, "[2001:db8::4]:0", 204},
@@ -22,6 +22,9 @@ func TestLoopbackClientAddressBoundary(t *testing.T) {
 		{"duplicate", "127.0.0.1:1234", []string{"198.51.100.4", "192.0.2.4"}, "", 400},
 		{"empty", "127.0.0.1:1234", []string{""}, "", 400},
 		{"zone", "127.0.0.1:1234", []string{"fe80::1%eth0"}, "", 400},
+		{"mapped-unspecified", "127.0.0.1:1234", []string{"::ffff:0.0.0.0"}, "", 400},
+		{"mapped-multicast", "127.0.0.1:1234", []string{"::ffff:224.0.0.1"}, "", 400},
+		{"multicast", "127.0.0.1:1234", []string{"ff02::1"}, "", 400},
 		{"unspecified", "127.0.0.1:1234", []string{"0.0.0.0"}, "", 400},
 	}
 	for _, tc := range cases {

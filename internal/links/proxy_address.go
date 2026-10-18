@@ -25,7 +25,7 @@ func WithLoopbackClientAddress(next http.Handler) http.Handler {
 			return
 		}
 		client, err := netip.ParseAddr(strings.TrimSpace(values[0]))
-		if len(values) != 1 || err != nil || client.Zone() != "" || client.IsUnspecified() || client.IsMulticast() {
+		if len(values) != 1 || err != nil || client.Zone() != "" || client.Unmap().IsUnspecified() || client.Unmap().IsMulticast() {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 			http.Error(w, "Invalid proxy address", http.StatusBadRequest)
