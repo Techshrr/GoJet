@@ -5,6 +5,7 @@ import subprocess
 from urllib.parse import quote
 from archive import BINS,digest,encode,write_archive,allowed
 from catalog import catalog
+from static_routes import render as render_static_routes
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/v10/P21/payload'
 def command(*args): return subprocess.check_output(args,cwd=ROOT,text=True)
@@ -52,6 +53,9 @@ def main():
         add(source.relative_to(ROOT).as_posix(),source)
     for name in ['deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf','deploy/logrotate/gojet-nginx']:
         add(name,ROOT/name)
+    files['deploy/nginx/static-apps.conf']=render_static_routes(files,
+        (ROOT/'deploy/nginx/site-p19.conf').read_text(),
+        (ROOT/'deploy/nginx/docs-p18.conf').read_text())
     migration_catalog=catalog(ROOT/'migrations')
     files['migration-catalog.json']=encode(migration_catalog)
     for row in migration_catalog['migrations']: add(row['path'],ROOT/row['path'])
