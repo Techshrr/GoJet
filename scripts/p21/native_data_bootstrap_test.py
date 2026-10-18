@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
     assert sql(plan['database']['name'], 'SELECT COUNT(*) FROM admin_administrators') == '1'
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
-    verify_configuration(repo, root, binary, plan)
+    verify_configuration(release, root, binary, plan)
     # The actual non-root operationsmonitor must select the same Redis DB as API/redirect.
     monitor_binary = sys.argv[3]
     monitor_env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin',

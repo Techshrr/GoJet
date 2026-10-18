@@ -32,7 +32,7 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
     command = ['php8.3', str(repo/'installer/bin/configure-services.php'), str(destination)]
     def call(value, nonroot=False):
         return subprocess.run((['runuser', '-u', 'nobody', '--'] if nonroot else [])+command,
-            input=json.dumps(value).encode(), capture_output=True, timeout=15,
+            input=json.dumps(value).encode(), capture_output=True, timeout=15, cwd=root,
             env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin'})
     def refused(result):
         assert result.returncode == 1 and not result.stdout
