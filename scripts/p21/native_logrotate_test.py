@@ -27,8 +27,10 @@ def main():
     run('systemd-tmpfiles', '--create', str(ROOT/'deploy/tmpfiles/gojet.conf'))
     for directory in [LOGS.parent, LOGS]:
         stat = directory.stat()
-        assert stat.st_uid == 0 and stat.st_gid == grp.getgrnam('adm').gr_gid
+        assert stat.st_uid == 0 and stat.st_gid == grp.getgrnam('www-data').gr_gid
         assert stat.st_mode & 0o777 == 0o750
+        run('runuser', '-u', 'www-data', '--', 'test', '-x', str(directory))
+        assert subprocess.run(['runuser', '-u', 'www-data', '--', 'test', '-w', str(directory)]).returncode != 0
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -61,10 +63,27 @@ def main():
             wait_for(access, 'before-rotation')
             inode = access.stat().st_ino
             run('logrotate', '--debug', '--state', state, str(policy))
+            # Reproduce the original production configuration defect in this disposable fixture.
+            for directory in [LOGS.parent, LOGS]:
+                os.chown(directory, 0, grp.getgrnam('adm').gr_gid)
             run('logrotate', '--force', '--state', state, str(policy))
             rotated = LOGS/'access.log.1'
             assert rotated.stat().st_ino == inode
             assert not (LOGS/'access.log.1.gz').exists(), 'First rotation must delay compression'
+            # Worker reopen must actually fail before testing the corrected configuration.
+            for _ in range(100):
+                errors = (LOGS/'error.log').read_text()
+                if str(access) in errors and '(13: Permission denied)' in errors:
+                    break
+                time.sleep(0.05)
+            else:
+                raise AssertionError('Expected real worker traversal failure was not observed')
+            request('blocked-worker-reopen')
+            wait_for(rotated, 'blocked-worker-reopen')
+            assert 'blocked-worker-reopen' not in access.read_text()
+            for directory in [LOGS.parent, LOGS]:
+                os.chown(directory, 0, grp.getgrnam('www-data').gr_gid)
+            run('systemctl', 'kill', '--kill-whom=main', '--signal=USR1', 'nginx.service')
             # USR1 is asynchronous: requests may briefly still reach the old descriptor.
             for index in range(100):
                 marker = f'after-rotation-{index}'
@@ -99,6 +118,7 @@ def main():
     print(json.dumps(dict(native_nginx_rotation=True, descriptor_reopened=True,
                          delayed_compression_exact=True, root_owned_directories=True,
                          private_log_permissions=True, gojet_read_denied=True,
+                         worker_traversal_failure_reproduced=True, permissions_restored_reopen=True,
                          stopped_empty_missing_logs_supported=True,
                          copytruncate_used=False, production_deployment=False)))
 

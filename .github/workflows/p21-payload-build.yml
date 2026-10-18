@@ -8,6 +8,10 @@ on:
       - 'services/**'
       - 'frontend/**'
       - 'installer/**'
+      - 'deploy/systemd/**'
+      - 'deploy/sysusers/**'
+      - 'deploy/tmpfiles/**'
+      - 'deploy/logrotate/**'
       - 'migrations/**'
       - '.github/workflows/p21-payload-build.yml'
   workflow_dispatch:
