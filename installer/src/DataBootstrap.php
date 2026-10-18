@@ -154,6 +154,15 @@ final class DataBootstrap
         }
     }
 
+    /** Validate a prepared request before publishing it; does not connect to the database. */
+    public static function validateRequest(array $request): void
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        $raw = json_encode($request, JSON_THROW_ON_ERROR);
+        if (strlen($raw) > 16384) { throw new \RuntimeException('Root request exceeds bound'); }
+        self::plan($raw);
+    }
+
     public static function run(string $directory): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root data worker required'); }
