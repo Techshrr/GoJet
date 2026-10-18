@@ -44,7 +44,7 @@ final class NativeConfiguration
     }
     public static function compile(array $p): array
     {
-        self::keys($p, ['schema', 'origin', 'database', 'redis', 'secrets', 'files', 'quotas', 'smtp', 'risk', 'turnstile_secret']);
+        self::keys($p, ['schema', 'origin', 'database', 'redis', 'secrets', 'files', 'quotas', 'smtp', 'risk', 'turnstile_secret', 'auth_rate']);
         if ($p['schema'] !== 'gojet.native-configuration.v1') { throw new \InvalidArgumentException('Invalid schema'); }
         $origin = self::text($p['origin'], 1, 300);
         $url = parse_url($origin);
@@ -97,6 +97,9 @@ final class NativeConfiguration
         }
         self::keys($p['quotas'], ['text', 'bio', 'qr']);
         foreach (['text' => 1000000, 'bio' => 1000000, 'qr' => 100000] as $name => $max) { self::number($p['quotas'][$name], 1, $max); }
+        self::keys($p['auth_rate'], ['limit', 'window_seconds']);
+        self::number($p['auth_rate']['limit'], 1, 1000);
+        self::number($p['auth_rate']['window_seconds'], 1, 86400);
         self::keys($p['smtp'], ['host', 'port', 'from', 'username', 'password']);
         $smtp = $p['smtp']; self::host($smtp['host']); self::number($smtp['port'], 1, 65535);
         if (filter_var(self::text($smtp['from'], 3, 254), FILTER_VALIDATE_EMAIL) === false) { throw new \InvalidArgumentException('Invalid sender'); }
@@ -121,6 +124,7 @@ final class NativeConfiguration
         $riskEnv = ['GOJET_RISK_PROVIDER_NAME' => $risk['name'], 'GOJET_RISK_PROVIDER_ENDPOINT' => $risk['endpoint'], 'GOJET_RISK_POLICY_VERSION' => $risk['policy_version']];
         $api = $database + $redis + $log + $storage + $riskEnv + [
             'GOJET_PLATFORMAPI_ADDR' => '127.0.0.1:8081', 'GOJET_AUTH_ALLOWED_ORIGIN' => $origin, 'GOJET_ADMIN_ALLOWED_ORIGIN' => $origin,
+            'GOJET_AUTH_RATE_LIMIT' => (string)$p['auth_rate']['limit'], 'GOJET_AUTH_RATE_WINDOW_SECONDS' => (string)$p['auth_rate']['window_seconds'],
             'GOJET_AUTH_TRUSTED_PROXY_CIDRS' => '127.0.0.1/32,::1/128',
             'GOJET_AUTH_CSRF_KEY_HEX' => $p['secrets']['csrf'], 'GOJET_AUTH_GRANT_KEY_ID' => $keyID, 'GOJET_AUTH_GRANT_KEY_HEX' => $p['secrets']['grant'],
             'GOJET_OAUTH_KEY_ID' => $keyID, 'GOJET_OAUTH_KEY_HEX' => $p['secrets']['oauth'],

@@ -27,7 +27,7 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
         quotas=dict(text=100, bio=100, qr=100),
         smtp=dict(host='localhost', port=2525, **{'from': 'native@p21.test'}, username='', password=''),
         risk=dict(name='native-config-probe', endpoint='https://unused.invalid/check', policy_version='native-v1'),
-        turnstile_secret=secrets.token_urlsafe(32))
+        turnstile_secret=secrets.token_urlsafe(32), auth_rate=dict(limit=3, window_seconds=60))
     destination = root/'configured-environment'
     command = ['php8.3', str(repo/'installer/bin/configure-services.php'), str(destination)]
     def call(value, nonroot=False):
@@ -48,7 +48,9 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
         ('files', 'root', '/tmp/../etc'), ('files', 'max_bytes', 1),
         ('files', 'types', {'php': ['text/plain;evil']}), ('files', 'max_upload_bytes', 1073741824),
         ('smtp', 'username', 'incomplete'), ('smtp', 'from', 'not-an-email'),
-        ('risk', 'endpoint', 'https://user:secret@site.test/'), ('quotas', 'qr', 100001)]:
+        ('risk', 'endpoint', 'https://user:secret@site.test/'), ('quotas', 'qr', 100001),
+        ('auth_rate', 'limit', 0), ('auth_rate', 'limit', 1001), ('auth_rate', 'limit', True),
+        ('auth_rate', 'window_seconds', 0), ('auth_rate', 'window_seconds', 86401)]:
         bad = copy.deepcopy(p)
         (bad if section is None else bad[section])[name] = value
         refused(call(bad))
@@ -89,9 +91,11 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
         assert run.returncode == 0 and run.stdout.strip() == b'verified', 'Typed environment PID1 mismatch'
     # Actual compiled Go API consumes the unmodified generated file under a non-root UID.
     unit = 'p21-config-api-'+secrets.token_hex(5)
-    def request(path):
+    def request(path, data=None):
         try:
-            response = urllib.request.urlopen('http://127.0.0.1:8081'+path, timeout=2)
+            req = urllib.request.Request('http://127.0.0.1:8081'+path, data=data,
+                headers={'Content-Type': 'application/json', 'Origin': p['origin']})
+            response = urllib.request.urlopen(req, timeout=5)
         except urllib.error.HTTPError as error:
             response = error
         with response:
@@ -137,6 +141,9 @@ def verify_configuration(repo, root, platform_binary, bootstrap):
         for path in ['/api/workspaces/1/files', '/api/workspaces/1/text-shares', '/api/workspaces/1/bio-pages',
                      '/api/workspaces/1/domains', '/api/workspaces/1/qr-codes']:
             assert request(path)[0] in [401, 403], 'Generated configuration bypassed inherited authentication'
+        login = json.dumps(dict(email='native-rate-probe@p21.test', password=secrets.token_urlsafe(24))).encode()
+        statuses = [request('/api/auth/login', login)[0] for _ in range(4)]
+        assert all(status in [400, 401, 403] for status in statuses[:3]) and statuses[3] == 429, 'Configured authentication rate limit not enforced'
         logs = subprocess.check_output(['journalctl', '-u', unit, '--no-pager', '-o', 'cat'], text=True)
         rows = [json.loads(line) for line in logs.splitlines() if line.startswith('{')]
         ready = [r for r in rows if r.get('msg') == 'platformapi listening']

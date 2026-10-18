@@ -197,6 +197,7 @@ print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_appl
     root_only=True, immutable_input_rejections=True, native_identity_checked=True,
     typed_configuration_rejected_unsafe_input=True, typed_eight_service_pid1_roundtrip=True,
     actual_platformapi_generated_configuration=True, inherited_session_boundaries_preserved=True,
+    configured_authentication_rate_limit_enforced=True,
     operationsmonitor_native_redis_db_selection=True, operationsmonitor_invalid_redis_db_rejected=True,
     job_lock_rejected=True, real_post_migration_failure=True, failed_retry_blocked=True,
     changed_request_retry_blocked=True, actual_worker_sigkill=True, native_ddl_wait_observed=True, interrupted_retry_blocked=True,

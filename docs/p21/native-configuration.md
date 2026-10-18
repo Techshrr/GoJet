@@ -19,6 +19,7 @@ The exact schema is `gojet.native-configuration.v1` with these required fields:
 | quotas | text, bio, qr; positive bounded integers |
 | smtp | host, port, from, username, password; both credentials or neither |
 | risk | name, endpoint, policy_version; HTTPS endpoint without embedded credentials/query/fragment |
+| auth_rate | limit1–1000 and window_seconds1–86400; required authentication rate policy |
 | turnstile_secret | Required nonempty verification secret for Support/Trust |
 
 `files.types` maps lowercase extensions to lists of explicit MIME types, e.g.
@@ -53,7 +54,7 @@ Native data CI validates rejection before file creation, consumes all eight exac
 files through real PID1 as nobody, and starts the actual compiled platformapi with
 its unmodified generated EnvironmentFile against native migrated MySQL/Redis.
 It verifies all core API startup flags, public provider discovery and inherited
-unauthenticated401/403 boundaries. External-provider fixture values are explicitly
+unauthenticated401/403 boundaries and a real Redis-backed login429 at the configured threshold. External-provider fixture values are explicitly
 unused; there is no external delivery/risk/verification claim. This is configuration
 integration, not eight-daemon health, sealed web-to-root apply, final installation
 lock, browser acceptance or G11. The package remains non-installable until those
