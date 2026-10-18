@@ -39,6 +39,16 @@ def render(files, site_fragment, docs_fragment):
                             '    add_header Cache-Control "no-store" always;\n'
                             '    add_header X-Robots-Tag "noindex, nofollow" always;\n'
                             '    try_files /index.html =404;\n}\n')
+    # Existing Website router owns these private/authentication client routes.
+    selectors = ['= /'+route for route in ['login', 'register', 'verify-email',
+                 'forgot-password', 'reset-password', 'social-registration',
+                 'linkunavailable', 'abuse/report']]
+    selectors.append('~ ^/oauth/[A-Za-z0-9_-]+/callback$')
+    for selector in selectors:
+        sections.append('location '+selector+' {\n    root '+PREFIX+'/static/site;\n'
+                        '    add_header Cache-Control "no-store" always;\n'
+                        '    add_header X-Robots-Tag "noindex, nofollow" always;\n'
+                        '    access_log off;\n    try_files /index.html =404;\n}\n')
     # Exact asset locations take precedence over the Website asset prefix/regex.
     # Identical shared bytes can reuse a file; differing bytes at one URL reject the build.
     for url, path in sorted(assets.items()):
