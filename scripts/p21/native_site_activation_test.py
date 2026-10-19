@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+from native_installation_completion_test import verify_completion
 
 
 def verify_site(root, release, prepared, profile):
@@ -186,6 +187,7 @@ def verify_site(root, release, prepared, profile):
         journal = (prepared/'site.json').read_text()
         assert profile['database']['password'] not in journal and profile['secrets']['admin'] not in journal
         assert not Path('/var/lib/gojet-installer-authority/installed.lock').exists()
+        verify_completion(root, release, prepared)
     finally:
         if override.exists():
             override.unlink()

@@ -152,3 +152,39 @@ recovery removes the owned vhost and restores the baseline. It tests changed-sit
 preservation, global-lock/nonroot/completion-marker denial, closed recovered
 listeners and successful reapplication. It does not prove machine power-loss or
 full upgrade/restore. No final completion lock or production deployment is implied.
+
+## Final native health and completion authority
+
+After data, services and site apply, root may run
+`php8.3 installer/bin/check-installation.php DIRECTORY` for a current health check.
+`php8.3 installer/bin/complete-installation.php DIRECTORY` repeats those checks and
+publishes `/var/lib/gojet-installer-authority/installed.lock` only on success.
+Both use the same global activation lock and fixed command set. There is no HTTP
+success flag or arbitrary root command interface.
+
+Checks bind the approved package, sealed configuration/TLS files, completed data
+and site journals, all current native dependencies, and all eight enabled nonroot
+service executable identities and health. Local HTTPS uses the sealed certificate
+bundle as trust, verifies the configured peer name/SNI, never resolves a remote
+host or follows redirects, and limits each response to 1MiB and a 3-second stream
+timeout. The three SPA entry bodies and a Docs index must match packaged bytes;
+provider discovery must return JSON, private APIs must deny anonymous access,
+Installer paths must be404, and a wrong Host must be421. Native readiness is
+rechecked after HTTP probes.
+
+The root0600 completion record contains only source, manifest and seal digests.
+It is fsynced in a staging file and atomically linked into place without replacing
+an existing file or symlink; the containing directory is fsynced before success.
+A matching repeat acknowledges existing completion without rewriting it. It is
+not a claim that services will remain healthy forever. An interrupted publication
+or damaged authority remains closed to normal apply and requires operator review.
+Existing Installer HTTP access returns404 after this marker is present.
+
+Native CI exercises stopped worker/Nginx refusal, lock contention/nonroot/symlink
+refusal, and a live unapproved TLS certificate while the disk config is restored
+to approved bytes. None may write completion. It then checks health-only mode,
+actual completion, exact repeat, all apply/recovery barriers and HTTP adapter404.
+The marker is removed only during teardown of the disposable CI installation.
+This proves the native CLI completion path; interactive web submission, full
+upgrade/restore, browser verification and release/G11 closure remain required.
+Package metadata remains `installable=false` until the complete P21 gate passes.

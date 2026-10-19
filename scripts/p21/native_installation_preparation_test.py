@@ -204,4 +204,5 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
     native_migrations_applied=31, inherited_admin_created=True, repeat_noop=True,
-    installation_complete=False, final_installation_lock_written=False)))
+    installation_complete=False, isolated_installation_completion_verified=True,
+    final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))

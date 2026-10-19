@@ -91,6 +91,19 @@ final class SiteActivation
         }
         return array_keys($ports);
     }
+    /** Read-only readiness; caller holds the shared root activation lock. */
+    public static function verifyReady(string $directory): array
+    {
+        $seal = ServiceActivation::verifyReady($directory);
+        $state = json_decode(self::privateFile($directory.'/site.json'), true, 16, JSON_THROW_ON_ERROR);
+        if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source']
+            || ($state['seal_sha256'] ?? '') !== hash_file('sha256', $directory.'/seal.json')
+            || ($state['phase'] ?? '') !== 'site-configured' || !self::owned($seal['files']['nginx.conf'])) {
+            throw new \RuntimeException('Verified site readiness required');
+        }
+        self::command(['/usr/sbin/nginx', '-t']);
+        return $seal;
+    }
     public static function run(string $directory): array { return self::execute($directory, false); }
     public static function recover(string $directory): array { return self::execute($directory, true); }
     private static function execute(string $directory, bool $recover): array

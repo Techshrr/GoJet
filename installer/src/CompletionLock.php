@@ -3,7 +3,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 
-/** Read-only final authority. Only the future root apply worker may commit this lock after health checks. */
+/** Read-only final authority. InstallationCompletion commits the fixed root lock only after live health checks. */
 final class CompletionLock
 {
     public function __construct(private readonly string $path)
