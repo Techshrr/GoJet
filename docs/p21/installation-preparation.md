@@ -81,17 +81,25 @@ The private services.json journal records publication, startup and readiness.
 On failure, cleanup stops/disables only the units created by this invocation,
 after verifying their bytes and ownership, then removes those units. It does not
 stop an unrelated listener, modify existing units, undo migrations or remove data.
-A changed unit or incomplete cleanup requires manual verified recovery. Failed or
-interrupted journals block automatic retry even after the initial cause disappears.
-The native CI fixture proves a real occupied API port failure, cleanup, unchanged
-data journal and blocked retry. It explicitly verifies cleanup before clearing the
-failed journal as a disposable operator-recovery exercise; this is not an automatic
-production recovery command. Success and repeat then use the shipped root CLI.
+A changed unit or incomplete cleanup requires operator review. Failed or interrupted
+activation cannot be retried directly. The root-only
+`php8.3 installer/bin/recover-services.php DIRECTORY` command holds the same global
+lock, rechecks the sealed release, live dependencies and completed data identity,
+and inspects all eight unit paths, loaded fragments, overrides and enable links
+before stopping anything. It refuses foreign or changed configuration, an existing
+site journal, or the final completion marker. Exact owned units are stopped,
+disabled and removed; data is preserved. Successful recovery durably records
+`recovered`, its prior phase and a recovery counter, permitting fresh activation.
+Repeated recovery is a no-op. If prerequisites are unavailable or bytes changed,
+restore verified prerequisites or obtain operator review; do not delete journals.
 
-This service phase does not apply Nginx, provision web-to-root submission, validate
-external providers, write the final installation lock or claim installable status.
-Process termination/power-loss recovery and full upgrade/restore remain separate
-acceptance requirements. Privileged activation is exercised only in isolated CI;
+Native CI exercises occupied-port failure and this shipped recovery command, then
+SIGKILLs the actual root worker after observing the actual API startup failure.
+It checks blocked retry, changed-unit refusal, explicit cleanup and successful
+reactivation. This covers service-worker termination, not power-loss, site recovery
+or full upgrade/restore.
+
+Privileged activation is exercised only in isolated CI;
 no production deployment is authorized by this implementation.
 
 ## Root site activation

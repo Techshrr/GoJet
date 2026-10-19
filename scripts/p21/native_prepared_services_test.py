@@ -99,9 +99,74 @@ def verify_services(root, release, prepared, storage, profile):
         assert systemctl('is-active', unit, check=False).stdout.strip() not in ['active', 'activating']
         assert not (Path('/etc/systemd/system/multi-user.target.wants')/unit).is_symlink()
     assert (prepared/'data/journal.json').read_bytes() == journal
-    # Explicit operator recovery in the disposable fixture after verifying complete cleanup.
-    # Production has no automatic failed-state reset; database state is never rolled back here.
-    (prepared/'services.json').unlink()
+    recovery = ['php8.3', str(release/'installer/bin/recover-services.php'), str(prepared)]
+
+    def recover(ok=True, prefix=()):
+        result = subprocess.run([*prefix, *recovery], capture_output=True, timeout=150)
+        if ok:
+            assert result.returncode == 0 and not result.stderr, 'Verified service recovery failed'
+            assert json.loads(result.stdout)['services_recovered'] is True
+        else:
+            assert result.returncode == 1 and not result.stdout
+            assert result.stderr == b'Service recovery refused; inspect private journal and verify recovery.\n'
+        return result
+
+    recover(False, ['runuser', '-u', 'nobody', '--'])
+    with (authority/'service-activation.lock').open('rb') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        recover(False)
+    recover()
+    assert json.loads((prepared/'services.json').read_text())['phase'] == 'recovered'
+    assert json.loads(recover().stdout)['already_applied'] is True
+    # Kill the actual root worker after PID1 starts services; no fabricated journal.
+    blocker = socket.socket()
+    blocker.bind(('127.0.0.1', 8081))
+    blocker.listen()
+    worker = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=root)
+    try:
+        deadline = time.monotonic()+12
+        while True:
+            assert worker.poll() is None, 'Activation exited before interruption'
+            state = json.loads((prepared/'services.json').read_text())
+            api = status('gojet-platformapi.service')
+            if state['phase'] == 'starting' and (int(api.get('NRestarts', '0')) > 0 or api.get('SubState') == 'auto-restart'):
+                break
+            assert time.monotonic() < deadline, 'Actual API failure not observed'
+            time.sleep(.05)
+        worker.kill()
+        stdout, stderr = worker.communicate(timeout=50)
+        assert worker.returncode == -9 and not stdout and not stderr
+        interrupted = (prepared/'services.json').read_bytes()
+        assert json.loads(interrupted)['phase'] == 'starting'
+        refused(activate())
+        assert (prepared/'services.json').read_bytes() == interrupted
+        unit_path = Path('/etc/systemd/system/gojet-platformapi.service')
+        original = unit_path.read_bytes()
+        try:
+            unit_path.write_bytes(original+b'\n# operator change\n')
+            recover(False)
+            assert unit_path.read_bytes() == original+b'\n# operator change\n'
+            assert (prepared/'services.json').read_bytes() == interrupted
+        finally:
+            unit_path.write_bytes(original)
+        marker.touch(mode=0o600)
+        try:
+            recover(False)
+        finally:
+            marker.unlink()
+        recover()
+        state = json.loads((prepared/'services.json').read_text())
+        assert state['phase'] == 'recovered' and state['recovered_from'] == 'starting' and state['recovery_count'] == 2
+        for unit in units:
+            assert not (Path('/etc/systemd/system')/unit).exists()
+            assert systemctl('is-active', unit, check=False).stdout.strip() not in ['active', 'activating']
+        assert blocker.getsockname()[1] == 8081
+        assert (prepared/'data/journal.json').read_bytes() == journal and not marker.exists()
+    finally:
+        if worker.poll() is None:
+            worker.kill()
+            worker.communicate(timeout=50)
+        blocker.close()
     try:
         result = activate()
         assert result.returncode == 0 and not result.stderr, 'Root native activation failed'

@@ -199,6 +199,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     root_site_activation=True, existing_site_and_listener_preserved=True, real_reload_failure_barrier=True,
     trusted_tls_to_actual_api=True, applied_static_bytes_verified=True, site_repeat_noop=True,
     root_service_activation=True, existing_service_conflict_preserved=True, activation_global_lock=True,
+    real_service_worker_sigkill=True, explicit_service_recovery=True, changed_unit_recovery_refused=True,
     real_api_port_failure_cleaned=True, failed_activation_retry_blocked=True, activation_repeat_noop=True,
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,

@@ -94,6 +94,7 @@ jobs:
           php8.3 -l installer/bin/activate-site.php
           php8.3 -l installer/src/ServiceActivation.php
           php8.3 -l installer/bin/activate-services.php
+          php8.3 -l installer/bin/recover-services.php
           php8.3 -l installer/src/InstallationPreparation.php
           php8.3 -l installer/bin/prepare-installation.php
           php8.3 -l installer/bin/run-prepared-data.php

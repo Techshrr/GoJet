@@ -133,7 +133,9 @@ final class ServiceActivation
         }
         return $seal;
     }
-    public static function run(string $directory): array
+    public static function run(string $directory): array { return self::execute($directory, false); }
+    public static function recover(string $directory): array { return self::execute($directory, true); }
+    private static function execute(string $directory, bool $recover): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(self::AUTHORITY.'/installed.lock');
@@ -157,12 +159,62 @@ final class ServiceActivation
                 throw new \RuntimeException('Verified data completion required');
             }
             $journalPath = $directory.'/services.json';
+            $recoveryCount = 0;
+            if ($recover && (file_exists($directory.'/site.json') || is_link($directory.'/site.json'))) {
+                throw new \RuntimeException('Site phase requires separate recovery');
+            }
             if (file_exists($journalPath) || is_link($journalPath)) {
                 $state = json_decode(self::privateFile($journalPath), true, 16, JSON_THROW_ON_ERROR);
-                if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source'] || ($state['seal_sha256'] ?? '') !== $sealHash
-                    || ($state['phase'] ?? '') !== 'services-ready' || !self::healthy($seal)) { throw new \RuntimeException('Verified service recovery required'); }
-                return ['services_ready' => true, 'already_applied' => true, 'installation_complete' => false];
-            }
+                if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source'] || ($state['seal_sha256'] ?? '') !== $sealHash) {
+                    throw new \RuntimeException('Verified service recovery required');
+                }
+                $recoveryCount = $state['recovery_count'] ?? 0;
+                if (!is_int($recoveryCount) || $recoveryCount < 0 || $recoveryCount >= 1000) { throw new \RuntimeException('Invalid recovery history'); }
+                if ($recover) {
+                    if (!in_array($state['phase'] ?? '', ['failed', 'publishing', 'starting', 'recovered'], true)) {
+                        throw new \RuntimeException('Service phase is not recoverable');
+                    }
+                    $published = [];
+                    // Inspect every name before stopping anything. Never adopt foreign units or overrides.
+                    foreach (self::NAMES as $name) {
+                        $unit = 'gojet-'.$name.'.service'; $target = self::UNIT_DIRECTORY.'/'.$unit;
+                        $exists = file_exists($target) || is_link($target);
+                        if ($exists && !self::owned($target, $seal['files']['units/'.$unit])) { throw new \RuntimeException('Changed unit requires operator review'); }
+                        foreach (['/etc/systemd/system', '/run/systemd/system', '/usr/lib/systemd/system'] as $base) {
+                            foreach ([$base.'/'.$unit, $base.'/'.$unit.'.d', $base.'/multi-user.target.wants/'.$unit] as $path) {
+                                if (!file_exists($path) && !is_link($path)) { continue; }
+                                if ($path === $target && $exists) { continue; }
+                                if ($exists && $path === self::UNIT_DIRECTORY.'/multi-user.target.wants/'.$unit
+                                    && is_link($path) && realpath($path) === $target && lstat($path)['uid'] === 0) { continue; }
+                                throw new \RuntimeException('Foreign service authority');
+                            }
+                        }
+                        $row = self::systemctl(['show', $unit, '--property=ActiveState,FragmentPath,DropInPaths,MainPID'], false);
+                        $native = [];
+                        foreach (explode("\n", trim($row['out'])) as $line) { if (str_contains($line, '=')) { [$k, $v] = explode('=', $line, 2); $native[$k] = $v; } }
+                        if ($row['code'] !== 0 || ($native['DropInPaths'] ?? '') !== ''
+                            || !in_array($native['FragmentPath'] ?? '', $exists ? ['', $target] : [''], true)
+                            || (!$exists && (!in_array($native['ActiveState'] ?? '', ['inactive', 'failed'], true) || ($native['MainPID'] ?? '') !== '0'))) {
+                            throw new \RuntimeException('Unverified loaded service');
+                        }
+                        if ($exists) { $published[] = $unit; }
+                    }
+                    if (!self::cleanup($published, $seal)) { throw new \RuntimeException('Service cleanup incomplete'); }
+                    $already = $state['phase'] === 'recovered';
+                    if (!$already) {
+                        $state['recovered_from'] = $state['phase']; $state['phase'] = 'recovered';
+                        $state['recovery_count'] = $recoveryCount+1; $state['cleanup_complete'] = true;
+                        self::persist($directory, $state);
+                    }
+                    return ['services_recovered' => true, 'already_applied' => $already, 'installation_complete' => false];
+                }
+                if (($state['phase'] ?? '') === 'services-ready' && self::healthy($seal)) {
+                    return ['services_ready' => true, 'already_applied' => true, 'installation_complete' => false];
+                }
+                if (($state['phase'] ?? '') !== 'recovered' || ($state['cleanup_complete'] ?? false) !== true || $recoveryCount < 1) {
+                    throw new \RuntimeException('Verified service recovery required');
+                }
+            } elseif ($recover) { throw new \RuntimeException('Service journal required'); }
             $units = array_map(fn($n) => 'gojet-'.$n.'.service', self::NAMES);
             self::systemctl(['daemon-reload']);
             foreach ($units as $unit) {
@@ -174,7 +226,7 @@ final class ServiceActivation
                     }
                 }
             }
-            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false];
+            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false, 'recovery_count' => $recoveryCount];
             self::persist($directory, $state); $published = [];
             try {
                 foreach ($units as $unit) {
