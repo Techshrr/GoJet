@@ -91,7 +91,9 @@ final class SiteActivation
         }
         return array_keys($ports);
     }
-    public static function run(string $directory): array
+    public static function run(string $directory): array { return self::execute($directory, false); }
+    public static function recover(string $directory): array { return self::execute($directory, true); }
+    private static function execute(string $directory, bool $recover): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(self::AUTHORITY.'/installed.lock');
@@ -105,13 +107,47 @@ final class SiteActivation
             if ((new CompletionLock(self::AUTHORITY.'/installed.lock'))->exists()) { throw new \RuntimeException('Installation complete'); }
             $seal = ServiceActivation::verifyReady($directory);
             $hash = $seal['files']['nginx.conf']; $sealHash = hash_file('sha256', $directory.'/seal.json');
+            $recoveryCount = 0;
             if (file_exists($directory.'/site.json') || is_link($directory.'/site.json')) {
                 $state = json_decode(self::privateFile($directory.'/site.json'), true, 16, JSON_THROW_ON_ERROR);
-                if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source'] || ($state['seal_sha256'] ?? '') !== $sealHash
-                    || ($state['phase'] ?? '') !== 'site-configured' || !self::owned($hash)) { throw new \RuntimeException('Verified site recovery required'); }
-                self::command(['/usr/sbin/nginx', '-t']);
-                return ['site_configured' => true, 'already_applied' => true, 'installation_complete' => false];
-            }
+                if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source'] || ($state['seal_sha256'] ?? '') !== $sealHash) {
+                    throw new \RuntimeException('Verified site recovery required');
+                }
+                $recoveryCount = $state['recovery_count'] ?? 0;
+                if (!is_int($recoveryCount) || $recoveryCount < 0 || $recoveryCount >= 1000) { throw new \RuntimeException('Invalid recovery history'); }
+                if ($recover) {
+                    if (!in_array($state['phase'] ?? '', ['failed', 'publishing', 'reloading', 'recovering', 'recovered'], true)) {
+                        throw new \RuntimeException('Site phase is not recoverable');
+                    }
+                    $exists = file_exists(self::TARGET) || is_link(self::TARGET);
+                    if ($exists && (!self::owned($hash) || $state['phase'] === 'recovered')) { throw new \RuntimeException('Changed site requires operator review'); }
+                    $already = $state['phase'] === 'recovered';
+                    if (!$already && $state['phase'] !== 'recovering') {
+                        $state['recovered_from'] = $state['phase']; $state['phase'] = 'recovering';
+                        $state['cleanup_complete'] = false; self::persist($directory, $state);
+                    }
+                    if ($exists) {
+                        if (!unlink(self::TARGET)) { throw new \RuntimeException('Site removal failed'); }
+                        self::sync(dirname(self::TARGET));
+                    }
+                    // Always restore the loaded baseline too: the killed worker may have reloaded it.
+                    self::command(['/usr/sbin/nginx', '-t']);
+                    self::command(['/usr/bin/systemctl', 'reload', 'nginx.service']);
+                    self::command(['/usr/bin/systemctl', 'is-active', 'nginx.service']);
+                    if (!$already) {
+                        $state['phase'] = 'recovered'; $state['cleanup_complete'] = true;
+                        $state['recovery_count'] = $recoveryCount+1; self::persist($directory, $state);
+                    }
+                    return ['site_recovered' => true, 'already_applied' => $already, 'installation_complete' => false];
+                }
+                if (($state['phase'] ?? '') === 'site-configured' && self::owned($hash)) {
+                    self::command(['/usr/sbin/nginx', '-t']);
+                    return ['site_configured' => true, 'already_applied' => true, 'installation_complete' => false];
+                }
+                if (($state['phase'] ?? '') !== 'recovered' || ($state['cleanup_complete'] ?? false) !== true || $recoveryCount < 1) {
+                    throw new \RuntimeException('Verified site recovery required');
+                }
+            } elseif ($recover) { throw new \RuntimeException('Site journal required'); }
             if (file_exists(self::TARGET) || is_link(self::TARGET)) { throw new \RuntimeException('Existing site configuration'); }
             $baseline = self::command(['/usr/sbin/nginx', '-T'])['out'];
             $raw = (string)file_get_contents($directory.'/nginx.conf');
@@ -119,7 +155,7 @@ final class SiteActivation
             if ($ports === [] || array_intersect($ports, self::listenPorts($baseline))) { throw new \RuntimeException('Existing Nginx listener'); }
             // Require this fixed conf.d destination to be included by the native Ubuntu configuration.
             if (!preg_match('~\binclude\s+/etc/nginx/conf\.d/\*\.conf\s*;~', preg_replace('/#[^\n]*/', '', $baseline))) { throw new \RuntimeException('Unsupported Nginx include authority'); }
-            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false];
+            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false, 'recovery_count' => $recoveryCount];
             self::persist($directory, $state); $created = false;
             try {
                 $old = umask(0022);

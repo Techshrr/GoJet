@@ -15,6 +15,7 @@ def verify_site(root, release, prepared, profile):
     override = override_dir/'p21-reload-failure.conf'
     assert not target.exists() and not target.is_symlink() and not conflict.exists() and not override.exists()
     command = ['php8.3', str(release/'installer/bin/activate-site.php'), str(prepared)]
+    recovery = ['php8.3', str(release/'installer/bin/recover-site.php'), str(prepared)]
     expected = (prepared/'nginx.conf').read_bytes()
     data_before = (prepared/'data/journal.json').read_bytes()
     services_before = (prepared/'services.json').read_bytes()
@@ -26,6 +27,17 @@ def verify_site(root, release, prepared, profile):
     def refused(result):
         assert result.returncode == 1 and not result.stdout
         assert result.stderr == b'Site activation refused; inspect private journal and verify recovery.\n'
+
+    def recover(ok=True, nonroot=False):
+        result = subprocess.run((['runuser', '-u', 'nobody', '--'] if nonroot else [])+recovery,
+            capture_output=True, timeout=120, cwd=root)
+        if ok:
+            assert result.returncode == 0 and not result.stderr, 'Root site recovery failed'
+            assert json.loads(result.stdout)['site_recovered'] is True
+        else:
+            assert result.returncode == 1 and not result.stdout
+            assert result.stderr == b'Site recovery refused; inspect private journal and verify recovery.\n'
+        return result
 
     def ctl(*args):
         subprocess.run(['systemctl', *args], check=True, capture_output=True, timeout=30)
@@ -73,6 +85,9 @@ def verify_site(root, release, prepared, profile):
             failed = (prepared/'site.json').read_bytes()
             refused(call())
             assert (prepared/'site.json').read_bytes() == failed
+            recover(False)  # Restoration cannot succeed while the real reload command fails.
+            assert json.loads((prepared/'site.json').read_text())['phase'] == 'recovering'
+            refused(call())
         finally:
             override.unlink()
             ctl('daemon-reload')
@@ -81,8 +96,70 @@ def verify_site(root, release, prepared, profile):
         refused(call())  # Restored reload command alone does not clear the failed authority.
         assert (prepared/'data/journal.json').read_bytes() == data_before
         assert (prepared/'services.json').read_bytes() == services_before
-        # Explicit verified operator recovery in this disposable fixture only.
-        (prepared/'site.json').unlink()
+        recover(False, True)
+        with Path('/var/lib/gojet-installer-authority/service-activation.lock').open('r+b') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            recover(False)
+        recover()
+        state = json.loads((prepared/'site.json').read_text())
+        assert state['phase'] == 'recovered' and state['recovered_from'] == 'failed' and state['recovery_count'] == 1
+        assert json.loads(recover().stdout)['already_applied'] is True
+        # Interrupt the shipped root worker while a real PID1 reload is in progress.
+        # The native reload still executes after a bounded delay, even if its caller dies.
+        override.write_text('[Service]\nExecReload=\nExecReload=/usr/bin/sleep 3\nExecReload=/usr/sbin/nginx -s reload\n')
+        ctl('daemon-reload')
+        worker = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=root)
+        try:
+            deadline = time.monotonic()+15
+            while True:
+                assert worker.poll() is None, 'Site worker exited before interruption'
+                state = json.loads((prepared/'site.json').read_text())
+                native = subprocess.check_output(['systemctl', 'show', 'nginx.service', '--property=SubState', '--value'], text=True).strip()
+                if state['phase'] == 'reloading' and native == 'reload':
+                    break
+                assert time.monotonic() < deadline, 'Actual reload not observed'
+                time.sleep(.02)
+            worker.kill()
+            stdout, stderr = worker.communicate(timeout=40)
+            assert worker.returncode == -9 and not stdout and not stderr
+            # Wait for the actual native reload to finish, preserving the interrupted authority.
+            deadline = time.monotonic()+10
+            while curl('/')[0] != 200:
+                assert time.monotonic() < deadline, 'Interrupted reload did not reach actual TLS site'
+                time.sleep(.1)
+        finally:
+            if worker.poll() is None:
+                worker.kill()
+                worker.communicate(timeout=40)
+            override.unlink()
+            ctl('daemon-reload')
+        interrupted = (prepared/'site.json').read_bytes()
+        assert json.loads(interrupted)['phase'] == 'reloading'
+        refused(call())
+        assert (prepared/'site.json').read_bytes() == interrupted
+        target.write_bytes(expected+b'\n# operator change\n')
+        try:
+            recover(False)
+            assert target.read_bytes() == expected+b'\n# operator change\n'
+            assert (prepared/'site.json').read_bytes() == interrupted
+        finally:
+            target.write_bytes(expected)
+        marker = Path('/var/lib/gojet-installer-authority/installed.lock')
+        marker.touch(mode=0o600)
+        try:
+            recover(False)
+        finally:
+            marker.unlink()
+        recover()
+        state = json.loads((prepared/'site.json').read_text())
+        assert state['phase'] == 'recovered' and state['recovered_from'] == 'reloading' and state['recovery_count'] == 2
+        assert not target.exists()
+        deadline = time.monotonic()+10
+        while curl('/')[0] != 0:
+            assert time.monotonic() < deadline, 'Recovered site still accepts new connections'
+            time.sleep(.1)
+        assert (prepared/'data/journal.json').read_bytes() == data_before
+        assert (prepared/'services.json').read_bytes() == services_before
         result = call()
         assert result.returncode == 0 and not result.stderr, 'Root site activation failed'
         assert json.loads(result.stdout) == dict(site_configured=True, already_applied=False, installation_complete=False)
@@ -102,6 +179,7 @@ def verify_site(root, release, prepared, profile):
         assert curl('/', headers=['Host: unrelated.invalid'])[0] == 421
         status, _, headers = curl('/login?next=%2Fapp', tls=False)
         assert status == 308 and ('location: '+profile['origin']+'/login?next=%2Fapp').lower() in headers.lower()
+        recover(False)  # Never tear down an already successful site.
         repeated = call()
         assert repeated.returncode == 0 and not repeated.stderr
         assert json.loads(repeated.stdout) == dict(site_configured=True, already_applied=True, installation_complete=False)

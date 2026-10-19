@@ -92,6 +92,7 @@ jobs:
           set -euo pipefail
           php8.3 -l installer/src/SiteActivation.php
           php8.3 -l installer/bin/activate-site.php
+          php8.3 -l installer/bin/recover-site.php
           php8.3 -l installer/src/ServiceActivation.php
           php8.3 -l installer/bin/activate-services.php
           php8.3 -l installer/bin/recover-services.php

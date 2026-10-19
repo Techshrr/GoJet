@@ -121,7 +121,7 @@ explicitly incomplete. This does not roll back service or database state.
 
 CI injects an actual failing systemd ExecReload on a disposable Nginx instance,
 checks owned-file removal and failed-retry barriers, restores the command, and
-performs explicit verified fixture recovery. Successful execution then serves the
+performs explicit recovery through the shipped root CLI. Successful execution then serves the
 actual packaged website bytes and real API/redirect services through verified
 localhost TLS. HTTP canonical redirect, authorization401/403, wrong Host421 and
 Installer404 are checked. Existing operator files and inline listener declarations
@@ -130,3 +130,25 @@ are preserved. The fixture removes only its own vhost and reload override.
 site-configured records native syntax/reload completion, not end-to-end business
 health. Final TLS/provider health, browser flow, completion lock, crash recovery
 and G11 remain required. No production deployment or whole P21 closure is claimed.
+
+
+## Explicit initial site recovery
+
+Run `php8.3 installer/bin/recover-site.php DIRECTORY` as root after investigating
+a failed/interrupted initial site apply. It shares the service activation lock,
+requires the sealed release and ready services, refuses installed.lock or a
+successful site, and only removes a root-owned exact sealed gojet.conf. Changed
+bytes, symlinks and foreign authority require operator review. It validates and
+reloads the remaining native Nginx configuration before recording `recovered`.
+Failed restoration stays `recovering`; the same command may resume after fixing
+the prerequisite. Data and service journals remain unchanged. Recovery retains
+the prior phase and count, permitting subsequent site activation. Repeated recovery
+revalidates and reloads the baseline without changing the recovered journal.
+
+The native test uses the shipped recovery command after actual reload failure,
+then kills the actual root worker during a delayed PID1 reload. The real Nginx
+reload completes and serves the actual TLS site while the journal stays interrupted;
+recovery removes the owned vhost and restores the baseline. It tests changed-site
+preservation, global-lock/nonroot/completion-marker denial, closed recovered
+listeners and successful reapplication. It does not prove machine power-loss or
+full upgrade/restore. No final completion lock or production deployment is implied.
