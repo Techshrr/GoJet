@@ -118,6 +118,21 @@ final class ServiceActivation
             return true;
         } catch (\Throwable) { return false; }
     }
+    /** Read-only readiness for another root phase holding the shared activation lock. */
+    public static function verifyReady(string $directory): array
+    {
+        $seal = InstallationPreparation::verify($directory);
+        $data = json_decode(self::privateFile($directory.'/data/journal.json'), true, 16, JSON_THROW_ON_ERROR);
+        $state = json_decode(self::privateFile($directory.'/services.json'), true, 16, JSON_THROW_ON_ERROR);
+        if (($data['phase'] ?? '') !== 'data-complete' || ($data['source'] ?? '') !== $seal['source']
+            || ($data['request_sha256'] ?? '') !== hash_file('sha256', $directory.'/data/request.json')
+            || ($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source']
+            || ($state['seal_sha256'] ?? '') !== hash_file('sha256', $directory.'/seal.json')
+            || ($state['phase'] ?? '') !== 'services-ready' || !self::healthy($seal)) {
+            throw new \RuntimeException('Verified service readiness required');
+        }
+        return $seal;
+    }
     public static function run(string $directory): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }

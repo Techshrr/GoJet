@@ -10,6 +10,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from native_site_activation_test import verify_site
 
 
 SERVICES = ['logreceiver', 'redirectengine', 'analyticsworker', 'analyticsreconciler',
@@ -156,6 +157,7 @@ def verify_services(root, release, prepared, storage, profile):
                 assert check.returncode == 0, 'Configured storage inaccessible inside actual service sandbox'
         for secret in [profile['database']['password'], *profile['secrets'].values()]:
             assert secret not in logs, 'Private configuration leaked into journal'
+        verify_site(root, release, prepared, profile)
         assert not list(root.rglob('installed.lock'))
     finally:
         if installed:

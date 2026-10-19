@@ -93,3 +93,32 @@ external providers, write the final installation lock or claim installable statu
 Process termination/power-loss recovery and full upgrade/restore remain separate
 acceptance requirements. Privileged activation is exercised only in isolated CI;
 no production deployment is authorized by this implementation.
+
+## Root site activation
+
+`installer/bin/activate-site.php DIRECTORY` uses the same fixed root activation
+lock and requires verified ready services, the complete prepared seal and current
+dependencies. It publishes only `/etc/nginx/conf.d/gojet.conf`, with root0644,
+exclusive creation and fsync. It refuses an existing target, an existing Nginx
+listener on either intended port, unsupported include authority or Nginx warnings.
+The Ubuntu conf.d wildcard must be active. Operators must resolve site conflicts
+explicitly; this initial-install path never edits other vhosts or reuses ports.
+
+The native parser checks the combined Nginx configuration before reload. A private
+site.json records publishing/reloading/site-configured. Repeat verifies identity,
+permissions and native syntax without reloading. A failed/interrupted journal
+blocks automatic retry. On failure, only the exact owned file can be removed;
+if reload was attempted, restoration is also reloaded. Failed restoration remains
+explicitly incomplete. This does not roll back service or database state.
+
+CI injects an actual failing systemd ExecReload on a disposable Nginx instance,
+checks owned-file removal and failed-retry barriers, restores the command, and
+performs explicit verified fixture recovery. Successful execution then serves the
+actual packaged website bytes and real API/redirect services through verified
+localhost TLS. HTTP canonical redirect, authorization401/403, wrong Host421 and
+Installer404 are checked. Existing operator files and inline listener declarations
+are preserved. The fixture removes only its own vhost and reload override.
+
+site-configured records native syntax/reload completion, not end-to-end business
+health. Final TLS/provider health, browser flow, completion lock, crash recovery
+and G11 remain required. No production deployment or whole P21 closure is claimed.

@@ -170,11 +170,11 @@ final class InstallationPreparation
                 throw new \RuntimeException('Prepared input changed');
             }
         }
-        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json', 'units', 'services.json'], 'units/' => array_map(fn($s) => 'gojet-'.$s.'.service', self::SERVICES), 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
+        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json', 'units', 'services.json', 'site.json'], 'units/' => array_map(fn($s) => 'gojet-'.$s.'.service', self::SERVICES), 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
             foreach (scandir($directory.'/'.$prefix) as $name) {
                 if ($name === '.' || $name === '..') { continue; }
                 if (!in_array($name, $allowed, true)) { throw new \RuntimeException('Unexpected prepared input'); }
-                if (($prefix === 'data/' && $name !== 'request.json') || ($prefix === '' && $name === 'services.json')) { self::privateFile($directory.'/'.$prefix.$name); }
+                if (($prefix === 'data/' && $name !== 'request.json') || ($prefix === '' && in_array($name, ['services.json', 'site.json'], true))) { self::privateFile($directory.'/'.$prefix.$name); }
             }
         }
         if (!is_array($seal['tls_files']) || count($seal['tls_files']) !== 2) { throw new \RuntimeException('Invalid TLS binding'); }
