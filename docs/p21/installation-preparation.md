@@ -8,7 +8,7 @@ release against the separately approved manifest digest and source before runnin
 its native identity probe. It does not connect to MySQL or start services.
 
 The tool derives all eight environment files, the product Nginx configuration and
-the existing root data request from this single profile. Database, Redis, origin,
+the existing root data request and dependency probe settings from this single profile. Database, Redis, origin,
 Admin encryption key and release identity therefore cannot diverge through separate
 operator inputs. Storage must not overlap the release or prepared job; TLS files
 must be distinct and outside writable storage and the prepared job. These are path
@@ -23,7 +23,13 @@ Never expose the prepared directory or stdin credentials to Installer FPM.
 
 `installer/bin/run-prepared-data.php DIRECTORY` rechecks the private directory,
 exact input inventory, links, ownership, modes, hashes, TLS and complete release
-before delegating to the existing DataBootstrap worker. That worker retains its
+and runs the existing live dependency preflight before delegating to the existing
+DataBootstrap worker. Schema2 plans bind the probe inputs; schema1 preparation
+records are rejected and require a fresh destination. Readiness is never cached
+from preparation. Stopped Nginx/FPM/Redis or changed storage permissions reject
+before the data journal or any migration is created. Restoring dependencies permits
+the unchanged plan to proceed. This does not eliminate failures occurring after
+preflight: the data worker still records those failures and blocks unsafe retry. That worker retains its
 exclusive lock, immutable migrations, inherited Admin bootstrap, durable journal,
 repeat no-op and failure/interruption recovery barrier. Admin business validation
 remains with the existing native authority. Failed data initialization requires
@@ -32,6 +38,5 @@ verified recovery; editing inputs is not a retry mechanism.
 The payload CI exercises the actual archive against native MySQL8, Redis and
 Nginx, checks refusal before any database mutation, applies all31 migrations,
 creates exactly one initial administrator/audit event, and checks repeat no-op.
-This is the root preparation/data phase only. Web submission, full dependency and
-site checks at apply time, service activation, final health and completion lock
+This is the root preparation/data phase only. Web submission, site conflict checks and dependency rechecks at service activation, service activation, final health and completion lock
 are still required before an installable release or P21 closure.

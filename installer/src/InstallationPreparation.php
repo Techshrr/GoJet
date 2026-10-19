@@ -6,6 +6,7 @@ require_once __DIR__.'/PackageIntegrity.php';
 require_once __DIR__.'/NativeConfiguration.php';
 require_once __DIR__.'/ProductWebConfig.php';
 require_once __DIR__.'/DataBootstrap.php';
+require_once __DIR__.'/DependencyPreflight.php';
 
 /** Root-private preparation and the existing data phase, not service apply or final completion. */
 final class InstallationPreparation
@@ -84,7 +85,11 @@ final class InstallationPreparation
             'admin' => $input['admin'], 'admin_cipher' => ['id' => $p['secrets']['key_id'], 'key_hex' => $p['secrets']['admin']],
             'origin' => $config['origin']];
         DataBootstrap::validateRequest($data);
-        $files = ['data/request.json' => json_encode($data, JSON_THROW_ON_ERROR)."\n", 'nginx.conf' => $nginx];
+        // Derive live dependency probes from the same validated settings, never a second client profile.
+        $dependencies = ['release' => $release, 'manifest_sha256' => $manifestHash, 'source' => $source,
+            'database' => $p['database'], 'redis' => $p['redis'], 'storage' => $p['files']['root'],
+            'clamav_socket' => $p['files']['clamav_socket']];
+        $files = ['dependencies.json' => json_encode($dependencies, JSON_THROW_ON_ERROR)."\n", 'data/request.json' => json_encode($data, JSON_THROW_ON_ERROR)."\n", 'nginx.conf' => $nginx];
         foreach (ServiceEnvironment::render($config['services']) as $name => $value) { $files['environment/'.$name] = $value; }
         $external = [];
         foreach (['certificate', 'private_key'] as $key) {
@@ -106,7 +111,7 @@ final class InstallationPreparation
             if (!mkdir($stage, 0700) || !mkdir($stage.'/data', 0700) || !mkdir($stage.'/environment', 0700)) { throw new \RuntimeException('Preparation staging failed'); }
             $hashes = [];
             foreach ($files as $name => $value) { self::write($stage.'/'.$name, $value); $hashes[$name] = hash('sha256', $value); }
-            self::write($stage.'/seal.json', json_encode(['schema' => 1, 'source' => $source, 'release' => $release,
+            self::write($stage.'/seal.json', json_encode(['schema' => 2, 'source' => $source, 'release' => $release,
                 'manifest_sha256' => $manifestHash, 'files' => $hashes, 'tls_files' => $external], JSON_THROW_ON_ERROR)."\n");
             self::sync($stage.'/data'); self::sync($stage.'/environment'); self::sync($stage);
             if (!rename($stage, $destination)) { throw new \RuntimeException('Preparation publication failed'); }
@@ -127,8 +132,8 @@ final class InstallationPreparation
         self::root(); self::privateDirectory($directory);
         $seal = json_decode(self::privateFile($directory.'/seal.json'), true, 16, JSON_THROW_ON_ERROR);
         self::keys($seal, ['schema', 'source', 'release', 'manifest_sha256', 'files', 'tls_files']);
-        if ($seal['schema'] !== 1) { throw new \RuntimeException('Invalid preparation seal'); }
-        $names = ['data/request.json', 'nginx.conf'];
+        if ($seal['schema'] !== 2) { throw new \RuntimeException('Invalid preparation seal'); }
+        $names = ['dependencies.json', 'data/request.json', 'nginx.conf'];
         foreach (self::SERVICES as $service) { $names[] = 'environment/'.$service.'.env'; }
         self::keys($seal['files'], $names);
         foreach (['data', 'environment'] as $name) { self::privateDirectory($directory.'/'.$name); }
@@ -137,7 +142,7 @@ final class InstallationPreparation
                 throw new \RuntimeException('Prepared input changed');
             }
         }
-        foreach (['' => ['data', 'environment', 'nginx.conf', 'seal.json'], 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
+        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json'], 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
             foreach (scandir($directory.'/'.$prefix) as $name) {
                 if ($name === '.' || $name === '..') { continue; }
                 if (!in_array($name, $allowed, true)) { throw new \RuntimeException('Unexpected prepared input'); }
@@ -161,6 +166,12 @@ final class InstallationPreparation
         PackageIntegrity::verify($seal['release'], $seal['manifest_sha256'], $seal['source']);
         $request = json_decode(self::privateFile($directory.'/data/request.json'), true, 16, JSON_THROW_ON_ERROR);
         if ($request['release'] !== $seal['release'] || $request['source'] !== $seal['source']) { throw new \RuntimeException('Prepared source mismatch'); }
+        // Readiness must be current at execution; preparation is not a health authority.
+        $dependencies = json_decode(self::privateFile($directory.'/dependencies.json'), true, 16, JSON_THROW_ON_ERROR);
+        if ($dependencies['release'] !== $seal['release'] || $dependencies['source'] !== $seal['source']
+            || $dependencies['manifest_sha256'] !== $seal['manifest_sha256']) { throw new \RuntimeException('Prepared dependency identity mismatch'); }
+        $readiness = DependencyPreflight::check($dependencies);
+        if ($readiness['ready'] !== true) { throw new \RuntimeException('Native dependencies not ready'); }
         return DataBootstrap::run($directory.'/data');
     }
 }

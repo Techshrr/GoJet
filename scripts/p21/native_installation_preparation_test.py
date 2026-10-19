@@ -4,6 +4,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import secrets
 import shutil
@@ -44,7 +45,10 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
     certificate.chmod(0o644)
     key.chmod(0o600)
     storage = root/'storage'
-    storage.mkdir(mode=0o700)
+    account = pwd.getpwnam('gojet')
+    for directory in [storage, storage/'quarantine', storage/'published']:
+        directory.mkdir(mode=0o700)
+        os.chown(directory, account.pw_uid, account.pw_gid)
     profile = dict(schema='gojet.native-configuration.v1', origin='https://localhost:18443',
         database=dict(port=3306, name='gojet_p21_prepared', user='gojet_prepared', password='p21-ci-only'),
         redis=dict(port=6379, db=5, password=''),
@@ -119,13 +123,16 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
     assert prepared['redis'] == dict(host='127.0.0.1', **profile['redis'])
     assert prepared['admin'] == request['admin'] and prepared['origin'] == profile['origin']
     assert prepared['admin_cipher'] == dict(id=profile['secrets']['key_id'], key_hex=profile['secrets']['admin'])
+    dependencies = json.loads((destination/'dependencies.json').read_text())
+    assert dependencies['database'] == profile['database'] and dependencies['redis'] == profile['redis']
+    assert dependencies['storage'] == str(storage) and dependencies['source'] == source
     seal_before = (destination/'seal.json').read_bytes()
     # Validate the composed configuration with the real installed Nginx parser.
     nginx = root/'nginx.conf'
     nginx.write_text('events {}\nhttp { include /etc/nginx/mime.types; include '+str(destination/'nginx.conf')+'; }\n')
     check = subprocess.run(['nginx', '-t', '-c', str(nginx)], capture_output=True, timeout=15)
     assert check.returncode == 0, 'Prepared product Nginx configuration invalid'
-    for path in [destination/'data/request.json', destination/'environment/platformapi.env',
+    for path in [destination/'dependencies.json', destination/'data/request.json', destination/'environment/platformapi.env',
                  destination/'nginx.conf', certificate, key, release/'deploy/sysusers/gojet.conf']:
         original = path.read_bytes()
         path.write_bytes(original+b'\n')
@@ -155,6 +162,19 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
     refused(execute())
     extra.unlink()
     assert (destination/'seal.json').read_bytes() == seal_before
+    # Changes after preparation must prevent any migration, even with an intact seal.
+    storage.chmod(0o755)
+    try:
+        refused(execute())
+    finally:
+        storage.chmod(0o700)
+    for unit in ['nginx.service', 'php8.3-fpm.service', 'redis-server.service']:
+        subprocess.run(['systemctl', 'stop', unit], check=True, capture_output=True, timeout=30)
+        try:
+            refused(execute())
+        finally:
+            subprocess.run(['systemctl', 'start', unit], check=True, capture_output=True, timeout=30)
+    assert (destination/'seal.json').read_bytes() == seal_before
     result = execute()
     assert result.returncode == 0 and not result.stderr, 'Prepared native data execution failed'
     assert json.loads(result.stdout) == dict(data_complete=True, already_applied=False, installation_complete=False)
@@ -172,5 +192,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     preparation_without_database_mutation=True, root_private_plan=True, source_identity_bound=True,
     existing_job_and_concurrent_preparation_rejected=True, tls_content_and_mode_changes_rejected=True,
     prepared_input_and_release_tampering_rejected=True, links_and_owner_changes_rejected=True,
+    current_dependencies_checked_before_migration=True, stopped_dependencies_block_data_execution=True,
+    changed_storage_permissions_block_data_execution=True, restored_dependencies_allow_execution=True,
     native_migrations_applied=31, inherited_admin_created=True, repeat_noop=True,
     installation_complete=False, final_installation_lock_written=False)))
