@@ -13,6 +13,7 @@ import sys
 import tarfile
 import tempfile
 from archive import verify_archive
+from native_prepared_services_test import verify_services
 
 repo = Path(__file__).resolve().parents[2]
 archive, source = Path(sys.argv[1]).resolve(), sys.argv[2]
@@ -28,7 +29,7 @@ def sql(query):
         'gojet_p21_prepared', '-e', query], env=env | {'MYSQL_PWD': 'p21-ci-only'}, text=True, timeout=15).strip()
 
 
-with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
+with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as temporary:
     root = Path(temporary)
     root.chmod(0o755)
     release = root/'release'
@@ -113,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
     assert sql('SHOW TABLES') == ''
     refused(prepare(), True)
     refused(execute(nonroot=True))
-    for path in [destination, destination/'environment', destination/'data']:
+    for path in [destination, destination/'environment', destination/'data', destination/'units']:
         assert path.stat().st_uid == 0 and path.stat().st_mode & 0o7777 == 0o700
     for path in destination.rglob('*'):
         if path.is_file():
@@ -132,7 +133,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
     nginx.write_text('events {}\nhttp { include /etc/nginx/mime.types; include '+str(destination/'nginx.conf')+'; }\n')
     check = subprocess.run(['nginx', '-t', '-c', str(nginx)], capture_output=True, timeout=15)
     assert check.returncode == 0, 'Prepared product Nginx configuration invalid'
-    for path in [destination/'dependencies.json', destination/'data/request.json', destination/'environment/platformapi.env',
+    for path in [destination/'units/gojet-platformapi.service', destination/'dependencies.json', destination/'data/request.json', destination/'environment/platformapi.env',
                  destination/'nginx.conf', certificate, key, release/'deploy/sysusers/gojet.conf']:
         original = path.read_bytes()
         path.write_bytes(original+b'\n')
@@ -186,6 +187,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-') as temporary:
         assert secret.encode() not in result.stdout+result.stderr
     journal = (destination/'data/journal.json').read_text()
     assert request['admin']['password'] not in journal and profile['secrets']['admin'] not in journal
+    verify_services(root, release, destination, storage, profile)
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
     actual_release_preparation=True, typed_configuration_data_binding=True, native_nginx_syntax=True,
@@ -194,5 +196,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     prepared_input_and_release_tampering_rejected=True, links_and_owner_changes_rejected=True,
     current_dependencies_checked_before_migration=True, stopped_dependencies_block_data_execution=True,
     changed_storage_permissions_block_data_execution=True, restored_dependencies_allow_execution=True,
+    eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
+    custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
     native_migrations_applied=31, inherited_admin_created=True, repeat_noop=True,
     installation_complete=False, final_installation_lock_written=False)))

@@ -54,6 +54,33 @@ final class InstallationPreparation
     {
         return $a === $b || str_starts_with($a, $b.'/') || str_starts_with($b, $a.'/');
     }
+    /** Bind packaged hardening to immutable release, private environment and configured storage. */
+    private static function units(string $release, string $destination, string $storage): array
+    {
+        foreach ([$release, $destination, $storage] as $path) {
+            if (!preg_match('~^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$~D', $path)
+                || in_array('.', explode('/', $path), true) || in_array('..', explode('/', $path), true)) {
+                throw new \RuntimeException('Unsafe service path');
+            }
+        }
+        $units = [];
+        foreach (self::SERVICES as $name) {
+            $template = file_get_contents($release.'/deploy/systemd/gojet-'.$name.'.service');
+            if ($template === false || strlen($template) > 65536) { throw new \RuntimeException('Invalid service template'); }
+            $replace = ['WorkingDirectory=/opt/gojet/current' => 'WorkingDirectory='.$release,
+                'EnvironmentFile=/etc/gojet/'.$name.'.env' => 'EnvironmentFile='.$destination.'/environment/'.$name.'.env',
+                'ExecStart=/opt/gojet/current/bin/'.$name => 'ExecStart='.$release.'/bin/'.$name];
+            if (in_array($name, ['platformapi', 'fileworker'], true)) {
+                $replace['ReadWritePaths=/var/lib/gojet/files'] = 'ReadWritePaths='.$storage;
+            }
+            foreach ($replace as $from => $to) {
+                $template = str_replace("\n".$from."\n", "\n".$to."\n", $template, $count);
+                if ($count !== 1) { throw new \RuntimeException('Service template boundary changed'); }
+            }
+            $units['units/gojet-'.$name.'.service'] = $template;
+        }
+        return $units;
+    }
     public static function create(string $destination, string $release, string $manifestHash, string $source, array $input): array
     {
         self::root();
@@ -91,6 +118,7 @@ final class InstallationPreparation
             'clamav_socket' => $p['files']['clamav_socket']];
         $files = ['dependencies.json' => json_encode($dependencies, JSON_THROW_ON_ERROR)."\n", 'data/request.json' => json_encode($data, JSON_THROW_ON_ERROR)."\n", 'nginx.conf' => $nginx];
         foreach (ServiceEnvironment::render($config['services']) as $name => $value) { $files['environment/'.$name] = $value; }
+        $files += self::units($release, $destination, $p['files']['root']);
         $external = [];
         foreach (['certificate', 'private_key'] as $key) {
             $path = $input['tls'][$key]; $external[$path] = ['sha256' => hash_file('sha256', $path), 'mode' => fileperms($path) & 07777, 'private' => $key === 'private_key'];
@@ -108,12 +136,12 @@ final class InstallationPreparation
             clearstatcache();
             if (file_exists($destination) || is_link($destination)) { throw new \RuntimeException('Prepared job already exists'); }
             $stage = $parent.'/.installation-'.bin2hex(random_bytes(16));
-            if (!mkdir($stage, 0700) || !mkdir($stage.'/data', 0700) || !mkdir($stage.'/environment', 0700)) { throw new \RuntimeException('Preparation staging failed'); }
+            if (!mkdir($stage, 0700) || !mkdir($stage.'/data', 0700) || !mkdir($stage.'/environment', 0700) || !mkdir($stage.'/units', 0700)) { throw new \RuntimeException('Preparation staging failed'); }
             $hashes = [];
             foreach ($files as $name => $value) { self::write($stage.'/'.$name, $value); $hashes[$name] = hash('sha256', $value); }
-            self::write($stage.'/seal.json', json_encode(['schema' => 2, 'source' => $source, 'release' => $release,
+            self::write($stage.'/seal.json', json_encode(['schema' => 3, 'source' => $source, 'release' => $release,
                 'manifest_sha256' => $manifestHash, 'files' => $hashes, 'tls_files' => $external], JSON_THROW_ON_ERROR)."\n");
-            self::sync($stage.'/data'); self::sync($stage.'/environment'); self::sync($stage);
+            self::sync($stage.'/data'); self::sync($stage.'/environment'); self::sync($stage.'/units'); self::sync($stage);
             if (!rename($stage, $destination)) { throw new \RuntimeException('Preparation publication failed'); }
             $stage = null; self::sync($parent);
             return ['prepared' => true, 'source' => $source, 'manifest_sha256' => $manifestHash,
@@ -121,7 +149,7 @@ final class InstallationPreparation
         } finally {
             if ($stage !== null && is_dir($stage)) {
                 foreach (array_merge(array_keys($files), ['seal.json']) as $name) { if (is_file($stage.'/'.$name)) { unlink($stage.'/'.$name); } }
-                foreach (['data', 'environment'] as $name) { if (is_dir($stage.'/'.$name)) { rmdir($stage.'/'.$name); } }
+                foreach (['data', 'environment', 'units'] as $name) { if (is_dir($stage.'/'.$name)) { rmdir($stage.'/'.$name); } }
                 rmdir($stage);
             }
             flock($lock, LOCK_UN); fclose($lock);
@@ -132,17 +160,17 @@ final class InstallationPreparation
         self::root(); self::privateDirectory($directory);
         $seal = json_decode(self::privateFile($directory.'/seal.json'), true, 16, JSON_THROW_ON_ERROR);
         self::keys($seal, ['schema', 'source', 'release', 'manifest_sha256', 'files', 'tls_files']);
-        if ($seal['schema'] !== 2) { throw new \RuntimeException('Invalid preparation seal'); }
+        if ($seal['schema'] !== 3) { throw new \RuntimeException('Invalid preparation seal'); }
         $names = ['dependencies.json', 'data/request.json', 'nginx.conf'];
-        foreach (self::SERVICES as $service) { $names[] = 'environment/'.$service.'.env'; }
+        foreach (self::SERVICES as $service) { $names[] = 'environment/'.$service.'.env'; $names[] = 'units/gojet-'.$service.'.service'; }
         self::keys($seal['files'], $names);
-        foreach (['data', 'environment'] as $name) { self::privateDirectory($directory.'/'.$name); }
+        foreach (['data', 'environment', 'units'] as $name) { self::privateDirectory($directory.'/'.$name); }
         foreach ($names as $name) {
             if (!is_string($seal['files'][$name]) || !hash_equals($seal['files'][$name], hash('sha256', self::privateFile($directory.'/'.$name)))) {
                 throw new \RuntimeException('Prepared input changed');
             }
         }
-        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json'], 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
+        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json', 'units'], 'units/' => array_map(fn($s) => 'gojet-'.$s.'.service', self::SERVICES), 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
             foreach (scandir($directory.'/'.$prefix) as $name) {
                 if ($name === '.' || $name === '..') { continue; }
                 if (!in_array($name, $allowed, true)) { throw new \RuntimeException('Unexpected prepared input'); }

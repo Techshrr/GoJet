@@ -24,7 +24,7 @@ Never expose the prepared directory or stdin credentials to Installer FPM.
 `installer/bin/run-prepared-data.php DIRECTORY` rechecks the private directory,
 exact input inventory, links, ownership, modes, hashes, TLS and complete release
 and runs the existing live dependency preflight before delegating to the existing
-DataBootstrap worker. Schema2 plans bind the probe inputs; schema1 preparation
+DataBootstrap worker. Schema3 plans bind the probe inputs and service units; older preparation
 records are rejected and require a fresh destination. Readiness is never cached
 from preparation. Stopped Nginx/FPM/Redis or changed storage permissions reject
 before the data journal or any migration is created. Restoring dependencies permits
@@ -40,3 +40,23 @@ Nginx, checks refusal before any database mutation, applies all31 migrations,
 creates exactly one initial administrator/audit event, and checks repeat no-op.
 This is the root preparation/data phase only. Web submission, site conflict checks and dependency rechecks at service activation, service activation, final health and completion lock
 are still required before an installable release or P21 closure.
+
+## Prepared systemd units
+
+Schema3 preparation also seals eight unit files derived from the verified packaged
+units. Only the release WorkingDirectory/ExecStart, private EnvironmentFile and the
+two file-consuming services' ReadWritePaths change. Fixed nonroot identities,
+restart policy, dependencies and sandbox protections remain intact. Paths accept
+only literal safe components, with no whitespace or systemd specifier expansion.
+Schema1/2 plans require fresh preparation. No units are installed or enabled by
+preparation or the data worker.
+
+The native payload fixture installs the exact generated units into disposable
+/run/systemd/system, enables them at runtime, starts all eight real binaries, and
+checks their actual process UIDs, executable paths, running states and zero
+restarts. It exercises API authentication and an absent-code redirect response,
+and writes to the custom storage directory from the actual API/fileworker mount
+namespaces as gojet. Units are stopped, disabled and removed in finally. Test
+releases live outside /tmp because the production units retain PrivateTmp=yes.
+These are startup/configuration integration proofs, not full business health,
+external SMTP delivery, production apply, final lock or whole P21 acceptance.
