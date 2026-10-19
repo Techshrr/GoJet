@@ -1,9 +1,11 @@
 """Actual eight-daemon startup from sealed unit bytes, only in disposable native CI."""
+import fcntl
 import json
 import os
 from pathlib import Path
 import pwd
 import secrets
+import socket
 import subprocess
 import time
 import urllib.error
@@ -41,26 +43,74 @@ def verify_services(root, release, prepared, storage, profile):
             path = Path(directory)/unit
             assert not path.exists() and not path.is_symlink(), 'Existing GoJet unit blocks isolated fixture'
         assert systemctl('is-active', unit, check=False).stdout.strip() not in ['active', 'activating']
+    authority = Path('/var/lib/gojet-installer-authority')
+    authority.mkdir(mode=0o755, exist_ok=True)
+    assert authority.stat().st_uid == 0 and authority.stat().st_mode & 0o022 == 0
+    assert not (authority/'installed.lock').exists()
+    command = ['php8.3', str(release/'installer/bin/activate-services.php'), str(prepared)]
+
+    def activate(nonroot=False):
+        return subprocess.run((['runuser', '-u', 'nobody', '--'] if nonroot else [])+command,
+            capture_output=True, timeout=150, cwd=root, env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin'})
+
+    def refused(result):
+        assert result.returncode == 1 and not result.stdout
+        assert result.stderr == b'Service activation refused; inspect private journal and verify recovery.\n'
+
+    refused(activate(True))
+    marker = authority/'installed.lock'
+    marker.touch(mode=0o600)
     try:
-        for unit in units:
-            target = Path('/run/systemd/system')/unit
-            with target.open('xb') as handle:
-                handle.write((prepared/'units'/unit).read_bytes())
-            target.chmod(0o644)
-            installed.append(target)
-        check = subprocess.run(['systemd-analyze', 'verify', *map(str, installed)], capture_output=True, timeout=30)
-        assert check.returncode == 0, 'Rendered units failed native systemd verification'
+        refused(activate())
+    finally:
+        marker.unlink()
+    with (authority/'service-activation.lock').open('wb') as lock:
+        os.chmod(lock.name, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        refused(activate())
+    conflict = Path('/etc/systemd/system/gojet-platformapi.service')
+    conflict.write_text('[Unit]\nDescription=Existing operator authority\n')
+    conflict.chmod(0o644)
+    try:
+        refused(activate())
+        assert conflict.read_text() == '[Unit]\nDescription=Existing operator authority\n'
+    finally:
+        conflict.unlink()
         systemctl('daemon-reload')
-        systemctl('enable', '--runtime', *units)
+    assert not (prepared/'services.json').exists()
+    journal = (prepared/'data/journal.json').read_bytes()
+    # A real occupied API port causes the actual API binary to fail during activation.
+    blocker = socket.socket()
+    blocker.bind(('127.0.0.1', 8081))
+    blocker.listen()
+    try:
+        refused(activate())
+        state = json.loads((prepared/'services.json').read_text())
+        assert state['phase'] == 'failed' and state['cleanup_complete'] is True
+        failed = (prepared/'services.json').read_bytes()
+        refused(activate())
+        assert (prepared/'services.json').read_bytes() == failed
+        assert blocker.getsockname()[1] == 8081  # The unrelated port owner was not stopped.
+    finally:
+        blocker.close()
+    for unit in units:
+        assert not (Path('/etc/systemd/system')/unit).exists()
+        assert systemctl('is-active', unit, check=False).stdout.strip() not in ['active', 'activating']
+        assert not (Path('/etc/systemd/system/multi-user.target.wants')/unit).is_symlink()
+    assert (prepared/'data/journal.json').read_bytes() == journal
+    # Explicit operator recovery in the disposable fixture after verifying complete cleanup.
+    # Production has no automatic failed-state reset; database state is never rolled back here.
+    (prepared/'services.json').unlink()
+    try:
+        result = activate()
+        assert result.returncode == 0 and not result.stderr, 'Root native activation failed'
+        assert json.loads(result.stdout) == dict(services_ready=True, already_applied=False, installation_complete=False)
+        installed = [Path('/etc/systemd/system')/unit for unit in units]
+        repeat = activate()
+        assert repeat.returncode == 0 and not repeat.stderr
+        assert json.loads(repeat.stdout) == dict(services_ready=True, already_applied=True, installation_complete=False)
         for unit in units:
-            assert systemctl('is-enabled', unit).stdout.strip() == 'enabled-runtime'
-        systemctl('start', units[0])
-        # Dependency ordering does not imply socket readiness: wait for the real collector.
-        deadline = time.monotonic()+10
-        while not Path('/run/gojet-log/collector.sock').is_socket():
-            assert time.monotonic() < deadline, 'Native logreceiver socket unavailable'
-            time.sleep(.1)
-        systemctl('start', *units[1:])
+            assert systemctl('is-enabled', unit).stdout.strip() == 'enabled'
         expected = {name: name+(' listening' if name in ['platformapi', 'redirectengine'] else ' started') for name in SERVICES}
         deadline = time.monotonic()+20
         while True:
@@ -110,7 +160,7 @@ def verify_services(root, release, prepared, storage, profile):
     finally:
         if installed:
             systemctl('stop', *units, check=False)
-            systemctl('disable', '--runtime', *units, check=False)
+            systemctl('disable', *units, check=False)
             for path in installed:
                 path.unlink()
             systemctl('daemon-reload')

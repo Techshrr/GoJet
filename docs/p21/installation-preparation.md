@@ -51,12 +51,45 @@ only literal safe components, with no whitespace or systemd specifier expansion.
 Schema1/2 plans require fresh preparation. No units are installed or enabled by
 preparation or the data worker.
 
-The native payload fixture installs the exact generated units into disposable
-/run/systemd/system, enables them at runtime, starts all eight real binaries, and
+The native payload fixture now invokes the shipped root activation CLI in a
+disposable host. It installs the exact generated units, starts all eight real binaries, and
 checks their actual process UIDs, executable paths, running states and zero
 restarts. It exercises API authentication and an absent-code redirect response,
 and writes to the custom storage directory from the actual API/fileworker mount
 namespaces as gojet. Units are stopped, disabled and removed in finally. Test
 releases live outside /tmp because the production units retain PrivateTmp=yes.
-These are startup/configuration integration proofs, not full business health,
-external SMTP delivery, production apply, final lock or whole P21 acceptance.
+These are service activation/startup proofs, not full business health,
+external SMTP delivery, production deployment, final lock or whole P21 acceptance.
+
+## Root service activation
+
+`installer/bin/activate-services.php DIRECTORY` is a root-only CLI. The fixed
+root authority directory `/var/lib/gojet-installer-authority` must first be
+provisioned using the packaged tmpfiles policy. Its lock serializes activation
+across all jobs; an installed.lock blocks this initial-install path. The executor
+revalidates the full prepared plan and current dependencies, requires the exact
+completed data journal, and refuses existing units, aliases, wanted symlinks or
+drop-in overrides. It accepts no command, binary, unit-name or destination override.
+
+It publishes the eight sealed units to /etc/systemd/system using exclusive create,
+syncs them, enables them and starts the real logreceiver before its consumers.
+Readiness checks actual nonroot executable identities, enabled/running states,
+zero restarts, API discovery, redirect database/cache health and the private log
+socket. Repeating a successful request rechecks current health and returns no-op.
+The private services.json journal records publication, startup and readiness.
+
+On failure, cleanup stops/disables only the units created by this invocation,
+after verifying their bytes and ownership, then removes those units. It does not
+stop an unrelated listener, modify existing units, undo migrations or remove data.
+A changed unit or incomplete cleanup requires manual verified recovery. Failed or
+interrupted journals block automatic retry even after the initial cause disappears.
+The native CI fixture proves a real occupied API port failure, cleanup, unchanged
+data journal and blocked retry. It explicitly verifies cleanup before clearing the
+failed journal as a disposable operator-recovery exercise; this is not an automatic
+production recovery command. Success and repeat then use the shipped root CLI.
+
+This service phase does not apply Nginx, provision web-to-root submission, validate
+external providers, write the final installation lock or claim installable status.
+Process termination/power-loss recovery and full upgrade/restore remain separate
+acceptance requirements. Privileged activation is exercised only in isolated CI;
+no production deployment is authorized by this implementation.
