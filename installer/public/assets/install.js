@@ -2,6 +2,7 @@
   'use strict';
   const form = document.querySelector('#installer-login');
   const token = document.querySelector('#bootstrap-token');
+  const title = document.querySelector('#installer-title');
   const message = document.querySelector('#installer-message');
   const submit = document.querySelector('#installer-apply');
   const refresh = document.querySelector('#installer-refresh');
@@ -19,6 +20,7 @@
         ...(body ? {body: JSON.stringify(body)} : {}), signal: controller.signal});
       if (response.status === 404) {
         csrf = null; form.hidden = true; submit.hidden = true; refresh.hidden = true;
+        title.textContent = 'Installer unavailable';
         tell('The installer is closed or unavailable. Check the installation result with your server administrator before opening Admin.');
         return null;
       }
@@ -38,15 +40,18 @@
     if (!state) return;
     submit.hidden = true;
     if (state.step === 'services' && state.status === 'ready') {
+      title.textContent = 'Ready to install';
       submit.hidden = false;
       if (!csrf) form.hidden = false;
       tell(csrf ? 'The server-approved installation plan is ready. Submit it once to queue installation.'
         : 'Authenticate to submit the server-approved installation plan.');
     } else if (state.step === 'services' && state.status === 'checking') {
       csrf = null;
+      title.textContent = 'Installation requested';
       tell('Installation request submitted. Awaiting the server executor or its result. Refresh status to check whether the installer has closed. Do not submit again.');
     } else {
       csrf = null;
+      title.textContent = 'Preparation required';
       tell('Interactive configuration is not available in this release. Your server administrator must prepare and approve the installation plan first.');
     }
   }

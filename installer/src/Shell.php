@@ -8,6 +8,9 @@ final class Shell
     public static function interactive(): string
     {
         $html = self::render();
+        $html = str_replace('<p class="installer-state">session-ready</p>', '', $html);
+        $html = str_replace('<h1>Welcome to GoJet V10</h1>', '<h1 id="installer-title">Authorize installation</h1>', $html);
+        $html = str_replace('Verify this server before starting the native installation.', 'Continue with a server-approved installation plan.', $html);
         $start = strpos($html, '<dl>');
         $end = strpos($html, '</section>', $start);
         $controls = '<p id="installer-message" role="status" aria-live="polite" aria-atomic="true">Enter the installation access token supplied by your server administrator.</p>'
