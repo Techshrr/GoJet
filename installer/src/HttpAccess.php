@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/InstallState.php';
 
-/** HTTP boundary only. Privileged apply and step validators are not exposed here yet. */
+/** HTTP authentication and bounded apply mailbox; privileged execution stays outside FPM. */
 final class HttpAccess
 {
     private const ROUTES = ['/install', '/install/', '/install/environment', '/install/data',
@@ -58,6 +58,14 @@ final class HttpAccess
             if (!is_string($session)) { return $reply(401, 'Installer authentication required'); }
             $current = $state->inspect($session);
             if ($method === 'POST') {
+                if ($uri === '/install/services') {
+                    try { $data = json_decode($body, true, 8, JSON_THROW_ON_ERROR); }
+                    catch (\Throwable) { return $reply(400, 'Invalid request'); }
+                    if (!is_array($data) || array_keys($data) !== ['csrf'] || !is_string($data['csrf'])) {
+                        return $reply(400, 'Invalid request');
+                    }
+                    return [202, $headers, $state->submitApply($session, $data['csrf'])];
+                }
                 // No public route may turn an arbitrary client success flag into an approved check.
                 return $reply(503, 'Installer step execution unavailable');
             }
@@ -69,6 +77,8 @@ final class HttpAccess
             return [200, $headers, $current];
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
+                'Invalid installer CSRF token' => $reply(403, 'Invalid installer CSRF token'),
+                'Installer transition forbidden' => $reply(409, 'Installer step unavailable'),
                 'Installer unavailable' => $reply(404, 'Not found'),
                 'Installer authentication failed', 'Installer authentication required' => $reply(401, 'Installer authentication required'),
                 'Installer authentication rate limited' => [429, $headers + ['Retry-After' => '60'], ['error' => 'Try again later']],

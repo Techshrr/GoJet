@@ -7,6 +7,7 @@ from pathlib import Path
 import socket
 import subprocess
 from native_prepared_services_test import SERVICES
+from native_web_apply_test import prepare_web_apply
 
 
 def verify_apply(root, release, source, digest, request):
@@ -69,7 +70,7 @@ def verify_apply(root, release, source, digest, request):
         assert sql('SELECT COUNT(*) FROM admin_administrators') == '1'
         recovery = subprocess.run(['php8.3', str(release/'installer/bin/recover-services.php'), str(destination)], capture_output=True, timeout=120)
         assert recovery.returncode == 0 and not recovery.stderr
-        first = call()
+        first = prepare_web_apply(root, release, destination, source)
         assert first == dict(source=source, installation_complete=True, already_applied=False)
         assert (destination/'data/journal.json').read_bytes() == saved
         assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
@@ -89,6 +90,14 @@ def verify_apply(root, release, source, digest, request):
             assert profile['admin']['password'] not in journal
             assert profile['configuration']['database']['password'] not in journal
     finally:
+        # Root mailbox artifacts belong solely to this disposable fixture.
+        binding = marker.parent/'web-apply.json'
+        if binding.exists():
+            assert json.loads(binding.read_text())['prepared'] == str(destination)
+            receipt = marker.parent/'web-apply-started.json'
+            if receipt.exists():
+                receipt.unlink()
+            binding.unlink()
         # Remove only this fixture's exact owned site/units and its final marker.
         if marker.exists():
             assert json.loads(marker.read_text())['source'] == source

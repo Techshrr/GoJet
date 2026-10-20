@@ -192,7 +192,9 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
     verify_apply(root, release, source, digest, request)
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
-    actual_release_preparation=True, single_command_native_apply=True, apply_failure_resume_preserves_data=True,
+    actual_release_preparation=True, single_command_native_apply=True,
+    unprivileged_http_apply_mailbox=True, root_bound_web_apply=True, web_apply_replay_refused=True,
+    browser_apply_submission_verified=False, apply_failure_resume_preserves_data=True,
     apply_global_serialization=True, foreign_completion_refused=True, typed_configuration_data_binding=True, native_nginx_syntax=True,
     preparation_without_database_mutation=True, root_private_plan=True, source_identity_bound=True,
     existing_job_and_concurrent_preparation_rejected=True, tls_content_and_mode_changes_rejected=True,

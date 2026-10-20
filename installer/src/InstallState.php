@@ -21,11 +21,23 @@ final class InstallState
     /** Explicit provisioning only. Missing/corrupt state during requests must never reopen an install. */
     public function initialize(): void
     {
-        $this->locked(function (): void {
+        $this->initializeAt(0);
+    }
+
+    /** Only a root-verified sealed plan may start at the apply step. */
+    public function initializePreparedApply(): void
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        $this->initializeAt(4);
+    }
+
+    private function initializeAt(int $step): void
+    {
+        $this->locked(function () use ($step): void {
             if (file_exists($this->directory.'/state.json') || is_link($this->directory.'/state.json')) {
                 throw new \RuntimeException('Installer already initialized');
             }
-            $this->save(['schema' => 2, 'step' => 0, 'status' => 'ready', 'session' => null,
+            $this->save(['schema' => 2, 'step' => $step, 'status' => 'ready', 'session' => null,
                 'expires' => 0, 'csrf' => null, 'attempts' => 0, 'retry_at' => 0]);
         });
     }
@@ -91,6 +103,24 @@ final class InstallState
             $s['csrf'] = hash('sha256', $next);
             $this->save($s);
             return ['step' => self::STEPS[$s['step']], 'status' => $s['status'], 'csrf' => $next];
+        });
+    }
+
+    /** Consume the session CSRF before publishing the bounded approved-plan request. */
+    public function submitApply(string $session, string $csrf): array
+    {
+        return $this->locked(function () use ($session, $csrf): array {
+            $s = $this->authorized($session);
+            if (!preg_match('/^[a-f0-9]{64}$/D', $csrf) || !is_string($s['csrf'])
+                || !hash_equals($s['csrf'], hash('sha256', $csrf))) {
+                throw new \RuntimeException('Invalid installer CSRF token');
+            }
+            $s['csrf'] = null; $this->save($s);
+            if ($s['step'] !== 4 || $s['status'] !== 'ready') { throw new \RuntimeException('Installer transition forbidden'); }
+            $s['status'] = 'checking'; $this->save($s);
+            require_once __DIR__.'/ApplyRequest.php';
+            ApplyRequest::enqueue($this->directory);
+            return ['step' => 'services', 'status' => 'checking'];
         });
     }
 

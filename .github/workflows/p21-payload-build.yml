@@ -90,6 +90,10 @@ jobs:
       - name: Verify sealed preparation through actual native database bootstrap
         run: |
           set -euo pipefail
+          php8.3 -l installer/src/ApplyRequest.php
+          php8.3 -l installer/src/WebInstallationApply.php
+          php8.3 -l installer/bin/provision-web-apply.php
+          php8.3 -l installer/bin/run-web-apply.php
           php8.3 -l installer/src/InstallationApply.php
           php8.3 -l installer/bin/apply-installation.php
           php8.3 -l installer/src/InstallationCompletion.php

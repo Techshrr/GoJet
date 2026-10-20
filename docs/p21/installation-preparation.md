@@ -214,3 +214,42 @@ then permits the same apply command to finish. All31 migrations and the single
 administrator/audit event remain intact, and the final marker/repeat are checked.
 System changes and marker removal occur only in disposable CI. This CLI closes
 native orchestration; interactive web-to-root submission remains separate work.
+
+### Root-approved web apply mailbox
+
+The shipped `provision-web-apply.php PREPARED_DIRECTORY NEW_STATE_DIRECTORY BOOTSTRAP_SHA256`
+command verifies the sealed plan and provisions a dedicated `gojet-installer` state directory
+starting at the services step. This is specifically an already root-approved plan; it does
+not claim that the browser collected or validated environment/data/site/admin forms.
+The dedicated system account must already exist. The new state directory must be outside
+release, preparation and storage, beneath root-owned non-writable ancestors. Configure the
+existing native installer FPM boundary with this directory and the same bootstrap digest.
+
+After bootstrap authentication, `POST /install/services` accepts only JSON `{"csrf":"..."}`
+with the existing session cookie and exact HTTPS Origin. It consumes the one-time CSRF,
+persists checking, and exclusively publishes a small seal-digest request. HTTP 202 means
+queued, not installed. No path, configuration, command, success flag or secret is accepted
+by this endpoint. Normal unprepared wizard sessions cannot jump to this step.
+
+The operator invokes `php8.3 installer/bin/run-web-apply.php` as root. This command takes no
+arguments: it reads the fixed root-private `/var/lib/gojet-installer-authority/web-apply.json`,
+checks the unprivileged mailbox ownership/mode/link count/bounded contents against that
+binding, verifies the seal and package/dependencies again, and writes an exclusive durable
+`web-apply-started.json` before calling the existing native installation orchestrator.
+Only that orchestrator's successful live health checks can write the final `installed.lock`.
+The HTTP adapter then returns 404. Neither the mailbox nor web state is completion authority.
+
+There is deliberately no automatic retry or background worker installation in this increment.
+Partial provisioning, partial mailbox publication, a failed worker or an interrupted worker
+leaves a barrier for root inspection; re-authentication cannot reset it. Follow the existing
+phase-specific recovery procedures and explicit root apply after diagnosis. Do not remove
+root receipts to retry browser requests. Until final completion, the web state stays checking;
+it does not yet project phase failures or provide an interactive progress experience.
+Bootstrap-to-product vhost transition and the complete interactive/browser flow remain open.
+
+The native payload fixture exercises the shipped HTTP adapter as the real unprivileged
+installer account, rejects missing auth, invalid CSRF, extra fields, replay, forged digests,
+unsafe modes, symlinks and an existing started receipt, then executes the real root worker
+against the prepared native database and eight services through HTTPS health and final lock.
+This is HTTP-adapter integration with injected trusted server variables, **not** a claim of
+real browser/TLS submission. The separate native web fixture remains the TLS/FPM authority.
