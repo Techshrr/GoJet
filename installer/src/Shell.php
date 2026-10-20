@@ -11,7 +11,7 @@ final class Shell
         $start = strpos($html, '<dl>');
         $end = strpos($html, '</section>', $start);
         $controls = '<p id="installer-message" role="status" aria-live="polite" aria-atomic="true">Enter the installation access token supplied by your server administrator.</p>'
-            .'<form id="installer-login"><label for="bootstrap-token">Installation access token</label>'
+            .'<form id="installer-login" method="post" action="/install/"><label for="bootstrap-token">Installation access token</label>'
             .'<input id="bootstrap-token" name="bootstrap_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required minlength="32" maxlength="256" aria-describedby="token-help">'
             .'<p id="token-help">Used only to authorize this installation session.</p>'
             .'<button class="installer-primary" type="submit">Authenticate</button></form>'

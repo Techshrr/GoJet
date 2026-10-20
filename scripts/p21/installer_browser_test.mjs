@@ -31,6 +31,8 @@ try {
     const first = await page.goto(cfg.origin+'/install/');
     assert.equal(first.status(), 401);
     assert.match(first.headers()['content-security-policy'], /script-src 'sha256-/);
+    assert.equal(await page.locator('#installer-login').getAttribute('method'), 'post');
+    assert.equal(await page.locator('#installer-login').getAttribute('action'), '/install/');
     await page.locator('#bootstrap-token').waitFor();
     await page.keyboard.press('Tab');
     assert.equal(await page.locator('#bootstrap-token').evaluate(el => el === document.activeElement), true);
@@ -65,9 +67,22 @@ try {
     assert.equal(submissions, 1);
     assert.deepEqual(errors, []);
     await context.close();
+    // With scripts disabled, the browser must never put the token into a GET URL.
+    if (label === 'desktop') {
+      fs.unlinkSync(cfg.completion);
+      const noJS = await browser.newContext({javaScriptEnabled: false, ignoreHTTPSErrors: true});
+      const fallback = await noJS.newPage();
+      await fallback.goto(cfg.origin+'/install/');
+      await fallback.getByLabel('Installation access token', {exact: true}).fill('non-secret-no-js-fixture-token-0123456789');
+      const response = fallback.waitForResponse(r => r.request().method() === 'POST');
+      await fallback.getByRole('button', {name: 'Authenticate', exact: true}).click();
+      assert.equal((await response).status(), 415);
+      assert.equal(new URL(fallback.url()).search, '');
+      await noJS.close();
+    }
   }
 } finally { await browser.close(); }
 console.log(JSON.stringify({desktop_mobile_browser: true, real_tls_fpm_browser_requests: true,
   keyboard_access: true, no_horizontal_overflow: true, authentication_and_apply_submission: true,
-  no_secret_browser_storage: true, offline_recovery: true, post_lock_closed: true,
+  no_secret_browser_storage: true, no_script_post_only_verified: true, offline_recovery: true, post_lock_closed: true,
   unexpected_console_errors: 0, approved_plan_is_fixture: true, privileged_apply_verified: false}));
