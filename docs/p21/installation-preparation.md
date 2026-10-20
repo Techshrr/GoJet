@@ -253,3 +253,29 @@ unsafe modes, symlinks and an existing started receipt, then executes the real r
 against the prepared native database and eight services through HTTPS health and final lock.
 This is HTTP-adapter integration with injected trusted server variables, **not** a claim of
 real browser/TLS submission. The separate native web fixture remains the TLS/FPM authority.
+
+### Approved-plan browser controls
+
+The existing Installer shell now provides an access-token form, a single approved-plan
+submission action and a read-only status refresh. HTML navigation to `/install/` retains
+HTTP 401 until authenticated but displays the login form; API callers retain JSON errors.
+Authenticated GET with `Accept: application/json` returns only the current step/status.
+The native FPM boundary forwards Accept explicitly. The inline client is authorized by an
+exact SHA256 CSP hash, with same-origin connections; no arbitrary inline script allowance.
+Token input is cleared after submission, CSRF remains only in memory, and no secret is
+written to browser storage. Reload requires authentication again to obtain submission
+CSRF. Submission is never automatically retried after a timeout or connectivity error.
+
+Queued/checking does not assert the root worker is running or successful. Status refresh
+shows a closed/unavailable message after HTTP 404, not an unverified success claim. There
+is no automatic root invocation or bootstrap/product-vhost transition in this change.
+Unprepared sessions explicitly report that interactive configuration is unavailable.
+Full environment/data/site/Admin form collection and phase-level progress remain open.
+
+Native-web CI runs Chromium desktop/mobile against the real isolated Nginx/FPM TLS surface
+using the existing pinned playwright-core dependency. It checks keyboard access, viewport
+overflow, invalid/valid login, request publication, single submission, read-only refresh,
+offline recovery, empty browser storage and final-lock closure, and exports login/queued
+screenshots. The browser ignores only the isolated fixture's self-signed certificate;
+separate Python HTTPS assertions verify its certificate. Browser approval/state are fixture
+inputs; this is not a second claim of privileged execution or full P21-T016 completion.

@@ -73,6 +73,7 @@ final class HttpAccess
                 || in_array($uri, ['/install/services', '/install/health', '/install/complete'], true)) {
                 return $reply(409, 'Installer step unavailable');
             }
+            if (($server['HTTP_ACCEPT'] ?? '') === 'application/json') { return [200, $headers + ['Vary' => 'Accept'], $current]; }
             $headers['Content-Type'] = 'text/html; charset=utf-8';
             return [200, $headers, $current];
         } catch (\RuntimeException $e) {

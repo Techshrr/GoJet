@@ -124,6 +124,12 @@ def main():
             # Verify the actual FPM worker is unprivileged, not merely a rendered pool declaration.
             workers = command(['ps', '-eo', 'user=,args=']).stdout.splitlines()
             assert any(line.strip().startswith('gojet-i') and 'php-fpm: pool gojet-installer' in line for line in workers)
+            browser = command([os.environ['P21_NODE'], str(ROOT/'scripts/p21/installer_browser_test.mjs')],
+                input=json.dumps(dict(origin=origin, state=str(private), completion=str(completion), token=token,
+                    uid=account.pw_uid, gid=account.pw_gid)), timeout=150)
+            browser_evidence = json.loads(browser.stdout)
+            assert browser_evidence['desktop_mobile_browser'] is True
+            (ROOT/'artifacts/v10/P21/native-web/browser.json').write_text(json.dumps(browser_evidence)+'\n')
             completion.touch(mode=0o644)
             # Even code executing as the FPM service account cannot remove or
             # replace root's final authority, or mutate its containing directory.
@@ -150,7 +156,7 @@ def main():
             'private_files_not_served': True, 'root_completion_cannot_be_removed': True,
             'writable_state_reset_cannot_reopen': True, 'request_boundaries': True, 'post_lock_404': True,
             'full_product_vhost_verified': False, 'privileged_apply_verified': False,
-            'browser_verified': False}))
+            'approved_plan_browser_verified': True, 'full_interactive_installer_verified': False}))
 
 
 if __name__ == '__main__':

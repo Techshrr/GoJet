@@ -17,12 +17,17 @@ if (is_resource($input)) { fclose($input); }
 [$status, $headers, $result] = HttpAccess::handle($_SERVER, $_COOKIE, $body,
     (string)getenv('GOJET_INSTALL_STATE_DIR'), (string)getenv('GOJET_INSTALL_BOOTSTRAP_SHA256'),
     (string)getenv('GOJET_INSTALL_ORIGIN'), (string)getenv('GOJET_INSTALL_COMPLETION_FILE'));
+// HTML navigation receives the login surface; API callers keep the original JSON boundary.
+$loginPage = $status === 401 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+    && in_array($_SERVER['REQUEST_URI'] ?? '', ['/install', '/install/'], true)
+    && str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'text/html');
+$htmlPage = $loginPage || ($status === 200 && str_starts_with($headers['Content-Type'], 'text/html'));
+if ($htmlPage) {
+    $headers['Content-Type'] = 'text/html; charset=utf-8';
+    $headers['Content-Security-Policy'] .= '; '.Shell::scriptPolicy();
+    $headers['Vary'] = 'Accept';
+}
 http_response_code($status);
 foreach ($headers as $name => $value) { header($name.': '.$value); }
-if ($status === 200 && str_starts_with($headers['Content-Type'], 'text/html')) {
-    echo Shell::render(match ($result['status']) {
-        'failed' => 'retryable-failure', 'checking' => 'step-checking', default => 'session-ready',
-    });
-} else {
-    echo json_encode($result, JSON_THROW_ON_ERROR);
-}
+if ($htmlPage) { echo Shell::interactive(); }
+else { echo json_encode($result, JSON_THROW_ON_ERROR); }

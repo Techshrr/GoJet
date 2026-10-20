@@ -79,6 +79,7 @@ server {
         fastcgi_param HTTP_HOST \$http_host;
         fastcgi_param HTTP_ORIGIN \$http_origin;
         fastcgi_param HTTP_COOKIE \$http_cookie;
+        fastcgi_param HTTP_ACCEPT \$http_accept;
         fastcgi_connect_timeout 5s;
         fastcgi_read_timeout 30s;
     }

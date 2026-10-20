@@ -2,7 +2,7 @@ name: P21 Native Installer Web
 on:
   push:
     branches: [develop/p21-native-release-package]
-    paths: ['installer/**', 'deploy/sysusers/**', 'scripts/p21/native_web_test.py', '.github/workflows/p21-native-web.yml']
+    paths: ['installer/**', 'deploy/sysusers/**', 'scripts/p21/native_web_test.py', 'scripts/p21/installer_browser_test.mjs', '.github/workflows/p21-native-web.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - name: Prepare frozen browser test tooling
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/p21-browsers
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          pnpm install --frozen-lockfile
+          pnpm exec playwright-core install --with-deps chromium
       - name: Validate immutable contract
         run: python3 scripts/p21/validate_contract.py
       - name: Prepare native web dependencies
@@ -27,7 +39,7 @@ jobs:
           set -euo pipefail
           php8.3 -l installer/src/NativeWebConfig.php
           mkdir -p artifacts/v10/P21/native-web
-          sudo python3 scripts/p21/native_web_test.py | tee artifacts/v10/P21/native-web/result.json
+          sudo env P21_NODE="$(command -v node)" PLAYWRIGHT_BROWSERS_PATH=/opt/p21-browsers python3 scripts/p21/native_web_test.py | tee artifacts/v10/P21/native-web/result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

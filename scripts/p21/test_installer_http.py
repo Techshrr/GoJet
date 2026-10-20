@@ -66,6 +66,11 @@ class InstallerHTTP(unittest.TestCase):
                         time.sleep(.05)
                 for suffix in ROUTES:
                     self.assertEqual(request('/install'+suffix)[0], 401)
+                login_status, login_headers, login_body = request(headers={'Accept': 'text/html'})
+                self.assertEqual(login_status, 401)
+                self.assertIn('id="installer-login"', login_body)
+                self.assertIn("script-src 'sha256-", login_headers['Content-Security-Policy'])
+                self.assertNotIn(token, login_body)
                 payload = json.dumps({'bootstrap_token': token}).encode()
                 self.assertEqual(request(data=payload, headers={'Origin': 'https://evil.test'})[0], 403)
                 self.assertEqual(request(data=payload, headers={'Host': 'evil.test'})[0], 400)
@@ -90,6 +95,9 @@ class InstallerHTTP(unittest.TestCase):
                     self.assertIn('data-shell="installer"', body)
                     self.assertEqual(headers['Cache-Control'], 'no-store')
                     self.assertEqual(headers['X-Robots-Tag'], 'noindex, nofollow')
+                api_status, api_headers, api_body = request(headers=cookie_header | {'Accept': 'application/json'})
+                self.assertEqual(api_status, 200)
+                self.assertEqual(json.loads(api_body), {'step': 'environment', 'status': 'ready'})
                 for route in ['/install/data', '/install/admin', '/install/complete']:
                     self.assertEqual(request(route, headers=cookie_header)[0], 409)
                 self.assertEqual(request('/install/environment', data=b'{"success":true}', headers=cookie_header)[0], 503)
