@@ -49,7 +49,12 @@ def verify_apply(root, release, source, digest, request):
                 call(False)
             assert sql('SHOW TABLES') == '' and not (destination/'data/journal.json').exists()
         # Fail the actual API only after the same command has bootstrapped the empty DB.
+        with socket.socket() as probe:
+            probe.settimeout(1)
+            assert probe.connect_ex(('127.0.0.1', 8081)) != 0, 'Prior fixture left an active API listener'
         with socket.socket() as blocker:
+            # Reuse TIME_WAIT addresses from the previous real API, never an active listener.
+            blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             blocker.bind(('127.0.0.1', 8081)); blocker.listen()
             call(False)
             assert json.loads((destination/'data/journal.json').read_text())['phase'] == 'data-complete'
