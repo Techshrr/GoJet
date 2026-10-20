@@ -90,6 +90,8 @@ jobs:
       - name: Verify sealed preparation through actual native database bootstrap
         run: |
           set -euo pipefail
+          php8.3 -l installer/src/InstallationApply.php
+          php8.3 -l installer/bin/apply-installation.php
           php8.3 -l installer/src/InstallationCompletion.php
           php8.3 -l installer/bin/check-installation.php
           php8.3 -l installer/bin/complete-installation.php
@@ -102,7 +104,7 @@ jobs:
           php8.3 -l installer/src/InstallationPreparation.php
           php8.3 -l installer/bin/prepare-installation.php
           php8.3 -l installer/bin/run-prepared-data.php
-          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_prepared; CREATE USER 'gojet_prepared'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_prepared.* TO 'gojet_prepared'@'127.0.0.1';"
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_applied; CREATE DATABASE gojet_p21_prepared; CREATE USER 'gojet_prepared'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_prepared.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_applied.* TO 'gojet_prepared'@'127.0.0.1';"
           sudo python3 scripts/p21/native_installation_preparation_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/installation-preparation.json
       - uses: actions/upload-artifact@v4
         if: always()

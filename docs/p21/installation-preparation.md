@@ -188,3 +188,29 @@ The marker is removed only during teardown of the disposable CI installation.
 This proves the native CLI completion path; interactive web submission, full
 upgrade/restore, browser verification and release/G11 closure remain required.
 Package metadata remains `installable=false` until the complete P21 gate passes.
+
+## Single-command native apply
+
+After root prepares and reviews the sealed plan, run
+`php8.3 installer/bin/apply-installation.php DIRECTORY`. The packaged entry point
+executes data bootstrap, eight-service activation, site activation and final live
+health/completion through the existing phase authorities. Only final completion
+produces success output. It does not accept raw web input, arbitrary commands or
+client-supplied phase results.
+
+A fixed root0600 `installation-apply.lock` serializes complete apply invocations.
+The data phase also holds the shared service activation lock; later phases acquire
+that lock themselves. Every phase revalidates its prerequisites. Completed phases
+retain their existing no-op semantics; failed/interrupted journals require the
+explicit phase recovery command before another apply can proceed. The orchestrator
+never deletes journals, rolls back data or silently resets a failed phase.
+A matching final marker is acknowledged without rewriting it; a different sealed
+plan cannot adopt it.
+
+Native CI starts from a second empty MySQL database and verifies contention and
+nonroot refusal before mutation. A real API-port conflict fails after data bootstrap
+without final completion; direct retry stays blocked. Explicit service recovery
+then permits the same apply command to finish. All31 migrations and the single
+administrator/audit event remain intact, and the final marker/repeat are checked.
+System changes and marker removal occur only in disposable CI. This CLI closes
+native orchestration; interactive web-to-root submission remains separate work.

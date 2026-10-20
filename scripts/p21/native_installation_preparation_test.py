@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 from archive import verify_archive
 from native_prepared_services_test import verify_services
+from native_installation_apply_test import verify_apply
 
 repo = Path(__file__).resolve().parents[2]
 archive, source = Path(sys.argv[1]).resolve(), sys.argv[2]
@@ -188,9 +189,11 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
     journal = (destination/'data/journal.json').read_text()
     assert request['admin']['password'] not in journal and profile['secrets']['admin'] not in journal
     verify_services(root, release, destination, storage, profile)
+    verify_apply(root, release, source, digest, request)
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
-    actual_release_preparation=True, typed_configuration_data_binding=True, native_nginx_syntax=True,
+    actual_release_preparation=True, single_command_native_apply=True, apply_failure_resume_preserves_data=True,
+    apply_global_serialization=True, foreign_completion_refused=True, typed_configuration_data_binding=True, native_nginx_syntax=True,
     preparation_without_database_mutation=True, root_private_plan=True, source_identity_bound=True,
     existing_job_and_concurrent_preparation_rejected=True, tls_content_and_mode_changes_rejected=True,
     prepared_input_and_release_tampering_rejected=True, links_and_owner_changes_rejected=True,
