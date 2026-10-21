@@ -29,7 +29,7 @@ final class InstallationApply
             throw new \RuntimeException('Unsafe apply lock');
         }
     }
-    public static function run(string $directory): array
+    public static function run(string $directory, ?callable $observe = null): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(self::AUTHORITY.'/installed.lock');
@@ -43,12 +43,16 @@ final class InstallationApply
             $phase = self::lock('service-activation.lock');
             try {
                 if ((new CompletionLock(self::AUTHORITY.'/installed.lock'))->exists()) { throw new \RuntimeException('Installation complete'); }
+                if ($observe !== null) { $observe('data'); }
                 InstallationPreparation::runData($directory);
             } finally { flock($phase, LOCK_UN); fclose($phase); }
             // These shipped phase authorities revalidate identity/readiness and refuse
             // failed/interrupted journals. No deletion, compensation or blind retry here.
+            if ($observe !== null) { $observe('services'); }
             ServiceActivation::run($directory);
+            if ($observe !== null) { $observe('site'); }
             SiteActivation::run($directory);
+            if ($observe !== null) { $observe('health'); }
             return InstallationCompletion::run($directory, true);
         } finally { flock($apply, LOCK_UN); fclose($apply); }
     }

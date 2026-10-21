@@ -12,9 +12,11 @@
   const preflightChecks = document.querySelector('#preflight-checks');
   const checkNames = {package: 'Release integrity', systemd: 'Service manager', nginx: 'Nginx',
     php: 'PHP', mysql: 'MySQL', redis: 'Redis', storage: 'File storage', clamav: 'ClamAV'};
+  let executionExpiry = null;
   let expiry = null;
   let csrf = null;
   let busy = false;
+  function clearExecution() { clearTimeout(executionExpiry); executionExpiry = null; }
   function clearPreflight() {
     clearTimeout(expiry); expiry = null;
     preflight.hidden = true; preflightChecks.hidden = true; preflightChecks.replaceChildren();
@@ -48,10 +50,35 @@
     preflightChecks.hidden = false;
     expiry = setTimeout(() => showPreflight({status: 'stale'}), remaining);
   }
+  function showExecution(value) {
+    clearExecution();
+    const phases = {starting: 'Starting installation', data: 'Initializing data', services: 'Starting services', site: 'Publishing the site', health: 'Checking installation health'};
+    const unknown = () => {
+      title.textContent = 'Execution status unconfirmed';
+      tell('No recent execution update is available. Refresh status or ask your server administrator to inspect the worker. Do not submit again.');
+    };
+    if (!value || value.status === 'unavailable') return;
+    if (value.status === 'stale') { unknown(); return; }
+    if (!Object.hasOwn(phases, value.phase) || !Number.isInteger(value.updated_at)
+      || value.installation_complete !== false || !['running', 'failed'].includes(value.status)) { unknown(); return; }
+    if (value.status === 'failed') {
+      title.textContent = 'Installation needs attention';
+      tell(phases[value.phase] + ' failed. Your server administrator must inspect the phase records and use the recovery procedure. Do not submit again.');
+      return;
+    }
+    const remaining = (value.updated_at + 120) * 1000 - Date.now();
+    if (remaining <= 0 || remaining > 120000) { unknown(); return; }
+    title.textContent = phases[value.phase];
+    tell('The server worker reported this phase in progress. Refresh status for the next update. Installation is not yet confirmed complete.');
+    executionExpiry = setTimeout(unknown, remaining);
+  }
   async function loadPreflight(state) {
     if (state?.step === 'services') {
       const result = await request('GET', '/install/services');
-      if (result) showPreflight(result.preflight);
+      if (result) {
+        showPreflight(result.preflight);
+        if (result.status === 'checking') showExecution(result.execution);
+      }
     }
   }
   function tell(text) { message.textContent = text; }
@@ -64,7 +91,7 @@
         redirect: 'error', headers: {'Accept': 'application/json', ...(body ? {'Content-Type': 'application/json'} : {})},
         ...(body ? {body: JSON.stringify(body)} : {}), signal: controller.signal});
       if (response.status === 404) {
-        clearPreflight(); csrf = null; form.hidden = true; submit.hidden = true; refresh.hidden = true;
+        clearPreflight(); clearExecution(); csrf = null; form.hidden = true; submit.hidden = true; refresh.hidden = true;
         title.textContent = 'Installer unavailable';
         tell('The installer is closed or unavailable. Check the installation result with your server administrator before opening Admin.');
         return null;
@@ -82,7 +109,7 @@
     } finally { clearTimeout(timer); }
   }
   function show(state) {
-    clearPreflight();
+    clearPreflight(); clearExecution();
     if (!state) return;
     submit.hidden = true;
     if (state.step === 'services' && state.status === 'ready') {
@@ -103,7 +130,7 @@
   }
   async function action(work, isApply = false) {
     if (busy) return;
-    clearPreflight(); busy = true; controls();
+    clearPreflight(); clearExecution(); busy = true; controls();
     try { await work(); }
     catch (error) {
       if (error.name === 'AbortError' || error instanceof TypeError) {
@@ -128,6 +155,6 @@
     action(async () => { show(await request('POST', '/install/services', {csrf: once})); }, true);
   });
   refresh.addEventListener('click', () => action(async () => { const state = await request('GET', '/install/'); show(state); await loadPreflight(state); }));
-  window.addEventListener('pagehide', () => { clearPreflight(); csrf = null; token.value = ''; });
+  window.addEventListener('pagehide', () => { clearPreflight(); clearExecution(); csrf = null; token.value = ''; });
   controls();
 })();

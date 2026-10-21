@@ -23,6 +23,13 @@ try {
     if (fs.existsSync(request)) fs.unlinkSync(request);
     const snapshot = path.join(path.dirname(cfg.completion), 'preflight.json');
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot);
+    const progress = path.join(path.dirname(cfg.completion), 'apply-progress.json');
+    if (fs.existsSync(progress)) fs.unlinkSync(progress);
+    function executionFixture(phase, status = 'running', age = 0) {
+      fs.writeFileSync(progress, JSON.stringify({schema: 1,
+        state_sha256: createHash('sha256').update(cfg.state).digest('hex'),
+        updated_at: Math.floor(Date.now() / 1000) - age, phase, status}), {mode: 0o644});
+    }
     const checks = {package: true, systemd: true, nginx: true, php: true, mysql: true, redis: true, storage: true, clamav: true};
     function publishFixture(changes = {}, age = 0) {
       // Root-owned snapshot fixture: browser rendering/HTTP read only, not a native probe claim.
@@ -92,6 +99,26 @@ try {
     await page.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
     assert.equal(submissions, 1);
     await page.screenshot({path: path.join(output, label+'-queued.png'), fullPage: true});
+    for (const [phase, heading] of [['starting', 'Starting installation'], ['data', 'Initializing data'],
+      ['services', 'Starting services'], ['site', 'Publishing the site'], ['health', 'Checking installation health']]) {
+      executionFixture(phase); await refreshChecks();
+      assert.equal(await page.locator('#installer-title').textContent(), heading);
+      assert.equal(await page.locator('#installer-apply').isVisible(), false);
+    }
+    await page.screenshot({path: path.join(output, label+'-execution-running.png'), fullPage: true});
+    executionFixture('services', 'failed'); await refreshChecks();
+    assert.equal(await page.locator('#installer-title').textContent(), 'Installation needs attention');
+    assert.match(await page.locator('#installer-message').textContent(), /Do not submit again/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({path: path.join(output, label+'-execution-failed.png'), fullPage: true});
+    executionFixture('data', 'running', 121); await refreshChecks();
+    assert.equal(await page.locator('#installer-title').textContent(), 'Execution status unconfirmed');
+    // Preflight expiry must not cancel the separate execution expiry timer.
+    publishFixture({}, 119); executionFixture('data', 'running', 117); await refreshChecks();
+    await page.waitForFunction(() => document.querySelector('#installer-title').textContent === 'Execution status unconfirmed', null, {timeout: 10000});
+    assert.match(await page.locator('#preflight-summary').textContent(), /^Checks expired/);
+    assert.equal(submissions, 1);
+    assert.equal(await page.locator('#installer-apply').isVisible(), false);
     await context.setOffline(true);
     await page.getByRole('button', {name: 'Refresh status', exact: true}).click();
     await page.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('The server could not be reached.'));
@@ -135,4 +162,5 @@ console.log(JSON.stringify({desktop_mobile_browser: true, real_tls_fpm_browser_r
   keyboard_access: true, no_horizontal_overflow: true, authentication_and_apply_submission: true,
   no_secret_browser_storage: true, no_script_post_only_verified: true, offline_recovery: true, post_lock_closed: true,
   snapshot_ready_failed_stale_unavailable: true, snapshot_expiry_clears_checks: true, snapshot_is_fixture: true,
+  execution_phases_failed_stale: true, independent_execution_expiry: true, execution_is_fixture: true,
   unexpected_console_errors: 0, approved_plan_is_fixture: true, privileged_apply_verified: false}));

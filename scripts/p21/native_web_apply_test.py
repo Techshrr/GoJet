@@ -241,6 +241,49 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     cookie2 = rotated[1]['Set-Cookie'].split(';', 1)[0].split('=', 1)[1]
     assert http('/install/services', {'csrf': rotated[2]['csrf']}, {'__Secure-gojet_install': cookie2})[0] == 409
     assert subprocess.run(['runuser', '-u', 'gojet-installer', '--']+worker, capture_output=True, timeout=30).returncode == 1
+    # Exercise the shipped publisher and authenticated reader with explicit observation fixtures.
+    progress = authority/'apply-progress.json'
+    publisher = root/'publish-apply-progress.php'
+    publisher.write_text("<?php require_once $argv[1].'/installer/src/ApplyProgress.php'; "
+                         "echo json_encode(GoJet\\Installer\\ApplyProgress::publish($argv[2],$argv[3],$argv[4],$argv[5]));")
+    publisher.chmod(0o644)
+    publish_command = ['php8.3', str(publisher), str(release), str(authority), str(state)]
+    assert subprocess.run(['runuser', '-u', 'gojet-installer', '--']+publish_command+['data', 'running'],
+                          capture_output=True, timeout=15).returncode != 0
+    assert not progress.exists()
+    current_cookies = {'__Secure-gojet_install': cookie2}
+    for phase in ['starting', 'data', 'services', 'site', 'health']:
+        r = subprocess.run(publish_command+[phase, 'running'], capture_output=True, timeout=15)
+        assert r.returncode == 0 and not r.stderr
+        observed = json.loads(r.stdout)
+        assert observed['phase'] == phase and observed['status'] == 'running'
+        assert observed['installation_complete'] is False
+        assert status(current_cookies)[2]['execution'] == observed
+    assert status({})[0] == 401
+    good_progress = progress.read_bytes()
+    value = json.loads(good_progress)
+    for key, bad, expected in [('updated_at', 1, 'stale'), ('updated_at', 4102444800, 'unavailable'),
+                               ('state_sha256', '0'*64, 'unavailable'), ('phase', '/etc/private', 'unavailable'),
+                               ('status', 'complete', 'unavailable')]:
+        altered = dict(value); altered[key] = bad
+        progress.write_text(json.dumps(altered))
+        observation = status(current_cookies)[2]['execution']
+        assert observation['status'] == expected and observation['phase'] is None
+        assert observation['installation_complete'] is False
+    progress.write_bytes(good_progress); progress.chmod(0o666)
+    assert status(current_cookies)[2]['execution']['status'] == 'unavailable'
+    progress.chmod(0o644); os.chown(progress, account.pw_uid, account.pw_gid)
+    assert status(current_cookies)[2]['execution']['status'] == 'unavailable'
+    os.chown(progress, 0, 0)
+    progress.unlink(); progress.symlink_to(authority/'web-apply.json')
+    assert status(current_cookies)[2]['execution']['status'] == 'unavailable'
+    progress.unlink()
+    r = subprocess.run(publish_command+['services', 'failed'], capture_output=True, timeout=15)
+    assert r.returncode == 0 and not r.stderr
+    assert status(current_cookies)[2]['execution']['status'] == 'failed'
+    assert http('/install/services', {'csrf': rotated[2]['csrf']}, current_cookies)[0] == 409
+    assert request.read_bytes() == raw and not (authority/'web-apply-started.json').exists()
+    progress.unlink()  # Remove only observation fixtures before the real worker invocation.
     # A forged digest or unsafe mailbox never starts privileged work.
     forged = json.loads(raw); forged['seal_sha256'] = '0'*64
     request.write_text(json.dumps(forged))
@@ -268,6 +311,10 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     result = subprocess.run(worker, capture_output=True, timeout=240)
     assert result.returncode == 0 and not result.stderr, 'Root mailbox apply failed'
     assert json.loads(result.stdout) == dict(source=source, installation_complete=True, already_applied=False)
+    final_progress = json.loads(progress.read_text())
+    assert final_progress['phase'] == 'health' and final_progress['status'] == 'running'
+    assert progress.stat().st_uid == 0 and progress.stat().st_mode & 0o777 == 0o644
+    assert subprocess.run(publish_command+['health', 'running'], capture_output=True, timeout=15).returncode != 0
     receipt = (authority/'web-apply-started.json').read_bytes()
     assert (authority/'web-apply-started.json').stat().st_uid == 0
     assert subprocess.run(worker, capture_output=True, timeout=30).returncode == 1

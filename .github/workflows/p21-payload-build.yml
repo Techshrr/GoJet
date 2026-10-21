@@ -92,6 +92,7 @@ jobs:
           set -euo pipefail
           php8.3 -l installer/src/ApplyRequest.php
           php8.3 -l installer/src/PreflightSnapshot.php
+          php8.3 -l installer/src/ApplyProgress.php
           php8.3 -l installer/bin/refresh-web-preflight.php
           php8.3 -l installer/bin/render-web-preflight-schedule.php
           php8.3 -l installer/src/PreflightScheduleInstallation.php

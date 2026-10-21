@@ -5,6 +5,7 @@ require_once __DIR__.'/InstallationApply.php';
 require_once __DIR__.'/InstallState.php';
 require_once __DIR__.'/ApplyRequest.php';
 require_once __DIR__.'/PreflightSnapshot.php';
+require_once __DIR__.'/ApplyProgress.php';
 
 /** One root-approved plan, one unprivileged request, one explicit root invocation. */
 final class WebInstallationApply
@@ -166,6 +167,16 @@ UNIT,
         // Exclusive durable receipt before any database/service mutation. A failed or killed
         // invocation requires operator inspection; even root cannot blindly replay this mailbox.
         ApplyRequest::write(self::AUTHORITY.'/web-apply-started.json', $binding['approval']);
-        return InstallationApply::run($binding['prepared']);
+        $phase = 'starting';
+        try {
+            return InstallationApply::run($binding['prepared'], static function (string $next) use ($directory, &$phase): void {
+                $phase = $next;
+                ApplyProgress::publish(self::AUTHORITY, $directory, $phase, 'running');
+            });
+        } catch (\Throwable $error) {
+            // Retain the original failure and all replay barriers even if observation publication fails.
+            try { ApplyProgress::publish(self::AUTHORITY, $directory, $phase, 'failed'); } catch (\Throwable) {}
+            throw $error;
+        }
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/InstallState.php';
 require_once __DIR__.'/PreflightSnapshot.php';
+require_once __DIR__.'/ApplyProgress.php';
 
 /** HTTP authentication and bounded apply mailbox; privileged execution stays outside FPM. */
 final class HttpAccess
@@ -73,7 +74,9 @@ final class HttpAccess
             if ($uri === '/install/services' && $current['step'] === 'services'
                 && ($server['HTTP_ACCEPT'] ?? '') === 'application/json') {
                 return [200, $headers + ['Vary' => 'Accept'], $current +
-                    ['preflight' => PreflightSnapshot::read(dirname($completionFile), $directory)]];
+                    ['preflight' => PreflightSnapshot::read(dirname($completionFile), $directory),
+                     'execution' => $current['status'] === 'checking'
+                         ? ApplyProgress::read(dirname($completionFile), $directory) : null]];
             }
             if (!in_array($uri, ['/install', '/install/', '/install/'.$current['step']], true)
                 || in_array($uri, ['/install/services', '/install/health', '/install/complete'], true)) {
