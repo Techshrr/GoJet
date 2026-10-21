@@ -36,6 +36,21 @@ def verify_preflight_schedule(release, authority, account):
         assert paths[0].read_text() == '# existing operator unit\n' and not started.exists()
     finally:
         paths[0].unlink()
+    # Dangling links and orphan ready receipts are also operator-owned conflicts.
+    paths[0].symlink_to('/nonexistent-gojet-scheduler-fixture')
+    try:
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert paths[0].is_symlink() and os.readlink(paths[0]) == '/nonexistent-gojet-scheduler-fixture'
+        assert not started.exists() and not paths[1].exists()
+    finally:
+        paths[0].unlink()
+    ready.write_text('fixture orphan ready receipt'); ready.chmod(0o600)
+    try:
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert ready.read_text() == 'fixture orphan ready receipt'
+        assert not started.exists() and all(not p.exists() for p in paths)
+    finally:
+        ready.unlink()
     # A simulated interrupted attempt blocks new writes; only this injected fixture is removed.
     started.write_text('fixture interruption barrier'); started.chmod(0o600)
     try:
