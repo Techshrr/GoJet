@@ -72,6 +72,17 @@ rechecks live dependencies independently of this advisory snapshot.
 
 The payload fixture exercises the shipped HTTP adapter as gojet-installer and
 real root refreshes, including stopped Redis and altered sealed preparation.
-This is adapter coverage, not a browser/TLS handoff claim. UI rendering, automatic
-root refresh scheduling, environment/health route integration, and the complete
+This is adapter coverage, not a browser/TLS handoff claim. Automatic root refresh scheduling, environment/health route integration, and the complete
 T024 acceptance gate remain pending. The installer remains installable=false.
+
+
+The interactive installer reads the protected services endpoint after successful
+authentication and on Refresh status. It displays eight named checks, observation
+time, and explicit failed/unavailable/expired states. A local expiry timer clears
+old green checks; each request clears previous observations, including offline
+and authentication failures. The snapshot is advisory and never bypasses root
+apply verification. Refresh status reads only; it does not run privileged probes.
+Desktop/mobile Chromium tests use root-owned snapshot fixtures over real native
+HTTP/FPM to cover these states and passive expiry. Actual root probing and Redis
+failure remain independently covered by the payload test, not simulated by this
+browser fixture.

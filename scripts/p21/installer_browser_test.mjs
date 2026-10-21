@@ -1,6 +1,7 @@
 // Real Chromium -> native TLS/Nginx/FPM; prepared-plan fixture, no privileged apply claim.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const cfg = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -20,6 +21,15 @@ try {
     fs.chownSync(approval, cfg.uid, cfg.gid);
     const request = path.join(cfg.state, 'apply-request.json');
     if (fs.existsSync(request)) fs.unlinkSync(request);
+    const snapshot = path.join(path.dirname(cfg.completion), 'preflight.json');
+    if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot);
+    const checks = {package: true, systemd: true, nginx: true, php: true, mysql: true, redis: true, storage: true, clamav: true};
+    function publishFixture(changes = {}, age = 0) {
+      // Root-owned snapshot fixture: browser rendering/HTTP read only, not a native probe claim.
+      fs.writeFileSync(snapshot, JSON.stringify({schema: 1,
+        state_sha256: createHash('sha256').update(cfg.state).digest('hex'),
+        checked_at: Math.floor(Date.now() / 1000) - age, checks: {...checks, ...changes}}), {mode: 0o644});
+    }
     // Fixture certificate trust is verified by the native Python TLS tests; browser uses a self-signed fixture.
     const context = await browser.newContext({viewport, ignoreHTTPSErrors: true});
     const page = await context.newPage();
@@ -47,6 +57,32 @@ try {
     await page.getByRole('button', {name: 'Submit approved installation', exact: true}).waitFor();
     assert.equal(await page.locator('#bootstrap-token').inputValue(), '');
     assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    await page.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
+    assert.match(await page.locator('#preflight-summary').textContent(), /^Checks unavailable/);
+    const durableBefore = fs.readFileSync(stateFile, 'utf8');
+    async function refreshChecks() {
+      await page.getByRole('button', {name: 'Refresh status', exact: true}).click();
+      await page.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
+    }
+    publishFixture(); await refreshChecks();
+    assert.match(await page.locator('#preflight-summary').textContent(), /^All dependency checks passed/);
+    assert.equal(await page.locator('#preflight-checks dd').count(), 8);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({path: path.join(output, label+'-preflight-ready.png'), fullPage: true});
+    publishFixture({redis: false}); await refreshChecks();
+    assert.match(await page.locator('#preflight-summary').textContent(), /^Some dependency checks failed/);
+    assert.equal(await page.locator('#preflight-checks dd', {hasText: 'Failed'}).count(), 1);
+    await page.screenshot({path: path.join(output, label+'-preflight-failed.png'), fullPage: true});
+    publishFixture({}, 121); await refreshChecks();
+    assert.match(await page.locator('#preflight-summary').textContent(), /^Checks expired/);
+    assert.equal(await page.locator('#preflight-checks').isVisible(), false);
+    // A page left open must discard green without waiting for another HTTP request.
+    publishFixture({}, 118); await refreshChecks();
+    await page.waitForFunction(() => document.querySelector('#preflight-summary').textContent.startsWith('Checks expired.'), null, {timeout: 10000});
+    assert.equal(await page.locator('#preflight-checks').isVisible(), false);
+    assert.equal(fs.readFileSync(stateFile, 'utf8'), durableBefore);
+    assert.equal(fs.existsSync(request), false);
+    publishFixture(); await refreshChecks();
     // Real click sends one request; immediate repeated activation cannot duplicate it.
     await page.getByRole('button', {name: 'Submit approved installation', exact: true}).click();
     await page.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('Installation request submitted.'));
@@ -59,6 +95,7 @@ try {
     await context.setOffline(true);
     await page.getByRole('button', {name: 'Refresh status', exact: true}).click();
     await page.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('The server could not be reached.'));
+    assert.equal(await page.locator('#installer-preflight').isVisible(), false);
     await context.setOffline(false);
     fs.writeFileSync(cfg.completion, '', {mode: 0o600});
     await page.getByRole('button', {name: 'Refresh status', exact: true}).click();
@@ -97,4 +134,5 @@ try {
 console.log(JSON.stringify({desktop_mobile_browser: true, real_tls_fpm_browser_requests: true,
   keyboard_access: true, no_horizontal_overflow: true, authentication_and_apply_submission: true,
   no_secret_browser_storage: true, no_script_post_only_verified: true, offline_recovery: true, post_lock_closed: true,
+  snapshot_ready_failed_stale_unavailable: true, snapshot_expiry_clears_checks: true, snapshot_is_fixture: true,
   unexpected_console_errors: 0, approved_plan_is_fixture: true, privileged_apply_verified: false}));

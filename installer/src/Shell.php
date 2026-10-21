@@ -18,6 +18,9 @@ final class Shell
             .'<input id="bootstrap-token" name="bootstrap_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required minlength="32" maxlength="256" aria-describedby="token-help">'
             .'<p id="token-help">Used only to authorize this installation session.</p>'
             .'<button class="installer-primary" type="submit">Authenticate</button></form>'
+            .'<section id="installer-preflight" aria-labelledby="preflight-title" hidden><h2 id="preflight-title">Dependency checks</h2>'
+            .'<p id="preflight-summary" role="status" aria-live="polite"></p><dl id="preflight-checks" hidden></dl>'
+            .'<p>These checks describe the last server observation. Installation checks dependencies again before making changes.</p></section>'
             .'<div class="installer-actions"><button id="installer-apply" class="installer-primary" type="button" hidden disabled>Submit approved installation</button>'
             .'<button id="installer-refresh" type="button">Refresh status</button></div>'
             .'<noscript><p>JavaScript is required for this protected installation interface. The server administrator can use the native installation command instead.</p></noscript>';
