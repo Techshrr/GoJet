@@ -51,7 +51,7 @@ const targets = [
   { surface: 'docs', url: 'http://127.0.0.1:4176/docs/en/', state: 'article' },
   { surface: 'workspace', url: 'http://127.0.0.1:4174/app', state: 'notification-attention' },
   { surface: 'admin', url: 'http://127.0.0.1:4175/admin', state: 'normal' },
-  { surface: 'installer', url: 'http://127.0.0.1:4177/', state: 'session-ready' },
+  { surface: 'installer', url: 'http://127.0.0.1:4177/', state: 'session-ready', evidence_scope: 'php-shell-component-preview', protected_http_verified: false },
 ];
 
 const report = {
@@ -115,7 +115,14 @@ async function inspectTarget(target, viewportName, viewport) {
   assertViewport(`${target.surface}/${viewportName}/configured`, viewport, page.viewportSize());
   attachDiagnostics(page, target.surface);
 
-  await page.goto(target.url, { waitUntil: 'networkidle' });
+  const response = await page.goto(target.url, { waitUntil: 'networkidle' });
+  if (response?.status() !== 200) throw new Error(`Shell preview failed: ${target.surface}`);
+  if (target.surface === 'installer') {
+    if (await page.locator('body').getAttribute('data-shell') !== 'installer'
+        || await page.locator('body').getAttribute('data-state') !== target.state) {
+      throw new Error('Installer component preview did not render the actual PHP shell');
+    }
+  }
   await page.waitForTimeout(120);
   const metrics = await page.evaluate(() => ({
     innerViewport: { width: window.innerWidth, height: window.innerHeight },
