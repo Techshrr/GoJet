@@ -137,6 +137,32 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
             assert not report['ready'] and not report['checks'][check]
         finally:
             subprocess.run(['systemctl','start',unit], check=True, capture_output=True, timeout=30)
+    # Distinguish absent required executables from stopped services. These are
+    # real native tools, temporarily moved only inside the disposable CI host.
+    # No fake binary/version response replaces a production dependency probe.
+    missing_executables = {}
+    for binary, failed_checks in [
+        ('/usr/sbin/nginx', ['nginx']),
+        ('/usr/sbin/php-fpm8.3', ['php']),
+        ('/usr/bin/systemctl', ['systemd', 'nginx', 'php']),
+        ('/usr/sbin/runuser', ['storage', 'clamav']),
+    ]:
+        original = Path(binary)
+        backup = original.with_name(original.name+'.p21-absence-test')
+        assert original.is_file() and not backup.exists() and not backup.is_symlink()
+        identity = original.lstat()
+        original.rename(backup)
+        try:
+            report = call()
+            assert report['ready'] is False and report['checks']['package'] is True
+            assert all(report['checks'][name] is False for name in failed_checks)
+            assert not list(root.rglob('installed.lock'))
+            missing_executables[binary] = failed_checks
+        finally:
+            backup.rename(original)
+        restored = original.lstat()
+        assert (restored.st_dev, restored.st_ino, restored.st_mode) == (identity.st_dev, identity.st_ino, identity.st_mode)
+        assert call()['ready'], 'Native dependencies did not recover after restoring '+binary
     member = release/'bin/filepreflight'
     member.chmod(0o777)
     try:
@@ -149,6 +175,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, real_native_dependencies=True, baseline=baseline['checks'],
     stopped_nginx_fpm_rejected=True, unreachable_mysql_redis_rejected=True,
+    missing_required_executables_rejected=missing_executables,
     bad_database_redis_credentials_rejected=True, missing_clamav_rejected=True, disabled_version_command_rejected=True,
     unsafe_storage_rejected=True, untrusted_helper_not_executed=True, root_only=True,
     dependencies_restored=True, final_lock_written=False, full_p21_t010_acceptance=False)))
