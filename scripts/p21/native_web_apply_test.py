@@ -281,7 +281,11 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     r = subprocess.run(publish_command+['services', 'failed'], capture_output=True, timeout=15)
     assert r.returncode == 0 and not r.stderr
     assert status(current_cookies)[2]['execution']['status'] == 'failed'
-    assert http('/install/services', {'csrf': rotated[2]['csrf']}, current_cookies)[0] == 409
+    # The earlier replay consumed this CSRF: stale authority is rejected before step ordering.
+    assert http('/install/services', {'csrf': rotated[2]['csrf']}, current_cookies)[0] == 403
+    reauth = http('/install', {'bootstrap_token': token})
+    fresh_cookie = reauth[1]['Set-Cookie'].split(';', 1)[0].split('=', 1)[1]
+    assert http('/install/services', {'csrf': reauth[2]['csrf']}, {'__Secure-gojet_install': fresh_cookie})[0] == 409
     assert request.read_bytes() == raw and not (authority/'web-apply-started.json').exists()
     progress.unlink()  # Remove only observation fixtures before the real worker invocation.
     # A forged digest or unsafe mailbox never starts privileged work.
