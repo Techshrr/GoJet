@@ -72,7 +72,7 @@ rechecks live dependencies independently of this advisory snapshot.
 
 The payload fixture exercises the shipped HTTP adapter as gojet-installer and
 real root refreshes, including stopped Redis and altered sealed preparation.
-This is adapter coverage, not a browser/TLS handoff claim. Automatic root refresh scheduling, environment/health route integration, and the complete
+This is adapter coverage, not a browser/TLS handoff claim. Environment/health route integration and the complete
 T024 acceptance gate remain pending. The installer remains installable=false.
 
 
@@ -86,3 +86,40 @@ Desktop/mobile Chromium tests use root-owned snapshot fixtures over real native
 HTTP/FPM to cover these states and passive expiry. Actual root probing and Redis
 failure remain independently covered by the payload test, not simulated by this
 browser fixture.
+
+
+## Native refresh scheduler
+
+Root can generate pinned units after provisioning the sealed web binding:
+`php8.3 installer/bin/render-web-preflight-schedule.php`. This no-argument command
+revalidates the approved seal, complete package and live prerequisites, then emits
+a JSON object containing `gojet-installer-preflight.service` and
+`gojet-installer-preflight.timer`. The executable path uses the verified canonical
+release directory, never a mutable `current` link or browser-supplied path.
+
+This command renders configuration only. Root provisioning must exclusively create
+the two corresponding files in `/etc/systemd/system` with root ownership and mode
+0644; refuse existing files, symlinks or drop-in overrides and inspect conflicts
+instead of overwriting them. Run `systemd-analyze verify` on both generated files,
+then `systemctl daemon-reload` and
+`systemctl enable --now gojet-installer-preflight.timer`.
+
+The timer first runs after one second and schedules another observation 30 seconds
+after the preceding service becomes inactive. The 110-second execution limit
+kills the entire probe process group on timeout. A slow or failed probe can still
+produce an unavailable/expired observation; no timer guarantee replaces the
+120-second freshness check. The existing root binding lock serializes manual and
+scheduled refreshes. The service only observes dependencies, never applies an
+installation or reads commands from the web state.
+
+Both units require the root binding and absence of the final completion lock.
+After completion, future service starts are skipped. Disable the unused timer
+with `systemctl disable --now gojet-installer-preflight.timer`; stop the service
+before removing only these provisioned units, then daemon-reload. Keep root
+approval, completion and phase journals intact. This does not install an apply
+worker, retry failed installations or switch the bootstrap vhost.
+
+The disposable native payload fixture installs the generated units, verifies them
+with systemd, starts the real timer and observes subsequent ticks detect stopped
+Redis and recovery. It also checks non-root renderer refusal, completion-condition
+skipping and unchanged installer state/mailbox, then removes its own unit files.

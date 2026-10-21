@@ -52,6 +52,69 @@ final class WebInstallationApply
         if (!chown($directory, $account['uid']) || !chgrp($directory, $account['gid'])) { throw new \RuntimeException('Web state ownership failed'); }
         return ['source' => $seal['source'], 'web_apply_provisioned' => true, 'installation_complete' => false];
     }
+    /** Render pinned scheduler units for explicit root provisioning. */
+    public static function schedule(): array
+    {
+        self::root();
+        $binding = ApplyRequest::read(self::AUTHORITY.'/web-apply.json', 0);
+        if (($binding['schema'] ?? null) !== 1 || !is_string($binding['prepared'] ?? null)
+            || !is_string($binding['approval']['seal_sha256'] ?? null)
+            || !hash_equals($binding['approval']['seal_sha256'], (string)@hash_file('sha256', $binding['prepared'].'/seal.json'))) {
+            throw new \RuntimeException('Invalid root apply binding');
+        }
+        $seal = InstallationPreparation::verify($binding['prepared']);
+        $release = $seal['release'];
+        if (!preg_match('~^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$~D', $release)
+            || in_array('.', explode('/', $release), true) || in_array('..', explode('/', $release), true)
+            || realpath($release) !== $release) { throw new \RuntimeException('Unsafe scheduler release'); }
+        $authority = self::AUTHORITY;
+        return [
+            'gojet-installer-preflight.service' => <<<UNIT
+[Unit]
+Description=GoJet installer dependency observation
+After=network.target
+ConditionPathExists={$authority}/web-apply.json
+ConditionPathExists=!{$authority}/installed.lock
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/php8.3 {$release}/installer/bin/refresh-web-preflight.php
+TimeoutStartSec=110
+TimeoutStopSec=5
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+StandardOutput=null
+StandardError=journal
+
+UNIT,
+            'gojet-installer-preflight.timer' => <<<UNIT
+[Unit]
+Description=Refresh GoJet installer dependency observations
+ConditionPathExists={$authority}/web-apply.json
+ConditionPathExists=!{$authority}/installed.lock
+
+[Timer]
+OnActiveSec=1s
+OnUnitInactiveSec=30s
+AccuracySec=1s
+Unit=gojet-installer-preflight.service
+
+[Install]
+WantedBy=timers.target
+
+UNIT,
+        ];
+    }
+
     /** Explicit root refresh; FPM never executes a probe or chooses a prepared path. */
     public static function publishPreflight(): array
     {

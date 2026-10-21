@@ -93,6 +93,7 @@ jobs:
           php8.3 -l installer/src/ApplyRequest.php
           php8.3 -l installer/src/PreflightSnapshot.php
           php8.3 -l installer/bin/refresh-web-preflight.php
+          php8.3 -l installer/bin/render-web-preflight-schedule.php
           php8.3 -l installer/src/WebInstallationApply.php
           php8.3 -l installer/bin/provision-web-apply.php
           php8.3 -l installer/bin/run-web-apply.php

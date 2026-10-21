@@ -5,6 +5,73 @@ import os
 from pathlib import Path
 import pwd
 import subprocess
+import time
+
+
+def verify_preflight_schedule(release, authority, account):
+    render = ['php8.3', str(release/'installer/bin/render-web-preflight-schedule.php')]
+    assert subprocess.run(['runuser', '-u', 'gojet-installer', '--']+render, capture_output=True, timeout=30).returncode == 1
+    result = subprocess.run(render, capture_output=True, timeout=120)
+    assert result.returncode == 0 and not result.stderr
+    units = json.loads(result.stdout)
+    names = ['gojet-installer-preflight.service', 'gojet-installer-preflight.timer']
+    assert list(units) == names
+    assert f'ExecStart=/usr/bin/php8.3 {release}/installer/bin/refresh-web-preflight.php' in units[names[0]]
+    assert 'run-web-apply' not in result.stdout.decode()
+    paths = [Path('/etc/systemd/system')/name for name in names]
+    assert all(not p.exists() and not p.is_symlink() for p in paths)
+    marker = authority/'installed.lock'
+    assert not marker.exists()
+    snapshot = authority/'preflight.json'
+    created = []
+    def ctl(*args):
+        return subprocess.run(['systemctl', *args], check=True, capture_output=True, timeout=30)
+    def observe(after, redis):
+        deadline = time.monotonic()+100
+        while time.monotonic() < deadline:
+            try:
+                value = json.loads(snapshot.read_text())
+                if snapshot.stat().st_mtime_ns > after and value['checks'] is not None and value['checks']['redis'] is redis:
+                    return value
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass  # Refresh intentionally removes the old snapshot before probing.
+            time.sleep(0.5)
+        raise AssertionError('Native timer did not publish expected dependency observation')
+    try:
+        for p in paths:
+            with p.open('x') as f:
+                f.write(units[p.name])
+            p.chmod(0o644); created.append(p)
+        subprocess.run(['systemd-analyze', 'verify', *map(str, paths)], check=True, capture_output=True, timeout=30)
+        ctl('daemon-reload')
+        before = snapshot.stat().st_mtime_ns
+        ctl('start', names[1])
+        observe(before, True)
+        assert ctl('is-active', names[1]).stdout.strip() == b'active'
+        # A subsequent tick, not a direct service invocation, must detect the real outage.
+        ctl('stop', 'redis-server.service')
+        try:
+            failed = observe(snapshot.stat().st_mtime_ns, False)
+            assert failed['checks']['package'] is True
+        finally:
+            ctl('start', 'redis-server.service')
+        observe(snapshot.stat().st_mtime_ns, True)
+        ctl('stop', names[1], names[0])
+        original = snapshot.read_bytes()
+        # Fixture completion lock proves the service condition skips even explicit starts.
+        with marker.open('x') as f:
+            f.write('')
+        try:
+            ctl('start', names[0])
+            assert snapshot.read_bytes() == original
+            assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
+        finally:
+            marker.unlink()
+    finally:
+        ctl('stop', names[1], names[0])
+        for p in created:
+            p.unlink()
+        ctl('daemon-reload')
 
 
 def prepare_web_apply(root, release, destination, source):
@@ -114,6 +181,9 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     assert publish()['ready'] is True
     response = json.dumps(status())
     assert str(destination) not in response and str(state) not in response and 'p21-ci-only' not in response
+    verify_preflight_schedule(release, authority, account)
+    assert (state/'state.json').read_bytes() == before
+    assert not (state/'apply-request.json').exists()
     assert http('/install/services', {'csrf': '0'*64}, cookies)[0] == 403
     assert http('/install/services', {'csrf': csrf, 'prepared': '/etc'}, cookies)[0] == 400
     assert not (state/'apply-request.json').exists()
