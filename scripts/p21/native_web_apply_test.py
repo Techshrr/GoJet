@@ -36,16 +36,16 @@ def prepare_web_apply(root, release, destination, source):
     adapter.write_text('''<?php
 require_once $argv[1].'/installer/src/HttpAccess.php';
 $r=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR);
-$s=['REQUEST_URI'=>$r['uri'],'REQUEST_METHOD'=>'POST','HTTPS'=>'on','HTTP_HOST'=>'localhost:18443',
+$s=['REQUEST_URI'=>$r['uri'],'REQUEST_METHOD'=>$r['method'],'HTTP_ACCEPT'=>'application/json','HTTPS'=>'on','HTTP_HOST'=>'localhost:18443',
 'HTTP_ORIGIN'=>'https://localhost:18443','CONTENT_TYPE'=>'application/json'];
 echo json_encode(GoJet\\Installer\\HttpAccess::handle($s,$r['cookies'],json_encode($r['body']),
 $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/installed.lock'));
 ''')
     adapter.chmod(0o644)
 
-    def http(uri, body, cookies=None):
+    def http(uri, body, cookies=None, method="POST"):
         r = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(adapter), str(release), str(state), digest],
-            input=json.dumps(dict(uri=uri, body=body, cookies=cookies or {})).encode(), capture_output=True, timeout=15)
+            input=json.dumps(dict(uri=uri, body=body, cookies=cookies or {}, method=method)).encode(), capture_output=True, timeout=15)
         assert r.returncode == 0 and not r.stderr, 'Unprivileged HTTP adapter failed'
         return json.loads(r.stdout)
 
@@ -55,6 +55,65 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     cookie = auth[1]['Set-Cookie'].split(';', 1)[0].split('=', 1)[1]
     cookies = {'__Secure-gojet_install': cookie}
     csrf = auth[2]['csrf']
+    def status(c=cookies):
+        return http('/install/services', {}, c, method='GET')
+
+    assert status({})[0] == 401
+    assert status()[2]['preflight']['status'] == 'unavailable'
+    refresh = ['php8.3', str(release/'installer/bin/refresh-web-preflight.php')]
+    snapshot = authority/'preflight.json'
+    assert subprocess.run(['runuser', '-u', 'gojet-installer', '--']+refresh, capture_output=True, timeout=30).returncode == 1
+    assert not snapshot.exists()
+
+    def publish():
+        r = subprocess.run(refresh, capture_output=True, timeout=120)
+        assert r.returncode == 0 and not r.stderr, 'Root preflight refresh failed'
+        return json.loads(r.stdout)
+
+    observed = publish()
+    assert observed['status'] == 'ready' and observed['ready'] is True
+    assert observed['installation_complete'] is False and all(observed['checks'].values())
+    assert status()[2]['preflight'] == observed
+    assert snapshot.stat().st_uid == 0 and snapshot.stat().st_mode & 0o777 == 0o644
+    before = (state/'state.json').read_bytes()
+    good = snapshot.read_bytes()
+    # Bounded read rejects unsafe nodes, wrong binding, expiry and forged result shapes.
+    value = json.loads(good)
+    for key, bad in [('checked_at', 1), ('checked_at', 4102444800), ('state_sha256', '0'*64), ('checks', {'mysql': True})]:
+        altered = dict(value); altered[key] = bad
+        snapshot.write_text(json.dumps(altered))
+        assert status()[2]['preflight']['ready'] is False
+    snapshot.write_bytes(good); snapshot.chmod(0o666)
+    assert status()[2]['preflight']['status'] == 'unavailable'
+    snapshot.chmod(0o644)
+    snapshot.unlink(); snapshot.symlink_to(authority/'web-apply.json')
+    assert status()[2]['preflight']['status'] == 'unavailable'
+    snapshot.unlink(); snapshot.write_bytes(good); snapshot.chmod(0o644)
+    os.chown(snapshot, account.pw_uid, account.pw_gid)
+    assert status()[2]['preflight']['status'] == 'unavailable'
+    os.chown(snapshot, 0, 0)
+    # A real stopped Redis service must replace green with an authenticated failure.
+    subprocess.run(['systemctl', 'stop', 'redis-server.service'], check=True)
+    try:
+        failed = publish()
+        assert failed['status'] == 'failed' and failed['checks']['redis'] is False and failed['ready'] is False
+        assert status()[2]['preflight'] == failed
+    finally:
+        subprocess.run(['systemctl', 'start', 'redis-server.service'], check=True)
+    assert publish()['ready'] is True
+    assert (state/'state.json').read_bytes() == before
+    assert not (state/'apply-request.json').exists()
+    # Seal mismatch cannot retain a prior green result or disclose sealed configuration.
+    seal_path = destination/'seal.json'; seal_bytes = seal_path.read_bytes()
+    try:
+        seal_path.write_bytes(seal_bytes+b' ')
+        assert publish()['status'] == 'unavailable'
+        assert status()[2]['preflight']['ready'] is False
+    finally:
+        seal_path.write_bytes(seal_bytes)
+    assert publish()['ready'] is True
+    response = json.dumps(status())
+    assert str(destination) not in response and str(state) not in response and 'p21-ci-only' not in response
     assert http('/install/services', {'csrf': '0'*64}, cookies)[0] == 403
     assert http('/install/services', {'csrf': csrf, 'prepared': '/etc'}, cookies)[0] == 400
     assert not (state/'apply-request.json').exists()
@@ -103,4 +162,6 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     assert subprocess.run(worker, capture_output=True, timeout=30).returncode == 1
     assert (authority/'web-apply-started.json').read_bytes() == receipt
     assert http('/install/services', {'csrf': csrf}, cookies)[0] == 404
+    assert status()[0] == 404
+    assert subprocess.run(refresh, capture_output=True, timeout=30).returncode == 1
     return json.loads(result.stdout)

@@ -4,6 +4,7 @@ namespace GoJet\Installer;
 require_once __DIR__.'/InstallationApply.php';
 require_once __DIR__.'/InstallState.php';
 require_once __DIR__.'/ApplyRequest.php';
+require_once __DIR__.'/PreflightSnapshot.php';
 
 /** One root-approved plan, one unprivileged request, one explicit root invocation. */
 final class WebInstallationApply
@@ -51,6 +52,37 @@ final class WebInstallationApply
         if (!chown($directory, $account['uid']) || !chgrp($directory, $account['gid'])) { throw new \RuntimeException('Web state ownership failed'); }
         return ['source' => $seal['source'], 'web_apply_provisioned' => true, 'installation_complete' => false];
     }
+    /** Explicit root refresh; FPM never executes a probe or chooses a prepared path. */
+    public static function publishPreflight(): array
+    {
+        self::root();
+        $binding = ApplyRequest::read(self::AUTHORITY.'/web-apply.json', 0);
+        if (array_keys($binding) !== ['schema', 'prepared', 'directory', 'uid', 'approval'] || $binding['schema'] !== 1
+            || !is_string($binding['prepared']) || !is_string($binding['directory']) || !is_int($binding['uid']) || $binding['uid'] <= 0
+            || !is_array($binding['approval']) || array_keys($binding['approval']) !== ['schema', 'seal_sha256']
+            || $binding['approval']['schema'] !== 'gojet.web-apply.v1'
+            || !is_string($binding['approval']['seal_sha256']) || !preg_match('/^[a-f0-9]{64}$/D', $binding['approval']['seal_sha256'])) {
+            throw new \RuntimeException('Invalid root apply binding');
+        }
+        // Serialize refreshes using the immutable root-owned binding inode.
+        $lock = fopen(self::AUTHORITY.'/web-apply.json', 'rb');
+        if ($lock === false) { throw new \RuntimeException('Preflight refresh unavailable'); }
+        try {
+            if (!flock($lock, LOCK_EX | LOCK_NB)) { throw new \RuntimeException('Preflight refresh busy'); }
+            self::stateParent($binding['directory']);
+            // A killed refresh leaves no old success behind.
+            PreflightSnapshot::invalidate(self::AUTHORITY);
+            $started = time(); $checks = null;
+            try {
+                if (!hash_equals($binding['approval']['seal_sha256'], (string)@hash_file('sha256', $binding['prepared'].'/seal.json'))) {
+                    throw new \RuntimeException('Prepared seal changed');
+                }
+                $checks = InstallationPreparation::preflight($binding['prepared'])['checks'];
+            } catch (\Throwable) { /* Publish only unavailable, never private diagnostics. */ }
+            return PreflightSnapshot::publish(self::AUTHORITY, $binding['directory'], $started, $checks);
+        } finally { flock($lock, LOCK_UN); fclose($lock); }
+    }
+
     public static function run(): array
     {
         self::root();

@@ -155,7 +155,7 @@ final class InstallationPreparation
             flock($lock, LOCK_UN); fclose($lock);
         }
     }
-    public static function verify(string $directory): array
+    private static function inspect(string $directory): array
     {
         self::root(); self::privateDirectory($directory);
         $seal = json_decode(self::privateFile($directory.'/seal.json'), true, 16, JSON_THROW_ON_ERROR);
@@ -199,8 +199,18 @@ final class InstallationPreparation
         if ($dependencies['release'] !== $seal['release'] || $dependencies['source'] !== $seal['source']
             || $dependencies['manifest_sha256'] !== $seal['manifest_sha256']) { throw new \RuntimeException('Prepared dependency identity mismatch'); }
         $readiness = DependencyPreflight::check($dependencies);
+        return ['seal' => $seal, 'readiness' => $readiness];
+    }
+    public static function preflight(string $directory): array
+    {
+        return self::inspect($directory)['readiness'];
+    }
+    public static function verify(string $directory): array
+    {
+        $result = self::inspect($directory);
+        $readiness = $result['readiness'];
         if ($readiness['ready'] !== true) { throw new \RuntimeException('Native dependencies not ready'); }
-        return $seal;
+        return $result['seal'];
     }
     public static function runData(string $directory): array
     {

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/InstallState.php';
+require_once __DIR__.'/PreflightSnapshot.php';
 
 /** HTTP authentication and bounded apply mailbox; privileged execution stays outside FPM. */
 final class HttpAccess
@@ -68,6 +69,11 @@ final class HttpAccess
                 }
                 // No public route may turn an arbitrary client success flag into an approved check.
                 return $reply(503, 'Installer step execution unavailable');
+            }
+            if ($uri === '/install/services' && $current['step'] === 'services'
+                && ($server['HTTP_ACCEPT'] ?? '') === 'application/json') {
+                return [200, $headers + ['Vary' => 'Accept'], $current +
+                    ['preflight' => PreflightSnapshot::read(dirname($completionFile), $directory)]];
             }
             if (!in_array($uri, ['/install', '/install/', '/install/'.$current['step']], true)
                 || in_array($uri, ['/install/services', '/install/health', '/install/complete'], true)) {

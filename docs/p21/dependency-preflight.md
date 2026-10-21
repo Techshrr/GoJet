@@ -47,3 +47,31 @@ updates and the native daemon; it does not mock scanner health. It exercises
 stopped Nginx/FPM, unreachable or wrong-credential databases/cache, unavailable
 scanner socket, unsafe storage and untrusted helper permissions, then restores
 the dependencies and checks readiness again. Tests run only in disposable runners.
+
+## Protected snapshot read
+
+After root provisions the sealed web apply binding, root may run
+`php8.3 installer/bin/refresh-web-preflight.php` with no arguments. It uses only
+the fixed root binding, validates sealed preparation, and publishes named boolean
+checks to root-owned `preflight.json` in the completion authority directory.
+Refreshes serialize on the immutable binding. The previous snapshot is removed
+and the directory synced before probing, so an interrupted refresh leaves no
+previous green result. Publication uses an atomic rename and directory sync.
+Integrity failures publish unavailable without private diagnostics.
+
+An authenticated `GET /install/services` with `Accept: application/json`, while
+the durable installer step is services, returns `step`, `status` and `preflight`.
+The preflight field contains only status, checked_at, eight boolean checks, ready,
+and installation_complete (always false). A snapshot is bound to the state
+directory and expires 120 seconds after probing starts. Missing, malformed,
+unsafe-owner/mode, symlink, wrong-binding, or future-dated snapshots cannot return
+ready; expired snapshots report stale with no cached green checks. This read
+neither advances state nor creates an apply request. All existing origin,
+session, completion-lock and step-order checks still apply. Root apply always
+rechecks live dependencies independently of this advisory snapshot.
+
+The payload fixture exercises the shipped HTTP adapter as gojet-installer and
+real root refreshes, including stopped Redis and altered sealed preparation.
+This is adapter coverage, not a browser/TLS handoff claim. UI rendering, automatic
+root refresh scheduling, environment/health route integration, and the complete
+T024 acceptance gate remain pending. The installer remains installable=false.
