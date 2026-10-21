@@ -74,10 +74,22 @@ try {
       const fallback = await noJS.newPage();
       await fallback.goto(cfg.origin+'/install/');
       await fallback.getByLabel('Installation access token', {exact: true}).fill('non-secret-no-js-fixture-token-0123456789');
+      const beforeState = fs.readFileSync(stateFile, 'utf8');
+      const beforeRequest = fs.readFileSync(request, 'utf8');
       const response = fallback.waitForResponse(r => r.request().method() === 'POST');
       await fallback.getByRole('button', {name: 'Authenticate', exact: true}).click();
-      assert.equal((await response).status(), 415);
+      const rejected = await response;
+      const posted = rejected.request();
+      // Native form POST under no-referrer sends an opaque Origin. The exact
+      // origin guard rejects it before the JSON content-type guard is reached.
+      assert.equal(await posted.headerValue('origin'), 'null');
+      assert.equal(rejected.status(), 403);
+      assert.deepEqual(await rejected.json(), {error: 'Invalid installer origin'});
+      assert.equal(posted.url(), cfg.origin+'/install/');
+      assert.equal(new URLSearchParams(posted.postData()).get('bootstrap_token'), 'non-secret-no-js-fixture-token-0123456789');
       assert.equal(new URL(fallback.url()).search, '');
+      assert.equal(fs.readFileSync(stateFile, 'utf8'), beforeState);
+      assert.equal(fs.readFileSync(request, 'utf8'), beforeRequest);
       await noJS.close();
     }
   }
