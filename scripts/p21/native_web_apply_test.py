@@ -23,7 +23,26 @@ def verify_preflight_schedule(release, authority, account):
     marker = authority/'installed.lock'
     assert not marker.exists()
     snapshot = authority/'preflight.json'
-    created = []
+    install = ['php8.3', str(release/'installer/bin/install-web-preflight-schedule.php')]
+    started = authority/'preflight-schedule-started.json'
+    ready = authority/'preflight-schedule-ready.json'
+    assert not started.exists() and not ready.exists()
+    denied = subprocess.run(['runuser', '-u', 'gojet-installer', '--']+install, capture_output=True, timeout=30)
+    assert denied.returncode == 1 and not started.exists() and all(not p.exists() for p in paths)
+    # Existing operator configuration must remain byte-identical, without a provisioning receipt.
+    paths[0].write_text('# existing operator unit\n'); paths[0].chmod(0o644)
+    try:
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert paths[0].read_text() == '# existing operator unit\n' and not started.exists()
+    finally:
+        paths[0].unlink()
+    # A simulated interrupted attempt blocks new writes; only this injected fixture is removed.
+    started.write_text('fixture interruption barrier'); started.chmod(0o600)
+    try:
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert started.read_text() == 'fixture interruption barrier' and all(not p.exists() for p in paths)
+    finally:
+        started.unlink()
     def ctl(*args):
         return subprocess.run(['systemctl', *args], check=True, capture_output=True, timeout=30)
     def observe(after, redis):
@@ -38,14 +57,18 @@ def verify_preflight_schedule(release, authority, account):
             time.sleep(0.5)
         raise AssertionError('Native timer did not publish expected dependency observation')
     try:
-        for p in paths:
-            with p.open('x') as f:
-                f.write(units[p.name])
-            p.chmod(0o644); created.append(p)
-        subprocess.run(['systemd-analyze', 'verify', *map(str, paths)], check=True, capture_output=True, timeout=30)
-        ctl('daemon-reload')
         before = snapshot.stat().st_mtime_ns
-        ctl('start', names[1])
+        result = subprocess.run(install, capture_output=True, timeout=180)
+        assert result.returncode == 0 and not result.stderr, 'Root scheduler provisioning failed'
+        assert json.loads(result.stdout) == dict(scheduler_enabled=True, installation_complete=False)
+        for p in paths:
+            assert p.read_text() == units[p.name] and p.stat().st_uid == 0 and p.stat().st_mode & 0o777 == 0o644
+        assert started.stat().st_uid == 0 and started.stat().st_mode & 0o777 == 0o600
+        assert json.loads(ready.read_text()) == dict(schema=1, scheduler_enabled=True)
+        receipt = started.read_bytes()
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert started.read_bytes() == receipt
+        assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
         observe(before, True)
         assert ctl('is-active', names[1]).stdout.strip() == b'active'
         # A subsequent tick, not a direct service invocation, must detect the real outage.
@@ -68,9 +91,12 @@ def verify_preflight_schedule(release, authority, account):
         finally:
             marker.unlink()
     finally:
-        ctl('stop', names[1], names[0])
-        for p in created:
-            p.unlink()
+        ctl('disable', '--now', names[1])
+        ctl('stop', names[0])
+        for p in paths:
+            if p.exists():
+                assert p.read_text() == units[p.name]
+                p.unlink()
         ctl('daemon-reload')
 
 

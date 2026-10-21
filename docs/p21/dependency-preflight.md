@@ -97,7 +97,7 @@ a JSON object containing `gojet-installer-preflight.service` and
 `gojet-installer-preflight.timer`. The executable path uses the verified canonical
 release directory, never a mutable `current` link or browser-supplied path.
 
-This command renders configuration only. Root provisioning must exclusively create
+The renderer returns configuration only. For manual provisioning, root must exclusively create
 the two corresponding files in `/etc/systemd/system` with root ownership and mode
 0644; refuse existing files, symlinks or drop-in overrides and inspect conflicts
 instead of overwriting them. Run `systemd-analyze verify` on both generated files,
@@ -123,3 +123,33 @@ The disposable native payload fixture installs the generated units, verifies the
 with systemd, starts the real timer and observes subsequent ticks detect stopped
 Redis and recovery. It also checks non-root renderer refusal, completion-condition
 skipping and unchanged installer state/mailbox, then removes its own unit files.
+
+
+### Root provisioning command
+
+After provisioning the approved web binding, root can run
+`php8.3 installer/bin/install-web-preflight-schedule.php` with no arguments. This
+uses the same verified renderer, refuses existing unit files, loaded units and
+drop-in overrides, exclusively writes root-owned 0644 units, runs systemd syntax
+verification, reloads systemd, checks the loaded fragment paths and absence of
+overrides, and enables/starts only `gojet-installer-preflight.timer`. It does not
+start an installation worker or accept configuration from the browser.
+
+Before any unit publication it creates root-private, fsynced
+`preflight-schedule-started.json` with the exact unit hashes. After confirming the
+timer is enabled and active it writes `preflight-schedule-ready.json`. Success
+reports scheduler_enabled=true and installation_complete=false; it does not
+assert that a fresh probe already passed. Repeat or interrupted attempts refuse
+instead of replacing files, deleting receipts or automatically rolling back.
+
+On failure, inspect the two root receipts, loaded unit fragments/drop-ins and
+timer status. A failure after activation can leave the observation timer running;
+stop/disable it before manual repair. Preserve the receipts for diagnosis and
+never remove approval, apply or completion records as part of scheduler repair.
+Only remove units proven to match the recorded hashes. Automatic recovery and
+automatic removal after completion remain separate work.
+
+Native CI now provisions through this shipped command instead of manually writing
+its units. It asserts non-root denial, preservation of existing operator files,
+interrupted-attempt/repeat barriers, exact unit ownership/modes, durable receipts,
+and enabled/active timer before the existing real outage/recovery checks.
