@@ -3,21 +3,21 @@
 ## 固定试装版本与下载
 
 本次固定使用已通过原生安装 CI 的源码版本
-`d3194251701c697f5d60c28cf3c20543a5a4689f`，不是当前开发分支的最新提交。
+`9ea4135d17cca3e60f5a19b10e3f4eeb3397497e`，不是当前开发分支的最新提交。
 
-- 下载页：https://github.com/Techshrr/GoJet/actions/runs/39607290660
-- 下载项：`gojet-v10-p21-payload-d3194251701c697f5d60c28cf3c20543a5a4689f`
-- Artifact ID：`12349127611`。下载 GitHub Actions artifact 可能需要登录。
+- 下载页：https://github.com/Techshrr/GoJet/actions/runs/39616094148
+- 下载项：`gojet-v10-p21-payload-9ea4135d17cca3e60f5a19b10e3f4eeb3397497e`
+- Artifact ID：`12352609963`。下载 GitHub Actions artifact 可能需要登录。
 - 包内程序：`payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz`
 - CI artifact 有保留期限；失效后应重新提供经验证的同版本包，不能随意换用 latest。
 
-2026-10-21 已独立下载原始 ZIP，验证 ZIP 完整性、程序归档、成员清单和 manifest。
+2026-10-22 已独立下载原始 ZIP，验证 ZIP 完整性、程序归档、成员清单和 manifest。
 
 | 对象 | SHA256 |
 | --- | --- |
-| Actions ZIP | `9c08ec7343b422844e5963dbae69400dbb691700df2eeebb551ad983fc35794e` |
-| 程序 tar.gz | `d797ce5c752793aca640b127870b02abfbb64de59dac247f7ad12ab8d9a985bf` |
-| manifest.json | `776dedb2d5b13aa62cb989951936cf7c6b2cd3166eac0b8c345c34944de7a514` |
+| Actions ZIP | `c300fc279fe40d184ad7084d8245c06b6b7942f6a1f4e373601d04acbc066d12` |
+| 程序 tar.gz | `835e15fbe55b2a8cf1196218495dfc1f698f8e8e9968e0670255c29e0639212e` |
+| manifest.json | `a88eb128b74911479c2befca095faaf3581fc064e9183c7778c9b004865b2e83` |
 
 这是开发预览包，不是正式发行版。manifest 的 `installable=false` 保持原值，表示
 完整 P21 验收尚未关闭。原生安装链路已在一次性 CI 主机验证，但尚未在用户测试机验证。
@@ -71,13 +71,13 @@ HTTPS 和完成锁。邮件投递、外部风控、Turnstile、支付及全业�
 
 ```sh
 php8.3 "$TRIAL_TOOLS/bin/verify-package.php" "$TRIAL_RELEASE" \
-  776dedb2d5b13aa62cb989951936cf7c6b2cd3166eac0b8c345c34944de7a514 \
-  d3194251701c697f5d60c28cf3c20543a5a4689f
+  a88eb128b74911479c2befca095faaf3581fc064e9183c7778c9b004865b2e83 \
+  9ea4135d17cca3e60f5a19b10e3f4eeb3397497e
 
 php8.3 "$TRIAL_RELEASE/installer/bin/prepare-installation.php" \
   "$TRIAL_PLAN" "$TRIAL_RELEASE" \
-  776dedb2d5b13aa62cb989951936cf7c6b2cd3166eac0b8c345c34944de7a514 \
-  d3194251701c697f5d60c28cf3c20543a5a4689f < "$TRIAL_INPUT"
+  a88eb128b74911479c2befca095faaf3581fc064e9183c7778c9b004865b2e83 \
+  9ea4135d17cca3e60f5a19b10e3f4eeb3397497e < "$TRIAL_INPUT"
 
 php8.3 "$TRIAL_RELEASE/installer/bin/apply-installation.php" "$TRIAL_PLAN"
 php8.3 "$TRIAL_RELEASE/installer/bin/check-installation.php" "$TRIAL_PLAN"
@@ -104,5 +104,5 @@ admin 为 email/display_name/password，tls 为 certificate/private_key/http_por
 ## 本轮明确不作为试装前置条件
 
 完整网页配置向导、进度展示、自动切换安装 vhost、升级/卸载、全部外部集成，以及
-最新开发分支的预检调度安装器，都不纳入这份固定版本 CLI 试装入口。它们仍是后续
+可选的网页预检调度安装器，都不纳入这份固定版本 CLI 试装入口。它们仍是后续
 工作；正式上线和完整验收仍未完成。
