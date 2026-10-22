@@ -116,6 +116,68 @@ UNIT,
         ];
     }
 
+    /** Explicitly authorized root executor; never accepts a web-selected command or path. */
+    public static function applySchedule(): array
+    {
+        // Reuse the sealed-release validation used by observation scheduling.
+        self::schedule();
+        $binding = ApplyRequest::read(self::AUTHORITY.'/web-apply.json', 0);
+        $seal = InstallationPreparation::verify($binding['prepared']);
+        $release = $seal['release'];
+        $directory = $binding['directory'] ?? null;
+        if (!is_string($directory) || !preg_match('~^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$~D', $directory)
+            || in_array('.', explode('/', $directory), true) || in_array('..', explode('/', $directory), true)
+            || realpath($directory) !== $directory) { throw new \RuntimeException('Unsafe executor state path'); }
+        self::stateParent($directory);
+        $authority = self::AUTHORITY;
+        return [
+            'gojet-installer-apply.service' => <<<UNIT
+[Unit]
+Description=Execute the root-approved GoJet installation request
+After=network.target
+ConditionPathExists={$authority}/web-apply.json
+ConditionPathExists={$directory}/apply-request.json
+ConditionPathExists=!{$authority}/web-apply-started.json
+ConditionPathExists=!{$authority}/installed.lock
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/php8.3 {$release}/installer/bin/run-web-apply.php
+TimeoutStartSec=900
+TimeoutStopSec=5
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+StandardOutput=null
+StandardError=journal
+
+UNIT,
+            'gojet-installer-apply.timer' => <<<UNIT
+[Unit]
+Description=Observe requests for the root-approved GoJet installation
+ConditionPathExists={$authority}/web-apply.json
+ConditionPathExists=!{$authority}/installed.lock
+
+[Timer]
+OnActiveSec=1s
+OnCalendar=*-*-* *:*:00/10
+AccuracySec=1s
+Unit=gojet-installer-apply.service
+
+[Install]
+WantedBy=timers.target
+
+UNIT,
+        ];
+    }
+
     /** Explicit root refresh; FPM never executes a probe or chooses a prepared path. */
     public static function publishPreflight(): array
     {

@@ -115,6 +115,109 @@ def verify_preflight_schedule(release, authority, account):
         ctl('daemon-reload')
 
 
+def run_scheduled_apply(release, authority, account, state, destination, source):
+    """Actual PID1 timer -> shipped root worker; no direct worker call for the successful apply."""
+    render = ['php8.3', str(release/'installer/bin/render-web-apply-schedule.php')]
+    install = ['php8.3', str(release/'installer/bin/install-web-apply-schedule.php')]
+    names = ['gojet-installer-apply.service', 'gojet-installer-apply.timer']
+    paths = [Path('/etc/systemd/system')/name for name in names]
+    started = authority/'apply-schedule-started.json'
+    ready = authority/'apply-schedule-ready.json'
+    receipt = authority/'web-apply-started.json'
+    marker = authority/'installed.lock'
+    assert not any(p.exists() or p.is_symlink() for p in [*paths, started, ready, receipt, marker])
+    denied = subprocess.run(['runuser', '-u', 'gojet-installer', '--']+render, capture_output=True, timeout=30)
+    assert denied.returncode == 1
+    rendered = subprocess.run(render, capture_output=True, timeout=120)
+    assert rendered.returncode == 0 and not rendered.stderr
+    units = json.loads(rendered.stdout)
+    assert list(units) == names
+    assert f'ExecStart=/usr/bin/php8.3 {release}/installer/bin/run-web-apply.php' in units[names[0]]
+    assert f'ConditionPathExists={state}/apply-request.json' in units[names[0]]
+    assert f'ConditionPathExists=!{receipt}' in units[names[0]]
+    assert f'ConditionPathExists=!{marker}' in units[names[0]]
+    assert 'Restart=' not in units[names[0]] and 'KillMode=control-group' in units[names[0]]
+    for command in [install+['unexpected'], ['runuser', '-u', 'gojet-installer', '--']+install]:
+        assert subprocess.run(command, capture_output=True, timeout=30).returncode == 1
+        assert not started.exists() and all(not p.exists() for p in paths)
+    # Refuse existing operator files and interruption evidence without enabling a worker.
+    paths[0].write_text('# operator executor unit\n'); paths[0].chmod(0o644)
+    try:
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert paths[0].read_text() == '# operator executor unit\n' and not started.exists()
+    finally:
+        paths[0].unlink()
+    for record in [started, ready]:
+        record.write_text('injected provisioning barrier'); record.chmod(0o600)
+        try:
+            assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+            assert record.read_text() == 'injected provisioning barrier' and all(not p.exists() for p in paths)
+        finally:
+            record.unlink()
+    request = state/'apply-request.json'
+    saved_request = state/'apply-request.saved-fixture'
+    data_before = (destination/'data/journal.json').read_bytes()
+    services_before = (destination/'services.json').read_bytes()
+    def ctl(*args):
+        return subprocess.run(['systemctl', *args], check=True, capture_output=True, timeout=30)
+    request.rename(saved_request)
+    try:
+        installed = subprocess.run(install, capture_output=True, timeout=180)
+        assert installed.returncode == 0 and not installed.stderr, 'Root apply scheduler provisioning failed'
+        assert json.loads(installed.stdout) == dict(scheduler_enabled=True, installation_complete=False)
+        for path in paths:
+            assert path.read_text() == units[path.name] and path.stat().st_uid == 0 and path.stat().st_mode & 0o777 == 0o644
+        assert started.stat().st_uid == 0 and started.stat().st_mode & 0o777 == 0o600
+        assert json.loads(ready.read_text()) == dict(schema=1, scheduler_enabled=True)
+        provision_receipt = started.read_bytes()
+        assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
+        assert started.read_bytes() == provision_receipt
+        assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
+        assert ctl('is-active', names[1]).stdout.strip() == b'active'
+        ctl('start', names[0])
+        assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
+        assert not receipt.exists() and not marker.exists()
+        # A partial/failed execution receipt prevents a timer retry even with a valid mailbox.
+        receipt.write_text('injected execution barrier'); receipt.chmod(0o600)
+        saved_request.rename(request)
+        try:
+            ctl('start', names[0])
+            assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
+            assert receipt.read_text() == 'injected execution barrier'
+            assert (destination/'data/journal.json').read_bytes() == data_before
+            assert (destination/'services.json').read_bytes() == services_before
+            assert not marker.exists()
+        finally:
+            receipt.unlink()  # Only this injected barrier, before any actual executor invocation.
+        deadline = time.monotonic()+300
+        while time.monotonic() < deadline:
+            status = ctl('show', names[0], '--property=ActiveState,Result,ExecMainStatus').stdout.decode()
+            if 'ActiveState=failed' in status:
+                raise AssertionError('Scheduled root installation failed')
+            if marker.exists() and 'ActiveState=inactive' in status:
+                assert 'Result=success' in status and 'ExecMainStatus=0' in status
+                break
+            time.sleep(0.5)
+        else:
+            raise AssertionError('Root timer did not complete the approved installation')
+        assert json.loads(marker.read_text())['source'] == source
+        original = receipt.read_bytes()
+        ctl('start', names[0])
+        assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
+        assert receipt.read_bytes() == original
+        return dict(source=source, installation_complete=True, already_applied=False)
+    finally:
+        ctl('disable', '--now', names[1])
+        ctl('stop', names[0])
+        if saved_request.exists():
+            saved_request.rename(request)
+        for path in paths:
+            if path.exists():
+                assert path.read_text() == units[path.name]
+                path.unlink()
+        ctl('daemon-reload')
+
+
 def prepare_web_apply(root, release, destination, source):
     try:
         account = pwd.getpwnam('gojet-installer')
@@ -312,9 +415,8 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     assert (destination/'services.json').read_bytes() == services_before
     assert not (destination/'site.json').exists()
     receipt_path.unlink()  # Only the deliberately injected fixture receipt, before any real apply.
-    result = subprocess.run(worker, capture_output=True, timeout=240)
-    assert result.returncode == 0 and not result.stderr, 'Root mailbox apply failed'
-    assert json.loads(result.stdout) == dict(source=source, installation_complete=True, already_applied=False)
+    result = run_scheduled_apply(release, authority, account, state, destination, source)
+    assert result == dict(source=source, installation_complete=True, already_applied=False)
     final_progress = json.loads(progress.read_text())
     assert final_progress['phase'] == 'health' and final_progress['status'] == 'running'
     assert progress.stat().st_uid == 0 and progress.stat().st_mode & 0o777 == 0o644
@@ -326,4 +428,4 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     assert http('/install/services', {'csrf': csrf}, cookies)[0] == 404
     assert status()[0] == 404
     assert subprocess.run(refresh, capture_output=True, timeout=30).returncode == 1
-    return json.loads(result.stdout)
+    return result

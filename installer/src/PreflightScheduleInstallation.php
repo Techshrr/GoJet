@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/WebInstallationApply.php';
 
-/** Explicit root provisioning of observation-only units; never executes an apply mailbox. */
+/** Shared publication guards for separately authorized observation and execution schedulers. */
 final class PreflightScheduleInstallation
 {
     private const AUTHORITY = '/var/lib/gojet-installer-authority';
@@ -46,13 +46,19 @@ final class PreflightScheduleInstallation
         try { if (!fsync($f)) { throw new \RuntimeException('Unit directory sync failed'); } }
         finally { fclose($f); }
     }
-    public static function install(): array
+    /** Observation-only entry point; existing callers never enable execution. */
+    public static function install(): array { return self::installSchedule(false); }
+    /** Separate explicit root authorization to execute the fixed approved mailbox. */
+    public static function installApply(): array { return self::installSchedule(true); }
+    private static function installSchedule(bool $apply): array
     {
         // This validates root, completion, fixed binding, sealed release and current prerequisites.
-        $units = WebInstallationApply::schedule();
+        $units = $apply ? WebInstallationApply::applySchedule() : WebInstallationApply::schedule();
+        $kind = $apply ? 'apply' : 'preflight';
+        $timerName = 'gojet-installer-'.$kind.'.timer';
         CompletionLock::verifyProvisioningPath(self::DIRECTORY.'/installed.lock');
-        $receipt = self::AUTHORITY.'/preflight-schedule-started.json';
-        foreach ([$receipt, self::AUTHORITY.'/preflight-schedule-ready.json'] as $record) {
+        $receipt = self::AUTHORITY.'/'.$kind.'-schedule-started.json';
+        foreach ([$receipt, self::AUTHORITY.'/'.$kind.'-schedule-ready.json'] as $record) {
             if (file_exists($record) || is_link($record)) { throw new \RuntimeException('Scheduler provisioning already attempted'); }
         }
         foreach ($units as $name => $bytes) {
@@ -86,12 +92,12 @@ final class PreflightScheduleInstallation
                 || ($p['DropInPaths'] ?? '') !== '') { throw new \RuntimeException('Scheduler unit override detected'); }
         }
         if ((new CompletionLock(self::AUTHORITY.'/installed.lock'))->exists()) { throw new \RuntimeException('Installer unavailable'); }
-        self::command(['/usr/bin/systemctl', 'enable', '--now', 'gojet-installer-preflight.timer']);
-        $timer = self::properties('gojet-installer-preflight.timer');
+        self::command(['/usr/bin/systemctl', 'enable', '--now', $timerName]);
+        $timer = self::properties($timerName);
         if (($timer['ActiveState'] ?? '') !== 'active' || ($timer['UnitFileState'] ?? '') !== 'enabled') {
             throw new \RuntimeException('Scheduler activation failed');
         }
-        ApplyRequest::write(self::AUTHORITY.'/preflight-schedule-ready.json', ['schema' => 1, 'scheduler_enabled' => true]);
+        ApplyRequest::write(self::AUTHORITY.'/'.$kind.'-schedule-ready.json', ['schema' => 1, 'scheduler_enabled' => true]);
         return ['scheduler_enabled' => true, 'installation_complete' => false];
     }
 }
