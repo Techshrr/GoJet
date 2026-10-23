@@ -1,4 +1,4 @@
-"""Real unprivileged PHP HTTP-adapter mailbox -> root native apply (not a browser/TLS submission test)."""
+"""Real browser/TLS submission -> root timer apply, plus adversarial HTTP-adapter checks."""
 import hashlib
 import json
 import os
@@ -7,6 +7,7 @@ import pwd
 import re
 import subprocess
 import time
+from native_browser_apply import submit_browser
 
 
 def verify_preflight_schedule(release, authority, account):
@@ -388,8 +389,10 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     worker = ['php8.3', str(release/'installer/bin/run-web-apply.php')]
     assert subprocess.run(worker, capture_output=True, timeout=30).returncode == 1
     assert not (authority/'web-apply-started.json').exists()
-    queued = http('/install/services', {'csrf': csrf}, cookies)
-    assert queued[0] == 202 and queued[2] == dict(step='services', status='checking')
+    browser_auth = submit_browser(root, release, state, authority, token)
+    csrf = browser_auth['csrf']
+    cookies = {'__Secure-gojet_install': browser_auth['session']}
+    assert status(cookies)[2]['status'] == 'checking'
     request = state/'apply-request.json'
     raw = request.read_bytes()
     assert request.stat().st_uid == account.pw_uid and request.stat().st_mode & 0o777 == 0o600
