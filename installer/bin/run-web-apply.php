@@ -8,6 +8,9 @@ try {
     fwrite(STDERR, "Web apply refused; inspect root binding and phase journals.\n");
     // Root CLI diagnostics contain only shipped source locations, never messages or stack arguments.
     for ($depth = 0; $error !== null && $depth < 4; $depth++, $error = $error->getPrevious()) {
+        if ($error instanceof GoJet\Installer\NativeDependencyFailure) {
+            fwrite(STDERR, 'Web apply dependency failures: '.implode(',', $error->failedChecks)."\n");
+        }
         $file = $error->getFile();
         if (dirname($file) === dirname(__DIR__).'/src' && preg_match('/^[A-Za-z]+\.php$/D', basename($file))) {
             fwrite(STDERR, 'Web apply failure location: '.basename($file).':'.$error->getLine()."\n");

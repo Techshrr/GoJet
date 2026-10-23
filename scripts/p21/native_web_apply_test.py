@@ -206,6 +206,10 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
                             'publishing', 'reloading'} else 'unavailable'
                 journal = subprocess.run(['journalctl', '-u', names[0], '-n', '40', '--no-pager', '-o', 'cat'],
                                          capture_output=True, text=True, timeout=15).stdout
+                evidence['dependencies'] = [name for line in journal.splitlines()
+                    if line.startswith('Web apply dependency failures: ')
+                    for name in line.removeprefix('Web apply dependency failures: ').split(',')
+                    if name in {'package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'}][:8]
                 evidence['locations'] = re.findall(r'^Web apply failure location: ([A-Za-z]+\.php:[0-9]+)$', journal, re.M)[:4]
                 raise AssertionError('Scheduled root installation failed: '+json.dumps(evidence, sort_keys=True))
             if marker.exists() and 'ActiveState=inactive' in status:

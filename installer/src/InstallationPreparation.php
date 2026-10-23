@@ -8,6 +8,21 @@ require_once __DIR__.'/ProductWebConfig.php';
 require_once __DIR__.'/DataBootstrap.php';
 require_once __DIR__.'/DependencyPreflight.php';
 
+/** Bounded dependency names only; never retains connection settings or raw probe output. */
+final class NativeDependencyFailure extends \RuntimeException
+{
+    public readonly array $failedChecks;
+    public function __construct(array $checks)
+    {
+        $failed = [];
+        foreach (['package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'] as $name) {
+            if (($checks[$name] ?? false) !== true) { $failed[] = $name; }
+        }
+        $this->failedChecks = $failed;
+        parent::__construct('Native dependencies not ready');
+    }
+}
+
 /** Root-private preparation and the existing data phase, not service apply or final completion. */
 final class InstallationPreparation
 {
@@ -209,7 +224,7 @@ final class InstallationPreparation
     {
         $result = self::inspect($directory);
         $readiness = $result['readiness'];
-        if ($readiness['ready'] !== true) { throw new \RuntimeException('Native dependencies not ready'); }
+        if ($readiness['ready'] !== true) { throw new NativeDependencyFailure($readiness['checks']); }
         return $result['seal'];
     }
     public static function runData(string $directory): array
