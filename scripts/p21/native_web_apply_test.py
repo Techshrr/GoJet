@@ -116,6 +116,41 @@ def verify_preflight_schedule(release, authority, account):
         ctl('daemon-reload')
 
 
+def diagnose_scheduled_file_probe(release, destination, unit):
+    """CI-only reproduction; emit enums/booleans, never raw helper or PAM output."""
+    plan = json.loads((destination/'dependencies.json').read_text())
+    properties = [line for line in unit.splitlines() if line.split('=', 1)[0] in {
+        'User', 'Group', 'UMask', 'NoNewPrivileges', 'ProtectHome', 'ProtectKernelTunables',
+        'ProtectKernelModules', 'ProtectControlGroups', 'RestrictSUIDSGID'}]
+    command = ['/usr/bin/systemd-run', '--quiet', '--wait', '--pipe', '--collect']
+    for value in properties:
+        command += ['--property='+value]
+    command += ['/usr/bin/env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin',
+        'GOJET_FILE_STORAGE_ROOT='+plan['storage'], 'GOJET_CLAMAV_NETWORK=unix',
+        'GOJET_CLAMAV_ADDRESS='+plan['clamav_socket'], '/usr/sbin/runuser', '-u', 'gojet', '--']
+    results = {}
+    for name, executable in [('identity', '/usr/bin/id'), ('health', str(release/'bin/filepreflight'))]:
+        result = subprocess.run(command+[executable], capture_output=True, text=True, timeout=30)
+        evidence = {'exit': result.returncode, 'stderr_present': bool(result.stderr)}
+        evidence['errors'] = [label for label, phrase in {
+            'groups': 'cannot set groups', 'execute': 'failed to execute',
+            'permission': 'Permission denied', 'operation': 'Operation not permitted',
+            'pam': 'pam', 'namespace': 'mount namespacing',
+        }.items() if phrase in result.stderr]
+        if name == 'identity':
+            evidence['gojet_uid'] = result.stdout.startswith('uid='+str(pwd.getpwnam('gojet').pw_uid)+'(')
+        else:
+            try:
+                report = json.loads(result.stdout)
+                for key in ['storage', 'clamav']:
+                    state = report.get(key, {}).get('state')
+                    evidence[key] = state if state in {'healthy', 'unavailable', 'permission_error', 'stale', 'indeterminate'} else 'invalid'
+            except (ValueError, AttributeError):
+                evidence['health_json'] = False
+        results[name] = evidence
+    return results
+
+
 def run_scheduled_apply(release, authority, account, state, destination, source):
     """Actual PID1 timer -> shipped root worker; no direct worker call for the successful apply."""
     render = ['php8.3', str(release/'installer/bin/render-web-apply-schedule.php')]
@@ -211,6 +246,7 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
                     for name in line.removeprefix('Web apply dependency failures: ').split(',')
                     if name in {'package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'}][:8]
                 evidence['locations'] = re.findall(r'^Web apply failure location: ([A-Za-z]+\.php:[0-9]+)$', journal, re.M)[:4]
+                evidence['file_probe'] = diagnose_scheduled_file_probe(release, destination, units[names[0]])
                 raise AssertionError('Scheduled root installation failed: '+json.dumps(evidence, sort_keys=True))
             if marker.exists() and 'ActiveState=inactive' in status:
                 assert 'Result=success' in status and 'ExecMainStatus=0' in status
