@@ -3,6 +3,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/PackageIntegrity.php';
+require_once __DIR__.'/UnprivilegedProbe.php';
 
 /** Native Ubuntu 24.04 dependency probes; fixed argv only, no apply or final lock. */
 final class DependencyPreflight
@@ -105,8 +106,8 @@ final class DependencyPreflight
         $checks['storage'] = false; $checks['clamav'] = false;
         if ($checks['package']) {
             try {
-                $r = self::process(['/usr/sbin/runuser', '-u', 'gojet', '--', $p['release'].'/bin/filepreflight'],
-                    ['GOJET_FILE_STORAGE_ROOT' => $p['storage'], 'GOJET_CLAMAV_NETWORK' => 'unix', 'GOJET_CLAMAV_ADDRESS' => $p['clamav_socket']]);
+                $r = self::process(UnprivilegedProbe::command($p['release'], 'filepreflight',
+                    ['GOJET_FILE_STORAGE_ROOT' => $p['storage'], 'GOJET_CLAMAV_NETWORK' => 'unix', 'GOJET_CLAMAV_ADDRESS' => $p['clamav_socket']]));
                 $report = json_decode($r['out'], true, 16, JSON_THROW_ON_ERROR);
                 // The inherited helper reports storage and scanner failures independently.
                 if (in_array($r['code'], [0, 2], true) && $r['err'] === '') {

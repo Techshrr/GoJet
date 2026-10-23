@@ -98,7 +98,7 @@ final class ServiceActivation
             fclose($f);
             if (!preg_match('~^HTTP/\S+ '.$expected.'(?: |$)~', $http_response_header[0] ?? '')) { return false; }
         }
-        return self::command(['/usr/sbin/runuser', '-u', 'gojet', '--', $seal['release'].'/bin/logreceiver', '--check'], ['GOJET_LOG_SOCKET' => '/run/gojet-log/collector.sock'])['code'] === 0;
+        return self::command(UnprivilegedProbe::command($seal['release'], 'logreceiver', ['GOJET_LOG_SOCKET' => '/run/gojet-log/collector.sock']))['code'] === 0;
     }
     private static function cleanup(array $published, array $seal): bool
     {
@@ -249,7 +249,7 @@ final class ServiceActivation
                 self::systemctl(['start', $units[0]]);
                 $deadline = microtime(true)+10;
                 do {
-                    $probe = self::command(['/usr/sbin/runuser', '-u', 'gojet', '--', $seal['release'].'/bin/logreceiver', '--check'], ['GOJET_LOG_SOCKET' => '/run/gojet-log/collector.sock']);
+                    $probe = self::command(UnprivilegedProbe::command($seal['release'], 'logreceiver', ['GOJET_LOG_SOCKET' => '/run/gojet-log/collector.sock']));
                     if ($probe['code'] === 0) { break; }
                     if (microtime(true) > $deadline) { throw new \RuntimeException('Collector unavailable'); }
                     usleep(100000);

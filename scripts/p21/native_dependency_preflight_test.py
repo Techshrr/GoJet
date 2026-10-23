@@ -145,7 +145,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
         ('/usr/sbin/nginx', ['nginx']),
         ('/usr/sbin/php-fpm8.3', ['php']),
         ('/usr/bin/systemctl', ['systemd', 'nginx', 'php']),
-        ('/usr/sbin/runuser', ['storage', 'clamav']),
+        ('/usr/bin/systemd-run', ['storage', 'clamav']),
     ]:
         original = Path(binary)
         backup = original.with_name(original.name+'.p21-absence-test')

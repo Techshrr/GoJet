@@ -85,7 +85,7 @@ def verify_preflight_schedule(release, authority, account):
         assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
         assert started.read_bytes() == receipt
         assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
-        observe(before, True)
+        assert all(observe(before, True)['checks'].values()), 'Scheduled preflight must verify every dependency'
         assert ctl('is-active', names[1]).stdout.strip() == b'active'
         # A subsequent tick, not a direct service invocation, must detect the real outage.
         ctl('stop', 'redis-server.service')
@@ -94,7 +94,7 @@ def verify_preflight_schedule(release, authority, account):
             assert failed['checks']['package'] is True
         finally:
             ctl('start', 'redis-server.service')
-        observe(snapshot.stat().st_mtime_ns, True)
+        assert all(observe(snapshot.stat().st_mtime_ns, True)['checks'].values()), 'Recovered preflight must verify every dependency'
         ctl('stop', names[1], names[0])
         original = snapshot.read_bytes()
         # Fixture completion lock proves the service condition skips even explicit starts.
