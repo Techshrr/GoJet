@@ -7,7 +7,7 @@ import pwd
 import re
 import subprocess
 import time
-from native_browser_apply import submit_browser
+from native_browser_apply import submit_browser, observe_browser
 
 
 def verify_preflight_schedule(release, authority, account):
@@ -472,7 +472,8 @@ $argv[2],$argv[3],'https://localhost:18443','/var/lib/gojet-installer-authority/
     assert (destination/'services.json').read_bytes() == services_before
     assert not (destination/'site.json').exists()
     receipt_path.unlink()  # Only the deliberately injected fixture receipt, before any real apply.
-    result = run_scheduled_apply(release, authority, account, state, destination, source)
+    with observe_browser(root, release, state, authority, token):
+        result = run_scheduled_apply(release, authority, account, state, destination, source)
     assert result == dict(source=source, installation_complete=True, already_applied=False)
     final_progress = json.loads(progress.read_text())
     assert final_progress['phase'] == 'health' and final_progress['status'] == 'running'

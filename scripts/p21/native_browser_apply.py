@@ -1,4 +1,6 @@
 """Real browser submission against shipped TLS/FPM; never edits installer state or mailbox."""
+from contextlib import contextmanager
+import selectors
 import hashlib
 import json
 import os
@@ -11,9 +13,9 @@ import urllib.error
 import urllib.request
 
 
-def submit_browser(root, release, state, authority, token):
-    repo = Path(__file__).resolve().parents[2]
-    base = root/'browser-submit'
+@contextmanager
+def browser_endpoint(root, release, state, authority, token, name):
+    base = root/name
     base.mkdir(mode=0o755)
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -56,13 +58,7 @@ def submit_browser(root, release, state, authority, token):
             time.sleep(0.1)
         else:
             raise AssertionError('Native browser endpoint unavailable')
-        assert not (state/'apply-request.json').exists()
-        result = command([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_apply_browser_test.mjs')],
-            input=json.dumps(dict(origin=origin, token=token)), cwd=repo)
-        credentials = json.loads(result.stdout)
-        assert set(credentials) == {'session', 'csrf'}
-        assert (state/'apply-request.json').exists()
-        return credentials
+        yield origin
     finally:
         for process in reversed(processes):
             process.terminate()
@@ -70,3 +66,46 @@ def submit_browser(root, release, state, authority, token):
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait(timeout=5)
+
+
+def submit_browser(root, release, state, authority, token):
+    repo = Path(__file__).resolve().parents[2]
+    with browser_endpoint(root, release, state, authority, token, 'browser-submit') as origin:
+        assert not (state/'apply-request.json').exists()
+        result = subprocess.run([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_apply_browser_test.mjs')],
+            input=json.dumps(dict(origin=origin, token=token)), cwd=repo,
+            capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, 'Native browser submission failed'
+        credentials = json.loads(result.stdout)
+        assert set(credentials) == {'session', 'csrf'}
+        assert (state/'apply-request.json').exists()
+        return credentials
+
+
+@contextmanager
+def observe_browser(root, release, state, authority, token):
+    """Keep real desktop/mobile pages open around native timer execution; no state fixtures."""
+    repo = Path(__file__).resolve().parents[2]
+    with browser_endpoint(root, release, state, authority, token, 'browser-observe') as origin:
+        process = subprocess.Popen([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_progress_browser_test.mjs')],
+            cwd=repo, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            process.stdin.write(json.dumps(dict(origin=origin, token=token)))
+            process.stdin.close(); process.stdin = None
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                assert selector.select(timeout=60), 'Browser observer readiness timeout'
+                assert process.stdout.readline() == 'ready\n', 'Browser observer failed before native execution'
+            yield
+            stdout, stderr = process.communicate(timeout=60)
+            assert process.returncode == 0 and not stdout and not stderr, 'Browser native progress/closure verification failed'
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill(); process.wait(timeout=5)
+            for pipe in [process.stdin, process.stdout, process.stderr]:
+                if pipe is not None:
+                    pipe.close()

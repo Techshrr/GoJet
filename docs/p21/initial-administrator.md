@@ -51,6 +51,11 @@ For source `76f9b3e506bc7b468842b4fa79d3a894406ad3c7`, initial-administrator
 run `39978105664` passed, preserving root-only access, one-time creation,
 credentials, permissions and audit behavior. Migration, data bootstrap, installer
 web, release package and service environment workflows also passed. Payload run
-`39978105676` remains pending: its full native preparation regression must pass
-before the new pre-DDL/no-plan rejection is considered verified. Compilation
-success alone is not that evidence.
+`39978105676` / job `120497936015` passed the actual native preparation regression:
+`invalid_admin_rejected_before_plan_or_migration=true`, along with the inherited
+browser submission, timer, replay, recovery and completion-lock checks. Original
+artifact `12514032627` was independently downloaded and verified: ZIP SHA256
+`759dddf16b3fd70652ead09ce6e5cb25013b3d8e7605778cca645c8235c2ad6f`, inner archive
+SHA256 `f3f6f51ab59b9f80b255b81866fe9198a01f4d17fe2e3a643e796500d6e7ffcb`.
+ZIP integrity, exact-source JSON and archive allowlist checks passed. This does
+not close full interactive configuration or target Ubuntu 24.04.4 acceptance.
