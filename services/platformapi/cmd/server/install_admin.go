@@ -39,7 +39,23 @@ func readInitialAdmin(input io.Reader) (initialAdminRequest, error) {
 	if strings.TrimSpace(request.DisplayName) == "" || len(request.DisplayName) > 128 || strings.ContainsAny(request.DisplayName, "\r\n\x00") {
 		return initialAdminRequest{}, errInstallAdmin
 	}
+	if adminaccess.ValidateBootstrapAdministratorInput(request.Email, request.Password, request.CorrelationID) != nil {
+		return initialAdminRequest{}, errInstallAdmin
+	}
 	return request, nil
+}
+
+// Validate before preparation publishes a plan or the data phase applies migrations.
+// This mode deliberately does not load runtime configuration or connect to dependencies.
+func validateInitialAdministrator(input io.Reader, output io.Writer) error {
+	if os.Geteuid() != 0 || os.Getenv("GOJET_TEST_AUTH_ENABLED") == "1" {
+		return errInstallAdmin
+	}
+	if _, err := readInitialAdmin(input); err != nil {
+		return errInstallAdmin
+	}
+	_, err := io.WriteString(output, "{\"valid\":true}\n")
+	return err
 }
 
 // Only the local privileged Installer may call this mode. Never register an HTTP route.

@@ -12,6 +12,9 @@ func TestInitialAdminRequestBounds(t *testing.T) {
 	}
 	for _, input := range []string{
 		strings.Repeat("x", 4097), valid + `{}`, `{"display_name":""}`,
+		strings.Replace(valid, "admin@example.test", "not-an-email", 1),
+		strings.Replace(valid, "test-password-long", "", 1),
+		strings.Replace(valid, "install-test", "", 1),
 		`{"display_name":"root","permissions":["anything"]}`, `{broken`,
 	} {
 		if _, err := readInitialAdmin(strings.NewReader(input)); err == nil {

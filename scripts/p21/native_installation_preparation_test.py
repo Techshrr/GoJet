@@ -85,6 +85,25 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
         assert sql('SHOW TABLES') == '', 'Refused input mutated database'
         assert not (destination/'data/journal.json').exists()
 
+    # Validation-only mode has no dependency credentials and must never create an account.
+    validation = [str(release/'bin/platformapi'), '--validate-bootstrap-admin']
+    validation_input = json.dumps(request['admin'] | {'correlation_id': 'p21-validation-only'}).encode()
+    checked = subprocess.run(validation, input=validation_input, capture_output=True, timeout=15, env=env)
+    assert checked.returncode == 0 and checked.stdout == b'{"valid":true}\n' and not checked.stderr
+    for argv, variables in [(validation+['unexpected'], env),
+                            (['runuser', '-u', 'nobody', '--']+validation, env),
+                            (validation, env | {'GOJET_TEST_AUTH_ENABLED': '1'})]:
+        checked = subprocess.run(argv, input=validation_input, capture_output=True, timeout=15, env=variables)
+        assert checked.returncode == 1 and not checked.stdout
+        assert checked.stderr == b'initial administrator validation refused\n'
+    assert sql('SHOW TABLES') == '' and not destination.exists()
+    # These passed PHP's former nonempty/length checks but fail the native Admin authority.
+    # Reject before publishing any prepared directory or touching the empty database.
+    for email in ['not-an-email', '@example.test', 'admin@@example.test', 'admin@.example.test', 'admin@example.test.']:
+        bad = copy.deepcopy(request)
+        bad['admin']['email'] = email
+        refused(prepare(bad), True)
+        assert not destination.exists(), 'Invalid administrator published a plan'
     refused(prepare(nonroot=True), True)
     refused(prepare(manifest='0'*64), True)
     refused(prepare(commit='0'*40), True)
@@ -209,6 +228,6 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     real_api_port_failure_cleaned=True, failed_activation_retry_blocked=True, activation_repeat_noop=True,
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
-    native_migrations_applied=31, inherited_admin_created=True, repeat_noop=True,
+    native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True, repeat_noop=True,
     installation_complete=False, isolated_installation_completion_verified=True,
     final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))

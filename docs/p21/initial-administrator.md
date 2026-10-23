@@ -33,3 +33,16 @@ lock, one-time creation, duplicate refusal, credential derivation, inherited
 permissions and the original audit authority. It does not export credentials or
 hash material. This is not yet the sealed privileged worker, complete Installer
 flow, login/browser proof, or a production deployment.
+
+Before publishing a preparation plan or executing migrations, the Installer now calls
+`platformapi --validate-bootstrap-admin` on the already verified immutable binary.
+It uses the same bounded stdin parser and Admin email/password/correlation rules as
+creation, without loading database/Redis configuration, hashing passwords or writing
+accounts. Only root may invoke it; extra arguments and test-auth mode are rejected.
+Success is exactly `{"valid":true}`; errors never echo input. This is input validity,
+not proof of database readiness, uniqueness, account creation or login success.
+
+This moves malformed administrator input rejection before DDL and plan publication.
+It does not change password policy or permit browser-controlled roles/permissions.
+The new native regression requires an empty database and absent prepared directory
+after rejected input. This change is awaiting its first exact-source CI result.

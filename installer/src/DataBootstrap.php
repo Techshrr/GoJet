@@ -93,6 +93,13 @@ final class DataBootstrap
             || ($identity['commit'] ?? '') !== $p['source'] || ($identity['version'] ?? '') !== $p['version']) {
             throw new \RuntimeException('Native release identity mismatch');
         }
+        // Validate with the same native Admin authority before publishing a plan or applying DDL.
+        // Release ownership/hash/version have already been checked; credentials travel only on stdin.
+        $admin = json_encode($p['admin'] + ['correlation_id' => 'p21-root-'.substr($p['source'], 0, 32)], JSON_THROW_ON_ERROR);
+        if (self::native($root.'/bin/platformapi', '--validate-bootstrap-admin', $admin,
+            ['PATH' => '/usr/bin:/bin']) !== "{\"valid\":true}\n") {
+            throw new \RuntimeException('Initial administrator validation refused');
+        }
         return $p;
     }
 
