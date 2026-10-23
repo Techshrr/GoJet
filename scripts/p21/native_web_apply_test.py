@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import pwd
+import re
 import subprocess
 import time
 
@@ -193,7 +194,20 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
         while time.monotonic() < deadline:
             status = ctl('show', names[0], '--property=ActiveState,Result,ExecMainStatus').stdout.decode()
             if 'ActiveState=failed' in status:
-                raise AssertionError('Scheduled root installation failed')
+                # Publish finite diagnostic fields only; raw journals and configuration stay private.
+                evidence = {'systemd': dict(line.split('=', 1) for line in status.splitlines() if '=' in line)}
+                for label, path in [('execution', authority/'apply-progress.json'), ('data', destination/'data/journal.json'),
+                                    ('services', destination/'services.json'), ('site', destination/'site.json')]:
+                    if path.exists():
+                        value = json.loads(path.read_text())
+                        phase = value.get('phase')
+                        evidence[label] = phase if phase in {'starting', 'data', 'services', 'site', 'health',
+                            'data-complete', 'failed', 'recovered', 'services-ready', 'site-configured',
+                            'publishing', 'reloading'} else 'unavailable'
+                journal = subprocess.run(['journalctl', '-u', names[0], '-n', '40', '--no-pager', '-o', 'cat'],
+                                         capture_output=True, text=True, timeout=15).stdout
+                evidence['locations'] = re.findall(r'^Web apply failure location: ([A-Za-z]+\.php:[0-9]+)$', journal, re.M)[:4]
+                raise AssertionError('Scheduled root installation failed: '+json.dumps(evidence, sort_keys=True))
             if marker.exists() and 'ActiveState=inactive' in status:
                 assert 'Result=success' in status and 'ExecMainStatus=0' in status
                 break

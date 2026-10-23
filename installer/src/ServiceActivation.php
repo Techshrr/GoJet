@@ -264,10 +264,10 @@ final class ServiceActivation
                 if (!self::healthy($seal)) { throw new \RuntimeException('Unstable services'); }
                 $state['phase'] = 'services-ready'; self::persist($directory, $state);
                 return ['services_ready' => true, 'already_applied' => false, 'installation_complete' => false];
-            } catch (\Throwable) {
+            } catch (\Throwable $cause) {
                 $state['phase'] = 'failed'; $state['cleanup_complete'] = self::cleanup($published, $seal);
                 self::persist($directory, $state);
-                throw new \RuntimeException('Service activation failed; verify recovery');
+                throw new \RuntimeException('Service activation failed; verify recovery', 0, $cause);
             }
         } finally { flock($lock, LOCK_UN); fclose($lock); }
     }

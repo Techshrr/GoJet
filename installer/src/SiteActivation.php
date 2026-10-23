@@ -184,7 +184,7 @@ final class SiteActivation
                 self::command(['/usr/bin/systemctl', 'is-active', 'nginx.service']);
                 $state['phase'] = 'site-configured'; self::persist($directory, $state);
                 return ['site_configured' => true, 'already_applied' => false, 'installation_complete' => false];
-            } catch (\Throwable) {
+            } catch (\Throwable $cause) {
                 $clean = false;
                 try {
                     if ($created && self::owned($hash)) {
@@ -195,7 +195,7 @@ final class SiteActivation
                     }
                 } catch (\Throwable) { /* Preserve failure barrier; never remove foreign configuration. */ }
                 $state['phase'] = 'failed'; $state['cleanup_complete'] = $clean; self::persist($directory, $state);
-                throw new \RuntimeException('Site activation failed; verify recovery');
+                throw new \RuntimeException('Site activation failed; verify recovery', 0, $cause);
             }
         } finally { flock($h, LOCK_UN); fclose($h); }
     }
