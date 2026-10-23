@@ -33,11 +33,16 @@ worker 仍重新验证 root 绑定、专用账户所有权、私有 mailbox、�
 原生测试在隔离 runner 上运行真实 PID1、PHP、数据库和安装服务。浏览器观察夹具
 不能替代该执行证据。正式生产包将只包含运行必需文件；工程测试不随包交付。
 
-当前阻塞（2026-10-23）：Payload 39895957842 在 root 执行回执写入前失败，
-storage、clamav 两项依赖检查未通过。自动执行调度尚未通过真实安装验收。
-CI 对照诊断只输出退出码、固定错误类别及健康状态，不输出原始日志或连接配置。
+验证结果（2026-10-23）：bf245095573914a42ab7c1dc1bc36a9097574be0 的
+Payload 39929702376/job 120336635749 已通过真实 timer 安装、重放拒绝和最终完成锁。
+executor-context job 120336635479 另行确认实际非 root 身份、NNP=1 和空 capabilities。
+此前 storage/clamav 的共同阻塞来自保护环境中的用户切换失败，现已关闭。
 
-修复方式：健康探针由 systemd 临时服务直接以 gojet 身份启动，随后保持
-NoNewPrivileges、只读系统目录、内核保护及空 capability 集；不在 root worker
-内部通过 runuser/setpriv 切换身份。探针仅限已验证发行包的 filepreflight 或
-logreceiver --check，固定环境字段，有独立执行超时和进程组清理。该修改仍待 CI。
+健康探针由 systemd 临时服务直接以 gojet 身份启动，随后保持 NoNewPrivileges、
+只读系统目录、内核保护及空 capability 集；不在 root worker 内部通过 runuser/setpriv
+切换身份。探针仅限已验证发行包的 filepreflight 或 logreceiver --check，固定环境字段，
+有独立执行超时和进程组清理。父 worker 的保护不变，预检 timer 必须八项检查全部通过。
+
+原始 artifact 12493925215 的 ZIP 摘要/完整性、内层归档与对应源码证据已独立核验，
+详见 STATUS.md。CI runner 为 Ubuntu 24.04.5，不替代指定 24.04.4 目标机验收。
+HTTP mailbox 由非特权适配器提交；完整网页配置与浏览器到实际执行链仍待完成。
