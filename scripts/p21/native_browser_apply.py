@@ -42,11 +42,17 @@ def submit_browser(root, release, state, authority, token):
         context = ssl.create_default_context(cafile=str(root/'certificate.pem'))
         for _ in range(100):
             try:
-                with urllib.request.urlopen(origin+'/install/', context=context, timeout=2) as response:
-                    if response.status == 200:
+                request = urllib.request.Request(origin+'/install/', headers={'Accept': 'application/json'})
+                with urllib.request.urlopen(request, context=context, timeout=2):
+                    raise AssertionError('Unauthenticated installer unexpectedly accepted')
+            except urllib.error.HTTPError as response:
+                with response:
+                    if response.code == 401 and json.loads(response.read()) == {'error': 'Installer authentication required'}:
                         break
             except (OSError, urllib.error.URLError):
                 pass
+            if any(process.poll() is not None for process in processes):
+                raise AssertionError('Native browser endpoint process exited')
             time.sleep(0.1)
         else:
             raise AssertionError('Native browser endpoint unavailable')
