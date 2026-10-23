@@ -24,6 +24,15 @@ concurrency:
   group: p21-payload-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  executor-context:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Isolate native identity switching under installer protections
+        run: python3 scripts/p21/native_executor_identity_test.py
   payload:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
