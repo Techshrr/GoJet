@@ -45,4 +45,12 @@ not proof of database readiness, uniqueness, account creation or login success.
 This moves malformed administrator input rejection before DDL and plan publication.
 It does not change password policy or permit browser-controlled roles/permissions.
 The new native regression requires an empty database and absent prepared directory
-after rejected input. This change is awaiting its first exact-source CI result.
+after rejected input.
+
+For source `76f9b3e506bc7b468842b4fa79d3a894406ad3c7`, initial-administrator
+run `39978105664` passed, preserving root-only access, one-time creation,
+credentials, permissions and audit behavior. Migration, data bootstrap, installer
+web, release package and service environment workflows also passed. Payload run
+`39978105676` remains pending: its full native preparation regression must pass
+before the new pre-DDL/no-plan rejection is considered verified. Compilation
+success alone is not that evidence.
