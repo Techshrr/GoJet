@@ -48,7 +48,10 @@ try {
     for (const [field, value] of Object.entries(values)) await adoptionPage.locator('#cfg-'+field).fill(value);
     await adoptionPage.locator('#cfg-file-types').fill('pdf=application/pdf\npdf=application/pdf');
     await adoptionPage.locator('#installer-save-configuration').click();
-    await adoptionPage.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('Use a unique extension='));
+    // Validation is synchronous. Report field identifiers, never credential values.
+    const rejectedFields = await adoptionPage.locator('#installer-configuration :invalid').evaluateAll(nodes => nodes.map(node => node.id));
+    assert.deepEqual(rejectedFields, ['cfg-file-types'], 'Unexpected fields blocked configuration validation');
+    assert.match(await adoptionPage.locator('#installer-message').textContent(), /^Use a unique extension=/);
     assert.equal(configurationPosts, 0);
     assert.equal(fs.existsSync(draftFile), false);
     await adoptionPage.locator('#cfg-file-types').fill('pdf=application/pdf');
