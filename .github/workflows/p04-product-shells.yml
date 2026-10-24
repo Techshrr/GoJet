@@ -93,7 +93,12 @@ jobs:
           EOF
           nginx -t -c "$RUNNER_TEMP/p04-docs-nginx.conf"
           nginx -c "$RUNNER_TEMP/p04-docs-nginx.conf"
-          nohup php -S 127.0.0.1:4177 -t installer/public >/tmp/gojet-installer.log 2>&1 &
+          # P04 tests the shell component, not the protected P21 HTTP adapter.
+          # Serve only rendered HTML from a separate temporary document root.
+          preview_dir="$(mktemp -d "$RUNNER_TEMP/p04-installer.XXXXXX")"
+          php scripts/p04/render_installer_preview.php > "$preview_dir/index.html"
+          test -s "$preview_dir/index.html"
+          nohup python3 -m http.server 4177 --bind 127.0.0.1 --directory "$preview_dir" >/tmp/gojet-installer.log 2>&1 &
           for url in http://127.0.0.1:4173/ http://127.0.0.1:4174/app http://127.0.0.1:4175/admin http://127.0.0.1:4176/docs/en/ http://127.0.0.1:4177/; do
             ready=0
             for attempt in $(seq 1 40); do

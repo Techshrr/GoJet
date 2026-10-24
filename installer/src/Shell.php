@@ -4,6 +4,34 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 final class Shell
 {
+    /** Operable approved-plan surface; keeps the original shell and token system. */
+    public static function interactive(): string
+    {
+        $html = self::render();
+        $html = str_replace('<p class="installer-state">session-ready</p>', '', $html);
+        $html = str_replace('<h1>Welcome to GoJet V10</h1>', '<h1 id="installer-title">Authorize installation</h1>', $html);
+        $html = str_replace('Verify this server before starting the native installation.', 'Continue with a server-approved installation plan.', $html);
+        $start = strpos($html, '<dl>');
+        $end = strpos($html, '</section>', $start);
+        $controls = '<p id="installer-message" role="status" aria-live="polite" aria-atomic="true">Enter the installation access token supplied by your server administrator.</p>'
+            .'<form id="installer-login" method="post" action="/install/"><label for="bootstrap-token">Installation access token</label>'
+            .'<input id="bootstrap-token" name="bootstrap_token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required minlength="32" maxlength="256" aria-describedby="token-help">'
+            .'<p id="token-help">Used only to authorize this installation session.</p>'
+            .'<button class="installer-primary" type="submit">Authenticate</button></form>'
+            .'<section id="installer-preflight" aria-labelledby="preflight-title" hidden><h2 id="preflight-title">Dependency checks</h2>'
+            .'<p id="preflight-summary" role="status" aria-live="polite"></p><dl id="preflight-checks" hidden></dl>'
+            .'<p>These checks describe the last server observation. Installation checks dependencies again before making changes.</p></section>'
+            .'<div class="installer-actions"><button id="installer-apply" class="installer-primary" type="button" hidden disabled>Submit approved installation</button>'
+            .'<button id="installer-refresh" type="button">Refresh status</button></div>'
+            .'<noscript><p>JavaScript is required for this protected installation interface. The server administrator can use the native installation command instead.</p></noscript>';
+        $html = substr($html, 0, $start).$controls.substr($html, $end);
+        $script = (string)file_get_contents(dirname(__DIR__).'/public/assets/install.js');
+        return str_replace('</body>', '<script>'.$script.'</script></body>', $html);
+    }
+    public static function scriptPolicy(): string
+    {
+        return "script-src 'sha256-".base64_encode(hash('sha256', (string)file_get_contents(dirname(__DIR__).'/public/assets/install.js'), true))."'; connect-src 'self'";
+    }
     public const STATES=['session-ready','step-checking','step-pass','hard-failure','retryable-failure','install-running','lock-failed','complete','already-locked'];
     public static function render(string $state='session-ready'):string
     {
