@@ -39,17 +39,22 @@ try {
       await adoptionPage.waitForFunction(selector => !document.querySelector(selector).disabled, control);
     }
     await authenticateApproval('#installer-save-configuration');
-    const values = {'origin': cfg.origin, 'database-name': 'gojet_browser', 'database-user': 'gojet_browser',
+    const values = {'origin': 'https://installer.example.test', 'database-name': 'gojet_browser', 'database-user': 'gojet_browser',
       'database-password': 'private-database-fixture', 'smtp-host': 'smtp.example.test',
       'smtp-from': 'mail@example.test', 'risk-name': 'browser-fixture',
       'risk-endpoint': 'https://risk.example.test/check', 'risk-policy_version': 'v1',
       'turnstile_secret': 'private-browser-fixture', 'admin-email': 'admin@example.test',
       'admin-display_name': 'Administrator', 'admin-password': 'private-browser-password'};
     for (const [field, value] of Object.entries(values)) await adoptionPage.locator('#cfg-'+field).fill(value);
+    await adoptionPage.locator('#cfg-origin').fill(cfg.origin);
+    await adoptionPage.locator('#installer-save-configuration').click();
+    assert.match(await adoptionPage.locator('#installer-message').textContent(), /Use the final DNS hostname/);
+    assert.equal(configurationPosts, 0);
+    await adoptionPage.locator('#cfg-origin').fill(values.origin);
     await adoptionPage.locator('#cfg-file-types').fill('pdf=application/pdf\npdf=application/pdf');
     await adoptionPage.locator('#installer-save-configuration').click();
     // Validation is synchronous. Report field identifiers, never credential values.
-    const rejectedFields = await adoptionPage.locator('#installer-configuration :invalid').evaluateAll(nodes => nodes.map(node => node.id));
+    const rejectedFields = await adoptionPage.locator('#installer-configuration input:invalid, #installer-configuration textarea:invalid').evaluateAll(nodes => nodes.map(node => node.id));
     assert.deepEqual(rejectedFields, ['cfg-file-types'], 'Unexpected fields blocked configuration validation');
     assert.match(await adoptionPage.locator('#installer-message').textContent(), /^Use a unique extension=/);
     assert.equal(configurationPosts, 0);
