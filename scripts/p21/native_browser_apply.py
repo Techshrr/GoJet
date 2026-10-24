@@ -127,3 +127,20 @@ def submit_configuration_browser(root, release, state, authority, token, draft):
     assert json.loads((state/'configuration-draft.json').read_text()) == draft, 'Browser draft content mismatch'
     assert json.loads((state/'state.json').read_text())['status'] == 'checking'
     assert not (state/'apply-request.json').exists() and not (state/'apply-approval.json').exists()
+
+
+def confirm_approval_browser(root, release, state, authority, token):
+    """No approval fixtures: read the root command's real record through the shipped mobile UI."""
+    immutable = {path: path.read_bytes() for path in [state/'configuration-draft.json',
+        authority/'configuration-approval.json', authority/'web-apply.json']}
+    assert not (state/'apply-approval.json').exists() and not (state/'apply-request.json').exists()
+    repo = Path(__file__).resolve().parents[2]
+    with browser_endpoint(root, release, state, authority, token, 'browser-approval') as origin:
+        result = subprocess.run([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_approval_browser_test.mjs')],
+            input=json.dumps(dict(origin=origin, token=token)), cwd=repo,
+            capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0 and not result.stdout and not result.stderr, 'Native browser approval failed'
+    assert all(path.read_bytes() == content for path, content in immutable.items()), 'Browser approval changed immutable inputs'
+    current = json.loads((state/'state.json').read_text())
+    assert current['step'] == 4 and current['status'] == 'ready'
+    assert not (state/'apply-request.json').exists()

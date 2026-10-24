@@ -7,7 +7,7 @@ import pwd
 import re
 import subprocess
 import time
-from native_browser_apply import submit_browser, observe_browser
+from native_browser_apply import submit_browser, observe_browser, confirm_approval_browser
 
 
 def verify_preflight_schedule(release, authority, account):
@@ -343,8 +343,7 @@ if($r[0]!==200||$r[2]['step']!=='services'||$r[2]['status']!=='ready') {exit(1);
     assert adopt().returncode == 1 and interrupted.read_bytes() == interrupted_bytes
     assert json.loads((state/'state.json').read_text())['status'] == 'checking'
     interrupted.unlink()
-    adopted = adopt()
-    assert adopted.returncode == 0 and not adopted.stdout and not adopted.stderr
+    confirm_approval_browser(root, release, state, authority, token)
     assert not (state/'apply-request.json').exists()
     assert (state/'apply-approval.json').stat().st_uid == account.pw_uid
     state_approval = (state/'apply-approval.json').read_bytes()
