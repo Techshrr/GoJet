@@ -15,7 +15,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 PHP = os.environ.get('PHP_BIN', 'php8.3')
-ROUTES = ['', '/', '/environment', '/data', '/site', '/admin', '/services', '/health', '/complete']
+ROUTES = ['', '/', '/environment', '/data', '/site', '/admin', '/services', '/health', '/complete', '/configuration', '/configuration/approve']
 
 
 @unittest.skipUnless(shutil.which(PHP), 'Native PHP 8.3 required')
@@ -102,8 +102,47 @@ class InstallerHTTP(unittest.TestCase):
                     self.assertEqual(request(route, headers=cookie_header)[0], 409)
                 self.assertEqual(request('/install/environment', data=b'{"success":true}', headers=cookie_header)[0], 503)
                 self.assertEqual(json.loads((state/'state.json').read_text())['step'], 0)
-                # A new authenticated session invalidates the old cookie.
-                self.assertEqual(request(data=payload)[0], 200)
+                # Dedicated configuration route accepts a bounded private draft, never a success flag.
+                draft = {'configuration': {'schema': 'gojet.native-configuration.v1',
+                    'origin': 'https://installer.test', 'database': {}, 'redis': {},
+                    'files': {'max_upload_bytes': 1, 'max_files': 1, 'max_bytes': 1, 'types': []},
+                    'quotas': {}, 'smtp': {}, 'risk': {}, 'turnstile_secret': 'private-fixture-'+'x'*5000,
+                    'auth_rate': {}}, 'admin': {'email': 'admin@example.test',
+                    'display_name': 'Admin', 'password': 'private-admin-fixture'}}
+                route = '/install/configuration'
+                draft_body = json.dumps({'csrf': auth['csrf'], 'draft': draft}).encode()
+                self.assertGreater(len(draft_body), 4096)
+                self.assertEqual(request(route, data=draft_body)[0], 401)
+                self.assertEqual(request(route, data=draft_body, headers=cookie_header | {'Origin': 'https://evil.test'})[0], 403)
+                self.assertEqual(request(route, data=b'x'*32769, headers=cookie_header)[0], 413)
+                self.assertEqual(request(route, data=b'{"success":true}', headers=cookie_header)[0], 400)
+                wrong = json.dumps({'csrf': '0'*64, 'draft': draft}).encode()
+                self.assertEqual(request(route, data=wrong, headers=cookie_header)[0], 403)
+                self.assertFalse((state/'configuration-draft.json').exists())
+                submitted = request(route, data=draft_body, headers=cookie_header)
+                self.assertEqual(submitted[0], 202)
+                self.assertEqual(json.loads(submitted[2]), {'step': 'environment', 'status': 'checking'})
+                frozen = (state/'configuration-draft.json').read_bytes()
+                self.assertEqual(json.loads(frozen), draft)
+                self.assertEqual((state/'configuration-draft.json').stat().st_mode & 0o777, 0o600)
+                self.assertEqual(request(route, data=draft_body, headers=cookie_header)[0], 403)
+                self.assertEqual(request(route, headers=cookie_header)[0], 409)
+                status_body = request('/install/environment', headers=cookie_header | {'Accept': 'application/json'})[2]
+                self.assertNotIn('private-fixture', status_body)
+                self.assertFalse((state/'apply-request.json').exists())
+                # A new authenticated session invalidates the old cookie but cannot approve a draft.
+                renewed = request(data=payload)
+                self.assertEqual(renewed[0], 200)
+                new_cookie = {'Cookie': renewed[1]['Set-Cookie'].split(';')[0]}
+                approve = '/install/configuration/approve'
+                acknowledgement = {'csrf': json.loads(renewed[2])['csrf']}
+                self.assertEqual(request(approve, data=json.dumps(acknowledgement | {'authority': '/tmp'}).encode(), headers=new_cookie)[0], 400)
+                self.assertEqual(request(approve, data=b'x'*4097, headers=new_cookie)[0], 413)
+                self.assertEqual(request(approve, data=json.dumps(acknowledgement).encode(), headers=new_cookie)[0], 503)
+                self.assertEqual((state/'configuration-draft.json').read_bytes(), frozen)
+                self.assertEqual(json.loads((state/'state.json').read_text())['status'], 'checking')
+                self.assertFalse((state/'apply-approval.json').exists())
+                self.assertFalse((state/'apply-request.json').exists())
                 self.assertEqual(request(headers=cookie_header)[0], 401)
                 for _ in range(8):
                     self.assertEqual(request(data=b'{"bootstrap_token":"wrong"}')[0], 401)

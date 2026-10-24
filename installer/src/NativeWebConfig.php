@@ -57,11 +57,11 @@ server {
     ssl_certificate {$certificate};
     ssl_certificate_key {$privateKey};
     ssl_protocols TLSv1.2 TLSv1.3;
-    client_max_body_size 4k;
+    client_max_body_size 32k;
     access_log off;
     add_header X-Robots-Tag "noindex, nofollow" always;
     add_header Cache-Control "no-store" always;
-    location ~ ^/install(?:/|/(?:environment|data|site|admin|services|health|complete))?$ {
+    location ~ ^/install(?:/|/(?:environment|data|site|admin|services|health|complete|configuration(?:/approve)?))?$ {
         fastcgi_pass unix:{$socket};
         fastcgi_pass_request_headers off;
         fastcgi_param SCRIPT_FILENAME {$release}/installer/public/index.php;
@@ -107,7 +107,7 @@ php_admin_flag[log_errors] = on
 php_admin_value[expose_php] = Off
 php_admin_value[open_basedir] = {$release}:{$state}:{$completionDirectory}
 php_admin_value[upload_max_filesize] = 4K
-php_admin_value[post_max_size] = 8K
+php_admin_value[post_max_size] = 32K
 env[GOJET_INSTALL_STATE_DIR] = {$state}
 env[GOJET_INSTALL_BOOTSTRAP_SHA256] = {$hash}
 env[GOJET_INSTALL_ORIGIN] = {$origin}

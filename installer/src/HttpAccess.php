@@ -9,8 +9,14 @@ require_once __DIR__.'/ApplyProgress.php';
 /** HTTP authentication and bounded apply mailbox; privileged execution stays outside FPM. */
 final class HttpAccess
 {
+    /** Envelope includes CSRF and draft; persisted draft retains its separate 24 KiB limit. */
+    public static function bodyLimit(string $uri): int
+    {
+        return $uri === '/install/configuration' ? 32768 : 4096;
+    }
+
     private const ROUTES = ['/install', '/install/', '/install/environment', '/install/data',
-        '/install/site', '/install/admin', '/install/services', '/install/health', '/install/complete'];
+        '/install/configuration', '/install/configuration/approve', '/install/site', '/install/admin', '/install/services', '/install/health', '/install/complete'];
 
     public static function handle(array $server, array $cookies, string $body, string $directory, string $hash, string $origin, string $completionFile): array
     {
@@ -38,7 +44,7 @@ final class HttpAccess
         if (!in_array($method, ['GET', 'POST'], true)) { return $reply(405, 'Method not allowed'); }
         if ($method === 'POST') {
             if (($server['HTTP_ORIGIN'] ?? '') !== $origin) { return $reply(403, 'Invalid installer origin'); }
-            if (strlen($body) > 4096 || (int)($server['CONTENT_LENGTH'] ?? 0) > 4096) { return $reply(413, 'Request too large'); }
+            if (strlen($body) > self::bodyLimit($uri) || (int)($server['CONTENT_LENGTH'] ?? 0) > self::bodyLimit($uri)) { return $reply(413, 'Request too large'); }
             if (strtolower(trim(explode(';', $server['CONTENT_TYPE'] ?? '')[0])) !== 'application/json') {
                 return $reply(415, 'JSON required');
             }
@@ -60,6 +66,24 @@ final class HttpAccess
             if (!is_string($session)) { return $reply(401, 'Installer authentication required'); }
             $current = $state->inspect($session);
             if ($method === 'POST') {
+                if ($uri === '/install/configuration') {
+                    try { $data = json_decode($body, true, 16, JSON_THROW_ON_ERROR); }
+                    catch (\Throwable) { return $reply(400, 'Invalid request'); }
+                    if (!is_array($data) || count($data) !== 2 || !isset($data['csrf'], $data['draft'])
+                        || !is_string($data['csrf']) || !is_array($data['draft'])) {
+                        return $reply(400, 'Invalid request');
+                    }
+                    return [202, $headers, $state->submitConfiguration($session, $data['csrf'], $data['draft'])];
+                }
+                if ($uri === '/install/configuration/approve') {
+                    try { $data = json_decode($body, true, 8, JSON_THROW_ON_ERROR); }
+                    catch (\Throwable) { return $reply(400, 'Invalid request'); }
+                    if (!is_array($data) || array_keys($data) !== ['csrf'] || !is_string($data['csrf'])) {
+                        return $reply(400, 'Invalid request');
+                    }
+                    // Authority is fixed by server configuration, never by a client path or approval flag.
+                    return [200, $headers, $state->adoptConfiguration($session, $data['csrf'], dirname($completionFile))];
+                }
                 if ($uri === '/install/services') {
                     try { $data = json_decode($body, true, 8, JSON_THROW_ON_ERROR); }
                     catch (\Throwable) { return $reply(400, 'Invalid request'); }
@@ -87,6 +111,8 @@ final class HttpAccess
             return [200, $headers, $current];
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
+                'Invalid configuration draft' => $reply(400, 'Invalid configuration draft'),
+                'Configuration draft exceeds limit' => $reply(413, 'Request too large'),
                 'Invalid installer CSRF token' => $reply(403, 'Invalid installer CSRF token'),
                 'Installer transition forbidden' => $reply(409, 'Installer step unavailable'),
                 'Installer unavailable' => $reply(404, 'Not found'),

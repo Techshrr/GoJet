@@ -119,6 +119,11 @@ def main():
             assert request('/private/state.json')[0] == 404
             assert request('/install/environment', data=b'{"success":true}', headers={'Cookie': cookie})[0] == 503
             assert request(data=b'x'*5000)[0] == 413
+            large_draft_request = json.dumps({'csrf': '0'*5000, 'draft': {}}).encode()
+            assert request('/install/configuration', data=large_draft_request, headers={'Cookie': cookie})[0] == 403
+            assert request('/install/configuration', data=b'x'*32769, headers={'Cookie': cookie})[0] == 413
+            assert request('/install/configuration/approve', data=large_draft_request, headers={'Cookie': cookie})[0] == 413
+            assert not (private/'configuration-draft.json').exists()
             assert json.loads((private/'state.json').read_text())['step'] == 0
             assert (private/'state.json').stat().st_uid == account.pw_uid
             # Verify the actual FPM worker is unprivileged, not merely a rendered pool declaration.
@@ -142,7 +147,7 @@ def main():
             # Resetting all writable PHP state still cannot reopen the installation.
             for file in private.iterdir():
                 file.unlink()
-            for route in ['', '/', '/environment', '/data', '/site', '/admin', '/services', '/health', '/complete']:
+            for route in ['', '/', '/environment', '/data', '/site', '/admin', '/services', '/health', '/complete', '/configuration', '/configuration/approve']:
                 assert request('/install'+route, headers={'Cookie': cookie})[0] == 404
             assert request(data=payload)[0] == 404
         finally:

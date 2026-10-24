@@ -12,7 +12,7 @@ header('X-Robots-Tag: noindex, nofollow');
 header('Cache-Control: no-store');
 // Read at most one byte beyond the limit; never load an unbounded secret-bearing request.
 $input = fopen('php://input', 'rb');
-$body = $input === false ? '' : (string)stream_get_contents($input, 4097);
+$body = $input === false ? '' : (string)stream_get_contents($input, HttpAccess::bodyLimit((string)($_SERVER['REQUEST_URI'] ?? '')) + 1);
 if (is_resource($input)) { fclose($input); }
 [$status, $headers, $result] = HttpAccess::handle($_SERVER, $_COOKIE, $body,
     (string)getenv('GOJET_INSTALL_STATE_DIR'), (string)getenv('GOJET_INSTALL_BOOTSTRAP_SHA256'),

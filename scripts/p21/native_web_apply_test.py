@@ -305,7 +305,21 @@ def prepare_web_apply(root, release, destination, source):
     again = subprocess.run(provision, capture_output=True, timeout=120)
     assert again.returncode == 1 and (authority/'web-apply.json').read_bytes() == binding
     adopter = root/'adopt-configuration.php'
-    adopter.write_text("<?php\nrequire_once $argv[1].'/installer/src/InstallState.php';\n$token=stream_get_contents(STDIN);\ntry {\n$s=new GoJet\\Installer\\InstallState($argv[2],hash('sha256',$token));\n$a=$s->authenticate($token);\n$r=$s->adoptConfiguration($a['session'],$a['csrf'],$argv[3]);\nif($r['step']!=='services'||$r['status']!=='ready') {exit(1);}\n} catch(Throwable) {exit(1);}\n")
+    adopter.write_text("""<?php
+require_once $argv[1].'/installer/src/HttpAccess.php';
+$token=stream_get_contents(STDIN);
+try {
+$s=new GoJet\\Installer\\InstallState($argv[2],hash('sha256',$token));
+$a=$s->authenticate($token);
+$server=['REQUEST_URI'=>'/install/configuration/approve','REQUEST_METHOD'=>'POST',
+    'HTTPS'=>'on','HTTP_HOST'=>'localhost:18443','HTTP_ORIGIN'=>'https://localhost:18443',
+    'CONTENT_TYPE'=>'application/json'];
+$r=GoJet\\Installer\\HttpAccess::handle($server,['__Secure-gojet_install'=>$a['session']],
+    json_encode(['csrf'=>$a['csrf']]),$argv[2],hash('sha256',$token),
+    'https://localhost:18443',$argv[3].'/installed.lock');
+if($r[0]!==200||$r[2]['step']!=='services'||$r[2]['status']!=='ready') {exit(1);}
+} catch(Throwable) {exit(1);}
+""")
     adopter.chmod(0o644)
     def adopt():
         return subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(adopter), str(release), str(state), str(authority)],
