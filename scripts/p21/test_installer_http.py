@@ -104,10 +104,17 @@ class InstallerHTTP(unittest.TestCase):
                 self.assertEqual(json.loads((state/'state.json').read_text())['step'], 0)
                 # Dedicated configuration route accepts a bounded private draft, never a success flag.
                 draft = {'configuration': {'schema': 'gojet.native-configuration.v1',
-                    'origin': 'https://installer.test', 'database': {}, 'redis': {},
-                    'files': {'max_upload_bytes': 1, 'max_files': 1, 'max_bytes': 1, 'types': []},
-                    'quotas': {}, 'smtp': {}, 'risk': {}, 'turnstile_secret': 'private-fixture-'+'x'*5000,
-                    'auth_rate': {}}, 'admin': {'email': 'admin@example.test',
+                    'origin': 'https://installer.test',
+                    'database': {'port': 3306, 'name': 'gojet_http', 'user': 'gojet_http', 'password': 'd'*1024},
+                    'redis': {'port': 6379, 'db': 0, 'password': 'r'*1024},
+                    'files': {'max_upload_bytes': 1048576, 'max_files': 100, 'max_bytes': 104857600,
+                        'types': {'txt': ['text/plain']}},
+                    'quotas': {'text': 100, 'bio': 100, 'qr': 100},
+                    'smtp': {'host': 'smtp.example.test', 'port': 587, 'from': 'mail@example.test',
+                        'username': 'fixture-user', 'password': 's'*1024},
+                    'risk': {'name': 'http-fixture', 'endpoint': 'https://risk.example.test/check', 'policy_version': 'v1'},
+                    'turnstile_secret': 'private-fixture-'+'x'*1000,
+                    'auth_rate': {'limit': 10, 'window_seconds': 60}}, 'admin': {'email': 'admin@example.test',
                     'display_name': 'Admin', 'password': 'private-admin-fixture'}}
                 route = '/install/configuration'
                 draft_body = json.dumps({'csrf': auth['csrf'], 'draft': draft}).encode()
@@ -123,7 +130,7 @@ class InstallerHTTP(unittest.TestCase):
                 self.assertEqual(submitted[0], 202)
                 self.assertEqual(json.loads(submitted[2]), {'step': 'environment', 'status': 'checking'})
                 frozen = (state/'configuration-draft.json').read_bytes()
-                self.assertEqual(json.loads(frozen), draft)
+                self.assertTrue(json.loads(frozen) == draft, 'Persisted configuration differs from submitted fields')
                 self.assertEqual((state/'configuration-draft.json').stat().st_mode & 0o777, 0o600)
                 self.assertEqual(request(route, data=draft_body, headers=cookie_header)[0], 403)
                 self.assertEqual(request(route, headers=cookie_header)[0], 409)
