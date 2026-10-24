@@ -20,6 +20,17 @@ final class ConfigurationDraft
             'quotas', 'smtp', 'risk', 'turnstile_secret', 'auth_rate']);
         self::keys($draft['configuration']['files'], ['max_upload_bytes', 'max_files', 'max_bytes', 'types']);
         self::keys($draft['admin'], ['email', 'display_name', 'password']);
+        if ($draft['configuration']['schema'] !== 'gojet.native-configuration.v1') {
+            throw new \RuntimeException('Invalid configuration draft');
+        }
+        foreach (['database' => ['port', 'name', 'user', 'password'],
+            'redis' => ['port', 'db', 'password'], 'quotas' => ['text', 'bio', 'qr'],
+            'smtp' => ['host', 'port', 'from', 'username', 'password'],
+            'risk' => ['name', 'endpoint', 'policy_version'],
+            'auth_rate' => ['limit', 'window_seconds']] as $section => $fields) {
+            self::keys($draft['configuration'][$section], $fields);
+        }
+
         try { $raw = json_encode($draft, JSON_THROW_ON_ERROR, 16); }
         catch (\Throwable) { throw new \RuntimeException('Invalid configuration draft'); }
         if (strlen($raw) + 1 > 24576) { throw new \RuntimeException('Configuration draft exceeds limit'); }

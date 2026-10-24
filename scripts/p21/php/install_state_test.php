@@ -69,9 +69,23 @@ try {
     reject(fn() => $state->authenticate($bootstrap), 'unavailable');
     // Draft-only state fixture: no native preparation, approval or execution is implied.
     $draft = ['configuration' => ['schema' => 'gojet.native-configuration.v1', 'origin' => 'https://example.test',
-        'database' => [], 'redis' => [], 'files' => ['max_upload_bytes' => 1, 'max_files' => 1, 'max_bytes' => 1, 'types' => []],
-        'quotas' => [], 'smtp' => [], 'risk' => [], 'turnstile_secret' => 'private-test-token', 'auth_rate' => []],
+        'database' => ['port' => 3306, 'name' => 'test', 'user' => 'test', 'password' => ''],
+        'redis' => ['port' => 6379, 'db' => 0, 'password' => ''], 'files' => ['max_upload_bytes' => 1, 'max_files' => 1, 'max_bytes' => 1, 'types' => []],
+        'quotas' => ['text' => 100, 'bio' => 100, 'qr' => 100],
+        'smtp' => ['host' => 'smtp.example.test', 'port' => 587, 'from' => 'mail@example.test', 'username' => '', 'password' => ''],
+        'risk' => ['name' => 'fixture', 'endpoint' => 'https://example.test/check', 'policy_version' => 'v1'],
+        'turnstile_secret' => 'private-test-token', 'auth_rate' => ['limit' => 10, 'window_seconds' => 60]],
         'admin' => ['email' => 'admin@example.test', 'display_name' => 'Admin', 'password' => 'private-test-password']];
+    require_once dirname(__DIR__, 3).'/installer/src/ConfigurationDraft.php';
+    // Reject structural mistakes before a draft can become frozen; never echo input values.
+    foreach (['database', 'redis', 'quotas', 'smtp', 'risk', 'auth_rate'] as $section) {
+        $bad = $draft; $bad['configuration'][$section]['unexpected'] = 'private-value';
+        reject(fn() => GoJet\Installer\ConfigurationDraft::validate($bad), 'Invalid configuration draft');
+        $bad = $draft; array_pop($bad['configuration'][$section]);
+        reject(fn() => GoJet\Installer\ConfigurationDraft::validate($bad), 'Invalid configuration draft');
+    }
+    $bad = $draft; $bad['configuration']['schema'] = 'unknown';
+    reject(fn() => GoJet\Installer\ConfigurationDraft::validate($bad), 'Invalid configuration draft');
     foreach (['success', 'publication-failure'] as $case) {
         $draftDir = $dir.'/draft-'.$case;
         mkdir($draftDir, 0700);
@@ -82,7 +96,7 @@ try {
             reject(fn() => $draftState->submitConfiguration(str_repeat('0', 64), $auth['csrf'], $draft), 'authentication required');
             reject(fn() => $draftState->submitConfiguration($auth['session'], str_repeat('0', 64), $draft), 'CSRF');
             need(!file_exists($draftPath), 'Unauthorized draft published');
-            $bad = $draft; $bad['configuration']['secrets'] = [];
+            $bad = $draft; $bad['configuration']['database']['command'] = '/bin/sh';
             reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $bad), 'Invalid configuration draft');
             need($draftState->inspect($auth['session'])['status'] === 'ready', 'Invalid draft froze state');
             reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft), 'CSRF');
