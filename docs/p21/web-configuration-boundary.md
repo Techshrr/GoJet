@@ -35,3 +35,25 @@
   有确定的拒绝/恢复行为。不能通过删除 started 记录或重新生成密钥来假装重试成功。
 - 桌面/手机测试必须使用真实草稿、真实 root 审批及执行；模拟快照只能证明渲染。
   最终验收继续包含账户安全、升级/备份恢复及指定 Ubuntu 24.04.4 目标机验证。
+
+
+## Root 草稿准备入口（实现，待原生 CI）
+
+`installer/bin/prepare-web-configuration.php BINDING` 只在 root CLI 使用：
+BINDING 是 root 所有、0600、单链接普通文件，父路径经过安全检查，最多 8 KiB。
+绑定字段固定为 `schema=gojet.web-configuration-binding.v1`、`destination`、`release`、
+`manifest_sha256`、`source`、`tls` 和 `files`；其中 files 仅有 root/clamav_socket。
+这些值由服务器管理员提供，不能从 HTTP 请求中选择绑定文件。
+
+标准输入最多 24 KiB，仅包含 configuration/admin；configuration 沿用既有配置
+结构但不得包含 secrets，files 仅允许 max_upload_bytes/max_files/max_bytes/types。
+即使提交的受保护路径与 root 绑定完全一致，也拒绝该额外字段；不静默覆盖或忽略。
+管理员角色/权限继续由既有原生规则控制。错误只输出固定拒绝信息。
+
+入口组合输入后直接复用 InstallationPreparation::create：核验发行包，检查配置和
+管理员输入，生成 root 私有密钥，按原有封存格式原子发布。它只准备计划，不执行
+迁移、不启动服务、不写完成锁，也不为网页草稿授予执行权限。原有 root CLI 保留。
+
+原生回归把该入口的成功产物继续交给原有真实数据/服务/浏览器/root timer 测试，
+并覆盖客户端受保护字段、非 root、额外参数、错误绑定权限/属主/软链接、错误来源
+摘要、重复准备。HTTP 分步收集、CSRF/草稿锁定和 root 审批后的状态转换仍未接入。

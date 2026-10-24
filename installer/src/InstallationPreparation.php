@@ -96,6 +96,28 @@ final class InstallationPreparation
         }
         return $units;
     }
+    /** Root consumes untrusted configuration data against an operator-owned binding, never web paths. */
+    public static function createFromWebDraft(string $bindingPath, array $draft): array
+    {
+        self::root();
+        CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
+        $raw = self::privateFile($bindingPath);
+        if (strlen($raw) > 8192) { throw new \RuntimeException('Binding exceeds limit'); }
+        $binding = json_decode($raw, true, 16, JSON_THROW_ON_ERROR);
+        self::keys($binding, ['schema', 'destination', 'release', 'manifest_sha256', 'source', 'tls', 'files']);
+        if ($binding['schema'] !== 'gojet.web-configuration-binding.v1') { throw new \RuntimeException('Invalid binding schema'); }
+        self::keys($binding['files'], ['root', 'clamav_socket']);
+        self::keys($draft, ['configuration', 'admin']);
+        self::keys($draft['configuration'], ['schema', 'origin', 'database', 'redis', 'files',
+            'quotas', 'smtp', 'risk', 'turnstile_secret', 'auth_rate']);
+        self::keys($draft['configuration']['files'], ['max_upload_bytes', 'max_files', 'max_bytes', 'types']);
+        // Reject client-selected paths/keys before combining; never silently drop or overwrite them.
+        $draft['configuration']['files'] += $binding['files'];
+        $draft['tls'] = $binding['tls'];
+        return self::create($binding['destination'], $binding['release'], $binding['manifest_sha256'],
+            $binding['source'], $draft);
+    }
+
     public static function create(string $destination, string $release, string $manifestHash, string $source, array $input): array
     {
         self::root();

@@ -141,15 +141,72 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
     bad['admin']['email'] = 'not-an-email'
     refused(prepare(bad), True)
     assert not destination.exists()
-    result = prepare(automatic)
+    # Root-owned paths/identity never come from the future web form's untrusted draft.
+    binding = root/'web-configuration-binding.json'
+    binding_value = dict(schema='gojet.web-configuration-binding.v1', destination=str(destination),
+        release=str(release), manifest_sha256=digest, source=source, tls=request['tls'],
+        files={k: profile['files'][k] for k in ['root', 'clamav_socket']})
+    binding.write_text(json.dumps(binding_value)); binding.chmod(0o600)
+    draft = copy.deepcopy(automatic)
+    del draft['tls']
+    for name in ['root', 'clamav_socket']:
+        del draft['configuration']['files'][name]
+
+    def prepare_web(value=draft, nonroot=False, extra=False):
+        command = ['php8.3', str(root/'tools/bin/prepare-web-configuration.php'), str(binding)]
+        if extra:
+            command.append('unexpected')
+        return subprocess.run((['runuser', '-u', 'nobody', '--'] if nonroot else [])+command,
+            input=json.dumps(value).encode(), capture_output=True, timeout=60, cwd=root, env=env)
+
+    def web_refused(result):
+        assert result.returncode == 1 and not result.stdout
+        assert result.stderr == b'Web configuration preparation refused.\n'
+        assert sql('SHOW TABLES') == '' and not destination.exists()
+
+    web_refused(prepare_web(nonroot=True))
+    web_refused(prepare_web(extra=True))
+    for field, value in [('tls', request['tls']), ('destination', '/etc'), ('release', '/etc'),
+                         ('manifest_sha256', digest), ('source', source), ('command', '/bin/sh')]:
+        bad = copy.deepcopy(draft); bad[field] = value
+        web_refused(prepare_web(bad))
+    bad = copy.deepcopy(draft); bad['configuration']['secrets'] = profile['secrets']
+    web_refused(prepare_web(bad))
+    for field in ['root', 'clamav_socket']:
+        bad = copy.deepcopy(draft); bad['configuration']['files'][field] = profile['files'][field]
+        web_refused(prepare_web(bad))  # Even the correct path cannot be supplied by the client.
+    bad = copy.deepcopy(draft); bad['admin']['roles'] = ['administrator']
+    web_refused(prepare_web(bad))
+    bad = copy.deepcopy(draft); bad['admin']['email'] = 'not-an-email'
+    web_refused(prepare_web(bad))
+    binding.chmod(0o644)
+    web_refused(prepare_web())
+    binding.chmod(0o600); os.chown(binding, account.pw_uid, account.pw_gid)
+    web_refused(prepare_web())
+    os.chown(binding, 0, 0)
+    saved_binding = root/'saved-web-binding.json'
+    binding.rename(saved_binding); binding.symlink_to(saved_binding)
+    web_refused(prepare_web())
+    binding.unlink(); saved_binding.rename(binding)
+    for field in ['source', 'manifest_sha256']:
+        bad = copy.deepcopy(binding_value); bad[field] = '0'*len(bad[field])
+        binding.write_text(json.dumps(bad))
+        web_refused(prepare_web())
+    binding.write_text(json.dumps(binding_value))
+    binding_before = binding.read_bytes()
+    result = prepare_web()
     assert result.returncode == 0 and not result.stderr, 'Preparation of verified payload failed'
     assert json.loads(result.stdout) == dict(prepared=True, source=source, manifest_sha256=digest,
         environment_files=8, data_executed=False, installation_complete=False)
     assert sql('SHOW TABLES') == ''
+    assert binding.read_bytes() == binding_before
     private_before = {str(p.relative_to(destination)): p.read_bytes()
                       for p in destination.rglob('*') if p.is_file()}
     refused(prepare(automatic), True)
     refused(prepare(), True)
+    repeated = prepare_web()
+    assert repeated.returncode == 1 and not repeated.stdout
+    assert repeated.stderr == b'Web configuration preparation refused.\n'
     assert private_before == {str(p.relative_to(destination)): p.read_bytes()
                               for p in destination.rglob('*') if p.is_file()}, 'Retry rotated sealed keys'
     # Read only root-private generated values for binding assertions; never print them.
@@ -265,6 +322,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
     native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True,
-    root_generated_service_keys=True, repeated_preparation_preserves_keys=True, repeat_noop=True,
+    root_generated_service_keys=True, repeated_preparation_preserves_keys=True,
+    root_bound_web_configuration_preparation=True, web_configuration_authority_fields_rejected=True, repeat_noop=True,
     installation_complete=False, isolated_installation_completion_verified=True,
     final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))
