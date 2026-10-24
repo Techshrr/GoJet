@@ -7,6 +7,7 @@ require_once __DIR__.'/NativeConfiguration.php';
 require_once __DIR__.'/ProductWebConfig.php';
 require_once __DIR__.'/DataBootstrap.php';
 require_once __DIR__.'/DependencyPreflight.php';
+require_once __DIR__.'/ConfigurationDraft.php';
 
 /** Bounded dependency names only; never retains connection settings or raw probe output. */
 final class NativeDependencyFailure extends \RuntimeException
@@ -107,10 +108,7 @@ final class InstallationPreparation
         self::keys($binding, ['schema', 'destination', 'release', 'manifest_sha256', 'source', 'tls', 'files']);
         if ($binding['schema'] !== 'gojet.web-configuration-binding.v1') { throw new \RuntimeException('Invalid binding schema'); }
         self::keys($binding['files'], ['root', 'clamav_socket']);
-        self::keys($draft, ['configuration', 'admin']);
-        self::keys($draft['configuration'], ['schema', 'origin', 'database', 'redis', 'files',
-            'quotas', 'smtp', 'risk', 'turnstile_secret', 'auth_rate']);
-        self::keys($draft['configuration']['files'], ['max_upload_bytes', 'max_files', 'max_bytes', 'types']);
+        ConfigurationDraft::validate($draft);
         // Reject client-selected paths/keys before combining; never silently drop or overwrite them.
         $draft['configuration']['files'] += $binding['files'];
         $draft['tls'] = $binding['tls'];

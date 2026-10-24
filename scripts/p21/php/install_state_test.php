@@ -67,9 +67,65 @@ try {
     touch($dir.'/installed.lock');
     reject(fn() => $state->initialize(), 'unavailable');
     reject(fn() => $state->authenticate($bootstrap), 'unavailable');
+    // Draft-only state fixture: no native preparation, approval or execution is implied.
+    $draft = ['configuration' => ['schema' => 'gojet.native-configuration.v1', 'origin' => 'https://example.test',
+        'database' => [], 'redis' => [], 'files' => ['max_upload_bytes' => 1, 'max_files' => 1, 'max_bytes' => 1, 'types' => []],
+        'quotas' => [], 'smtp' => [], 'risk' => [], 'turnstile_secret' => 'private-test-token', 'auth_rate' => []],
+        'admin' => ['email' => 'admin@example.test', 'display_name' => 'Admin', 'password' => 'private-test-password']];
+    foreach (['success', 'publication-failure'] as $case) {
+        $draftDir = $dir.'/draft-'.$case;
+        mkdir($draftDir, 0700);
+        $draftState = new InstallState($draftDir, hash('sha256', $bootstrap));
+        try {
+            $draftState->initialize(); $auth = $draftState->authenticate($bootstrap);
+            $draftPath = $draftDir.'/configuration-draft.json';
+            reject(fn() => $draftState->submitConfiguration(str_repeat('0', 64), $auth['csrf'], $draft), 'authentication required');
+            reject(fn() => $draftState->submitConfiguration($auth['session'], str_repeat('0', 64), $draft), 'CSRF');
+            need(!file_exists($draftPath), 'Unauthorized draft published');
+            $bad = $draft; $bad['configuration']['secrets'] = [];
+            reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $bad), 'Invalid configuration draft');
+            need($draftState->inspect($auth['session'])['status'] === 'ready', 'Invalid draft froze state');
+            reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft), 'CSRF');
+            $auth = $draftState->authenticate($bootstrap);
+            $bad = $draft; $bad['admin']['password'] = str_repeat('x', 24576);
+            reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $bad), 'exceeds limit');
+            need(!file_exists($draftPath), 'Oversized draft published');
+            $auth = $draftState->authenticate($bootstrap);
+            $lock = fopen($draftDir.'/state.lock', 'r+'); flock($lock, LOCK_EX);
+            reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft), 'busy');
+            flock($lock, LOCK_UN); fclose($lock);
+            if ($case === 'publication-failure') {
+                mkdir($draftPath, 0700);
+                reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft), 'already exists');
+                rmdir($draftPath); // Remove only the injected obstruction; the durable barrier must remain.
+            } else {
+                $reply = $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft);
+                need($reply === ['step' => 'environment', 'status' => 'checking'], 'Draft response disclosed data or advanced approval');
+                need(json_decode(file_get_contents($draftPath), true) === $draft, 'Draft bytes lost');
+                need(fileowner($draftPath) === fileowner($draftDir) && (fileperms($draftPath) & 0777) === 0600
+                    && stat($draftPath)['nlink'] === 1, 'Unsafe draft file');
+            }
+            need($draftState->inspect($auth['session'])['status'] === 'checking', 'Draft publication lost freeze barrier');
+            $before = file_exists($draftPath) ? file_get_contents($draftPath) : null;
+            $auth = $draftState->authenticate($bootstrap);
+            reject(fn() => $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft), 'transition forbidden');
+            need((file_exists($draftPath) ? file_get_contents($draftPath) : null) === $before, 'Reauthentication replaced draft');
+            $auth = $draftState->authenticate($bootstrap);
+            reject(fn() => $draftState->submitApply($auth['session'], $auth['csrf']), 'transition forbidden');
+            foreach (['private-test-token', 'private-test-password'] as $value) {
+                need(!str_contains(file_get_contents($draftDir.'/state.json'), $value), 'Secret leaked into status state');
+            }
+            need(!file_exists($draftDir.'/apply-request.json'), 'Draft authorized execution');
+        } finally {
+            foreach (glob($draftDir.'/*') as $file) { is_dir($file) ? rmdir($file) : unlink($file); }
+            rmdir($draftDir);
+        }
+    }
     echo json_encode(['private_durable_state' => true, 'auth_rotation_expiry' => true, 'csrf_replay_rejected' => true,
         'sequential_checks' => true, 'validator_failure_redacted' => true, 'interrupted_check_blocks' => true,
         'concurrent_lock_rejected' => true, 'unsafe_state_rejected' => true, 'installed_lock_blocks' => true,
+        'private_configuration_draft' => true, 'draft_auth_csrf_bounds' => true,
+        'draft_reauthentication_no_replacement' => true, 'draft_publication_failure_blocks' => true,
         'web_adapter_and_privileged_apply_verified' => false], JSON_THROW_ON_ERROR)."\n";
 } finally {
     foreach (glob($dir.'/*') as $file) { unlink($file); }

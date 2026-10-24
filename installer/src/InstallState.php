@@ -106,6 +106,26 @@ final class InstallState
         });
     }
 
+    /** Freeze one private draft; neither this method nor its return value authorizes execution. */
+    public function submitConfiguration(string $session, string $csrf, array $draft): array
+    {
+        return $this->locked(function () use ($session, $csrf, $draft): array {
+            $s = $this->authorized($session);
+            if (!preg_match('/^[a-f0-9]{64}$/D', $csrf) || !is_string($s['csrf'])
+                || !hash_equals($s['csrf'], hash('sha256', $csrf))) {
+                throw new \RuntimeException('Invalid installer CSRF token');
+            }
+            $s['csrf'] = null; $this->save($s);
+            if ($s['step'] !== 0 || $s['status'] !== 'ready') { throw new \RuntimeException('Installer transition forbidden'); }
+            require_once __DIR__.'/ConfigurationDraft.php';
+            ConfigurationDraft::validate($draft);
+            // Freeze before publishing secrets. Failed/killed publication must not permit replacement.
+            $s['status'] = 'checking'; $this->save($s);
+            ConfigurationDraft::publish($this->directory, $draft);
+            return ['step' => 'environment', 'status' => 'checking'];
+        });
+    }
+
     /** Consume the session CSRF before publishing the bounded approved-plan request. */
     public function submitApply(string $session, string $csrf): array
     {

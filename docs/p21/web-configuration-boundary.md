@@ -37,7 +37,7 @@
   最终验收继续包含账户安全、升级/备份恢复及指定 Ubuntu 24.04.4 目标机验证。
 
 
-## Root 草稿准备入口（实现，待原生 CI）
+## Root 草稿准备入口（已通过原生 CI）
 
 `installer/bin/prepare-web-configuration.php BINDING` 只在 root CLI 使用：
 BINDING 是 root 所有、0600、单链接普通文件，父路径经过安全检查，最多 8 KiB。
@@ -57,3 +57,20 @@ BINDING 是 root 所有、0600、单链接普通文件，父路径经过安全�
 原生回归把该入口的成功产物继续交给原有真实数据/服务/浏览器/root timer 测试，
 并覆盖客户端受保护字段、非 root、额外参数、错误绑定权限/属主/软链接、错误来源
 摘要、重复准备。HTTP 分步收集、CSRF/草稿锁定和 root 审批后的状态转换仍未接入。
+
+
+## 私有草稿冻结（内部状态接口，待 CI）
+
+InstallState::submitConfiguration 在既有会话、CSRF 和独占锁下接受一个完整草稿。
+客户端可提交字段及 24 KiB 序列化上限由 ConfigurationDraft 统一检查，root 准备
+入口复用同一检查，语义/原生校验仍由 root 完整执行。无效草稿消耗 CSRF，但不保存
+秘密或推进状态；需要重新认证后再提交。
+
+合法草稿先将 environment 状态持久化为 checking，再独占创建和 fsync 私有
+configuration-draft.json。响应只有 step/status，状态文件不包含配置秘密。刷新或
+重新登录不解除冻结、不覆盖草稿、不创建 apply 请求；写入失败/中断保留 checking
+屏障，不能直接重试或删除状态来跳过。此处尚未增加 HTTP 路由或网页表单。
+
+后续 root 审批不得在网页可写目录里重建状态/写入新状态文件；应发布 root 所有的
+只读批准记录，由已认证适配层核对草稿摘要后执行受控状态转换。审批绑定、过期与
+并发的完整验收仍待实现，不能以保存成功代替批准或安装成功。
