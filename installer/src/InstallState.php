@@ -126,6 +126,30 @@ final class InstallState
         });
     }
 
+    /** Authenticated acknowledgement of root approval; still does not submit an apply request. */
+    public function adoptConfiguration(string $session, string $csrf, string $authority): array
+    {
+        return $this->locked(function () use ($session, $csrf, $authority): array {
+            $s = $this->authorized($session);
+            if (!preg_match('/^[a-f0-9]{64}$/D', $csrf) || !is_string($s['csrf'])
+                || !hash_equals($s['csrf'], hash('sha256', $csrf))) {
+                throw new \RuntimeException('Invalid installer CSRF token');
+            }
+            $s['csrf'] = null; $this->save($s);
+            if ($s['step'] !== 0 || $s['status'] !== 'checking') { throw new \RuntimeException('Installer transition forbidden'); }
+            require_once __DIR__.'/ConfigurationDraft.php';
+            require_once __DIR__.'/ConfigurationApproval.php';
+            $snapshot = ConfigurationDraft::frozen($this->directory, fileowner($this->directory));
+            $approval = ConfigurationApproval::read($authority, $this->directory, $snapshot['sha256']);
+            ApplyRequest::write($this->directory.'/apply-approval.json', $approval);
+            // An interrupted adoption retains checking and the exclusive approval file as a barrier.
+            $next = bin2hex(random_bytes(32));
+            $s['step'] = 4; $s['status'] = 'ready'; $s['csrf'] = hash('sha256', $next);
+            $this->save($s);
+            return ['step' => 'services', 'status' => 'ready', 'csrf' => $next];
+        });
+    }
+
     /** Consume the session CSRF before publishing the bounded approved-plan request. */
     public function submitApply(string $session, string $csrf): array
     {

@@ -106,7 +106,8 @@ final class InstallationPreparation
         $account = posix_getpwnam('gojet-installer');
         if ($account === false || $account['uid'] <= 0) { throw new \RuntimeException('Installer account required'); }
         $snapshot = ConfigurationDraft::frozen($directory, $account['uid']);
-        $result = self::createFromWebDraft($bindingPath, $snapshot['draft']);
+        $result = self::createFromWebDraft($bindingPath, $snapshot['draft'], ['schema' => 1,
+            'state_sha256' => hash('sha256', $directory), 'draft_sha256' => $snapshot['sha256'], 'uid' => $account['uid']]);
         $after = ConfigurationDraft::frozen($directory, $account['uid']);
         if (!hash_equals($snapshot['sha256'], $after['sha256'])) {
             // Preserve the published private plan as a recovery barrier; never approve changed input.
@@ -116,7 +117,7 @@ final class InstallationPreparation
     }
 
     /** Root consumes untrusted configuration data against an operator-owned binding, never web paths. */
-    public static function createFromWebDraft(string $bindingPath, array $draft): array
+    public static function createFromWebDraft(string $bindingPath, array $draft, ?array $proof = null): array
     {
         self::root();
         CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
@@ -131,10 +132,10 @@ final class InstallationPreparation
         $draft['configuration']['files'] += $binding['files'];
         $draft['tls'] = $binding['tls'];
         return self::create($binding['destination'], $binding['release'], $binding['manifest_sha256'],
-            $binding['source'], $draft);
+            $binding['source'], $draft, $proof);
     }
 
-    public static function create(string $destination, string $release, string $manifestHash, string $source, array $input): array
+    public static function create(string $destination, string $release, string $manifestHash, string $source, array $input, ?array $proof = null): array
     {
         self::root();
         self::keys($input, ['configuration', 'admin', 'tls']);
@@ -180,6 +181,7 @@ final class InstallationPreparation
             'database' => $p['database'], 'redis' => $p['redis'], 'storage' => $p['files']['root'],
             'clamav_socket' => $p['files']['clamav_socket']];
         $files = ['dependencies.json' => json_encode($dependencies, JSON_THROW_ON_ERROR)."\n", 'data/request.json' => json_encode($data, JSON_THROW_ON_ERROR)."\n", 'nginx.conf' => $nginx];
+        if ($proof !== null) { $files['web-draft.json'] = json_encode($proof, JSON_THROW_ON_ERROR)."\n"; }
         foreach (ServiceEnvironment::render($config['services']) as $name => $value) { $files['environment/'.$name] = $value; }
         $files += self::units($release, $destination, $p['files']['root']);
         $external = [];
@@ -225,6 +227,7 @@ final class InstallationPreparation
         self::keys($seal, ['schema', 'source', 'release', 'manifest_sha256', 'files', 'tls_files']);
         if ($seal['schema'] !== 3) { throw new \RuntimeException('Invalid preparation seal'); }
         $names = ['dependencies.json', 'data/request.json', 'nginx.conf'];
+        if (array_key_exists('web-draft.json', $seal['files'])) { $names[] = 'web-draft.json'; }
         foreach (self::SERVICES as $service) { $names[] = 'environment/'.$service.'.env'; $names[] = 'units/gojet-'.$service.'.service'; }
         self::keys($seal['files'], $names);
         foreach (['data', 'environment', 'units'] as $name) { self::privateDirectory($directory.'/'.$name); }
@@ -233,7 +236,7 @@ final class InstallationPreparation
                 throw new \RuntimeException('Prepared input changed');
             }
         }
-        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json', 'units', 'services.json', 'site.json'], 'units/' => array_map(fn($s) => 'gojet-'.$s.'.service', self::SERVICES), 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
+        foreach (['' => ['data', 'dependencies.json', 'environment', 'nginx.conf', 'seal.json', 'units', 'services.json', 'site.json', ...(in_array('web-draft.json', $names, true) ? ['web-draft.json'] : [])], 'units/' => array_map(fn($s) => 'gojet-'.$s.'.service', self::SERVICES), 'environment/' => array_map(fn($s) => $s.'.env', self::SERVICES), 'data/' => ['request.json', 'journal.json', 'worker.lock']] as $prefix => $allowed) {
             foreach (scandir($directory.'/'.$prefix) as $name) {
                 if ($name === '.' || $name === '..') { continue; }
                 if (!in_array($name, $allowed, true)) { throw new \RuntimeException('Unexpected prepared input'); }

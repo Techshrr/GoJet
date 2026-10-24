@@ -3,6 +3,8 @@ import copy
 import fcntl
 import hashlib
 import json
+import os
+import pwd
 from pathlib import Path
 import socket
 import subprocess
@@ -18,8 +20,23 @@ def verify_apply(root, release, source, digest, request):
     marker = Path('/var/lib/gojet-installer-authority/installed.lock')
     target = Path('/etc/nginx/conf.d/gojet.conf')
     assert not marker.exists() and not target.exists()
-    prepare = subprocess.run(['php8.3', str(release/'installer/bin/prepare-installation.php'), str(destination),
-        str(release), digest, source], input=json.dumps(profile).encode(), capture_output=True, timeout=90)
+    account = pwd.getpwnam('gojet-installer')
+    state = root/'web-apply-state'
+    state.mkdir(mode=0o700); os.chown(state, account.pw_uid, account.pw_gid)
+    binding = root/'applied-web-configuration.json'
+    binding.write_text(json.dumps(dict(schema='gojet.web-configuration-binding.v1',
+        destination=str(destination), release=str(release), manifest_sha256=digest, source=source,
+        tls=profile['tls'], files={k: profile['configuration']['files'][k] for k in ['root', 'clamav_socket']})))
+    binding.chmod(0o600)
+    draft = copy.deepcopy(profile)
+    del draft['tls']; del draft['configuration']['secrets']
+    for key in ['root', 'clamav_socket']:
+        del draft['configuration']['files'][key]
+    submitted = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(root/'submit-configuration.php'),
+        str(release), str(state)], input=json.dumps(draft).encode(), capture_output=True, timeout=30)
+    assert submitted.returncode == 0 and not submitted.stdout and not submitted.stderr
+    prepare = subprocess.run(['php8.3', str(release/'installer/bin/prepare-frozen-web-configuration.php'), str(binding), str(state)],
+        capture_output=True, timeout=90)
     assert prepare.returncode == 0 and not prepare.stderr
     command = ['php8.3', str(release/'installer/bin/apply-installation.php'), str(destination)]
 
@@ -94,6 +111,10 @@ def verify_apply(root, release, source, digest, request):
         binding = marker.parent/'web-apply.json'
         if binding.exists():
             assert json.loads(binding.read_text())['prepared'] == str(destination)
+            approval = marker.parent/'configuration-approval.json'
+            if approval.exists():
+                assert json.loads(approval.read_text())['seal_sha256'] == hashlib.sha256((destination/'seal.json').read_bytes()).hexdigest()
+                approval.unlink()
             receipt = marker.parent/'web-apply-started.json'
             if receipt.exists():
                 receipt.unlink()

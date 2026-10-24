@@ -6,6 +6,7 @@ require_once __DIR__.'/InstallState.php';
 require_once __DIR__.'/ApplyRequest.php';
 require_once __DIR__.'/PreflightSnapshot.php';
 require_once __DIR__.'/ApplyProgress.php';
+require_once __DIR__.'/ConfigurationApproval.php';
 
 /** One root-approved plan, one unprivileged request, one explicit root invocation. */
 final class WebInstallationApply
@@ -51,6 +52,28 @@ final class WebInstallationApply
             if (!chown($directory.'/'.$name, $account['uid']) || !chgrp($directory.'/'.$name, $account['gid'])) { throw new \RuntimeException('Web state ownership failed'); }
         }
         if (!chown($directory, $account['uid']) || !chgrp($directory, $account['gid'])) { throw new \RuntimeException('Web state ownership failed'); }
+        return ['source' => $seal['source'], 'web_apply_provisioned' => true, 'installation_complete' => false];
+    }
+    /** Approve the exact draft used by root preparation; never write into FPM-owned state. */
+    public static function approveConfiguration(string $prepared, string $directory): array
+    {
+        self::root(); self::stateParent($directory);
+        $seal = InstallationPreparation::verify($prepared);
+        $account = posix_getpwnam('gojet-installer');
+        if ($account === false || $account['uid'] <= 0 || $account['gid'] <= 0) { throw new \RuntimeException('Installer account required'); }
+        if (!isset($seal['files']['web-draft.json'])) { throw new \RuntimeException('Frozen draft provenance required'); }
+        $proof = ApplyRequest::read($prepared.'/web-draft.json', 0);
+        $snapshot = ConfigurationDraft::frozen($directory, $account['uid']);
+        if ($proof !== ['schema' => 1, 'state_sha256' => hash('sha256', $directory),
+            'draft_sha256' => $snapshot['sha256'], 'uid' => $account['uid']]) {
+            throw new \RuntimeException('Prepared draft mismatch');
+        }
+        if (filegroup($directory) !== $account['gid']) { throw new \RuntimeException('Unsafe state group'); }
+        $approval = ['schema' => 'gojet.web-apply.v1', 'seal_sha256' => hash_file('sha256', $prepared.'/seal.json')];
+        // The fixed private binding remains the root worker's sole execution authority.
+        ApplyRequest::write(self::AUTHORITY.'/web-apply.json', ['schema' => 1, 'prepared' => $prepared,
+            'directory' => $directory, 'uid' => $account['uid'], 'approval' => $approval]);
+        ConfigurationApproval::publish(self::AUTHORITY, $directory, $snapshot['sha256'], $approval['seal_sha256'], $account['gid']);
         return ['source' => $seal['source'], 'web_apply_provisioned' => true, 'installation_complete' => false];
     }
     /** Render pinned scheduler units for explicit root provisioning. */

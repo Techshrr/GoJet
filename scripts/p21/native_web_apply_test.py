@@ -283,19 +283,58 @@ def prepare_web_apply(root, release, destination, source):
     for name in ['web-apply.json', 'web-apply-started.json']:
         assert not (authority/name).exists()
     state = root/'web-apply-state'
-    token = 'p21-web-apply-bootstrap-fixture-only-0123456789'
+    token = 'native-configuration-fixture-token-0123456789'
     digest = hashlib.sha256(token.encode()).hexdigest()
-    provision = ['php8.3', str(release/'installer/bin/provision-web-apply.php'), str(destination), str(state), digest]
+    provision = ['php8.3', str(release/'installer/bin/approve-web-configuration.php'), str(destination), str(state)]
+    before_approval = {p.name: p.read_bytes() for p in state.iterdir()}
     denied = subprocess.run(['runuser', '-u', 'gojet-installer', '--']+provision, capture_output=True, timeout=30)
-    assert denied.returncode == 1 and not state.exists() and not (authority/'web-apply.json').exists()
+    assert denied.returncode == 1 and not (authority/'web-apply.json').exists()
+    draft_path = state/'configuration-draft.json'
+    original_draft = draft_path.read_bytes()
+    draft_path.write_bytes(original_draft+b' ')
+    assert subprocess.run(provision, capture_output=True, timeout=120).returncode == 1
+    assert not (authority/'web-apply.json').exists()
+    draft_path.write_bytes(original_draft)
     result = subprocess.run(provision, capture_output=True, timeout=120)
     assert result.returncode == 0 and not result.stderr, 'Web apply provisioning failed'
     assert json.loads(result.stdout) == dict(source=source, web_apply_provisioned=True, installation_complete=False)
+    assert before_approval == {p.name: p.read_bytes() for p in state.iterdir()}, 'Root approval rewrote web state'
     binding = (authority/'web-apply.json').read_bytes()
     assert (authority/'web-apply.json').stat().st_uid == 0
     assert state.stat().st_uid == account.pw_uid
     again = subprocess.run(provision, capture_output=True, timeout=120)
     assert again.returncode == 1 and (authority/'web-apply.json').read_bytes() == binding
+    adopter = root/'adopt-configuration.php'
+    adopter.write_text("<?php\nrequire_once $argv[1].'/installer/src/InstallState.php';\n$token=stream_get_contents(STDIN);\ntry {\n$s=new GoJet\\Installer\\InstallState($argv[2],hash('sha256',$token));\n$a=$s->authenticate($token);\n$r=$s->adoptConfiguration($a['session'],$a['csrf'],$argv[3]);\nif($r['step']!=='services'||$r['status']!=='ready') {exit(1);}\n} catch(Throwable) {exit(1);}\n")
+    adopter.chmod(0o644)
+    def adopt():
+        return subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(adopter), str(release), str(state), str(authority)],
+            input=token.encode(), capture_output=True, timeout=20)
+    approval_path = authority/'configuration-approval.json'
+    assert approval_path.stat().st_uid == 0 and approval_path.stat().st_mode & 0o777 == 0o640
+    approval_path.chmod(0o666)
+    assert adopt().returncode == 1 and not (state/'apply-approval.json').exists()
+    approval_path.chmod(0o640)
+    approval_bytes = approval_path.read_bytes()
+    for field in ['state_sha256', 'draft_sha256']:
+        changed = json.loads(approval_bytes); changed[field] = '0'*64
+        approval_path.write_text(json.dumps(changed))
+        assert adopt().returncode == 1 and not (state/'apply-approval.json').exists()
+    approval_path.write_bytes(approval_bytes)
+    # Inject only the local file left by an interrupted adoption; never delete a real apply receipt.
+    interrupted = state/'apply-approval.json'
+    interrupted.write_text(json.dumps(json.loads(binding)['approval'])); interrupted.chmod(0o600)
+    os.chown(interrupted, account.pw_uid, account.pw_gid)
+    interrupted_bytes = interrupted.read_bytes()
+    assert adopt().returncode == 1 and interrupted.read_bytes() == interrupted_bytes
+    assert json.loads((state/'state.json').read_text())['status'] == 'checking'
+    interrupted.unlink()
+    adopted = adopt()
+    assert adopted.returncode == 0 and not adopted.stdout and not adopted.stderr
+    assert not (state/'apply-request.json').exists()
+    assert (state/'apply-approval.json').stat().st_uid == account.pw_uid
+    state_approval = (state/'apply-approval.json').read_bytes()
+    assert adopt().returncode == 1 and (state/'apply-approval.json').read_bytes() == state_approval
     # Invoke the actual shipped adapter as the actual unprivileged installer account.
     # Trusted TLS variables are supplied by this test, not proof of a TLS/browser request.
     adapter = root/'web-apply-adapter.php'
