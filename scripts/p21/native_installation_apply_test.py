@@ -10,6 +10,7 @@ import socket
 import subprocess
 from native_prepared_services_test import SERVICES
 from native_web_apply_test import prepare_web_apply
+from native_browser_apply import submit_configuration_browser
 
 
 def verify_apply(root, release, source, digest, request):
@@ -32,9 +33,8 @@ def verify_apply(root, release, source, digest, request):
     del draft['tls']; del draft['configuration']['secrets']
     for key in ['root', 'clamav_socket']:
         del draft['configuration']['files'][key]
-    submitted = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(root/'submit-configuration.php'),
-        str(release), str(state)], input=json.dumps(draft).encode(), capture_output=True, timeout=30)
-    assert submitted.returncode == 0 and not submitted.stdout and not submitted.stderr
+    submit_configuration_browser(root, release, state, marker.parent,
+        'native-configuration-fixture-token-0123456789', draft)
     prepare = subprocess.run(['php8.3', str(release/'installer/bin/prepare-frozen-web-configuration.php'), str(binding), str(state)],
         capture_output=True, timeout=90)
     assert prepare.returncode == 0 and not prepare.stderr

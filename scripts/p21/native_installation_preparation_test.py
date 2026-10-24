@@ -353,6 +353,6 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     root_generated_service_keys=True, repeated_preparation_preserves_keys=True,
     root_bound_web_configuration_preparation=True, web_configuration_authority_fields_rejected=True,
     frozen_unprivileged_draft_prepared=True, root_preserves_web_state=True,
-    root_draft_approval_and_unprivileged_adoption=True, repeat_noop=True,
+    root_draft_approval_and_unprivileged_adoption=True, browser_draft_to_real_root_preparation=True, repeat_noop=True,
     installation_complete=False, isolated_installation_completion_verified=True,
     final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))
