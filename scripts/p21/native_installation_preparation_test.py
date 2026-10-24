@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -127,12 +128,47 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
         os.chmod(lock.name, 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         refused(prepare(), True)
-    result = prepare()
+    # Missing keys use root-generated material; malformed explicit values never select defaults.
+    for invalid in [None, {}, {'key_id': 'incomplete'}]:
+        bad = copy.deepcopy(request)
+        bad['configuration']['secrets'] = invalid
+        refused(prepare(bad), True)
+        assert not destination.exists()
+    automatic = copy.deepcopy(request)
+    del automatic['configuration']['secrets']
+    refused(prepare(automatic, nonroot=True), True)
+    bad = copy.deepcopy(automatic)
+    bad['admin']['email'] = 'not-an-email'
+    refused(prepare(bad), True)
+    assert not destination.exists()
+    result = prepare(automatic)
     assert result.returncode == 0 and not result.stderr, 'Preparation of verified payload failed'
     assert json.loads(result.stdout) == dict(prepared=True, source=source, manifest_sha256=digest,
         environment_files=8, data_executed=False, installation_complete=False)
     assert sql('SHOW TABLES') == ''
+    private_before = {str(p.relative_to(destination)): p.read_bytes()
+                      for p in destination.rglob('*') if p.is_file()}
+    refused(prepare(automatic), True)
     refused(prepare(), True)
+    assert private_before == {str(p.relative_to(destination)): p.read_bytes()
+                              for p in destination.rglob('*') if p.is_file()}, 'Retry rotated sealed keys'
+    # Read only root-private generated values for binding assertions; never print them.
+    environment = (destination/'environment/platformapi.env').read_text()
+    names = dict(admin='GOJET_ADMIN_TOTP_KEY_HEX', csrf='GOJET_AUTH_CSRF_KEY_HEX',
+        grant='GOJET_AUTH_GRANT_KEY_HEX', oauth='GOJET_OAUTH_KEY_HEX',
+        file_public='GOJET_FILE_PUBLIC_AUTH_SECRET', text_public='GOJET_TEXT_PUBLIC_AUTH_SECRET')
+    generated = {}
+    for name, variable in names.items():
+        matches = re.findall(r'^'+variable+r'="([a-f0-9]{64})"$', environment, re.M)
+        assert len(matches) == 1, 'Generated service key missing or malformed'
+        generated[name] = matches[0]
+    assert len(set(generated.values())) == 6
+    ids = re.findall(r'^GOJET_ADMIN_TOTP_KEY_ID="(install-[a-f0-9]{32})"$', environment, re.M)
+    assert len(ids) == 1
+    generated['key_id'] = ids[0]
+    for secret in generated.values():
+        assert secret.encode() not in result.stdout + result.stderr
+    profile['secrets'] = generated
     refused(execute(nonroot=True))
     for path in [destination, destination/'environment', destination/'data', destination/'units']:
         assert path.stat().st_uid == 0 and path.stat().st_mode & 0o7777 == 0o700
@@ -228,6 +264,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     real_api_port_failure_cleaned=True, failed_activation_retry_blocked=True, activation_repeat_noop=True,
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
-    native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True, repeat_noop=True,
+    native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True,
+    root_generated_service_keys=True, repeated_preparation_preserves_keys=True, repeat_noop=True,
     installation_complete=False, isolated_installation_completion_verified=True,
     final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))

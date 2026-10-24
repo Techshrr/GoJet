@@ -106,6 +106,16 @@ final class InstallationPreparation
             || $destination !== $parent.'/'.basename($destination)) { throw new \RuntimeException('Invalid job destination'); }
         PackageIntegrity::verify($release, $manifestHash, $source);
         $manifest = json_decode(file_get_contents($release.'/manifest.json'), true, 32, JSON_THROW_ON_ERROR);
+        // Root generates omitted service keys; an explicit malformed key set must still fail.
+        // Keys become durable only with the complete private plan below. No account or service
+        // uses them before publication, and an existing plan is never replaced on a retry.
+        if (!array_key_exists('secrets', $input['configuration'])) {
+            $keys = ['key_id' => 'install-'.bin2hex(random_bytes(16))];
+            foreach (['admin', 'csrf', 'grant', 'oauth', 'file_public', 'text_public'] as $name) {
+                $keys[$name] = bin2hex(random_bytes(32));
+            }
+            $input['configuration']['secrets'] = $keys;
+        }
         $config = NativeConfiguration::compile($input['configuration']);
         $p = $input['configuration'];
         self::keys($input['tls'], ['certificate', 'private_key', 'http_port']);

@@ -44,6 +44,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
     assert.equal(await page.locator('#installer-title').textContent(), 'Installation requested');
     assert.equal(await page.locator('#installer-apply').isVisible(), false);
+    assert.equal(await page.locator('#installer-login').isVisible(), false);
     pages.push({page, name, observed: new Set(), closed: false});
   }
   // Only this bounded marker crosses the pipe; the parent may now enable the real root timer.
@@ -59,6 +60,7 @@ try {
       await page.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
       const title = await page.locator('#installer-title').textContent();
       assert.equal(await page.locator('#installer-apply').isVisible(), false);
+      assert.equal(await page.locator('#installer-login').isVisible(), false);
       assert.equal(await page.locator('#bootstrap-token').inputValue(), '');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       if (phases.has(title)) {

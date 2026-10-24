@@ -7,6 +7,21 @@ password), and `tls` (certificate, private_key, http_port). It verifies the enti
 release against the separately approved manifest digest and source before running
 its native identity probe. It does not connect to MySQL or start services.
 
+The root preparation entrypoint accepts omission of `configuration.secrets` and
+then generates six independent 256-bit service keys plus a random key ID using
+`random_bytes`. A supplied key set remains subject to the original strict compiler;
+null, empty or partial sets do not silently select defaults. Generated values are
+never returned on stdout and are stored only in the existing sealed private plan
+(environment files and the administrator request). The pure configuration compiler
+still requires explicit keys; this convenience exists only in root preparation.
+
+Keys have no consumers before successful plan publication. Failed pre-publication
+validation may discard unused in-memory keys. Once published, retries with omitted
+or supplied keys reject the existing destination without changing any plan bytes;
+execution and recovery read that plan and do not regenerate keys. Never remove a
+published plan to retry or rotate keys. This does not yet expose a web configuration
+route; the future web draft boundary must reject client-selected service keys.
+
 The tool derives all eight environment files, the product Nginx configuration and
 the existing root data request and dependency probe settings from this single profile. Database, Redis, origin,
 Admin encryption key and release identity therefore cannot diverge through separate

@@ -120,6 +120,7 @@
         : 'Authenticate to submit the server-approved installation plan.');
     } else if (state.step === 'services' && state.status === 'checking') {
       csrf = null;
+      form.hidden = true;
       title.textContent = 'Installation requested';
       tell('Installation request submitted. Awaiting the server executor or its result. Refresh status to check whether the installer has closed. Do not submit again.');
     } else {
