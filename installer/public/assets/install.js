@@ -5,6 +5,7 @@
   const title = document.querySelector('#installer-title');
   const message = document.querySelector('#installer-message');
   const submit = document.querySelector('#installer-apply');
+  const approve = document.querySelector('#installer-approve');
   const refresh = document.querySelector('#installer-refresh');
   const login = form.querySelector('button');
   const preflight = document.querySelector('#installer-preflight');
@@ -82,7 +83,7 @@
     }
   }
   function tell(text) { message.textContent = text; }
-  function controls() { login.disabled = busy; refresh.disabled = busy; submit.disabled = busy || !csrf; }
+  function controls() { login.disabled = busy; refresh.disabled = busy; submit.disabled = busy || !csrf; approve.disabled = busy || !csrf; }
   async function request(method, path, body) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -91,7 +92,7 @@
         redirect: 'error', headers: {'Accept': 'application/json', ...(body ? {'Content-Type': 'application/json'} : {})},
         ...(body ? {body: JSON.stringify(body)} : {}), signal: controller.signal});
       if (response.status === 404) {
-        clearPreflight(); clearExecution(); csrf = null; form.hidden = true; submit.hidden = true; refresh.hidden = true;
+        clearPreflight(); clearExecution(); csrf = null; form.hidden = true; submit.hidden = true; approve.hidden = true; refresh.hidden = true;
         title.textContent = 'Installer unavailable';
         tell('The installer is closed or unavailable. Check the installation result with your server administrator before opening Admin.');
         return null;
@@ -111,7 +112,7 @@
   function show(state) {
     clearPreflight(); clearExecution();
     if (!state) return;
-    submit.hidden = true;
+    submit.hidden = true; approve.hidden = true;
     if (state.step === 'services' && state.status === 'ready') {
       title.textContent = 'Approved plan ready';
       submit.hidden = false;
@@ -123,6 +124,12 @@
       form.hidden = true;
       title.textContent = 'Installation requested';
       tell('Installation request submitted. Awaiting the server executor or its result. Refresh status to check whether the installer has closed. Do not submit again.');
+    } else if (state.step === 'environment' && state.status === 'checking') {
+      approve.hidden = false;
+      form.hidden = Boolean(csrf);
+      title.textContent = 'Configuration submitted';
+      tell(csrf ? 'Your configuration is saved. Ask your server administrator to validate and approve it, then confirm server approval below. Installation has not started.'
+        : 'Your configuration is saved. After your server administrator approves it, authenticate again to confirm approval. Installation has not started.');
     } else {
       csrf = null;
       title.textContent = 'Preparation required';
@@ -154,6 +161,20 @@
     if (!csrf || busy) return;
     const once = csrf; csrf = null;
     action(async () => { show(await request('POST', '/install/services', {csrf: once})); }, true);
+  });
+  approve.addEventListener('click', () => {
+    if (!csrf || busy) return;
+    const once = csrf; csrf = null;
+    action(async () => {
+      let state;
+      try { state = await request('POST', '/install/configuration/approve', {csrf: once}); }
+      catch (error) {
+        form.hidden = false;
+        if (error.name === 'AbortError' || error instanceof TypeError) throw error;
+        throw new Error('Approval could not be confirmed. Refresh status first. If configuration is still pending, ask your server administrator to check approval, then authenticate again.');
+      }
+      if (state) { csrf = state.csrf; show(state); await loadPreflight(state); }
+    }, true);
   });
   refresh.addEventListener('click', () => action(async () => { const state = await request('GET', '/install/'); show(state); await loadPreflight(state); }));
   window.addEventListener('pagehide', () => { clearPreflight(); clearExecution(); csrf = null; token.value = ''; });

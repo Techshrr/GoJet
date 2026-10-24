@@ -22,6 +22,7 @@ final class Shell
             .'<p id="preflight-summary" role="status" aria-live="polite"></p><dl id="preflight-checks" hidden></dl>'
             .'<p>These checks describe the last server observation. Installation checks dependencies again before making changes.</p></section>'
             .'<div class="installer-actions"><button id="installer-apply" class="installer-primary" type="button" hidden disabled>Submit approved installation</button>'
+            .'<button id="installer-approve" type="button" hidden disabled>Confirm server approval</button>'
             .'<button id="installer-refresh" type="button">Refresh status</button></div>'
             .'<noscript><p>JavaScript is required for this protected installation interface. The server administrator can use the native installation command instead.</p></noscript>';
         $html = substr($html, 0, $start).$controls.substr($html, $end);

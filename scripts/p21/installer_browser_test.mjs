@@ -10,6 +10,71 @@ fs.mkdirSync(output, {recursive: true});
 const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
 try {
   for (const [label, viewport] of [['desktop', {width: 1280, height: 900}], ['mobile', {width: 390, height: 844}]]) {
+    // Exercise actual HTTP adoption with a root-owned fixture record, never a real plan approval claim.
+    if (fs.existsSync(cfg.completion)) fs.unlinkSync(cfg.completion);
+    const draftFile = path.join(cfg.state, 'configuration-draft.json');
+    const rootApproval = path.join(path.dirname(cfg.completion), 'configuration-approval.json');
+    const localApproval = path.join(cfg.state, 'apply-approval.json');
+    const applyRequest = path.join(cfg.state, 'apply-request.json');
+    for (const file of [rootApproval, localApproval, applyRequest]) if (fs.existsSync(file)) fs.unlinkSync(file);
+    const pendingFile = path.join(cfg.state, 'state.json');
+    const pending = JSON.parse(fs.readFileSync(pendingFile));
+    Object.assign(pending, {step: 0, status: 'checking', session: null, csrf: null, expires: 0, attempts: 0, retry_at: 0});
+    fs.writeFileSync(pendingFile, JSON.stringify(pending));
+    const draft = JSON.stringify({configuration: {schema: 'gojet.native-configuration.v1', origin: cfg.origin,
+      database: [], redis: [], files: {max_upload_bytes: 1, max_files: 1, max_bytes: 1, types: []},
+      quotas: [], smtp: [], risk: [], turnstile_secret: 'private-browser-fixture', auth_rate: []},
+      admin: {email: 'admin@example.test', display_name: 'Admin', password: 'private-browser-password'}});
+    fs.writeFileSync(draftFile, draft, {mode: 0o600}); fs.chownSync(draftFile, cfg.uid, cfg.gid);
+    const adoptionContext = await browser.newContext({viewport, ignoreHTTPSErrors: true});
+    const adoptionPage = await adoptionContext.newPage();
+    const adoptionErrors = [];
+    adoptionPage.on('pageerror', error => adoptionErrors.push(error.message));
+    let acknowledgements = 0, prematureApply = 0;
+    adoptionPage.on('request', req => {
+      if (req.method() !== 'POST') return;
+      if (req.url().endsWith('/install/configuration/approve')) acknowledgements++;
+      if (req.url().endsWith('/install/services')) prematureApply++;
+    });
+    await adoptionPage.goto(cfg.origin+'/install/');
+    async function authenticateApproval() {
+      await adoptionPage.getByLabel('Installation access token', {exact: true}).fill(cfg.token);
+      await adoptionPage.getByRole('button', {name: 'Authenticate', exact: true}).click();
+      await adoptionPage.waitForFunction(() => !document.querySelector('#installer-approve').disabled);
+    }
+    await authenticateApproval();
+    assert.equal(await adoptionPage.locator('#installer-title').textContent(), 'Configuration submitted');
+    assert.equal(await adoptionPage.locator('#installer-apply').isVisible(), false);
+    const frozenBefore = fs.readFileSync(draftFile);
+    await adoptionPage.locator('#installer-approve').click();
+    await adoptionPage.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('Approval could not be confirmed.'));
+    assert.equal(await adoptionPage.locator('#installer-approve').isDisabled(), true);
+    assert.equal(fs.existsSync(localApproval), false);
+    assert.equal(fs.existsSync(applyRequest), false);
+    fs.writeFileSync(rootApproval, JSON.stringify({schema: 1,
+      state_sha256: createHash('sha256').update(cfg.state).digest('hex'),
+      draft_sha256: createHash('sha256').update(frozenBefore).digest('hex'), seal_sha256: 'a'.repeat(64)}), {mode: 0o640});
+    fs.chownSync(rootApproval, 0, cfg.gid);
+    await authenticateApproval();
+    await adoptionPage.screenshot({path: path.join(output, label+'-configuration-pending.png'), fullPage: true});
+    await adoptionPage.locator('#installer-approve').evaluate(el => { el.click(); el.click(); });
+    await adoptionPage.waitForFunction(() => document.querySelector('#installer-title').textContent === 'Approved plan ready');
+    await adoptionPage.waitForFunction(() => !document.querySelector('#installer-refresh').disabled);
+    assert.equal(acknowledgements, 2); // One rejected attempt and one successful acknowledgement.
+    assert.equal(prematureApply, 0);
+    assert.equal(fs.existsSync(applyRequest), false);
+    assert.equal(JSON.parse(fs.readFileSync(pendingFile)).step, 4);
+    assert.equal(fs.statSync(localApproval).uid, cfg.uid);
+    assert.deepEqual(fs.readFileSync(draftFile), frozenBefore);
+    assert.equal(await adoptionPage.locator('#installer-approve').isVisible(), false);
+    assert.equal(await adoptionPage.locator('#installer-apply').isEnabled(), true);
+    assert.equal(await adoptionPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await adoptionPage.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    assert.equal((await adoptionPage.content()).includes('private-browser-password'), false);
+    await adoptionPage.screenshot({path: path.join(output, label+'-approval-confirmed.png'), fullPage: true});
+    assert.deepEqual(adoptionErrors, []);
+    await adoptionContext.close();
+    fs.unlinkSync(rootApproval); fs.unlinkSync(draftFile);
     // Explicit test fixture only. Root approval/seal and actual execution are covered by payload CI.
     if (fs.existsSync(cfg.completion)) fs.unlinkSync(cfg.completion);
     const stateFile = path.join(cfg.state, 'state.json');
@@ -159,6 +224,7 @@ try {
   }
 } finally { await browser.close(); }
 console.log(JSON.stringify({desktop_mobile_browser: true, real_tls_fpm_browser_requests: true,
+  browser_approval_acknowledgement: true, approval_record_is_fixture: true, approval_does_not_submit_apply: true,
   keyboard_access: true, no_horizontal_overflow: true, authentication_and_apply_submission: true,
   no_secret_browser_storage: true, no_script_post_only_verified: true, offline_recovery: true, post_lock_closed: true,
   snapshot_ready_failed_stale_unavailable: true, snapshot_expiry_clears_checks: true, snapshot_is_fixture: true,
