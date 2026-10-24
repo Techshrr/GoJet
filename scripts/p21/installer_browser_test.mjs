@@ -19,29 +19,52 @@ try {
     for (const file of [rootApproval, localApproval, applyRequest]) if (fs.existsSync(file)) fs.unlinkSync(file);
     const pendingFile = path.join(cfg.state, 'state.json');
     const pending = JSON.parse(fs.readFileSync(pendingFile));
-    Object.assign(pending, {step: 0, status: 'checking', session: null, csrf: null, expires: 0, attempts: 0, retry_at: 0});
+    Object.assign(pending, {step: 0, status: 'ready', session: null, csrf: null, expires: 0, attempts: 0, retry_at: 0});
     fs.writeFileSync(pendingFile, JSON.stringify(pending));
-    const draft = JSON.stringify({configuration: {schema: 'gojet.native-configuration.v1', origin: cfg.origin,
-      database: [], redis: [], files: {max_upload_bytes: 1, max_files: 1, max_bytes: 1, types: []},
-      quotas: [], smtp: [], risk: [], turnstile_secret: 'private-browser-fixture', auth_rate: []},
-      admin: {email: 'admin@example.test', display_name: 'Admin', password: 'private-browser-password'}});
-    fs.writeFileSync(draftFile, draft, {mode: 0o600}); fs.chownSync(draftFile, cfg.uid, cfg.gid);
     const adoptionContext = await browser.newContext({viewport, ignoreHTTPSErrors: true});
     const adoptionPage = await adoptionContext.newPage();
     const adoptionErrors = [];
     adoptionPage.on('pageerror', error => adoptionErrors.push(error.message));
-    let acknowledgements = 0, prematureApply = 0;
+    let acknowledgements = 0, prematureApply = 0, configurationPosts = 0;
     adoptionPage.on('request', req => {
       if (req.method() !== 'POST') return;
+      if (req.url().endsWith('/install/configuration')) configurationPosts++;
       if (req.url().endsWith('/install/configuration/approve')) acknowledgements++;
       if (req.url().endsWith('/install/services')) prematureApply++;
     });
     await adoptionPage.goto(cfg.origin+'/install/');
-    async function authenticateApproval() {
+    async function authenticateApproval(control = '#installer-approve') {
       await adoptionPage.getByLabel('Installation access token', {exact: true}).fill(cfg.token);
       await adoptionPage.getByRole('button', {name: 'Authenticate', exact: true}).click();
-      await adoptionPage.waitForFunction(() => !document.querySelector('#installer-approve').disabled);
+      await adoptionPage.waitForFunction(selector => !document.querySelector(selector).disabled, control);
     }
+    await authenticateApproval('#installer-save-configuration');
+    const values = {'origin': cfg.origin, 'database-name': 'gojet_browser', 'database-user': 'gojet_browser',
+      'database-password': 'private-database-fixture', 'smtp-host': 'smtp.example.test',
+      'smtp-from': 'mail@example.test', 'risk-name': 'browser-fixture',
+      'risk-endpoint': 'https://risk.example.test/check', 'risk-policy_version': 'v1',
+      'turnstile_secret': 'private-browser-fixture', 'admin-email': 'admin@example.test',
+      'admin-display_name': 'Administrator', 'admin-password': 'private-browser-password'};
+    for (const [field, value] of Object.entries(values)) await adoptionPage.locator('#cfg-'+field).fill(value);
+    await adoptionPage.locator('#cfg-file-types').fill('pdf=application/pdf\npdf=application/pdf');
+    await adoptionPage.locator('#installer-save-configuration').click();
+    await adoptionPage.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('Use a unique extension='));
+    assert.equal(configurationPosts, 0);
+    assert.equal(fs.existsSync(draftFile), false);
+    await adoptionPage.locator('#cfg-file-types').fill('pdf=application/pdf');
+    assert.equal(await adoptionPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await adoptionPage.screenshot({path: path.join(output, label+'-configuration-form.png'), fullPage: true});
+    await adoptionPage.locator('#installer-save-configuration').evaluate(el => { el.click(); el.click(); });
+    await adoptionPage.waitForFunction(() => document.querySelector('#installer-title').textContent === 'Configuration submitted');
+    assert.equal(configurationPosts, 1);
+    const savedDraft = JSON.parse(fs.readFileSync(draftFile));
+    assert.equal(savedDraft.configuration.database.user, values['database-user']);
+    assert.equal(savedDraft.admin.password, values['admin-password']);
+    assert.deepEqual(savedDraft.configuration.files.types, {pdf: ['application/pdf']});
+    assert.equal(Object.hasOwn(savedDraft.configuration, 'secrets'), false);
+    assert.equal(Object.hasOwn(savedDraft.configuration.files, 'root'), false);
+    assert.equal(await adoptionPage.locator('#cfg-admin-password').inputValue(), '');
+    assert.equal(await adoptionPage.locator('#installer-configuration').isVisible(), false);
     await authenticateApproval();
     assert.equal(await adoptionPage.locator('#installer-title').textContent(), 'Configuration submitted');
     assert.equal(await adoptionPage.locator('#installer-apply').isVisible(), false);
@@ -224,6 +247,7 @@ try {
   }
 } finally { await browser.close(); }
 console.log(JSON.stringify({desktop_mobile_browser: true, real_tls_fpm_browser_requests: true,
+  browser_configuration_submission: true, client_validation_no_post: true,
   browser_approval_acknowledgement: true, approval_record_is_fixture: true, approval_does_not_submit_apply: true,
   keyboard_access: true, no_horizontal_overflow: true, authentication_and_apply_submission: true,
   no_secret_browser_storage: true, no_script_post_only_verified: true, offline_recovery: true, post_lock_closed: true,
