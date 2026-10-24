@@ -98,6 +98,24 @@ final class InstallationPreparation
         return $units;
     }
     /** Root consumes untrusted configuration data against an operator-owned binding, never web paths. */
+    public static function createFromFrozenWebDraft(string $bindingPath, string $directory): array
+    {
+        self::root();
+        // Parent/root hierarchy is fixed by the operator; FPM cannot replace the directory itself.
+        CompletionLock::verifyProvisioningPath(dirname($directory).'/installed.lock');
+        $account = posix_getpwnam('gojet-installer');
+        if ($account === false || $account['uid'] <= 0) { throw new \RuntimeException('Installer account required'); }
+        $snapshot = ConfigurationDraft::frozen($directory, $account['uid']);
+        $result = self::createFromWebDraft($bindingPath, $snapshot['draft']);
+        $after = ConfigurationDraft::frozen($directory, $account['uid']);
+        if (!hash_equals($snapshot['sha256'], $after['sha256'])) {
+            // Preserve the published private plan as a recovery barrier; never approve changed input.
+            throw new \RuntimeException('Configuration draft changed during preparation');
+        }
+        return $result;
+    }
+
+    /** Root consumes untrusted configuration data against an operator-owned binding, never web paths. */
     public static function createFromWebDraft(string $bindingPath, array $draft): array
     {
         self::root();

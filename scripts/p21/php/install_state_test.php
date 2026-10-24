@@ -102,6 +102,18 @@ try {
                 $reply = $draftState->submitConfiguration($auth['session'], $auth['csrf'], $draft);
                 need($reply === ['step' => 'environment', 'status' => 'checking'], 'Draft response disclosed data or advanced approval');
                 need(json_decode(file_get_contents($draftPath), true) === $draft, 'Draft bytes lost');
+                $snapshot = GoJet\Installer\ConfigurationDraft::frozen($draftDir, fileowner($draftDir));
+                need($snapshot['draft'] === $draft && $snapshot['sha256'] === hash_file('sha256', $draftPath), 'Frozen snapshot mismatch');
+                reject(fn() => GoJet\Installer\ConfigurationDraft::frozen($draftDir, fileowner($draftDir)+1), 'Unsafe draft directory');
+                chmod($draftPath, 0644);
+                reject(fn() => GoJet\Installer\ConfigurationDraft::frozen($draftDir, fileowner($draftDir)), 'Unsafe configuration draft');
+                chmod($draftPath, 0600);
+                rename($draftPath, $draftPath.'.saved'); symlink($draftPath.'.saved', $draftPath);
+                reject(fn() => GoJet\Installer\ConfigurationDraft::frozen($draftDir, fileowner($draftDir)), 'Unsafe configuration draft');
+                unlink($draftPath); rename($draftPath.'.saved', $draftPath);
+                link($draftPath, $draftPath.'.link');
+                reject(fn() => GoJet\Installer\ConfigurationDraft::frozen($draftDir, fileowner($draftDir)), 'Unsafe configuration draft');
+                unlink($draftPath.'.link');
                 need(fileowner($draftPath) === fileowner($draftDir) && (fileperms($draftPath) & 0777) === 0600
                     && stat($draftPath)['nlink'] === 1, 'Unsafe draft file');
             }
@@ -126,6 +138,7 @@ try {
         'concurrent_lock_rejected' => true, 'unsafe_state_rejected' => true, 'installed_lock_blocks' => true,
         'private_configuration_draft' => true, 'draft_auth_csrf_bounds' => true,
         'draft_reauthentication_no_replacement' => true, 'draft_publication_failure_blocks' => true,
+        'frozen_snapshot_identity_mode_links' => true,
         'web_adapter_and_privileged_apply_verified' => false], JSON_THROW_ON_ERROR)."\n";
 } finally {
     foreach (glob($dir.'/*') as $file) { unlink($file); }

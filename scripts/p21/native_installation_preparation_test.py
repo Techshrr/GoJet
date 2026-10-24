@@ -194,7 +194,32 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
         web_refused(prepare_web())
     binding.write_text(json.dumps(binding_value))
     binding_before = binding.read_bytes()
-    result = prepare_web()
+    try:
+        installer_account = pwd.getpwnam('gojet-installer')
+    except KeyError:
+        subprocess.run(['useradd', '--system', '--no-create-home', '--shell', '/usr/sbin/nologin', 'gojet-installer'], check=True)
+        installer_account = pwd.getpwnam('gojet-installer')
+    frozen_state = root/'configuration-state'
+    frozen_state.mkdir(mode=0o700)
+    os.chown(frozen_state, installer_account.pw_uid, installer_account.pw_gid)
+    publisher = root/'submit-configuration.php'
+    publisher.write_text('''<?php
+require_once $argv[1].'/installer/src/InstallState.php';
+$token='native-configuration-fixture-token-0123456789';
+$state=new GoJet\\Installer\\InstallState($argv[2],hash('sha256',$token));
+$state->initialize(); $auth=$state->authenticate($token);
+$state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR));
+''')
+    publisher.chmod(0o644)
+    submitted = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', str(publisher), str(release), str(frozen_state)],
+        input=json.dumps(draft).encode(), capture_output=True, timeout=30, env=env)
+    assert submitted.returncode == 0 and not submitted.stdout and not submitted.stderr
+    frozen_before = {p.name: p.read_bytes() for p in frozen_state.iterdir()}
+    frozen_command = ['php8.3', str(root/'tools/bin/prepare-frozen-web-configuration.php'), str(binding), str(frozen_state)]
+    denied = subprocess.run(['runuser', '-u', 'gojet-installer', '--']+frozen_command, capture_output=True, timeout=30, env=env)
+    assert denied.returncode == 1 and not denied.stdout and not destination.exists()
+    result = subprocess.run(frozen_command, capture_output=True, timeout=60, env=env)
+    assert frozen_before == {p.name: p.read_bytes() for p in frozen_state.iterdir()}, 'Root rewrote web-owned state'
     assert result.returncode == 0 and not result.stderr, 'Preparation of verified payload failed'
     assert json.loads(result.stdout) == dict(prepared=True, source=source, manifest_sha256=digest,
         environment_files=8, data_executed=False, installation_complete=False)
@@ -207,6 +232,9 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
     repeated = prepare_web()
     assert repeated.returncode == 1 and not repeated.stdout
     assert repeated.stderr == b'Web configuration preparation refused.\n'
+    repeated = subprocess.run(frozen_command, capture_output=True, timeout=60, env=env)
+    assert repeated.returncode == 1 and not repeated.stdout
+    assert repeated.stderr == b'Frozen web configuration preparation refused.\n'
     assert private_before == {str(p.relative_to(destination)): p.read_bytes()
                               for p in destination.rglob('*') if p.is_file()}, 'Retry rotated sealed keys'
     # Read only root-private generated values for binding assertions; never print them.
@@ -323,6 +351,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
     native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True,
     root_generated_service_keys=True, repeated_preparation_preserves_keys=True,
-    root_bound_web_configuration_preparation=True, web_configuration_authority_fields_rejected=True, repeat_noop=True,
+    root_bound_web_configuration_preparation=True, web_configuration_authority_fields_rejected=True,
+    frozen_unprivileged_draft_prepared=True, root_preserves_web_state=True, repeat_noop=True,
     installation_complete=False, isolated_installation_completion_verified=True,
     final_installation_lock_written=True, live_tls_mismatch_blocks_completion=True, stopped_services_block_completion=True)))
