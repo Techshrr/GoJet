@@ -96,6 +96,16 @@ final class WebConfigurationSwitch
         if (realpath('/proc/'.$pid.'/exe') !== realpath('/usr/sbin/php-fpm8.3')) { throw new \RuntimeException('Unexpected FPM executable'); }
     }
 
+    /** Shared read-only host guard for first provisioning and later pool replacement. */
+    public static function verifyHost(): void
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        foreach ([dirname(self::TARGET), dirname(self::MAIN)] as $parent) {
+            CompletionLock::verifyProvisioningPath($parent.'/installed.lock');
+        }
+        self::service();
+    }
+
     public static function run(array $input): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }

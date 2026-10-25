@@ -16,6 +16,7 @@ import tempfile
 from archive import verify_archive
 from native_prepared_services_test import verify_services
 from native_installation_apply_test import verify_apply
+from native_web_entry_test import verify_web_entry
 
 repo = Path(__file__).resolve().parents[2]
 archive, source = Path(sys.argv[1]).resolve(), sys.argv[2]
@@ -329,10 +330,13 @@ $state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_ge
     journal = (destination/'data/journal.json').read_text()
     assert request['admin']['password'] not in journal and profile['secrets']['admin'] not in journal
     verify_services(root, release, destination, storage, profile)
+    verify_web_entry(root, release, source, digest, request)
     verify_apply(root, release, source, digest, request)
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
     actual_release_preparation=True, single_command_native_apply=True,
+    native_initial_web_entry=True, initial_entry_browser_to_root_preparation=True,
+    initial_entry_survives_service_restart=True, initial_entry_missing_receipt_recovery=True,
     scheduled_root_executor=True, executor_idle_and_started_barriers=True,
     unprivileged_http_apply_mailbox=True, root_bound_web_apply=True, web_apply_replay_refused=True,
     browser_apply_submission_verified=True, browser_native_progress_and_closure=True, apply_failure_resume_preserves_data=True,

@@ -63,7 +63,7 @@ final class SiteActivation
             && hash_equals($hash, (string)hash_file('sha256', self::TARGET));
     }
     /** Parse directive tokens rather than line-oriented regex (inline/quoted directives are legal). */
-    private static function listenPorts(string $config): array
+    public static function listenPorts(string $config): array
     {
         preg_match_all('~\s+|\#[^\n]*|"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|[{};]|[^\s{};\#]+~', $config, $matches);
         $directive = []; $ports = [];

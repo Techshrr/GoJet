@@ -9,19 +9,19 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 
 ## 最新已核实的 CI
 
-源码：`b9a2285b5c68e311d939ee3fc2107007a14560b3`。以下六项均成功：
+当前已核实源码：`12b34b1a34fc0068b3437e395671dff583083115`。
 
-| 工作流 | Run |
-| --- | --- |
-| Native Payload Build | [40164481288](https://github.com/Techshrr/GoJet/actions/runs/40164481288) |
-| Native Service Environment | [40164481353](https://github.com/Techshrr/GoJet/actions/runs/40164481353) |
-| Native Migration Execution | [40164481341](https://github.com/Techshrr/GoJet/actions/runs/40164481341) |
-| Native Release Package | [40164481338](https://github.com/Techshrr/GoJet/actions/runs/40164481338) |
-| Native Installer Web | [40164481307](https://github.com/Techshrr/GoJet/actions/runs/40164481307) |
-| Native Data Bootstrap | [40164481349](https://github.com/Techshrr/GoJet/actions/runs/40164481349) |
+| 工作流 | Run | 结果 |
+| --- | --- | --- |
+| Native Payload Build | [40187291722](https://github.com/Techshrr/GoJet/actions/runs/40187291722) | 成功 |
+| Native Release Package | [40187291716](https://github.com/Techshrr/GoJet/actions/runs/40187291716) | 成功 |
+| P00 Bootstrap and G0 Traceability | [40187296731](https://github.com/Techshrr/GoJet/actions/runs/40187296731) | 成功 |
 
-这是上述源码的 CI 结果，不等于全部项目验收通过，也不替代指定 Ubuntu 24.04.4
-目标机验证。此前检查到的原生 runner 为 24.04.5；目标机验收单独保留。
+原生 Payload 日志确认同地址持久 FPM 切换、服务重启及缺失回执恢复通过。
+前一功能提交 `b7cfedb` 的六项 P21 工作流也已成功；`12b34b1` 只修正归档拒绝测试
+中的扫描误报，未放宽秘密扫描规则。这不是全部项目验收通过，也不替代指定
+Ubuntu 24.04.4 目标机验证。此前检查到的原生 runner 为 24.04.5。
+本次新增首次网页入口部署尚待对应 CI，不能沿用上述结果宣称通过。
 
 ## 当前实现
 
@@ -35,15 +35,15 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
   不继承；新尝试经真实网页提交，由独立准备 timer 处理，不覆盖旧 unit/回执。
 
 原生回归包含真实服务故障及恢复，不等同于所有部署场景都能无干预安装。
-重填入口的持久 FPM 切换命令及同地址、服务重启后的原生回归已加入，等待本次 CI
-核实；上述 b9a2285 的通过结果不覆盖这项新改动。
+重填入口的持久 FPM 切换、同地址登录与提交、服务重启后的持久性及缺失回执恢复
+已经通过原生回归。首次入口部署命令已加入，原生 CI 待核实。
 
 ## 尚未完成的工作
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 初装接续 | 持久 FPM 切换的本次原生 CI、首次引导/绑定配置、bootstrap 与产品站点的完整切换 |
-| 恢复 | 重填发布和调度器发布自身的中断恢复、无完整计划等剩余边界 |
+| 初装接续 | 首次入口部署的原生 CI、bootstrap 与产品站点的完整切换 |
+| 恢复 | 初次入口部分发布、重填发布和调度器发布自身的中断恢复等剩余边界 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
 | 运维 | 原生升级、数据库备份恢复、兼容边界和完整恢复手册 |
 | 最终验收 | 精确目标系统、统一候选源码/包摘要、全部受影响回归、G11 审查与签署 |

@@ -6,6 +6,48 @@ All commands below are shipped PHP 8.3 CLI entrypoints under `installer/bin/` an
 require root unless explicitly described as browser operations. Paths and digests
 come from reviewed server configuration, never browser input.
 
+## Provision the first web entry
+
+`provision-web-entry.php NEW_DIRECTORY` reads at most 8 KiB of private JSON on
+stdin. The exact `gojet.web-entry.v1` schema contains `schema`, `origin`, `release`,
+`manifest_sha256`, `source`, `bootstrap_sha256`, `tls` and `files`. `tls` contains
+`certificate`, `private_key`, `http_port`; `files` contains `root`, `clamav_socket`.
+Use a reviewed manifest/source, a canonical HTTPS DNS origin and existing matching,
+currently valid root0644 certificate/root0600 key. Supply only a bootstrap token
+SHA256 digest; retain the randomly generated token privately for browser login.
+The new directory must be absent, beneath a protected root-owned parent, outside
+all supplied inputs and host authority. Its derived Unix socket path is bounded.
+
+Prerequisites are the verified extracted payload, dedicated gojet-installer account,
+protected completion authority directory and active standard Ubuntu Nginx/PHP 8.3
+FPM services. This command does not install OS packages, issue certificates, change
+DNS, create service accounts or grant storage access. It refuses an existing
+Installer pool/vhost, occupied port, alternate FPM include authority, service
+unit overrides, existing approval or completion. It preserves other host settings.
+
+The command creates root0600 `binding.json` and `web.json`, an installer-owned0700
+`state`, and a root0755 enclosing directory. The derived preparation target is
+`NEW_DIRECTORY/prepared`; the socket is `NEW_DIRECTORY/fpm.sock`. Retain `web.json`
+as the original renderer input for a later configuration switch. It publishes
+root0600 `/etc/php/8.3/fpm/pool.d/gojet-installer.conf` and root0644
+`/etc/nginx/conf.d/gojet-installer.conf`, checks both native configurations and
+reloads the real services. A local HTTPS request verifies certificate/name and
+requires the unauthenticated401 response before success. No token is submitted by
+this probe; no account, draft, migration, approval or installation is created.
+
+The product activation lock and shared FPM lock serialize first entry with product
+activation and later replacement. Root authority
+`web-entry-started.json` binds the destination, private files, rendered host files
+and TLS hashes before mutation; `web-entry-ready.json` records verified entry
+activation. Publication never overwrites an existing node. A matching completed
+repeat acknowledges the record without resetting state. If only the success receipt
+is missing, rerunning the identical request may verify the complete publication,
+reload and recheck HTTPS. Incomplete publication, changed configuration or changed
+TLS remains blocked for operator inspection; never delete real receipts to retry.
+This is entry readiness, not final installation acceptance. Root preparation timer,
+approval and apply remain separate commands below. Bootstrap-to-product handover
+and recovery of incomplete first publication remain open.
+
 ## Prepare an immutable plan
 
 `prepare-installation.php DIRECTORY RELEASE MANIFEST_SHA SOURCE_SHA` reads bounded

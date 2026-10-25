@@ -47,7 +47,7 @@ try {
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   assert.deepEqual(errors, []);
   const evidence = cfg.evidence_name ?? 'browser-configuration';
-  assert.ok(['browser-configuration', 'browser-replacement'].includes(evidence));
+  assert.ok(['browser-configuration', 'browser-replacement', 'browser-entry'].includes(evidence));
   const output = path.resolve('artifacts/v10/P21/payload', evidence);
   fs.mkdirSync(output, {recursive: true});
   await page.screenshot({path: path.join(output, 'saved-desktop.png'), fullPage: true});
