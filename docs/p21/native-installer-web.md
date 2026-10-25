@@ -45,8 +45,10 @@ site/API/workspace/admin/proxy configuration. Forms, native approval/apply and
 browser flows are implemented. The replacement pool switch command is described
 in [installation preparation](installation-preparation.md); its native CI evidence
 is tracked separately. The first-entry provisioning command now publishes the
-renderer outputs and verifies actual HTTPS readiness; its new native CI is pending.
-Final product handover and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
+renderer outputs and verifies actual HTTPS readiness; its native CI has passed.
+Root-authorized same-origin product handover is implemented with explicit failure
+recovery; its new native CI is pending. Browser completion feedback, final FPM/timer
+retirement and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
 for the current overall boundary rather than inferring it from this renderer.
 
 The renderer also requires a `completion` input, normally

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/ServiceActivation.php';
+require_once __DIR__.'/EntryHandover.php';
 
 /** Publish only the sealed product vhost; never final installation authority. */
 final class SiteActivation
@@ -96,6 +97,9 @@ final class SiteActivation
     {
         $seal = ServiceActivation::verifyReady($directory);
         $state = json_decode(self::privateFile($directory.'/site.json'), true, 16, JSON_THROW_ON_ERROR);
+        $handover = EntryHandover::load($directory);
+        if (($state['entry_handover_sha256'] ?? null) !== EntryHandover::fingerprint($handover)
+            || ($handover !== null && !EntryHandover::parked($handover))) { throw new \RuntimeException('Entry handover incomplete'); }
         if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source']
             || ($state['seal_sha256'] ?? '') !== hash_file('sha256', $directory.'/seal.json')
             || ($state['phase'] ?? '') !== 'site-configured' || !self::owned($seal['files']['nginx.conf'])) {
@@ -119,10 +123,12 @@ final class SiteActivation
             if (!flock($h, LOCK_EX | LOCK_NB)) { throw new \RuntimeException('Activation busy'); }
             if ((new CompletionLock(self::AUTHORITY.'/installed.lock'))->exists()) { throw new \RuntimeException('Installation complete'); }
             $seal = ServiceActivation::verifyReady($directory);
+            $handover = EntryHandover::load($directory);
             $hash = $seal['files']['nginx.conf']; $sealHash = hash_file('sha256', $directory.'/seal.json');
             $recoveryCount = 0;
             if (file_exists($directory.'/site.json') || is_link($directory.'/site.json')) {
                 $state = json_decode(self::privateFile($directory.'/site.json'), true, 16, JSON_THROW_ON_ERROR);
+                if (($state['entry_handover_sha256'] ?? null) !== EntryHandover::fingerprint($handover)) { throw new \RuntimeException('Handover journal changed'); }
                 if (($state['schema'] ?? '') !== 1 || ($state['source'] ?? '') !== $seal['source'] || ($state['seal_sha256'] ?? '') !== $sealHash) {
                     throw new \RuntimeException('Verified site recovery required');
                 }
@@ -134,6 +140,7 @@ final class SiteActivation
                     }
                     $exists = file_exists(self::TARGET) || is_link(self::TARGET);
                     if ($exists && (!self::owned($hash) || $state['phase'] === 'recovered')) { throw new \RuntimeException('Changed site requires operator review'); }
+                    if ($handover !== null) { EntryHandover::parked($handover); }
                     $already = $state['phase'] === 'recovered';
                     if (!$already && $state['phase'] !== 'recovering') {
                         $state['recovered_from'] = $state['phase']; $state['phase'] = 'recovering';
@@ -143,6 +150,7 @@ final class SiteActivation
                         if (!unlink(self::TARGET)) { throw new \RuntimeException('Site removal failed'); }
                         self::sync(dirname(self::TARGET));
                     }
+                    if ($handover !== null) { EntryHandover::restore($handover); }
                     // Always restore the loaded baseline too: the killed worker may have reloaded it.
                     self::command(['/usr/sbin/nginx', '-t']);
                     self::command(['/usr/bin/systemctl', 'reload', 'nginx.service']);
@@ -154,6 +162,7 @@ final class SiteActivation
                     return ['site_recovered' => true, 'already_applied' => $already, 'installation_complete' => false];
                 }
                 if (($state['phase'] ?? '') === 'site-configured' && self::owned($hash)) {
+                    if ($handover !== null && !EntryHandover::parked($handover)) { throw new \RuntimeException('Entry still active'); }
                     self::command(['/usr/sbin/nginx', '-t']);
                     return ['site_configured' => true, 'already_applied' => true, 'installation_complete' => false];
                 }
@@ -165,12 +174,21 @@ final class SiteActivation
             $baseline = self::command(['/usr/sbin/nginx', '-T'])['out'];
             $raw = (string)file_get_contents($directory.'/nginx.conf');
             $ports = self::listenPorts($raw);
-            if ($ports === [] || array_intersect($ports, self::listenPorts($baseline))) { throw new \RuntimeException('Existing Nginx listener'); }
+            if ($ports === [] || ($handover === null && array_intersect($ports, self::listenPorts($baseline)))) { throw new \RuntimeException('Existing Nginx listener'); }
+            if ($handover !== null && EntryHandover::parked($handover)) { throw new \RuntimeException('Entry requires recovery'); }
             // Require this fixed conf.d destination to be included by the native Ubuntu configuration.
             if (!preg_match('~\binclude\s+/etc/nginx/conf\.d/\*\.conf\s*;~', preg_replace('/#[^\n]*/', '', $baseline))) { throw new \RuntimeException('Unsupported Nginx include authority'); }
-            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false, 'recovery_count' => $recoveryCount];
+            $state = ['schema' => 1, 'source' => $seal['source'], 'seal_sha256' => $sealHash, 'phase' => 'publishing', 'cleanup_complete' => false, 'recovery_count' => $recoveryCount,
+                'entry_handover_sha256' => EntryHandover::fingerprint($handover)];
             self::persist($directory, $state); $created = false;
             try {
+                if ($handover !== null) {
+                    EntryHandover::park($handover);
+                    // Inspect the actual expanded baseline after parking only our exact vhost.
+                    // Another listener, even on a different address, remains a hard conflict.
+                    $remaining = self::command(['/usr/sbin/nginx', '-T'])['out'];
+                    if (array_intersect($ports, self::listenPorts($remaining))) { throw new \RuntimeException('Existing Nginx listener'); }
+                }
                 $old = umask(0022);
                 try { $f = fopen(self::TARGET, 'x+b'); } finally { umask($old); }
                 if ($f === false) { throw new \RuntimeException('Site publication failed'); }
@@ -187,12 +205,15 @@ final class SiteActivation
             } catch (\Throwable $cause) {
                 $clean = false;
                 try {
+                    if ($handover !== null) { EntryHandover::parked($handover); }
                     if ($created && self::owned($hash)) {
                         unlink(self::TARGET); self::sync(dirname(self::TARGET));
-                        self::command(['/usr/sbin/nginx', '-t']);
-                        if ($state['phase'] === 'reloading') { self::command(['/usr/bin/systemctl', 'reload', 'nginx.service']); }
-                        $clean = true;
                     }
+                    if (file_exists(self::TARGET) || is_link(self::TARGET)) { throw new \RuntimeException('Foreign site requires inspection'); }
+                    if ($handover !== null) { EntryHandover::restore($handover); }
+                    self::command(['/usr/sbin/nginx', '-t']);
+                    self::command(['/usr/bin/systemctl', 'reload', 'nginx.service']);
+                    $clean = true;
                 } catch (\Throwable) { /* Preserve failure barrier; never remove foreign configuration. */ }
                 $state['phase'] = 'failed'; $state['cleanup_complete'] = $clean; self::persist($directory, $state);
                 throw new \RuntimeException('Site activation failed; verify recovery', 0, $cause);

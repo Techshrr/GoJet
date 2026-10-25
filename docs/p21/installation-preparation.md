@@ -45,8 +45,9 @@ is missing, rerunning the identical request may verify the complete publication,
 reload and recheck HTTPS. Incomplete publication, changed configuration or changed
 TLS remains blocked for operator inspection; never delete real receipts to retry.
 This is entry readiness, not final installation acceptance. Root preparation timer,
-approval and apply remain separate commands below. Bootstrap-to-product handover
-and recovery of incomplete first publication remain open.
+approval and apply remain separate commands below. Same-origin product handover
+uses the explicit root authorization below. Recovery of incomplete first publication
+remains open.
 
 ## Prepare an immutable plan
 
@@ -118,6 +119,43 @@ plan is prepared; approval and execution are independent.
 Scheduler publication rejects existing files, links, loaded fragments and drop-ins.
 Started/ready receipts are durable. Partial scheduler publication requires inspection;
 removing receipts is not a retry procedure.
+
+## Authorize a same-origin product handover
+
+After preparing and reviewing the sealed plan, root runs
+`authorize-entry-handover.php PREPARED ORIGINAL_ENTRY_DIRECTORY` before starting
+apply. Use the original directory created by `provision-web-entry.php`, including
+when its web state has since been replaced. This command does not approve a browser
+draft or start installation. It writes only root0600 `PREPARED/entry-handover.json`.
+A matching repeat before site execution acknowledges the existing authorization.
+
+The command binds the plan seal, verified release/source/manifest, HTTPS origin,
+TLS content, original root receipts and exact generated Nginx entry bytes. It
+refuses changed files, links, unsafe ownership, an existing site attempt or a
+completed installation. The shared root activation lock serializes it with entry
+provisioning and site operations. Without this record, the bootstrap listener is
+still treated as an existing site conflict.
+
+Site activation journals the handover identity before moving only the matching
+`/etc/nginx/conf.d/gojet-installer.conf` to the protected sibling
+`gojet-installer.conf.handover`, which the normal `*.conf` include excludes.
+It rechecks the expanded Nginx configuration for all remaining listener conflicts,
+then publishes `gojet.conf`, validates syntax and reloads. Other sites are never
+adopted or removed. Normal apply uses this same site phase automatically.
+
+A failed reload restores the original entry when its bytes and paths remain safe;
+the failed journal still blocks retry. After a failure or killed worker, root uses
+`recover-site.php PREPARED`, checks the restored service, then explicitly resumes
+the approved plan. Recovery removes only an exact owned product file and restores
+only an exact saved entry. Changed/missing/ambiguous files require inspection;
+never delete journals or overwrite intervening operator files to retry. A successful
+site is not recoverable through this teardown command.
+
+The original FPM pool, private state and receipts are retained for failure recovery.
+Only the public vhost is retired here; the product returns404 for `/install`.
+Final FPM/timer retirement and same-origin browser completion feedback remain open.
+Final installation authority still requires the existing live product health checks
+and atomic root completion lock, not this handover receipt.
 
 ## Execute the approved plan
 
@@ -245,8 +283,8 @@ retired endpoint or delete barriers as a retry procedure. A durable ready receip
 records configuration/reload completion, not final installation or account health.
 
 The optional predecessor argument to preparation scheduling validates this lineage.
-Initial endpoint provisioning, restart/scheduler publication recovery and the final
-bootstrap-to-product handover remain open. The old page is not automatically reset.
+First endpoint provisioning is implemented. Restart/scheduler publication recovery,
+post-handover FPM/timer retirement and browser completion feedback remain open. The old page is not automatically reset.
 
 ## Verification boundaries
 
@@ -257,7 +295,11 @@ observed progress and final completion. Replacement configuration is submitted t
 a real browser at the same Nginx endpoint after persistent system FPM switching
 and a real service restart, then prepared by its own timer. The switch regression
 also constructs a missing-ready-receipt boundary; this is not a power-loss claim.
-New switch coverage requires the corresponding native CI run to pass.
+Same-origin handover coverage requires its corresponding native CI run to pass.
+It exercises actual reload failure, a worker killed during native reload, explicit
+restoration of the Installer, protected foreign files, Nginx restart and product
+health/completion. Pre/post-rename interruption cases are constructed boundary
+fixtures; they do not claim machine power-loss testing.
 Published-plan receipt interruption uses an explicitly constructed boundary fixture;
 it is not a SIGKILL or machine power-loss claim. Detailed evidence and remaining
 candidate/target-system obligations are summarized only in [STATUS.md](STATUS.md).
