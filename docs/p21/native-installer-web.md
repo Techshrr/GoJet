@@ -42,8 +42,10 @@ is uploaded as evidence. The test does not deploy to an external host.
 
 This is the bootstrap Installer virtual host, separate from the final product
 site/API/workspace/admin/proxy configuration. Forms, native approval/apply and
-browser flows are implemented; automatic persistent FPM configuration switching
-and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
+browser flows are implemented. The replacement pool switch command is described
+in [installation preparation](installation-preparation.md); its native CI evidence
+is tracked separately. Initial bootstrap provisioning, final product handover and
+complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
 for the current overall boundary rather than inferring it from this renderer.
 
 The renderer also requires a `completion` input, normally

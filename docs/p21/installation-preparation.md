@@ -177,10 +177,34 @@ with root0755. The new plan destination is `NEW_DIRECTORY/prepared`.
 Old binding, draft, state and started receipts remain; sessions, approvals and keys
 are not copied. A partial restart remains retired and requires inspection.
 
-Point the Installer FPM configuration at the new state/bootstrap digest before new
-submission. The optional predecessor argument to preparation scheduling validates
-this lineage. Automatic persistent FPM configuration switching and restart/scheduler
-publication recovery remain open. The old page is not automatically reset.
+Before new submission, root can run `switch-web-configuration.php` with no arguments
+and a private JSON object on stdin. Its exact fields are `previous` (the eight
+original NativeWebConfig renderer inputs), `predecessor` (retired binding path),
+`binding` (successor binding path), and `bootstrap_sha256` (the new token digest).
+Keep the original rendered inputs privately; do not recover secrets from browser
+requests or put the token itself into this request. The root-selected new digest
+becomes the successor endpoint's authentication authority.
+
+This command supports the standard active Ubuntu `php8.3-fpm.service` and exclusively
+manages `/etc/php/8.3/fpm/pool.d/gojet-installer.conf`, which must already be a
+root0600 regular single-link file matching the exact original rendered pool.
+It does not provision a first endpoint. Changed pools, alternate includes, duplicate
+pool sections, unit overrides, changed lineage, approval or completion are refused.
+Nginx, origin, socket, release and TLS remain the original endpoint configuration.
+
+Both attempt locks and a global root lock serialize switching. Before atomically
+replacing the pool, it writes successor-private `fpm-switch-started.json` binding
+old/new configuration hashes. It verifies native syntax, reloads the real service
+and writes `fpm-switch-ready.json`. No web state, approval or apply request is written.
+A matching completed repeat is read-only. After interruption, explicitly rerun the
+same request: only the exact recorded old/new pool may be continued. A mismatched
+request or foreign file remains blocked. Preserve receipts; do not restore the
+retired endpoint or delete barriers as a retry procedure. A durable ready receipt
+records configuration/reload completion, not final installation or account health.
+
+The optional predecessor argument to preparation scheduling validates this lineage.
+Initial endpoint provisioning, restart/scheduler publication recovery and the final
+bootstrap-to-product handover remain open. The old page is not automatically reset.
 
 ## Verification boundaries
 
@@ -188,7 +212,10 @@ The native payload regression uses real packages, MySQL/Redis, Nginx/FPM, system
 and eight services. It covers actual service/site failures and worker termination,
 explicit recovery, browser configuration/approval/apply, timer preparation/execution,
 observed progress and final completion. Replacement configuration is submitted through
-a real browser into an isolated new FPM endpoint, then prepared by its own timer.
+a real browser at the same Nginx endpoint after persistent system FPM switching
+and a real service restart, then prepared by its own timer. The switch regression
+also constructs a missing-ready-receipt boundary; this is not a power-loss claim.
+New switch coverage requires the corresponding native CI run to pass.
 Published-plan receipt interruption uses an explicitly constructed boundary fixture;
 it is not a SIGKILL or machine power-loss claim. Detailed evidence and remaining
 candidate/target-system obligations are summarized only in [STATUS.md](STATUS.md).

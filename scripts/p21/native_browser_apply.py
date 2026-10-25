@@ -1,5 +1,5 @@
 """Real browser submission against shipped TLS/FPM; never edits installer state or mailbox."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import selectors
 import hashlib
 import json
@@ -112,7 +112,7 @@ def observe_browser(root, release, state, authority, token):
 
 
 def submit_configuration_browser(root, release, state, authority, token, draft, before_submit=None,
-                                 initialized=False, evidence_name="browser-configuration", old_session=None):
+                                 initialized=False, evidence_name="browser-configuration", old_session=None, endpoint_origin=None):
     """Provision an empty state, then let only the shipped browser/HTTP path publish its draft."""
     if not initialized:
         initialize = 'require $argv[1]."/installer/src/InstallState.php";'
@@ -123,7 +123,8 @@ def submit_configuration_browser(root, release, state, authority, token, draft, 
     if before_submit is not None:
         before_submit()
     repo = Path(__file__).resolve().parents[2]
-    with browser_endpoint(root, release, state, authority, token, evidence_name) as origin:
+    endpoint = nullcontext(endpoint_origin) if endpoint_origin else browser_endpoint(root, release, state, authority, token, evidence_name)
+    with endpoint as origin:
         result = subprocess.run([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_configuration_browser_test.mjs')],
             input=json.dumps(dict(origin=origin, token=token, draft=draft, evidence_name=evidence_name, old_session=old_session)), cwd=repo,
             capture_output=True, text=True, timeout=120)

@@ -128,6 +128,20 @@ UNIT,
         }
     }
 
+    /** Serialize endpoint switching with both retirement and successor preparation. */
+    public static function switchWeb(array $input): array
+    {
+        $fields = ['previous', 'predecessor', 'binding', 'bootstrap_sha256'];
+        if (array_diff($fields, array_keys($input)) || array_diff(array_keys($input), $fields)
+            || !is_array($input['previous']) || !is_string($input['predecessor']) || !is_string($input['binding'])
+            || !is_string($input['bootstrap_sha256']) || $input['predecessor'] === $input['binding']) {
+            throw new \RuntimeException('Invalid endpoint switch');
+        }
+        require_once __DIR__.'/WebConfigurationSwitch.php';
+        return self::withWorkerLock($input['predecessor'], fn() => self::withWorkerLock($input['binding'],
+            fn() => WebConfigurationSwitch::run($input)));
+    }
+
     private static function withWorkerLock(string $bindingPath, callable $operation): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }

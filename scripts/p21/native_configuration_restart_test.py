@@ -9,6 +9,7 @@ import pwd
 import subprocess
 from native_browser_apply import submit_configuration_browser
 from native_preparation_schedule_test import preparation_schedule
+from native_configuration_switch_test import switched_configuration_endpoint
 
 
 def verify_configuration_restart(root, release, original_binding, original_state, authority):
@@ -110,13 +111,16 @@ def verify_configuration_restart(root, release, original_binding, original_state
     denied = as_installer(deny, new_state, dict(token=token, session=old_auth['session'], csrf=old_auth['csrf'], draft=draft))
     assert denied.returncode == 0 and not denied.stdout and not denied.stderr
     assert not (new_state/'configuration-draft.json').exists()
-    # Corrected data now comes from the real browser/FPM; the new timer alone prepares it.
+    # Persistently switch the existing endpoint, then let the new timer alone prepare it.
     existing_schedule_receipts = {p: p.read_bytes() for p in authority.glob('preparation-schedule-*.json')}
-    with preparation_schedule(release, successor/'binding.json', new_state, successor/'prepared', authority,
-                              predecessor=binding) as wait_prepared:
-        submit_configuration_browser(root, release, new_state, authority, token, draft, initialized=True,
-                                     evidence_name='browser-replacement', old_session=old_auth['session'])
-        wait_prepared()
+    replacement_token = 'native-replacement-new-token-0123456789'
+    with switched_configuration_endpoint(root, release, state, new_state, authority, binding,
+                                         token, replacement_token, old_auth['session']) as origin:
+        with preparation_schedule(release, successor/'binding.json', new_state, successor/'prepared', authority,
+                                  predecessor=binding) as wait_prepared:
+            submit_configuration_browser(root, release, new_state, authority, replacement_token, draft, initialized=True,
+                                         evidence_name='browser-replacement', old_session=old_auth['session'], endpoint_origin=origin)
+            wait_prepared()
     assert all(p.read_bytes() == raw for p, raw in existing_schedule_receipts.items())
     proof = json.loads((successor/'prepared/web-draft.json').read_text())
     assert proof['state_sha256'] == hashlib.sha256(str(new_state).encode()).hexdigest()
