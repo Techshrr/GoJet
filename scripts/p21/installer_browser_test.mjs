@@ -105,7 +105,8 @@ try {
     await adoptionPage.screenshot({path: path.join(output, label+'-approval-confirmed.png'), fullPage: true});
     assert.deepEqual(adoptionErrors, []);
     await adoptionContext.close();
-    fs.unlinkSync(rootApproval); fs.unlinkSync(draftFile);
+    // Retain the root approval fixture so the following services observer has a bound result identity.
+    fs.unlinkSync(draftFile);
     // Explicit test fixture only. Root approval/seal and actual execution are covered by payload CI.
     if (fs.existsSync(cfg.completion)) fs.unlinkSync(cfg.completion);
     const stateFile = path.join(cfg.state, 'state.json');
