@@ -16,7 +16,9 @@ class ArchiveTests(unittest.TestCase):
         for name in ['../escape','/etc/passwd','static/site/../../escape','static/site/.env','static/site/node_modules/x.js','bin/node','Dockerfile','installer/public/shell.php']:
             self.assertFalse(allowed(name),name)
         with tempfile.TemporaryDirectory() as d:
-            with self.assertRaises(ValueError): write_archive({'static/site/key.txt':b'-----BEGIN PRIVATE KEY-----'},Path(d)/'a','a'*40,'1',[])
+            # Construct the rejection marker at runtime; this fixture contains no key material.
+            marker = b'-----BEGIN ' + b'PRIVATE KEY-----'
+            with self.assertRaises(ValueError): write_archive({'static/site/key.txt':marker},Path(d)/'a','a'*40,'1',[])
     def test_links_duplicates_and_payload_change(self):
         with tempfile.TemporaryDirectory() as d:
             good,bad=Path(d)/'good',Path(d)/'bad'
