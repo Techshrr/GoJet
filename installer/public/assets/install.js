@@ -15,6 +15,10 @@
   const preflightChecks = document.querySelector('#preflight-checks');
   const checkNames = {package: 'Release integrity', systemd: 'Service manager', nginx: 'Nginx',
     php: 'PHP', mysql: 'MySQL', redis: 'Redis', storage: 'File storage', clamav: 'ClamAV'};
+  const openAdmin = document.querySelector('#installer-open-admin');
+  const openSite = document.querySelector('#installer-open-site');
+  let resultId = null;
+  let entryClosed = false;
   let executionExpiry = null;
   let expiry = null;
   let csrf = null;
@@ -79,6 +83,7 @@
     if (state?.step === 'services') {
       const result = await request('GET', '/install/services');
       if (result) {
+        resultId = typeof result.result_id === 'string' && /^[a-f0-9]{64}$/.test(result.result_id) ? result.result_id : null;
         showPreflight(result.preflight);
         if (result.status === 'checking') showExecution(result.execution);
       }
@@ -86,6 +91,48 @@
   }
   function tell(text) { message.textContent = text; }
   function controls() { login.disabled = busy; refresh.disabled = busy; submit.disabled = busy || !csrf; approve.disabled = busy || !csrf; saveConfiguration.disabled = busy || !csrf; }
+  async function confirmResult() {
+    clearPreflight(); clearExecution(); csrf = null;
+    configuration.reset(); configuration.hidden = true; form.hidden = true; submit.hidden = true; approve.hidden = true;
+    openAdmin.hidden = true; openSite.hidden = true;
+    if (!resultId) {
+      refresh.hidden = true;
+      title.textContent = 'Installer unavailable';
+      tell('The installer is closed or unavailable. Check the installation result with your server administrator before opening Admin.');
+      return;
+    }
+    entryClosed = true; refresh.hidden = false;
+    refresh.textContent = 'Check installation result';
+    title.textContent = 'Installation result unconfirmed';
+    tell('The installation entry has closed, but completion has not yet been confirmed. Check the result again. If it remains unavailable, ask your server administrator to inspect the installation. Do not submit again.');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      // No credentials, token, identifier in the URL, redirect, or cross-origin request.
+      const response = await fetch('/.well-known/gojet-installation-result', {method: 'GET', credentials: 'omit',
+        cache: 'no-store', redirect: 'error', headers: {'Accept': 'application/json'}, signal: controller.signal});
+      if (response.status !== 200 || !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) return;
+      const reader = response.body.getReader(); let raw = ''; let size = 0;
+      const decoder = new TextDecoder('utf-8', {fatal: true});
+      try {
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 1024) { await reader.cancel(); return; }
+          raw += decoder.decode(value, {stream: true});
+        }
+        raw += decoder.decode();
+      } finally { reader.releaseLock(); }
+      const value = JSON.parse(raw);
+      if (!value || Object.keys(value).length !== 3 || value.schema !== 'gojet.installation-result.v1'
+        || value.result_id !== resultId || value.installation_complete !== true) return;
+      title.textContent = 'Installation completed';
+      tell('The server confirmed completion of your approved installation after its health checks. You can now open Admin or the site.');
+      openAdmin.hidden = false; openSite.hidden = false; refresh.hidden = true;
+    } catch { /* A missing, invalid, offline or unrelated receipt never means success. */ }
+    finally { clearTimeout(timer); }
+  }
   async function request(method, path, body) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -94,9 +141,7 @@
         redirect: 'error', headers: {'Accept': 'application/json', ...(body ? {'Content-Type': 'application/json'} : {})},
         ...(body ? {body: JSON.stringify(body)} : {}), signal: controller.signal});
       if (response.status === 404) {
-        clearPreflight(); clearExecution(); csrf = null; configuration.reset(); configuration.hidden = true; form.hidden = true; submit.hidden = true; approve.hidden = true; refresh.hidden = true;
-        title.textContent = 'Installer unavailable';
-        tell('The installer is closed or unavailable. Check the installation result with your server administrator before opening Admin.');
+        await confirmResult();
         return null;
       }
       if (!response.ok) {
@@ -160,7 +205,7 @@
     if (!form.reportValidity()) return;
     const value = token.value; token.value = '';
     action(async () => {
-      csrf = null;
+      csrf = null; resultId = null; entryClosed = false;
       const state = await request('POST', '/install/', {bootstrap_token: value});
       if (state) { csrf = state.csrf; form.hidden = true; show(state); await loadPreflight(state); }
     });
@@ -254,7 +299,10 @@
       if (state) { csrf = state.csrf; show(state); await loadPreflight(state); }
     }, true);
   });
-  refresh.addEventListener('click', () => action(async () => { const state = await request('GET', '/install/'); show(state); await loadPreflight(state); }));
+  refresh.addEventListener('click', () => action(async () => {
+    if (entryClosed) { await confirmResult(); return; }
+    const state = await request('GET', '/install/'); show(state); await loadPreflight(state);
+  }));
   window.addEventListener('pagehide', () => { clearPreflight(); clearExecution(); csrf = null; token.value = ''; configuration.reset(); configuration.hidden = true; controls(); });
   controls();
 })();

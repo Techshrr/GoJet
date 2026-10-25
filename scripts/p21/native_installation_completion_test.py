@@ -7,9 +7,11 @@ import subprocess
 import time
 
 
-def verify_completion(root, release, prepared):
+def verify_completion(root, release, prepared, on_completed=None, on_verified=None):
     authority = Path('/var/lib/gojet-installer-authority')
     marker = authority/'installed.lock'
+    public = Path('/var/lib/gojet-installation-result/result.json')
+    assert not public.exists() and not public.is_symlink()
     assert not marker.exists() and not marker.is_symlink()
     target = Path('/etc/nginx/conf.d/gojet.conf')
     expected = target.read_bytes()
@@ -83,12 +85,30 @@ def verify_completion(root, release, prepared):
         assert not marker.exists()
         first = call(complete)
         assert first['installation_complete'] is True and first['already_applied'] is False
+        if on_completed is not None: on_completed()
+        public_raw = public.read_bytes()
+        public_value = json.loads(public_raw)
+        assert set(public_value) == {'schema', 'result_id', 'installation_complete'}
+        assert public_value['installation_complete'] is True
+        assert public.stat().st_uid == 0 and public.stat().st_mode & 0o777 == 0o644
         stat = marker.stat()
         assert stat.st_uid == 0 and stat.st_mode & 0o777 == 0o600 and stat.st_nlink == 1
         raw = marker.read_bytes()
         record = json.loads(raw)
         assert record == dict(schema='gojet.installation-completion.v1', source=seal['source'],
             manifest_sha256=seal['manifest_sha256'], seal_sha256=__import__('hashlib').sha256((prepared/'seal.json').read_bytes()).hexdigest())
+        # Root marker survived but public receipt did not: explicit matching completion repairs it.
+        public.unlink()
+        public.symlink_to(marker)
+        call(complete, False)
+        assert public.is_symlink() and marker.read_bytes() == raw
+        public.unlink()
+        repeat = call(complete)
+        assert public.read_bytes() == public_raw
+        public.write_bytes(b'{}')
+        call(complete, False)
+        assert public.read_bytes() == b'{}' and marker.read_bytes() == raw
+        public.write_bytes(public_raw)
         repeat = call(complete)
         assert repeat['installation_complete'] is True and repeat['already_applied'] is True
         assert marker.read_bytes() == raw
@@ -101,7 +121,11 @@ def verify_completion(root, release, prepared):
         assert r.returncode == 0 and r.stdout == b'404' and not r.stderr
         for name, raw_before in original.items():
             assert (prepared/name).read_bytes() == raw_before
+        if on_verified is not None: on_verified()
     finally:
+        if public.exists() or public.is_symlink():
+            assert not public.is_symlink() and json.loads(public.read_text())["installation_complete"] is True
+            public.unlink()
         # Explicit removal solely to dismantle this isolated CI installation.
         if marker.exists() or marker.is_symlink():
             marker.unlink()

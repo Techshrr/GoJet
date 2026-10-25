@@ -118,6 +118,9 @@ jobs:
           php8.3 -l installer/bin/run-web-apply.php
           php8.3 -l installer/src/InstallationApply.php
           php8.3 -l installer/bin/apply-installation.php
+          php8.3 -l installer/src/InstallerRetirement.php
+          php8.3 -l installer/bin/retire-installer.php
+          php8.3 -l installer/src/InstallationResult.php
           php8.3 -l installer/src/InstallationCompletion.php
           php8.3 -l installer/bin/check-installation.php
           php8.3 -l installer/bin/complete-installation.php

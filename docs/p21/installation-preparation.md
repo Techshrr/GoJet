@@ -153,7 +153,9 @@ site is not recoverable through this teardown command.
 
 The original FPM pool, private state and receipts are retained for failure recovery.
 Only the public vhost is retired here; the product returns404 for `/install`.
-Final FPM/timer retirement and same-origin browser completion feedback remain open.
+The result observation and explicit post-completion retirement procedures below
+close the public feedback and owned runtime-resource lifecycle; their new native CI
+must pass before treating them as verified.
 Final installation authority still requires the existing live product health checks
 and atomic root completion lock, not this handover receipt.
 
@@ -284,7 +286,63 @@ records configuration/reload completion, not final installation or account healt
 
 The optional predecessor argument to preparation scheduling validates this lineage.
 First endpoint provisioning is implemented. Restart/scheduler publication recovery,
-post-handover FPM/timer retirement and browser completion feedback remain open. The old page is not automatically reset.
+remaining partial-publication cases and unified end-to-end acceptance remain open. The old page is not automatically reset.
+
+## Confirm the browser result
+
+A404 response from `/install` is not installation success. While authenticated,
+`GET /install/services` exposes a non-secret result identifier derived from the
+root-approved seal, only when the approval belongs to the current state. The page
+retains this identifier in memory. After the entry closes, it reads only the same
+origin's `/.well-known/gojet-installation-result`, with no credentials, URL token,
+redirect following, cache or automatic installation retry.
+
+After live product health checks and atomic publication of the private completion
+lock, root publishes `/var/lib/gojet-installation-result/result.json`. Its protected
+root0755 directory and root0644 file contain only a version, opaque result identifier
+and true completion flag. Nginx serves this exact file as JSON with no-store/nosniff
+headers, rejects symlinks and accepts only GET/HEAD. It never serves private state,
+credentials, the seal or completion-lock contents.
+
+The page shows completion and fixed relative Admin/site links only for the matching
+receipt. Missing, malformed, oversized, redirected, offline or unrelated results
+remain unconfirmed, with an explicit Check installation result button. A page that
+never obtained its approved identity cannot infer success from closure. This is an
+observation of the completed installation, not a continuous service-health claim.
+
+If root was interrupted after the completion lock but before receipt publication,
+rerun `complete-installation.php PREPARED` with the same verified plan. It preserves
+the private lock and may publish the missing receipt. An existing different, linked
+or unsafe public file is refused. Do not remove a real completion lock to retry.
+
+## Retire the completed Installer
+
+Once the root executor has finished, run
+`retire-installer.php PREPARED CURRENT_WEB_JSON` as root. For an unchanged entry,
+CURRENT_WEB_JSON is the original entry's `web.json`. After a configuration replacement,
+provide a root0600 JSON file containing the exact current eight NativeWebConfig
+renderer inputs; preserve the original entry directory and receipts. The command
+requires a matching completion lock and successful same-origin handover. It never
+starts an incomplete installation or turns a client flag into completion authority.
+
+The command takes the apply, activation and FPM locks; verifies the current pool's
+exact rendered bytes; and checks each discovered shipped scheduler's started/ready
+receipts, unit bytes, loaded fragment and absence of drop-ins. Active worker services,
+partial scheduler publication or changed resources require inspection. After a durable
+root retirement-started receipt, it disables/stops the registered timers, parks only
+`gojet-installer.conf` as `gojet-installer.conf.retired`, validates/reloads standard
+FPM and observes closure of the Installer socket. Other FPM pools and product services
+remain running. Unit files, private state, secrets, original web configuration,
+completion and recovery records are retained; this command is not a data eraser.
+
+A matching completed repeat verifies the retired resources. For an interrupted
+attempt, rerun the same command only after inspecting the private records. It can
+resume exact active/parked pool states and already-disabled timers without changing
+identity. Foreign/missing/ambiguous files are refused. The ready receipt is written
+only after timers are disabled and the socket is closed. No rollback reopens a
+completed public Installer. The independent public result remains available after
+FPM retirement. These retirement interruption cases are boundary fixtures in CI,
+not a claim of machine power-loss testing.
 
 ## Verification boundaries
 
@@ -295,7 +353,8 @@ observed progress and final completion. Replacement configuration is submitted t
 a real browser at the same Nginx endpoint after persistent system FPM switching
 and a real service restart, then prepared by its own timer. The switch regression
 also constructs a missing-ready-receipt boundary; this is not a power-loss claim.
-Same-origin handover coverage requires its corresponding native CI run to pass.
+Same-origin handover coverage passed at the commit recorded in STATUS. New result
+and retirement coverage requires its corresponding native CI run to pass.
 It exercises actual reload failure, a worker killed during native reload, explicit
 restoration of the Installer, protected foreign files, Nginx restart and product
 health/completion. Pre/post-rename interruption cases are constructed boundary
@@ -303,3 +362,9 @@ fixtures; they do not claim machine power-loss testing.
 Published-plan receipt interruption uses an explicitly constructed boundary fixture;
 it is not a SIGKILL or machine power-loss claim. Detailed evidence and remaining
 candidate/target-system obligations are summarized only in [STATUS.md](STATUS.md).
+
+The same-origin desktop/mobile result test uses an explicitly preapproved readiness
+state fixture and negative network fixtures. Its successful completion comes from
+actual Nginx handover, service/TLS health and the real root lock/receipt publisher;
+it does not claim that this new test repeats the entire interactive configuration
+journey. The separate existing browser configuration/apply/timer regressions remain.

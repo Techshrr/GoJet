@@ -67,12 +67,12 @@ try {
         if (!observed.size) await page.screenshot({path: path.join(output, name + '-running.png'), fullPage: true});
         observed.add(phases.get(title));
       }
-      if (title === 'Installer unavailable') {
+      if (title === 'Installation result unconfirmed') {
         // The lock can appear between the two GETs made by Refresh status.
-        assert.equal(await page.locator('#installer-refresh').isVisible(), false);
+        assert.equal(await page.locator('#installer-refresh').isVisible(), true);
         assert.equal(await page.locator('#installer-login').isVisible(), false);
         assert.ok(observed.size > 0, 'No actual worker phase observed');
-        assert.match(await page.locator('#installer-message').textContent(), /closed or unavailable/);
+        assert.match(await page.locator('#installer-message').textContent(), /completion has not yet been confirmed/);
         await page.screenshot({path: path.join(output, name + '-closed.png'), fullPage: true});
         item.closed = true;
       }

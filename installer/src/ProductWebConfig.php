@@ -117,6 +117,18 @@ server {
     if (\$ssl_server_name != "{$host}") { return 421; }
     client_max_body_size {$limit};
     access_log off;
+    location = /.well-known/gojet-installation-result {
+        if (\$request_method !~ ^(GET|HEAD)$) { return 405; }
+        alias /var/lib/gojet-installation-result/result.json;
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        disable_symlinks on;
+        open_file_cache off;
+        etag off;
+        if_modified_since off;
+    }
     location = /install { return 404; }
     location ^~ /install/ { return 404; }
 {$routes}

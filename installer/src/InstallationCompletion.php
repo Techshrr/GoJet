@@ -3,6 +3,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/SiteActivation.php';
+require_once __DIR__.'/InstallationResult.php';
 
 /** Fixed root completion authority, never a client-supplied success flag. */
 final class InstallationCompletion
@@ -96,6 +97,7 @@ final class InstallationCompletion
                     || ($state['seal_sha256'] ?? '') !== hash_file('sha256', $directory.'/seal.json')) {
                     throw new \RuntimeException('Existing completion authority');
                 }
+                InstallationResult::publish($state);
                 return ['source' => $seal['source'], 'installation_complete' => true, 'already_applied' => true];
             }
             $seal = self::health($directory);
@@ -114,6 +116,7 @@ final class InstallationCompletion
                 if (!unlink($tmp)) { throw new \RuntimeException('Completion staging cleanup failed'); }
                 self::sync();
             } finally { fclose($h); if (file_exists($tmp)) { unlink($tmp); } }
+            InstallationResult::publish($state);
             return ['source' => $seal['source'], 'installation_complete' => true, 'already_applied' => false];
         } finally { flock($lock, LOCK_UN); fclose($lock); }
     }

@@ -140,6 +140,10 @@ def verify_apply(root, release, source, digest, request):
             assert profile['admin']['password'] not in journal
             assert profile['configuration']['database']['password'] not in journal
     finally:
+        public = Path("/var/lib/gojet-installation-result/result.json")
+        if public.exists():
+            assert json.loads(public.read_text())["result_id"] == hashlib.sha256(("gojet.installation-result.v1\n"+hashlib.sha256((destination/"seal.json").read_bytes()).hexdigest()).encode()).hexdigest()
+            public.unlink()
         # Root mailbox artifacts belong solely to this disposable fixture.
         binding = marker.parent/'web-apply.json'
         if binding.exists():

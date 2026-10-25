@@ -1,4 +1,5 @@
 """Exercise shipped site activation, real reload failure, and TLS to actual daemons."""
+from contextlib import ExitStack
 import fcntl
 import hashlib
 import json
@@ -7,6 +8,8 @@ from pathlib import Path
 import subprocess
 import time
 from native_installation_completion_test import verify_completion
+from native_result_browser import observe_result
+from native_installer_retirement_test import verify_retirement
 
 
 def verify_site(root, release, prepared, profile):
@@ -16,6 +19,8 @@ def verify_site(root, release, prepared, profile):
     saved_site = Path(str(entry_site)+'.handover')
     pool = Path('/etc/php/8.3/fpm/pool.d/gojet-installer.conf')
     authority = Path('/var/lib/gojet-installer-authority')
+    scheduler_owned = {}
+    observers = ExitStack()
     entry_owned = {}
     entry_raw = None
     conflict = Path('/etc/nginx/conf.d/p21-existing.conf')
@@ -252,6 +257,19 @@ def verify_site(root, release, prepared, profile):
         assert curl('/install/')[0] == 401
         assert (prepared/'data/journal.json').read_bytes() == data_before
         assert (prepared/'services.json').read_bytes() == services_before
+        # Real shipped preparation scheduler, idle because this entry has no draft.
+        schedule = subprocess.run(['php8.3', str(release/'installer/bin/install-web-preparation-schedule.php'),
+            str(entry/'binding.json'), str(entry/'state')], capture_output=True, timeout=120)
+        assert schedule.returncode == 0 and not schedule.stderr, 'Preparation scheduler for retirement failed'
+        for path in [Path('/etc/systemd/system/gojet-installer-preparation.service'),
+                     Path('/etc/systemd/system/gojet-installer-preparation.timer'),
+                     authority/'preparation-schedule-started.json', authority/'preparation-schedule-ready.json']:
+            scheduler_owned[path] = path.read_bytes()
+        premature = subprocess.run(['php8.3', str(release/'installer/bin/retire-installer.php'),
+            str(prepared), str(entry/'web.json')], capture_output=True, timeout=120)
+        assert premature.returncode == 1 and not (authority/'retirement-started.json').exists()
+        wait_result = observers.enter_context(observe_result(root, release, prepared, entry, profile['origin'],
+            'native-handover-fixture-token-0123456789'))
         result = call()
         assert result.returncode == 0 and not result.stderr, 'Root site activation failed'
         assert json.loads(result.stdout) == dict(site_configured=True, already_applied=False, installation_complete=False)
@@ -283,8 +301,10 @@ def verify_site(root, release, prepared, profile):
         journal = (prepared/'site.json').read_text()
         assert profile['database']['password'] not in journal and profile['secrets']['admin'] not in journal
         assert not Path('/var/lib/gojet-installer-authority/installed.lock').exists()
-        verify_completion(root, release, prepared)
+        verify_completion(root, release, prepared, on_completed=wait_result,
+            on_verified=lambda: verify_retirement(root, release, prepared, entry, scheduler_owned))
     finally:
+        observers.close()
         if override.exists():
             override.unlink()
             ctl('daemon-reload')
@@ -298,8 +318,20 @@ def verify_site(root, release, prepared, profile):
                 assert entry_raw is not None and not p.is_symlink() and p.read_bytes() == entry_raw
                 p.unlink()
         for p, raw in entry_owned.items():
-            assert p.read_bytes() == raw
-            p.unlink()
+            current = Path(str(p)+'.retired') if p == pool and not p.exists() else p
+            assert current.read_bytes() == raw
+            current.unlink()
+        if scheduler_owned:
+            ctl('disable', '--now', 'gojet-installer-preparation.timer')
+            ctl('stop', 'gojet-installer-preparation.service')
+            for p, raw in scheduler_owned.items():
+                assert p.read_bytes() == raw
+                p.unlink()
+            ctl('daemon-reload')
+        for p in [authority/'retirement-ready.json', authority/'retirement-started.json']:
+            if p.exists():
+                assert json.loads(p.read_text())['seal_sha256'] == hashlib.sha256((prepared/'seal.json').read_bytes()).hexdigest()
+                p.unlink()
         if entry_owned: ctl('reload', 'php8.3-fpm.service')
         subprocess.run(['nginx', '-t'], check=True, capture_output=True, timeout=15)
         ctl('reload', 'nginx.service')

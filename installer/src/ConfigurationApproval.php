@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/CompletionLock.php';
 require_once __DIR__.'/ApplyRequest.php';
+require_once __DIR__.'/InstallationResult.php';
 
 /** Root-owned approval only; FPM reads it without receiving private plan paths or credentials. */
 final class ConfigurationApproval
@@ -31,6 +32,20 @@ final class ConfigurationApproval
         $f = fopen($path, 'rb');
         if ($f === false) { throw new \RuntimeException('Approval unavailable'); }
         try { if (!fsync($f)) { throw new \RuntimeException('Approval sync failed'); } } finally { fclose($f); }
+    }
+    /** Authenticated observation only; no draft approval or completion authority. */
+    public static function resultId(string $authority, string $state): ?string
+    {
+        try {
+            $path = $authority.'/configuration-approval.json'; clearstatcache(true, $path); $s = @lstat($path);
+            if ($s === false || ($s['mode'] & 0177777) !== 0100640 || $s['uid'] !== 0
+                || $s['gid'] !== filegroup($state) || $s['nlink'] !== 1 || $s['size'] > 4096) { return null; }
+            $raw = file_get_contents($path);
+            if ($raw === false || strlen($raw) > 4096) { return null; }
+            $value = json_decode($raw, true, 8, JSON_THROW_ON_ERROR); self::validate($value);
+            if (!hash_equals($value['state_sha256'], hash('sha256', $state))) { return null; }
+            return InstallationResult::id($value['seal_sha256']);
+        } catch (\Throwable) { return null; }
     }
     public static function read(string $authority, string $state, string $draftHash): array
     {
