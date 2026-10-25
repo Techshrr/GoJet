@@ -13,6 +13,7 @@ final class WebConfigurationPreparation
         $authority = '/var/lib/gojet-installer-authority';
         CompletionLock::verifyProvisioningPath($authority.'/installed.lock');
         if ((new CompletionLock($authority.'/installed.lock'))->exists()) { throw new \RuntimeException('Installer unavailable'); }
+        self::notRetired($bindingPath);
         CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
         CompletionLock::verifyProvisioningPath(dirname($directory).'/installed.lock');
         $binding = ApplyRequest::read($bindingPath, 0);
@@ -47,6 +48,7 @@ ConditionPathExists={$bindingPath}
 ConditionPathExists={$directory}/configuration-draft.json
 ConditionPathExists=!{$bindingPath}.started.json
 ConditionPathExists=!{$bindingPath}.ready.json
+ConditionPathExists=!{$bindingPath}.retired.json
 ConditionPathExists=!{$authority}/installed.lock
 
 [Service]
@@ -102,6 +104,25 @@ UNIT,
 
     private static function execute(string $bindingPath, string $directory, ?string $sealHash): array
     {
+        return self::withWorkerLock($bindingPath, fn() => self::runLocked($bindingPath, $directory, $sealHash));
+    }
+
+    /** A replacement is a new attempt, not a reset of the frozen state or failed receipts. */
+    public static function restart(string $bindingPath, string $directory, string $successor, string $draftHash, string $bootstrapHash): array
+    {
+        require_once __DIR__.'/WebConfigurationRestart.php';
+        return self::withWorkerLock($bindingPath, fn() => WebConfigurationRestart::create($bindingPath, $directory, $successor, $draftHash, $bootstrapHash));
+    }
+
+    private static function notRetired(string $bindingPath): void
+    {
+        if (file_exists($bindingPath.'.retired.json') || is_link($bindingPath.'.retired.json')) {
+            throw new \RuntimeException('Preparation attempt retired');
+        }
+    }
+
+    private static function withWorkerLock(string $bindingPath, callable $operation): array
+    {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
         // Both the normal worker and recovery hold this stable root-only inode throughout.
@@ -116,7 +137,7 @@ UNIT,
             if ($s === false || $opened === false || $s['dev'] !== $opened['dev'] || $s['ino'] !== $opened['ino']
                 || ($s['mode'] & 0177777) !== 0100600 || $s['uid'] !== 0 || $s['nlink'] !== 1 || $s['size'] !== 0
                 || !flock($lock, LOCK_EX | LOCK_NB)) { throw new \RuntimeException('Worker busy or unsafe'); }
-            return self::runLocked($bindingPath, $directory, $sealHash);
+            return $operation();
         } finally { flock($lock, LOCK_UN); fclose($lock); }
     }
 
@@ -125,6 +146,7 @@ UNIT,
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
         CompletionLock::verifyProvisioningPath(dirname($directory).'/installed.lock');
+        self::notRetired($bindingPath);
         if ((new CompletionLock('/var/lib/gojet-installer-authority/installed.lock'))->exists()) {
             throw new \RuntimeException('Installer unavailable');
         }

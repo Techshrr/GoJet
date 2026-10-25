@@ -131,6 +131,8 @@ jobs:
           php8.3 -l installer/src/WebConfigurationPreparation.php
           php8.3 -l installer/bin/run-web-preparation.php
           php8.3 -l installer/bin/recover-web-preparation.php
+          php8.3 -l installer/src/WebConfigurationRestart.php
+          php8.3 -l installer/bin/restart-web-configuration.php
           php8.3 -l installer/bin/render-web-preparation-schedule.php
           php8.3 -l installer/bin/install-web-preparation-schedule.php
           php8.3 -l installer/bin/prepare-installation.php

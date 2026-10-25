@@ -360,3 +360,48 @@ existing real approval/apply/recovery flow. No genuine attempt receipt is remove
 This command does not recover an absent/partial plan, permit editing a frozen invalid
 configuration, or reset scheduler publication. Those recovery paths remain separate
 unfinished work; do not delete receipts or regenerate service keys to bypass them.
+
+
+### Replace an invalid frozen configuration before any plan is published
+
+The root command `restart-web-configuration.php BINDING STATE NEW_DIRECTORY
+EXPECTED_DRAFT_SHA256 BOOTSTRAP_SHA256` retires an unpublished attempt and initializes
+a separate attempt. Root must review the old frozen draft digest and select an absent
+new directory beneath a root-controlled parent. The bootstrap digest is for the token
+that will be used with the new installer FPM configuration; the token itself is never
+passed on the command line or copied into state.
+
+Restart shares the preparation worker lock, verifies the package and exact old draft,
+and refuses a published plan, ready receipt, approval/apply artifact, final completion,
+unsafe/conflicting path or mismatched started record. It first writes an exclusive,
+durable root-private `BINDING.retired.json`. The old worker, recovery command and timer
+renderer thereafter refuse this attempt; the service condition also skips retired
+attempts. The old binding, draft, state and started receipt are never replaced or
+removed. An interrupted restart remains retired and requires inspection, not automatic
+retry. Restart is not a way to discard or regenerate an already published plan's keys.
+
+The new directory contains root0600 `binding.json` with a new `prepared` destination,
+and a fresh installer0700 `state` directory. Root initializes it while its enclosing
+directory is still root0700, transfers only those newly created state files to the
+installer account, writes the replacement receipt, and finally makes the enclosing
+directory traversable (root0755). No existing FPM-owned file is written by root.
+Old session/CSRF values, approvals, configuration and generated keys are not copied.
+The result prints the new binding/state/prepared paths, never credentials.
+
+This is currently an operator recovery entry point. The active installer FPM state
+and bootstrap digest must be switched to the returned state/new token, and the old
+preparation timer disabled before provisioning scheduling for the replacement.
+Existing scheduler units/receipts are intentionally not overwritten by this command.
+Automatic FPM/timer handoff, restart-publication recovery and the corresponding
+browser experience remain unfinished; the old page must not be described as reset.
+The ordinary root preparation CLI can consume the new binding and state after fresh
+submission, and root approval plus browser apply remain separate.
+
+Native regression submits a shape-valid but semantically invalid administrator
+email as the unprivileged installer and runs the real preparation worker to failure
+before plan publication. It covers nonroot/digest/lock/path/approval/plan conflicts,
+a simulated interrupted retirement, old-worker/renderer/recovery refusal, preserved
+old bytes, fresh ownership/session state, rejection of the old session, and corrected
+submission followed by real native preparation without automatic approval or data
+execution. These restart submissions use the state authority as the real installer
+account; they are not a claim of a browser/FPM handoff test.
