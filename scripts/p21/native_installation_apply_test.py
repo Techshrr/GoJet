@@ -33,11 +33,35 @@ def verify_apply(root, release, source, digest, request):
     del draft['tls']; del draft['configuration']['secrets']
     for key in ['root', 'clamav_socket']:
         del draft['configuration']['files'][key]
+    worker = ['php8.3', str(release/'installer/bin/run-web-preparation.php'), str(binding), str(state)]
+    started = Path(str(binding)+'.started.json'); ready = Path(str(binding)+'.ready.json')
+    def preparation(ok=True, nonroot=False):
+        result = subprocess.run((['runuser', '-u', 'gojet-installer', '--'] if nonroot else [])+worker,
+            capture_output=True, timeout=120)
+        if not ok:
+            assert result.returncode == 1 and not result.stdout
+            return
+        assert result.returncode == 0 and not result.stderr, 'Root preparation worker failed'
+        return json.loads(result.stdout)
+    def waiting():
+        assert preparation() == dict(prepared=False, waiting_for_configuration=True, installation_complete=False)
+        assert not started.exists() and not ready.exists() and not destination.exists()
     submit_configuration_browser(root, release, state, marker.parent,
-        'native-configuration-fixture-token-0123456789', draft)
-    prepare = subprocess.run(['php8.3', str(release/'installer/bin/prepare-frozen-web-configuration.php'), str(binding), str(state)],
-        capture_output=True, timeout=90)
-    assert prepare.returncode == 0 and not prepare.stderr
+        'native-configuration-fixture-token-0123456789', draft, before_submit=waiting)
+    preparation(False, True)
+    assert not started.exists() and not ready.exists() and not destination.exists()
+    # Only an injected interrupted-attempt fixture is removed, never a real attempt record.
+    started.write_text('{}'); started.chmod(0o600)
+    preparation(False)
+    assert started.read_text() == '{}' and not ready.exists() and not destination.exists()
+    started.unlink()
+    assert preparation() == dict(prepared=True, already_prepared=False, installation_complete=False)
+    sealed = {str(p.relative_to(destination)): p.read_bytes() for p in destination.rglob('*') if p.is_file()}
+    assert preparation() == dict(prepared=True, already_prepared=True, installation_complete=False)
+    assert sealed == {str(p.relative_to(destination)): p.read_bytes() for p in destination.rglob('*') if p.is_file()}
+    for receipt in [started, ready]:
+        assert receipt.stat().st_uid == 0 and receipt.stat().st_mode & 0o777 == 0o600
+    assert not (state/'apply-request.json').exists() and not (state/'apply-approval.json').exists()
     command = ['php8.3', str(release/'installer/bin/apply-installation.php'), str(destination)]
 
     def sql(query):

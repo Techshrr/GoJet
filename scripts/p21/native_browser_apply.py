@@ -111,13 +111,15 @@ def observe_browser(root, release, state, authority, token):
                     pipe.close()
 
 
-def submit_configuration_browser(root, release, state, authority, token, draft):
+def submit_configuration_browser(root, release, state, authority, token, draft, before_submit=None):
     """Provision an empty state, then let only the shipped browser/HTTP path publish its draft."""
     initialize = 'require $argv[1]."/installer/src/InstallState.php";'
     initialize += '(new GoJet\\Installer\\InstallState($argv[2],hash("sha256",stream_get_contents(STDIN))))->initialize();'
     result = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', '-r', initialize,
         str(release), str(state)], input=token.encode(), capture_output=True, timeout=30)
     assert result.returncode == 0 and not result.stdout and not result.stderr
+    if before_submit is not None:
+        before_submit()
     repo = Path(__file__).resolve().parents[2]
     with browser_endpoint(root, release, state, authority, token, 'browser-configuration') as origin:
         result = subprocess.run([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_configuration_browser_test.mjs')],
