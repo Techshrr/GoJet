@@ -327,3 +327,36 @@ preparation, no automatic approval/apply request, and the original immutable rep
 check before continuing the existing approval/apply/recovery chain. CI must pass for
 this change before these checks count as evidence. Binding/bootstrap provisioning,
 explicit preparation recovery and exact Ubuntu 24.04.4 acceptance remain open.
+
+
+### Recover a published preparation with a missing success receipt
+
+`recover-web-preparation.php BINDING STATE EXPECTED_SEAL_SHA256` is a separate root
+operation for one boundary: the complete sealed plan exists, but its worker did not
+finish publishing the ready receipt. Stop the preparation timer/service and inspect
+the private attempt, binding and plan before choosing the expected seal digest.
+Pass the reviewed SHA256 as an explicit argument; the command does not select a plan
+or reset an attempt automatically.
+
+Normal workers and recovery now hold the same root0600, single-link, empty
+`BINDING.worker.lock` for the entire operation. Busy, linked, writable or malformed
+locks refuse the operation. Recovery requires the original started identity, exact
+package/source/release, intact plan and TLS files, current dependencies, and frozen
+web-draft provenance. It rejects any approval/apply marker, phase journal or final
+completion node. A changed draft, missing plan, wrong digest or invalid existing
+ready receipt remains blocked. Valid recovery writes only the missing root0600
+ready receipt; it preserves the started barrier, plan, web state and generated keys.
+A matching repeat verifies and acknowledges the existing receipt without rewriting.
+It neither approves nor executes installation.
+
+The native regression constructs the precise published-plan/missing-receipt boundary
+in a disposable second plan using the real preparation API. This is an explicit
+boundary fixture, not a claim of SIGKILL timing coverage. It checks nonroot rejection,
+shared-lock contention, unsafe lock permissions/hardlinks, digest/plan/draft changes,
+phase/approval/completion barriers, conflicting receipts, successful recovery and
+byte-preserving repeats. The original browser/timer plan then continues through the
+existing real approval/apply/recovery flow. No genuine attempt receipt is removed.
+
+This command does not recover an absent/partial plan, permit editing a frozen invalid
+configuration, or reset scheduler publication. Those recovery paths remain separate
+unfinished work; do not delete receipts or regenerate service keys to bypass them.

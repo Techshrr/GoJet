@@ -90,6 +90,38 @@ UNIT,
 
     public static function run(string $bindingPath, string $directory): array
     {
+        return self::execute($bindingPath, $directory, null);
+    }
+
+    /** Explicit recovery of an already published plan; never rebuild or remove a barrier. */
+    public static function recover(string $bindingPath, string $directory, string $sealHash): array
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/D', $sealHash)) { throw new \RuntimeException('Expected seal digest required'); }
+        return self::execute($bindingPath, $directory, $sealHash);
+    }
+
+    private static function execute(string $bindingPath, string $directory, ?string $sealHash): array
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
+        // Both the normal worker and recovery hold this stable root-only inode throughout.
+        $path = $bindingPath.'.worker.lock';
+        clearstatcache();
+        if (is_link($path) || (file_exists($path) && !is_file($path))) { throw new \RuntimeException('Unsafe worker lock'); }
+        $old = umask(0077);
+        try { $lock = @fopen($path, 'c+b'); } finally { umask($old); }
+        if ($lock === false) { throw new \RuntimeException('Worker lock unavailable'); }
+        try {
+            clearstatcache(); $s = lstat($path); $opened = fstat($lock);
+            if ($s === false || $opened === false || $s['dev'] !== $opened['dev'] || $s['ino'] !== $opened['ino']
+                || ($s['mode'] & 0177777) !== 0100600 || $s['uid'] !== 0 || $s['nlink'] !== 1 || $s['size'] !== 0
+                || !flock($lock, LOCK_EX | LOCK_NB)) { throw new \RuntimeException('Worker busy or unsafe'); }
+            return self::runLocked($bindingPath, $directory, $sealHash);
+        } finally { flock($lock, LOCK_UN); fclose($lock); }
+    }
+
+    private static function runLocked(string $bindingPath, string $directory, ?string $sealHash): array
+    {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
         CompletionLock::verifyProvisioningPath(dirname($directory).'/installed.lock');
@@ -106,6 +138,9 @@ UNIT,
         $identity = ['schema' => 1, 'binding_sha256' => hash('sha256', json_encode($binding, JSON_THROW_ON_ERROR)),
             'state_sha256' => hash('sha256', $directory)];
         $started = $bindingPath.'.started.json'; $ready = $bindingPath.'.ready.json';
+        if ($sealHash !== null) {
+            return self::recoverPublished($bindingPath, $directory, $binding, $identity, $sealHash);
+        }
         if (file_exists($ready) || is_link($ready)) {
             $receipt = ApplyRequest::read($ready, 0);
             $attempt = ApplyRequest::read($started, 0);
@@ -139,5 +174,45 @@ UNIT,
         InstallationPreparation::verify($binding['destination']);
         ApplyRequest::write($ready, $identity + ['seal_sha256' => hash_file('sha256', $binding['destination'].'/seal.json')]);
         return ['prepared' => true, 'already_prepared' => false, 'installation_complete' => false];
+    }
+
+    private static function recoverPublished(string $bindingPath, string $directory, array $binding, array $identity, string $sealHash): array
+    {
+        $destination = $binding['destination'];
+        if (ApplyRequest::read($bindingPath.'.started.json', 0) !== $identity) { throw new \RuntimeException('Preparation attempt mismatch'); }
+        // Recovery is confined to preparation. Never adopt an approved or executed installation.
+        foreach (['/var/lib/gojet-installer-authority/web-apply.json',
+            '/var/lib/gojet-installer-authority/configuration-approval.json',
+            '/var/lib/gojet-installer-authority/web-apply-started.json',
+            $directory.'/apply-approval.json', $directory.'/apply-request.json',
+            $destination.'/data/journal.json', $destination.'/services.json', $destination.'/site.json'] as $path) {
+            if (file_exists($path) || is_link($path)) { throw new \RuntimeException('Preparation already advanced'); }
+        }
+        $account = posix_getpwnam('gojet-installer');
+        if ($account === false || $account['uid'] <= 0) { throw new \RuntimeException('Installer account required'); }
+        $snapshot = ConfigurationDraft::frozen($directory, $account['uid']);
+        $seal = InstallationPreparation::verify($destination);
+        foreach (['release', 'source', 'manifest_sha256'] as $key) {
+            if ($seal[$key] !== $binding[$key]) { throw new \RuntimeException('Prepared binding mismatch'); }
+        }
+        if (!isset($seal['files']['web-draft.json'])
+            || !hash_equals($sealHash, hash_file('sha256', $destination.'/seal.json'))
+            || ApplyRequest::read($destination.'/web-draft.json', 0) !== ['schema' => 1,
+                'state_sha256' => $identity['state_sha256'], 'draft_sha256' => $snapshot['sha256'], 'uid' => $account['uid']]) {
+            throw new \RuntimeException('Published preparation mismatch');
+        }
+        $after = ConfigurationDraft::frozen($directory, $account['uid']);
+        if (!hash_equals($snapshot['sha256'], $after['sha256']) || ApplyRequest::read($bindingPath, 0) !== $binding) {
+            throw new \RuntimeException('Preparation input changed');
+        }
+        $receipt = $identity + ['seal_sha256' => $sealHash];
+        $path = $bindingPath.'.ready.json';
+        $already = file_exists($path) || is_link($path);
+        if ($already) {
+            if (ApplyRequest::read($path, 0) !== $receipt) { throw new \RuntimeException('Existing receipt mismatch'); }
+        } else {
+            ApplyRequest::write($path, $receipt);
+        }
+        return ['prepared' => true, 'recovered' => true, 'already_prepared' => $already, 'installation_complete' => false];
     }
 }

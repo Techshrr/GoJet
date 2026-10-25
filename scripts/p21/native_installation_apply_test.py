@@ -13,6 +13,7 @@ from native_prepared_services_test import SERVICES
 from native_web_apply_test import prepare_web_apply
 from native_browser_apply import submit_configuration_browser
 from native_preparation_schedule_test import preparation_schedule
+from native_preparation_recovery_test import verify_preparation_recovery
 
 
 def verify_apply(root, release, source, digest, request):
@@ -67,6 +68,7 @@ def verify_apply(root, release, source, digest, request):
     for receipt in [started, ready]:
         assert receipt.stat().st_uid == 0 and receipt.stat().st_mode & 0o777 == 0o600
     assert not (state/'apply-request.json').exists() and not (state/'apply-approval.json').exists()
+    verify_preparation_recovery(root, release, binding, state, marker.parent)
     command = ['php8.3', str(release/'installer/bin/apply-installation.php'), str(destination)]
 
     def sql(query):
