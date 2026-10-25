@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import pwd
 import subprocess
+from native_browser_apply import submit_configuration_browser
+from native_preparation_schedule_test import preparation_schedule
 
 
 def verify_configuration_restart(root, release, original_binding, original_state, authority):
@@ -101,27 +103,21 @@ def verify_configuration_restart(root, release, original_binding, original_state
     assert subprocess.run(render, capture_output=True, timeout=120).returncode == 1
     recovery = ['php8.3', str(release/'installer/bin/recover-web-preparation.php'), str(binding), str(state), '0'*64]
     assert subprocess.run(recovery, capture_output=True, timeout=120).returncode == 1
-    next_worker = worker[:-2]+[str(successor/'binding.json'), str(new_state)]
-    waiting = subprocess.run(next_worker, capture_output=True, timeout=120)
-    assert waiting.returncode == 0 and not waiting.stderr
-    assert json.loads(waiting.stdout) == dict(prepared=False, waiting_for_configuration=True, installation_complete=False)
     # The former session cannot read or submit against the newly initialized state.
     deny = 'require $argv[1]."/installer/src/InstallState.php";$v=json_decode(stream_get_contents(STDIN),true);'
     deny += '$s=new GoJet\\Installer\\InstallState($argv[2],hash("sha256",$v["token"]));'
-    deny += 'try{$s->inspect($v["session"]);exit(2);}catch(Throwable){}'
     deny += 'try{$s->submitConfiguration($v["session"],$v["csrf"],$v["draft"]);exit(3);}catch(Throwable){}'
     denied = as_installer(deny, new_state, dict(token=token, session=old_auth['session'], csrf=old_auth['csrf'], draft=draft))
     assert denied.returncode == 0 and not denied.stdout and not denied.stderr
     assert not (new_state/'configuration-draft.json').exists()
-    # Corrected data still requires fresh authentication and the normal frozen-draft preparation path.
-    submit = 'require $argv[1]."/installer/src/InstallState.php";$v=json_decode(stream_get_contents(STDIN),true);'
-    submit += '$s=new GoJet\\Installer\\InstallState($argv[2],hash("sha256",$v["token"]));$a=$s->authenticate($v["token"]);'
-    submit += '$s->submitConfiguration($a["session"],$a["csrf"],$v["draft"]);'
-    result = as_installer(submit, new_state, dict(token=token, draft=draft))
-    assert result.returncode == 0 and not result.stdout and not result.stderr
-    prepared = subprocess.run(next_worker, capture_output=True, timeout=120)
-    assert prepared.returncode == 0 and not prepared.stderr
-    assert json.loads(prepared.stdout) == dict(prepared=True, already_prepared=False, installation_complete=False)
+    # Corrected data now comes from the real browser/FPM; the new timer alone prepares it.
+    existing_schedule_receipts = {p: p.read_bytes() for p in authority.glob('preparation-schedule-*.json')}
+    with preparation_schedule(release, successor/'binding.json', new_state, successor/'prepared', authority,
+                              predecessor=binding) as wait_prepared:
+        submit_configuration_browser(root, release, new_state, authority, token, draft, initialized=True,
+                                     evidence_name='browser-replacement', old_session=old_auth['session'])
+        wait_prepared()
+    assert all(p.read_bytes() == raw for p, raw in existing_schedule_receipts.items())
     proof = json.loads((successor/'prepared/web-draft.json').read_text())
     assert proof['state_sha256'] == hashlib.sha256(str(new_state).encode()).hexdigest()
     assert proof['draft_sha256'] == hashlib.sha256((new_state/'configuration-draft.json').read_bytes()).hexdigest()

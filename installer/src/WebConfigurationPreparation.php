@@ -7,7 +7,7 @@ require_once __DIR__.'/InstallationPreparation.php';
 final class WebConfigurationPreparation
 {
     /** Validate the root-selected inputs before publishing a fixed preparation timer. */
-    public static function schedule(string $bindingPath, string $directory): array
+    public static function schedule(string $bindingPath, string $directory, ?string $predecessor = null): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         $authority = '/var/lib/gojet-installer-authority';
@@ -39,8 +39,15 @@ final class WebConfigurationPreparation
             || !in_array($state['status'] ?? null, ['ready', 'checking'], true)) { throw new \RuntimeException('Invalid preparation state'); }
         $release = $binding['release'];
         PackageIntegrity::verify($release, $binding['manifest_sha256'], $binding['source']);
+        $kind = 'preparation';
+        if ($predecessor !== null) {
+            require_once __DIR__.'/WebConfigurationRestart.php';
+            $kind = WebConfigurationRestart::scheduleKind($bindingPath, $directory, $predecessor);
+        }
+        $service = 'gojet-installer-'.$kind.'.service';
+        $timer = 'gojet-installer-'.$kind.'.timer';
         return [
-            'gojet-installer-preparation.service' => <<<UNIT
+            $service => <<<UNIT
 [Unit]
 Description=Prepare the submitted GoJet configuration for root approval
 After=network.target
@@ -71,7 +78,7 @@ StandardOutput=null
 StandardError=journal
 
 UNIT,
-            'gojet-installer-preparation.timer' => <<<UNIT
+            $timer => <<<UNIT
 [Unit]
 Description=Observe submitted GoJet configuration
 ConditionPathExists={$bindingPath}
@@ -81,7 +88,7 @@ ConditionPathExists=!{$authority}/installed.lock
 OnActiveSec=1s
 OnCalendar=*-*-* *:*:00/10
 AccuracySec=1s
-Unit=gojet-installer-preparation.service
+Unit={$service}
 
 [Install]
 WantedBy=timers.target

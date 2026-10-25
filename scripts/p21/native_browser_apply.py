@@ -111,19 +111,21 @@ def observe_browser(root, release, state, authority, token):
                     pipe.close()
 
 
-def submit_configuration_browser(root, release, state, authority, token, draft, before_submit=None):
+def submit_configuration_browser(root, release, state, authority, token, draft, before_submit=None,
+                                 initialized=False, evidence_name="browser-configuration", old_session=None):
     """Provision an empty state, then let only the shipped browser/HTTP path publish its draft."""
-    initialize = 'require $argv[1]."/installer/src/InstallState.php";'
-    initialize += '(new GoJet\\Installer\\InstallState($argv[2],hash("sha256",stream_get_contents(STDIN))))->initialize();'
-    result = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', '-r', initialize,
-        str(release), str(state)], input=token.encode(), capture_output=True, timeout=30)
-    assert result.returncode == 0 and not result.stdout and not result.stderr
+    if not initialized:
+        initialize = 'require $argv[1]."/installer/src/InstallState.php";'
+        initialize += '(new GoJet\\Installer\\InstallState($argv[2],hash("sha256",stream_get_contents(STDIN))))->initialize();'
+        result = subprocess.run(['runuser', '-u', 'gojet-installer', '--', 'php8.3', '-r', initialize,
+            str(release), str(state)], input=token.encode(), capture_output=True, timeout=30)
+        assert result.returncode == 0 and not result.stdout and not result.stderr
     if before_submit is not None:
         before_submit()
     repo = Path(__file__).resolve().parents[2]
-    with browser_endpoint(root, release, state, authority, token, 'browser-configuration') as origin:
+    with browser_endpoint(root, release, state, authority, token, evidence_name) as origin:
         result = subprocess.run([os.environ['P21_NODE'], str(repo/'scripts/p21/installer_configuration_browser_test.mjs')],
-            input=json.dumps(dict(origin=origin, token=token, draft=draft)), cwd=repo,
+            input=json.dumps(dict(origin=origin, token=token, draft=draft, evidence_name=evidence_name, old_session=old_session)), cwd=repo,
             capture_output=True, text=True, timeout=120)
         assert result.returncode == 0 and not result.stdout and not result.stderr, 'Native browser configuration failed'
     assert json.loads((state/'configuration-draft.json').read_text()) == draft, 'Browser draft content mismatch'

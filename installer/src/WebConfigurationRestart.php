@@ -7,6 +7,35 @@ require_once __DIR__.'/InstallState.php';
 /** Invoked under the preparation worker lock. Publishes a fresh, isolated attempt. */
 final class WebConfigurationRestart
 {
+    /** Authenticate the root-created replacement before enabling its own preparation timer. */
+    public static function scheduleKind(string $bindingPath, string $directory, string $predecessor): string
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        $successor = dirname($bindingPath);
+        foreach ([dirname($predecessor), $successor] as $parent) { CompletionLock::verifyProvisioningPath($parent.'/installed.lock'); }
+        if ($bindingPath !== $successor.'/binding.json' || $directory !== $successor.'/state'
+            || (fileperms($successor) & 07777) !== 0755) { throw new \RuntimeException('Replacement not activated'); }
+        $previous = ApplyRequest::read($predecessor, 0);
+        $retired = ApplyRequest::read($predecessor.'.retired.json', 0);
+        $ready = ApplyRequest::read($predecessor.'.replacement-ready.json', 0);
+        if (array_keys($retired) !== ['schema', 'binding_sha256', 'state_sha256', 'draft_sha256', 'successor_sha256']
+            || $retired['schema'] !== 1) { throw new \RuntimeException('Invalid retirement identity'); }
+        foreach (['binding_sha256', 'state_sha256', 'draft_sha256', 'successor_sha256'] as $key) {
+            if (!is_string($retired[$key]) || !preg_match('/^[a-f0-9]{64}$/D', $retired[$key])) { throw new \RuntimeException('Invalid retirement digest'); }
+        }
+        $next = ApplyRequest::read($bindingPath, 0);
+        if (!hash_equals($retired['binding_sha256'], hash('sha256', json_encode($previous, JSON_THROW_ON_ERROR)))
+            || !hash_equals($retired['successor_sha256'], hash('sha256', $successor))) {
+            throw new \RuntimeException('Replacement lineage mismatch');
+        }
+        $expected = $previous; $expected['destination'] = $successor.'/prepared';
+        if ($next !== $expected || $ready !== ['schema' => 1, 'successor_sha256' => hash('sha256', $successor),
+            'binding_sha256' => hash('sha256', json_encode($next, JSON_THROW_ON_ERROR))]) {
+            throw new \RuntimeException('Replacement publication mismatch');
+        }
+        return 'preparation-'.hash('sha256', $bindingPath);
+    }
+
     private static function absent(string $path): void
     {
         clearstatcache(true, $path);

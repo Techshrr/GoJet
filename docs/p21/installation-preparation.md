@@ -389,19 +389,27 @@ Old session/CSRF values, approvals, configuration and generated keys are not cop
 The result prints the new binding/state/prepared paths, never credentials.
 
 This is currently an operator recovery entry point. The active installer FPM state
-and bootstrap digest must be switched to the returned state/new token, and the old
-preparation timer disabled before provisioning scheduling for the replacement.
-Existing scheduler units/receipts are intentionally not overwritten by this command.
-Automatic FPM/timer handoff, restart-publication recovery and the corresponding
-browser experience remain unfinished; the old page must not be described as reset.
-The ordinary root preparation CLI can consume the new binding and state after fresh
-submission, and root approval plus browser apply remain separate.
+and bootstrap digest must be switched to the returned state/new token. The existing
+`render-web-preparation-schedule.php NEW_BINDING NEW_STATE OLD_BINDING` and
+`install-web-preparation-schedule.php NEW_BINDING NEW_STATE OLD_BINDING` commands now
+accept an optional predecessor binding. They verify its root retirement/replacement
+receipts and the exact successor binding, then use a deterministic per-binding timer
+name and separate provisioning receipts. Existing units and receipts are preserved;
+the retired attempt cannot run. The original two-argument scheduling entry is unchanged.
+The new timer can be installed before configuration submission and waits for its draft.
+Automatic persistent FPM configuration switching and restart-publication recovery
+remain unfinished; the old page must not be described as reset. Root approval and
+browser apply remain separate after new preparation.
 
 Native regression submits a shape-valid but semantically invalid administrator
 email as the unprivileged installer and runs the real preparation worker to failure
 before plan publication. It covers nonroot/digest/lock/path/approval/plan conflicts,
 a simulated interrupted retirement, old-worker/renderer/recovery refusal, preserved
-old bytes, fresh ownership/session state, rejection of the old session, and corrected
-submission followed by real native preparation without automatic approval or data
-execution. These restart submissions use the state authority as the real installer
-account; they are not a claim of a browser/FPM handoff test.
+old bytes and fresh ownership/session state. Corrected submission uses the existing
+real browser/TLS/FPM helper against the replacement state, including HTTP rejection
+of the old session. Its isolated successor timer alone prepares the new plan; old
+scheduler receipts remain unchanged. The shared scheduler publication failure matrix
+runs once in the original scenario; the replacement adds only lineage-specific checks.
+Browser evidence is stored separately under `payload/browser-replacement`. This proves
+new-state browser submission and scheduling, not automated switching of a persistent
+production FPM pool, and it creates no approval or data execution.

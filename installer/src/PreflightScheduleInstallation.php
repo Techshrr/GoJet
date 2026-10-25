@@ -52,9 +52,11 @@ final class PreflightScheduleInstallation
     /** Separate explicit root authorization to execute the fixed approved mailbox. */
     public static function installApply(): array { return self::installSchedule('apply', WebInstallationApply::applySchedule()); }
     /** Root-selected binding/state become literal unit arguments, never web parameters. */
-    public static function installPreparation(string $binding, string $directory): array
+    public static function installPreparation(string $binding, string $directory, ?string $predecessor = null): array
     {
-        return self::installSchedule('preparation', WebConfigurationPreparation::schedule($binding, $directory));
+        $units = WebConfigurationPreparation::schedule($binding, $directory, $predecessor);
+        $kind = substr(array_key_first($units), strlen('gojet-installer-'), -strlen('.service'));
+        return self::installSchedule($kind, $units);
     }
     private static function installSchedule(string $kind, array $units): array
     {

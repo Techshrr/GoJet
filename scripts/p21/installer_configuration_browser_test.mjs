@@ -7,6 +7,12 @@ const cfg = JSON.parse(fs.readFileSync(0, 'utf8'));
 const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
 try {
   const context = await browser.newContext({viewport: {width: 1280, height: 900}, ignoreHTTPSErrors: true});
+  if (cfg.old_session) {
+    const denied = await context.request.get(cfg.origin+'/install/', {
+      headers: {Accept: 'application/json', Cookie: '__Secure-gojet_install='+cfg.old_session}
+    });
+    assert.equal(denied.status(), 401);
+  }
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.name));
@@ -40,10 +46,13 @@ try {
   assert.equal(await page.locator('#installer-configuration').isVisible(), false);
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   assert.deepEqual(errors, []);
-  const output = path.resolve('artifacts/v10/P21/payload/browser-configuration');
+  const evidence = cfg.evidence_name ?? 'browser-configuration';
+  assert.ok(['browser-configuration', 'browser-replacement'].includes(evidence));
+  const output = path.resolve('artifacts/v10/P21/payload', evidence);
   fs.mkdirSync(output, {recursive: true});
   await page.screenshot({path: path.join(output, 'saved-desktop.png'), fullPage: true});
   fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({real_browser_configuration: true,
-    draft_posts: drafts, apply_posts: applies, no_browser_secret_storage: true, root_preparation_verified_here: false})+'\n');
+    draft_posts: drafts, apply_posts: applies, no_browser_secret_storage: true,
+    previous_session_rejected: Boolean(cfg.old_session), root_preparation_verified_here: false})+'\n');
   await context.close();
 } finally { await browser.close(); }

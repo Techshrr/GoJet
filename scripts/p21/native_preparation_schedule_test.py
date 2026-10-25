@@ -1,19 +1,24 @@
 """Real systemd preparation timer; only disposable fixture artifacts are removed."""
 from contextlib import contextmanager
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import time
 
 
 @contextmanager
-def preparation_schedule(release, binding, state, destination, authority):
+def preparation_schedule(release, binding, state, destination, authority, predecessor=None):
     render = ['php8.3', str(release/'installer/bin/render-web-preparation-schedule.php'), str(binding), str(state)]
     install = ['php8.3', str(release/'installer/bin/install-web-preparation-schedule.php'), str(binding), str(state)]
-    names = ['gojet-installer-preparation.service', 'gojet-installer-preparation.timer']
+    kind = 'preparation'
+    if predecessor is not None:
+        render.append(str(predecessor)); install.append(str(predecessor))
+        kind += '-'+hashlib.sha256(str(binding).encode()).hexdigest()
+    names = ['gojet-installer-'+kind+'.service', 'gojet-installer-'+kind+'.timer']
     paths = [Path('/etc/systemd/system')/name for name in names]
-    started = authority/'preparation-schedule-started.json'
-    ready = authority/'preparation-schedule-ready.json'
+    started = authority/(kind+'-schedule-started.json')
+    ready = authority/(kind+'-schedule-ready.json')
     attempt = Path(str(binding)+'.started.json')
     prepared = Path(str(binding)+'.ready.json')
     marker = authority/'installed.lock'
@@ -37,31 +42,44 @@ def preparation_schedule(release, binding, state, destination, authority):
     assert list(units) == names
     assert f'ExecStart=/usr/bin/php8.3 {release}/installer/bin/run-web-preparation.php {binding} {state}' in units[names[0]]
     assert 'run-web-apply' not in units[names[0]] and 'approve-web-configuration' not in units[names[0]]
-    # Reject unsafe literal systemd argument paths before any publication.
-    run(render[:-1]+[str(state)+'/%n'], False)
-    original = binding.read_bytes()
-    binding.chmod(0o644)
-    try:
-        run(install, False)
-        assert not started.exists() and all(not p.exists() for p in paths)
-    finally:
-        binding.chmod(0o600)
-    assert binding.read_bytes() == original
-    for conflict in ['file', 'link', 'receipt']:
-        artifact = started if conflict == 'receipt' else paths[0]
-        if conflict == 'link':
-            artifact.symlink_to('/nonexistent-gojet-preparation-fixture')
-        else:
-            artifact.write_text('fixture conflict'); artifact.chmod(0o600)
+    if predecessor is None:
+        # Reject unsafe literal systemd argument paths before any publication.
+        run(render[:-1]+[str(state)+'/%n'], False)
+        original = binding.read_bytes()
+        binding.chmod(0o644)
         try:
             run(install, False)
-            assert not ready.exists() and not paths[1].exists()
-            if conflict == 'link':
-                assert artifact.is_symlink()
-            else:
-                assert artifact.read_text() == 'fixture conflict'
+            assert not started.exists() and all(not p.exists() for p in paths)
         finally:
-            artifact.unlink()
+            binding.chmod(0o600)
+        assert binding.read_bytes() == original
+        for conflict in ['file', 'link', 'receipt']:
+            artifact = started if conflict == 'receipt' else paths[0]
+            if conflict == 'link':
+                artifact.symlink_to('/nonexistent-gojet-preparation-fixture')
+            else:
+                artifact.write_text('fixture conflict'); artifact.chmod(0o600)
+            try:
+                run(install, False)
+                assert not ready.exists() and not paths[1].exists()
+                if conflict == 'link':
+                    assert artifact.is_symlink()
+                else:
+                    assert artifact.read_text() == 'fixture conflict'
+            finally:
+                artifact.unlink()
+    else:
+        # Reuse publication coverage above; this branch tests only the new lineage guard.
+        root_receipt = Path(str(predecessor)+'.replacement-ready.json')
+        saved = root_receipt.read_bytes()
+        root_receipt.write_text('{}')
+        try:
+            run(install, False)
+            assert not started.exists() and all(not p.exists() for p in paths)
+        finally:
+            root_receipt.write_bytes(saved)
+        run(install[:-1]+[str(binding)], False)
+        assert not started.exists() and all(not p.exists() for p in paths)
     installed = False
     try:
         result = run(install)
