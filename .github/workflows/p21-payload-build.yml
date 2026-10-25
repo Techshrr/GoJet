@@ -128,6 +128,10 @@ jobs:
           php8.3 -l installer/bin/activate-services.php
           php8.3 -l installer/bin/recover-services.php
           php8.3 -l installer/src/InstallationPreparation.php
+          php8.3 -l installer/src/WebConfigurationPreparation.php
+          php8.3 -l installer/bin/run-web-preparation.php
+          php8.3 -l installer/bin/render-web-preparation-schedule.php
+          php8.3 -l installer/bin/install-web-preparation-schedule.php
           php8.3 -l installer/bin/prepare-installation.php
           php8.3 -l installer/bin/run-prepared-data.php
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_applied; CREATE DATABASE gojet_p21_prepared; CREATE USER 'gojet_prepared'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_prepared.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_applied.* TO 'gojet_prepared'@'127.0.0.1';"

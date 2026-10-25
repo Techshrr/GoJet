@@ -294,3 +294,36 @@ offline recovery, empty browser storage and final-lock closure, and exports logi
 screenshots. The browser ignores only the isolated fixture's self-signed certificate;
 separate Python HTTPS assertions verify its certificate. Browser approval/state are fixture
 inputs; this is not a second claim of privileged execution or full P21-T016 completion.
+
+
+### Root preparation timer (development acceptance)
+
+After root has created the private configuration binding and initialized the dedicated
+installer state, `install-web-preparation-schedule.php BINDING STATE` validates the
+root-owned binding (0600, one link, at most 4096 bytes), canonical state directory,
+package identity and literal systemd argument paths. It publishes and enables
+`gojet-installer-preparation.service` and `.timer` through the same exclusive,
+durable scheduler provisioning guards used by preflight/apply. Existing unit files,
+loaded overrides, symlinks and provisioning receipts are conflicts, never replacements.
+`render-web-preparation-schedule.php BINDING STATE` performs validation and returns the
+unit text without installing it. Both commands require root.
+
+The ten-second timer skips until a configuration draft exists. It invokes only the
+packaged preparation worker against the root-selected paths. Any worker started/ready
+receipt or final completion node prevents further service execution. The worker also
+checks its own receipts, so direct invocation cannot bypass an interrupted preparation.
+A service timeout stops the entire process group and leaves the durable barrier intact.
+The unit discards stdout, retains only the worker's generic refusal in the journal,
+and applies the existing observation service's hardening. Preparation publishes no
+approval, database bootstrap or install request. Root review/approval and the separate
+browser execution action remain required.
+
+The native payload regression installs the real timer before browser submission,
+checks refusal of unprivileged provisioning, unsafe binding permissions/arguments,
+existing files, dangling links and interrupted scheduler receipts, then submits the
+configuration through TLS/Nginx/FPM. Only the timer creates this scenario's plan.
+The fixture verifies root receipt/unit permissions, successful service exit, no second
+preparation, no automatic approval/apply request, and the original immutable repeat
+check before continuing the existing approval/apply/recovery chain. CI must pass for
+this change before these checks count as evidence. Binding/bootstrap provisioning,
+explicit preparation recovery and exact Ubuntu 24.04.4 acceptance remain open.

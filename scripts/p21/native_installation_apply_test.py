@@ -1,5 +1,6 @@
 """Single shipped root command from empty native DB through completion, with failure/resume."""
 import copy
+from contextlib import ExitStack
 import fcntl
 import hashlib
 import json
@@ -11,6 +12,7 @@ import subprocess
 from native_prepared_services_test import SERVICES
 from native_web_apply_test import prepare_web_apply
 from native_browser_apply import submit_configuration_browser
+from native_preparation_schedule_test import preparation_schedule
 
 
 def verify_apply(root, release, source, digest, request):
@@ -43,19 +45,22 @@ def verify_apply(root, release, source, digest, request):
             return
         assert result.returncode == 0 and not result.stderr, 'Root preparation worker failed'
         return json.loads(result.stdout)
-    def waiting():
-        assert preparation() == dict(prepared=False, waiting_for_configuration=True, installation_complete=False)
-        assert not started.exists() and not ready.exists() and not destination.exists()
-    submit_configuration_browser(root, release, state, marker.parent,
-        'native-configuration-fixture-token-0123456789', draft, before_submit=waiting)
-    preparation(False, True)
-    assert not started.exists() and not ready.exists() and not destination.exists()
-    # Only an injected interrupted-attempt fixture is removed, never a real attempt record.
-    started.write_text('{}'); started.chmod(0o600)
-    preparation(False)
-    assert started.read_text() == '{}' and not ready.exists() and not destination.exists()
-    started.unlink()
-    assert preparation() == dict(prepared=True, already_prepared=False, installation_complete=False)
+    with ExitStack() as schedules:
+        wait_prepared = None
+        def waiting():
+            nonlocal wait_prepared
+            assert preparation() == dict(prepared=False, waiting_for_configuration=True, installation_complete=False)
+            preparation(False, True)
+            assert not started.exists() and not ready.exists() and not destination.exists()
+            # Only the injected interrupted-attempt fixture is removed, never a real attempt record.
+            started.write_text('{}'); started.chmod(0o600)
+            preparation(False)
+            assert started.read_text() == '{}' and not ready.exists() and not destination.exists()
+            started.unlink()
+            wait_prepared = schedules.enter_context(preparation_schedule(release, binding, state, destination, marker.parent))
+        submit_configuration_browser(root, release, state, marker.parent,
+            'native-configuration-fixture-token-0123456789', draft, before_submit=waiting)
+        wait_prepared()  # The real timer, never a direct worker call, prepares this browser draft.
     sealed = {str(p.relative_to(destination)): p.read_bytes() for p in destination.rglob('*') if p.is_file()}
     assert preparation() == dict(prepared=True, already_prepared=True, installation_complete=False)
     assert sealed == {str(p.relative_to(destination)): p.read_bytes() for p in destination.rglob('*') if p.is_file()}

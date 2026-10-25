@@ -3,9 +3,91 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/InstallationPreparation.php';
 
-/** Root worker primitive. Scheduling and approval remain separate explicit operations. */
+/** Root preparation worker and scheduler; approval and execution remain separate operations. */
 final class WebConfigurationPreparation
 {
+    /** Validate the root-selected inputs before publishing a fixed preparation timer. */
+    public static function schedule(string $bindingPath, string $directory): array
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
+        $authority = '/var/lib/gojet-installer-authority';
+        CompletionLock::verifyProvisioningPath($authority.'/installed.lock');
+        if ((new CompletionLock($authority.'/installed.lock'))->exists()) { throw new \RuntimeException('Installer unavailable'); }
+        CompletionLock::verifyProvisioningPath(dirname($bindingPath).'/installed.lock');
+        CompletionLock::verifyProvisioningPath(dirname($directory).'/installed.lock');
+        $binding = ApplyRequest::read($bindingPath, 0);
+        $fields = ['schema', 'destination', 'release', 'manifest_sha256', 'source', 'tls', 'files'];
+        if (array_diff($fields, array_keys($binding)) || array_diff(array_keys($binding), $fields)
+            || $binding['schema'] !== 'gojet.web-configuration-binding.v1') { throw new \RuntimeException('Invalid preparation binding'); }
+        // Literal systemd arguments: reject specifiers, whitespace, escapes and ambiguous paths.
+        foreach ([$bindingPath, $directory, $binding['release'], $binding['destination']] as $path) {
+            if (!is_string($path) || !preg_match('~^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$~D', $path)
+                || in_array('.', explode('/', $path), true) || in_array('..', explode('/', $path), true)) {
+                throw new \RuntimeException('Unsafe scheduler path');
+            }
+        }
+        CompletionLock::verifyProvisioningPath(dirname($binding['destination']).'/installed.lock');
+        $account = posix_getpwnam('gojet-installer');
+        clearstatcache(); $dir = @lstat($directory);
+        if ($account === false || $account['uid'] <= 0 || $dir === false || realpath($directory) !== $directory
+            || ($dir['mode'] & 0177777) !== 0040700 || $dir['uid'] !== $account['uid']) {
+            throw new \RuntimeException('Unsafe configuration directory');
+        }
+        $state = ApplyRequest::read($directory.'/state.json', $account['uid']);
+        if (($state['schema'] ?? null) !== 2 || ($state['step'] ?? null) !== 0
+            || !in_array($state['status'] ?? null, ['ready', 'checking'], true)) { throw new \RuntimeException('Invalid preparation state'); }
+        $release = $binding['release'];
+        PackageIntegrity::verify($release, $binding['manifest_sha256'], $binding['source']);
+        return [
+            'gojet-installer-preparation.service' => <<<UNIT
+[Unit]
+Description=Prepare the submitted GoJet configuration for root approval
+After=network.target
+ConditionPathExists={$bindingPath}
+ConditionPathExists={$directory}/configuration-draft.json
+ConditionPathExists=!{$bindingPath}.started.json
+ConditionPathExists=!{$bindingPath}.ready.json
+ConditionPathExists=!{$authority}/installed.lock
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/php8.3 {$release}/installer/bin/run-web-preparation.php {$bindingPath} {$directory}
+TimeoutStartSec=300
+TimeoutStopSec=5
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+StandardOutput=null
+StandardError=journal
+
+UNIT,
+            'gojet-installer-preparation.timer' => <<<UNIT
+[Unit]
+Description=Observe submitted GoJet configuration
+ConditionPathExists={$bindingPath}
+ConditionPathExists=!{$authority}/installed.lock
+
+[Timer]
+OnActiveSec=1s
+OnCalendar=*-*-* *:*:00/10
+AccuracySec=1s
+Unit=gojet-installer-preparation.service
+
+[Install]
+WantedBy=timers.target
+
+UNIT,
+        ];
+    }
+
     public static function run(string $bindingPath, string $directory): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }

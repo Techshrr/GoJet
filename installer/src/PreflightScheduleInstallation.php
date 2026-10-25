@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/WebInstallationApply.php';
+require_once __DIR__.'/WebConfigurationPreparation.php';
 
 /** Shared publication guards for separately authorized observation and execution schedulers. */
 final class PreflightScheduleInstallation
@@ -47,14 +48,16 @@ final class PreflightScheduleInstallation
         finally { fclose($f); }
     }
     /** Observation-only entry point; existing callers never enable execution. */
-    public static function install(): array { return self::installSchedule(false); }
+    public static function install(): array { return self::installSchedule('preflight', WebInstallationApply::schedule()); }
     /** Separate explicit root authorization to execute the fixed approved mailbox. */
-    public static function installApply(): array { return self::installSchedule(true); }
-    private static function installSchedule(bool $apply): array
+    public static function installApply(): array { return self::installSchedule('apply', WebInstallationApply::applySchedule()); }
+    /** Root-selected binding/state become literal unit arguments, never web parameters. */
+    public static function installPreparation(string $binding, string $directory): array
     {
-        // This validates root, completion, fixed binding, sealed release and current prerequisites.
-        $units = $apply ? WebInstallationApply::applySchedule() : WebInstallationApply::schedule();
-        $kind = $apply ? 'apply' : 'preflight';
+        return self::installSchedule('preparation', WebConfigurationPreparation::schedule($binding, $directory));
+    }
+    private static function installSchedule(string $kind, array $units): array
+    {
         $timerName = 'gojet-installer-'.$kind.'.timer';
         CompletionLock::verifyProvisioningPath(self::DIRECTORY.'/installed.lock');
         $receipt = self::AUTHORITY.'/'.$kind.'-schedule-started.json';
