@@ -222,7 +222,9 @@ try {
     await context.setOffline(false);
     fs.writeFileSync(cfg.completion, '', {mode: 0o600});
     await page.getByRole('button', {name: 'Refresh status', exact: true}).click();
-    await page.waitForFunction(() => document.querySelector('#installer-message').textContent.startsWith('The installer is closed or unavailable.'));
+    await page.waitForFunction(() => document.querySelector('#installer-title').textContent === 'Installation result unconfirmed');
+    assert.equal(await page.locator('#installer-open-admin').isVisible(), false);
+    assert.equal(await page.locator('#installer-refresh').isVisible(), true);
     assert.equal(await page.locator('#installer-apply').isVisible(), false);
     assert.equal(submissions, 1);
     assert.deepEqual(errors, []);
