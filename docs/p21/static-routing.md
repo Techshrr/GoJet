@@ -22,9 +22,10 @@ bodies with packaged bytes. It checks private shell headers, JS/CSS MIME types,
 Docs search validation, inherited410 responses and missing/private-path404s.
 Only the deployment prefix is substituted for the disposable test extraction.
 This fixture validates static serving over loopback HTTP; the separate native
-Installer workflow verifies TLS/FPM. API/Auth/public-resource/redirect proxy routes,
-full TLS server composition, root apply, browser interaction and final P21 closure
-remain pending. This fragment is not a complete production virtual host.
+Installer workflow verifies TLS/FPM. Product TLS composition and privileged apply
+are documented in [product HTTPS configuration](product-tls.md) and
+[installation preparation](installation-preparation.md). This static fragment
+alone is not a complete production virtual host.
 
 The package also ships `deploy/nginx/platform-proxy.conf` for `/api/`, `/f/`,
 `/t/` and `/p/` to the inherited loopback platformapi port8081. Include it in the
@@ -45,5 +46,5 @@ CI uses a clearly identified local transport probe to verify byte/header/status
 forwarding and spoofed-header replacement through real Nginx. This is transport
 coverage only, not real Go login/payment/file or full TLS integration evidence.
 The four real compiled apps remain separately verified in the same fixture.
-Redirectengine still requires client-address integration review before composing
-its public short-link proxy; it is not covered by this fragment.
+Redirectengine uses the separate [short-link ingress](redirect-proxy.md) fragment
+and its explicit client-address trust boundary.

@@ -16,8 +16,8 @@ with existing virtual hosts. Do not install arbitrary caller-supplied output.
 The dedicated `gojet-installer` account is separate from the eight service
 processes. Root owns release/configuration files. The Installer account owns
 its private 0700 state directory; it has no write access to releases or product
-service configuration. A root-owned final installation lock independent of web
-write authority remains a requirement for the privileged apply integration.
+service configuration. A root-owned final installation lock is independent of web write authority and
+is committed only by the privileged health/completion integration.
 The FPM master starts as root only to drop workers to this dedicated account.
 Nginx workers use `www-data`; only that group can access the 0660 FPM socket.
 The socket parent must exist with suitable traversal permissions before start.
@@ -40,11 +40,11 @@ limits, step restrictions, private file denial and all post-lock404 responses.
 No certificate, private key, session cookie, bootstrap token or raw configuration
 is uploaded as evidence. The test does not deploy to an external host.
 
-This is the bootstrap Installer virtual host, not the final composed public
-site/API/workspace/admin/proxy configuration. Interactive forms, full dependency
-preflight, Admin bootstrap, privileged apply, service health, root-owned final
-lock and upgrade/restore are still pending. Browser and full-product-vhost
-verification remain false in this evidence.
+This is the bootstrap Installer virtual host, separate from the final product
+site/API/workspace/admin/proxy configuration. Forms, native approval/apply and
+browser flows are implemented; automatic persistent FPM configuration switching
+and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
+for the current overall boundary rather than inferring it from this renderer.
 
 The renderer also requires a `completion` input, normally
 `/var/lib/gojet-installer-authority/installed.lock`. Its root-owned directory must
@@ -53,5 +53,5 @@ canonical ownership and ancestor protection before returning configuration.
 FPM receives `GOJET_INSTALL_COMPLETION_FILE` and read access to this directory;
 it never receives filesystem write authority over it. Native TLS tests check
 actual permission denial under `gojet-installer` and post-lock404 even after
-all writable state is removed. The privileged worker's health-gated atomic lock
-write remains pending.
+all writable state is removed. The privileged worker's health-gated atomic lock write is verified separately
+in the native payload installation chain.

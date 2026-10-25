@@ -1,89 +1,68 @@
 # Private Installer state boundary
 
-`installer/src/InstallState.php` is an internal PHP 8.3 component, now protected by the
-HTTP entrypoint, but not a complete privileged installation worker. It retains the existing Installer shell design and does not claim
-T009/T012/T013 complete or make the payload installable.
+`InstallState` is the unprivileged state authority behind the PHP 8.3 HTTP entrypoint.
+It does not execute installation or write the root completion lock. The root worker
+and approval boundaries are described in [web-configuration-boundary.md](web-configuration-boundary.md).
 
-Provision an absolute canonical directory outside every document root, mode
-0700, owned by the dedicated Installer process account. Its ancestors must be
-administrator controlled. Provision the bootstrap token from at least 32 random
-bytes; only its SHA256 digest is supplied to the component. Never put the token
-in a URL, release package, log, or public environment response. `initialize()`
-is an explicit provisioning action, not request-time auto-repair. Missing,
-corrupt, linked, multiply linked, or non-private state fails closed.
+## Provisioning and authentication
 
-A successful authentication rotates the session and CSRF secrets, stores only
-digests, and grants a fixed 30-minute session. Every check requires the current
-session and a one-time CSRF token. Invalid/out-of-order transitions cannot run
-validation. The token is durably consumed before validation. State files are
-written with exclusive temporary creation, fsync, atomic rename and directory
-fsync; a stable flock serializes all operations. Termination while checking
-leaves a durable `checking` barrier that re-authentication cannot erase.
-Validator errors become a generic failed status and do not persist exception
-text, credentials, or form input. Successful checks advance only one step.
+Provision a canonical directory outside document roots, owned by gojet-installer,
+mode0700, beneath administrator-controlled ancestors. `initialize()` is an explicit
+provisioning operation, never request-time repair. Missing, corrupt, linked,
+multiply linked or non-private state fails closed.
 
-Only the four pre-apply steps (environment/data/site/admin) can advance through
-this component, using trusted server-side validators. No callable name or
-success value may be selected by client input. Services, health, and completion
-require the still-pending privileged worker integration. This component cannot
-create an installed lock or report completed installation. An existing
-`installed.lock` blocks every operation. The future worker must use the same
-stable state lock when committing completion, and must own the final lock
-boundary so a compromised web process cannot reopen installation.
+Use a bootstrap token generated from at least 32 random bytes; supply only its
+SHA256 digest to FPM. Never put tokens in URLs, logs, packages or public responses.
+A same-origin JSON POST to `/install/` accepts only `bootstrap_token`. Authentication
+is durably limited to ten attempts per sixty-second window. Success rotates the
+session and CSRF, stores digests and grants a thirty-minute session. The opaque
+session cookie is Secure/HttpOnly/SameSite=Strict and scoped to `/install`; it is
+not returned in JSON. Responses use no-store/noindex and frame/base/form restrictions.
 
-The public entrypoint now requires provisioned `GOJET_INSTALL_STATE_DIR`,
-`GOJET_INSTALL_BOOTSTRAP_SHA256`, and an exact HTTPS `GOJET_INSTALL_ORIGIN`
-without a trailing slash. Missing/unsafe provisioning fails closed. State schema
-2 includes the durable bootstrap throttle (10 attempts per 60-second window);
-older provisional state is rejected, never implicitly reset. This is not an
-upgrade mechanism for an installed system.
+FPM requires `GOJET_INSTALL_STATE_DIR`, `GOJET_INSTALL_BOOTSTRAP_SHA256`, exact HTTPS
+`GOJET_INSTALL_ORIGIN` and `GOJET_INSTALL_COMPLETION_FILE`. Missing/unsafe provisioning
+fails closed. Only real web-server HTTPS is trusted, not forwarded headers.
+Schema2 state is required; old provisional state is never implicitly migrated/reset.
 
-Authenticate with a same-origin JSON POST to `/install/` containing only
-`bootstrap_token`. The response sets an opaque Secure/HttpOnly/SameSite=Strict
-cookie scoped to `/install` and returns the CSRF token, current step and status.
-It never returns the session token in JSON. Do not log request/response bodies.
-All mutations require exact Origin and a bounded JSON body. Only the web
-server's `HTTPS=on` variable is trusted; forwarded headers are insufficient.
-The trusted Nginx/FPM configuration must preserve this boundary. Authentication
-is throttled durably and rotates prior sessions. Responses are no-store/noindex
-with frame/base/form restrictions. Installation locks yield 404 on every route.
+## State transitions
 
-Authenticated GET can render the existing welcome/current-step shell. Future
-steps return409. POST step execution currently returns503 without running any
-validator or applying any configuration; no arbitrary client success field can
-advance state. Complete/health/services are unavailable until worker integration.
-The interactive login/step forms, native configuration/apply/health, real TLS
-server configuration and desktop/mobile browser verification remain outstanding.
+A stable flock serializes operations. State writes use exclusive temporary creation,
+fsync, atomic rename and directory sync. Mutations consume the one-time CSRF before
+validation, including rejected transitions. Exceptions do not persist raw secrets.
 
-Native CI exercises real filesystem persistence, process termination during a
-validator, independent file-lock contention, secret omission, session rotation
-and expiry, CSRF replay, step skipping, corrupted/symlink state and lock denial.
-A real PHP HTTP server additionally tests the production entrypoint, cookie
-flags/rotation, request bounds/origin, route order, bootstrap throttling and
-post-lock404. Its unshipped router sets a test TLS server variable; this does not
-claim real TLS or browser verification. A separate HTTP probe with that variable
-off rejects spoofed forwarded HTTPS headers. Evidence flags preserve these limits.
+- Configuration submission validates fields, freezes environment/checking and
+  exclusively publishes the private draft. Reauthentication cannot erase it.
+- Approval confirmation validates a root-owned record against the frozen draft,
+  exclusively publishes local approval, advances to services/ready and rotates CSRF.
+- Separate apply submission consumes CSRF, saves services/checking and creates the
+  bounded approved-plan mailbox. HTTP202 means queued, not installed.
+- Authenticated GET is read-only. Protected services status includes dependency and
+  execution observations; those snapshots grant neither completion nor retry rights.
+- Internal pre-apply `check()` accepts only trusted server callbacks. HTTP clients
+  cannot choose callbacks or report their own successful validation.
 
-## Root-owned completion authority
+Interrupted publication retains a barrier. Do not delete state, approval or request
+files to retry. New-attempt recovery uses separate state and rejects old sessions;
+see [installation-preparation.md](installation-preparation.md).
 
-The public entrypoint now requires `GOJET_INSTALL_COMPLETION_FILE`, pointing to
-`installed.lock` in a canonical root-owned directory that is not group/world
-writable. Provision `/var/lib/gojet-installer-authority` through the packaged
-tmpfiles configuration. Regenerate older provisional FPM configurations; missing
-completion authority fails closed with503. No implicit migration/reset occurs.
+## Completion authority
 
-Before writing FPM configuration, NativeWebConfig verifies root ownership of the
-ancestor chain as well. FPM's restricted filesystem access permits reading only
-the release, private state and completion directory. HTTP checks the root lock
-before authentication/rendering, and state operations check it again under their
-state mutex. Any existing lock node, including a dangling symlink, closes the
-entrypoint. The old writable-state lock remains an additional fail-closed local
-barrier but cannot replace the independently configured root authority.
+The root completion directory is canonical, outside the release and writable state,
+and not group/world writable. NativeWebConfig checks protected ancestors. FPM has
+read access to release, its state and this authority, never root write access.
+HTTP checks completion before authentication/rendering; state operations recheck it
+under their lock. Any completion node, including a dangling symlink, closes entry
+with404. A local writable-state lock is only an additional fail-closed barrier.
 
-There is deliberately no public or PHP-service-account finalize operation.
-The pending root apply worker must perform real service/dependency health checks
-and atomically commit the root lock. Tests inject the lock from the isolated
-root fixture solely to verify the read boundary; they do not claim health or
-installation completion. Native TLS tests prove that the actual FPM account
-cannot delete the lock, create files in its directory, or rename that directory.
-Even deleting all PHP-writable state cannot reopen the Installer.
+The privileged completion command independently checks actual package, data,
+services and HTTPS health before atomically writing the root lock. Deleting all
+FPM-owned state cannot reopen installation. There is no public finalize operation.
+
+## Verification
+
+State/HTTP tests cover persistence, termination, contention, session/CSRF rotation,
+expiry/replay, step skipping, corruption/links and request bounds. Native TLS/FPM and
+Chromium tests separately exercise the actual entrypoint, desktop/mobile flows and
+lock closure. Explicit state/observation fixtures prove only their stated boundary;
+real root execution and completion are verified in the payload chain. Current
+acceptance limits are maintained in [STATUS.md](STATUS.md).

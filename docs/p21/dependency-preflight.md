@@ -31,15 +31,15 @@ A missing or failed check blocks aggregate readiness. Results are snapshots;
 recheck immediately before privileged apply. This CLI is not exposed to the web
 worker and does not advance Installer state or write its final completion lock.
 The sealed web-to-root apply worker revalidates this authority before execution.
-The complete T010 wrong-version/absent-dependency acceptance matrix and
-authenticated browser status handoff remain pending.
+The complete T010 wrong-version/absent-dependency acceptance matrix remains
+pending; the authenticated status handoff is described below.
 
 The native fixture additionally removes each real Nginx, PHP-FPM, systemctl and
 runuser executable in turn on the disposable CI host, without substituting fake
 version output. Each absence must block readiness and the corresponding checks;
 the exact original inode/mode is restored in a finally block and readiness is
 verified again. This covers missing executables independently of stopped units.
-Wrong-version coverage and the authenticated browser status handoff remain open;
+Complete wrong-version coverage remains open;
 these probes do not authorize exposing the root preflight command to PHP-FPM.
 
 Native payload CI uses the actual compiled release, real freshclam signature
@@ -72,8 +72,9 @@ rechecks live dependencies independently of this advisory snapshot.
 
 The payload fixture exercises the shipped HTTP adapter as gojet-installer and
 real root refreshes, including stopped Redis and altered sealed preparation.
-This is adapter coverage, not a browser/TLS handoff claim. Environment/health route integration and the complete
-T024 acceptance gate remain pending. The installer remains installable=false.
+This fixture covers the adapter; browser coverage is described below. The complete
+T024 acceptance gate remains pending. See [current status](STATUS.md) for the
+installation integration and remaining acceptance work.
 
 
 The interactive installer reads the protected services endpoint after successful

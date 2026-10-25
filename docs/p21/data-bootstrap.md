@@ -19,7 +19,8 @@ release from a verified archive before approving them. The worker checks root
 ownership, write permissions, canonical paths, original SQL hashes and the native
 binary's offline release identity before database mutation. Dependencies currently
 use loopback TCP only. The web/FPM identity cannot provision this root request;
-web-to-root approval and the complete installation executor remain pending.
+the sealed preparation and root apply flow invokes this data phase after approval.
+See [installation preparation](installation-preparation.md) for that integration.
 
 An exclusive job lock and fsynced atomic journal serialize each job. Migration
 execution also uses its existing database lock and durable per-migration journal.

@@ -5,8 +5,8 @@ through the existing `internal/admin.Service.BootstrapAdministrator` authority.
 There is no new daemon, fixture authority, HTTP bootstrap endpoint, password
 algorithm, permission vocabulary or audit schema.
 
-Only effective UID0 can invoke this mode. The future root-owned Installer worker
-must validate and seal the administrator request before invocation. PHP workers
+Only effective UID0 can invoke this mode. The root-owned Installer worker
+validates and seals the administrator request before invocation. PHP workers
 run under `gojet-installer` and cannot invoke this mode successfully. The CLI
 refuses the test-auth adapter, additional arguments, oversized/unknown-field or
 trailing JSON, incomplete Admin runtime configuration and unavailable native
@@ -31,8 +31,9 @@ MySQL database, starts native Redis and executes the real compiled platformapi
 binary. It verifies non-root rejection, input bounds, a competing live database
 lock, one-time creation, duplicate refusal, credential derivation, inherited
 permissions and the original audit authority. It does not export credentials or
-hash material. This is not yet the sealed privileged worker, complete Installer
-flow, login/browser proof, or a production deployment.
+hash material. This component fixture alone does not prove the complete Installer
+flow or login/browser behavior. The sealed root worker integration is documented
+in [installation preparation](installation-preparation.md).
 
 Before publishing a preparation plan or executing migrations, the Installer now calls
 `platformapi --validate-bootstrap-admin` on the already verified immutable binary.
@@ -47,15 +48,5 @@ It does not change password policy or permit browser-controlled roles/permission
 The new native regression requires an empty database and absent prepared directory
 after rejected input.
 
-For source `76f9b3e506bc7b468842b4fa79d3a894406ad3c7`, initial-administrator
-run `39978105664` passed, preserving root-only access, one-time creation,
-credentials, permissions and audit behavior. Migration, data bootstrap, installer
-web, release package and service environment workflows also passed. Payload run
-`39978105676` / job `120497936015` passed the actual native preparation regression:
-`invalid_admin_rejected_before_plan_or_migration=true`, along with the inherited
-browser submission, timer, replay, recovery and completion-lock checks. Original
-artifact `12514032627` was independently downloaded and verified: ZIP SHA256
-`759dddf16b3fd70652ead09ce6e5cb25013b3d8e7605778cca645c8235c2ad6f`, inner archive
-SHA256 `f3f6f51ab59b9f80b255b81866fe9198a01f4d17fe2e3a643e796500d6e7ffcb`.
-ZIP integrity, exact-source JSON and archive allowlist checks passed. This does
-not close full interactive configuration or target Ubuntu 24.04.4 acceptance.
+Current CI evidence and outstanding acceptance are maintained in
+[current status](STATUS.md); historical run and artifact identifiers remain in Git.

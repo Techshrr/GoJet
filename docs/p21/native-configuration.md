@@ -56,6 +56,7 @@ its unmodified generated EnvironmentFile against native migrated MySQL/Redis.
 It verifies all core API startup flags, public provider discovery and inherited
 unauthenticated401/403 boundaries and a real Redis-backed login429 at the configured threshold. External-provider fixture values are explicitly
 unused; there is no external delivery/risk/verification claim. This is configuration
-integration, not eight-daemon health, sealed web-to-root apply, final installation
-lock, browser acceptance or G11. The package remains non-installable until those
-gates are complete.
+integration; the separate payload fixture covers service health, sealed
+web-to-root apply, the completion lock and browser progress. See
+[current status](STATUS.md) for verified integration and remaining G11 gates.
+The package remains non-installable.

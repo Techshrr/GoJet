@@ -20,7 +20,8 @@ canonical Host optionally permits explicit443 only on standard TLS port443. The
 TLS versions are1.2/1.3. All three routing fragments share this server, preserving
 static location priority and private proxy behavior. `/install` is closed in this
 product configuration; the separately verified bootstrap vhost/FPM authority
-remains separate until privileged apply can safely switch configurations.
+has a separate lifecycle. Persistent bootstrap/FPM switching remains an open
+item in [current status](STATUS.md).
 
 The real compiled-payload fixture now uses a SAN certificate and verified TLS
 for all page/asset/proxy requests. It tests wrong Host, unknown SNI server rejection,
@@ -28,8 +29,11 @@ body limit enforcement and unsafe render inputs/private-key modes. Only the SNI
 negative probe disables client hostname comparison, so its failure must come from
 the server rather than a client certificate-name error; trusted CA verification
 remains enabled. Proxy upstreams are still explicitly labelled transport probes,
-not real Go business proof. Full site/custom-domain certificates, host conflicts, real business/service health and safe root apply remain
-pending before P21 closure. No production deployment is performed.
+not real Go business proof. The separate root apply integration covers owned site
+activation, conflict checks and real service health; see
+[installation preparation](installation-preparation.md). This renderer fixture
+alone does not establish full business acceptance or P21 closure. No production
+deployment is performed.
 
 When http_port is supplied, it must be an integer TCP port distinct from the TLS
 port. The renderer adds an HTTP default host rejecting unknown authorities with
