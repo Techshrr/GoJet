@@ -60,8 +60,12 @@ ACL file and no persistence. It individually denies SET, GET and DEL while PING
 still succeeds, then exercises a real read-only replica and restored write access.
 It verifies cleanup, actual expiry when DEL is denied, and preservation of existing
 keys in both the configured and default databases. The fixture never changes the
-host Redis ACL or replication state. See STATUS for the verified CI checkpoint;
-the new access cases require their own native run before being counted as passed.
+host Redis ACL or replication state. These cases passed on source
+`5b921a1509d5cf169bd6c66417e28f97eae527ca` in native payload run
+[40325314726](https://github.com/Techshrr/GoJet/actions/runs/40325314726), including
+restored readiness and independent key expiry. The same run passed the continuous
+first-install/browser/root-timer/retirement regression. Full T010 and target-host
+acceptance remain open; see [STATUS](STATUS.md).
 
 ## Protected snapshot read
 
