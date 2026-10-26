@@ -335,6 +335,7 @@ $state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_ge
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
     actual_release_preparation=True, single_command_native_apply=True,
+    replacement_partial_publication_recovery=True, replacement_recovery_preserves_retirement=True,
     entry_partial_publication_recovery=True, scheduler_partial_publication_recovery=True,
     recovery_preserves_execution_barriers=True, native_initial_web_entry=True, initial_entry_browser_to_root_preparation=True,
     continuous_first_install_browser_to_retirement=True, continuous_installation_without_state_fixtures=True,

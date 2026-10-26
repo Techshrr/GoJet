@@ -139,6 +139,7 @@ jobs:
           php8.3 -l installer/bin/recover-web-preparation.php
           php8.3 -l installer/src/WebConfigurationRestart.php
           php8.3 -l installer/bin/restart-web-configuration.php
+          php8.3 -l installer/bin/recover-configuration-restart.php
           php8.3 -l installer/src/WebConfigurationSwitch.php
           php8.3 -l installer/bin/switch-web-configuration.php
           php8.3 -l installer/src/WebEntryProvisioning.php

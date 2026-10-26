@@ -8,6 +8,7 @@ from pathlib import Path
 import pwd
 import subprocess
 from native_browser_apply import submit_configuration_browser
+from native_restart_publication_recovery_test import verify_restart_publication_recovery
 from native_preparation_schedule_test import preparation_schedule
 from native_configuration_switch_test import switched_configuration_endpoint
 
@@ -96,6 +97,7 @@ def verify_configuration_restart(root, release, original_binding, original_state
     current = json.loads((new_state/'state.json').read_text())
     assert current['step'] == 0 and current['status'] == 'ready' and current['session'] is None and current['csrf'] is None
     assert not (new_state/'configuration-draft.json').exists() and not (successor/'prepared').exists()
+    verify_restart_publication_recovery(release, binding, state, successor, digest, bootstrap, preserved)
     tombstone = retired.read_bytes(); publication = completed.read_bytes()
     call()  # Restart is exclusive; no silently created third attempt.
     assert retired.read_bytes() == tombstone and completed.read_bytes() == publication
@@ -129,3 +131,12 @@ def verify_configuration_restart(root, release, original_binding, original_state
     assert not (new_state/'apply-approval.json').exists() and not (new_state/'apply-request.json').exists()
     assert not (authority/'web-apply.json').exists() and not (authority/'configuration-approval.json').exists()
     assert not (successor/'prepared/data/journal.json').exists()
+
+    # Publication recovery cannot reopen the successor once the real browser/timer prepared it.
+    recovery = ['php8.3', str(release/'installer/bin/recover-configuration-restart.php'),
+        str(binding), str(state), str(successor), digest, bootstrap]
+    successor_before = {p: p.read_bytes() for p in successor.rglob('*') if p.is_file()}
+    denied = subprocess.run(recovery, capture_output=True, timeout=120)
+    assert denied.returncode == 1 and not denied.stdout
+    assert all(p.read_bytes() == raw for p, raw in successor_before.items())
+    assert all(p.read_bytes() == raw for p, raw in preserved.items())

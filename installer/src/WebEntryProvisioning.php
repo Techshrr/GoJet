@@ -205,10 +205,10 @@ final class WebEntryProvisioning
         }
         foreach ($missing as $path => $raw) { self::publish($path, $raw, 0600); }
         if (!$stateExists && !mkdir($state, 0700)) { throw new \RuntimeException('State recovery mkdir failed'); }
-        if (!self::exists($state.'/state.json')) {
-            (new InstallState($state, $input['bootstrap_sha256']))->initialize();
-        } elseif (!self::exists($state.'/state.lock')) { self::publish($state.'/state.lock', '', 0600); }
         if ($mode !== 0755) {
+            if (!self::exists($state.'/state.json')) {
+                (new InstallState($state, $input['bootstrap_sha256']))->initialize();
+            } elseif (!self::exists($state.'/state.lock')) { self::publish($state.'/state.lock', '', 0600); }
             foreach ([$state.'/state.json', $state.'/state.lock', $state] as $path) {
                 if (!chown($path, $account['uid']) || !chgrp($path, $account['gid'])) { throw new \RuntimeException('State recovery ownership failed'); }
                 self::sync($path);

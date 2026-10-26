@@ -259,6 +259,32 @@ with root0755. The new plan destination is `NEW_DIRECTORY/prepared`.
 Old binding, draft, state and started receipts remain; sessions, approvals and keys
 are not copied. A partial restart remains retired and requires inspection.
 
+After verifying the original retirement record, explicitly run
+`recover-configuration-restart.php BINDING STATE ORIGINAL_NEW_DIRECTORY
+EXPECTED_DRAFT_SHA256 BOOTSTRAP_SHA256` from the same verified release. It validates
+the original binding, frozen draft, predecessor started identity and exact retired
+successor identity before touching the new tree. No new successor can be selected.
+It uses the predecessor worker lock and, when present, the successor worker lock.
+The command never enables a timer, switches FPM, approves a draft or executes data.
+
+Recovery completes missing files only while the tree is still root0700, including
+initial state creation and interrupted ownership transfer. Exact completed state can
+finish the ready receipt/traversal boundary. A root0755 successor with missing state
+or binding is refused; its existing state is never rewritten. Authenticated/used state,
+submitted drafts, prepared plans, FPM-switch records, extra files, unsafe permissions,
+links or changed bytes are also refused. Old attempts stay retired; their drafts,
+sessions and journals are preserved. A matching unused completed repeat is read-only.
+The bootstrap digest remains initialization input, not copied session authority;
+the separate FPM switch still selects and binds the actual new endpoint token.
+
+New binding/ready files are staged and published without replacement. Missing or
+corrupt retirement authority, truncated existing files, unknown temporary files and
+ambiguous nodes require manual inspection; do not delete retirement to retry. The
+native regression constructs ten publication/receipt boundaries, verifies refusal
+of altered identity and busy workers, then continues the same recovered successor
+through the actual FPM switch, browser submission and root preparation timer.
+These are boundary fixtures, not machine power-loss tests; new CI must be checked.
+
 Before new submission, root can run `switch-web-configuration.php` with no arguments
 and a private JSON object on stdin. Its exact fields are `previous` (the eight
 original NativeWebConfig renderer inputs), `predecessor` (retired binding path),
@@ -285,8 +311,10 @@ retired endpoint or delete barriers as a retry procedure. A durable ready receip
 records configuration/reload completion, not final installation or account health.
 
 The optional predecessor argument to preparation scheduling validates this lineage.
-First endpoint provisioning is implemented. Restart/scheduler publication recovery,
-remaining partial-publication cases and unified end-to-end acceptance remain open. The old page is not automatically reset.
+First entry, its partial-publication recovery, scheduler publication recovery and the
+continuous first-install journey have passed at the source recorded in STATUS. The new
+replacement-publication recovery needs its own CI. The old page is never automatically
+reset; complete operational recovery and exact target-system acceptance remain open.
 
 ## Confirm the browser result
 
@@ -415,4 +443,5 @@ unit publication, missing ready, changed root inputs and serialization. They pre
 real completed preparation barrier and reject recovery after actual installation completion.
 These are publication-boundary fixtures, not machine power-loss claims. The continuous
 first-install browser journey remains a separate regression and has passed at the source
-recorded in STATUS; the newly added recovery cases require their own native CI result.
+recorded in STATUS; entry/scheduler recovery has passed at the source recorded in STATUS. The subsequent
+replacement-directory recovery is tracked separately.

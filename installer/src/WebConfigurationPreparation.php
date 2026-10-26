@@ -121,6 +121,12 @@ UNIT,
         return self::withWorkerLock($bindingPath, fn() => WebConfigurationRestart::create($bindingPath, $directory, $successor, $draftHash, $bootstrapHash));
     }
 
+    public static function recoverRestart(string $bindingPath, string $directory, string $successor, string $draftHash, string $bootstrapHash): array
+    {
+        require_once __DIR__.'/WebConfigurationRestart.php';
+        return self::withWorkerLock($bindingPath, fn() => WebConfigurationRestart::create($bindingPath, $directory, $successor, $draftHash, $bootstrapHash, true));
+    }
+
     private static function notRetired(string $bindingPath): void
     {
         if (file_exists($bindingPath.'.retired.json') || is_link($bindingPath.'.retired.json')) {
