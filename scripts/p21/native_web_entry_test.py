@@ -1,5 +1,4 @@
 """Ship-owned first entry on real system services; browser publishes the initial draft."""
-import copy
 import fcntl
 import hashlib
 import json
@@ -8,7 +7,7 @@ from pathlib import Path
 import pwd
 import socket
 import subprocess
-from native_browser_apply import submit_configuration_browser
+from native_installation_journey_test import verify_journey
 
 
 def verify_web_entry(root, release, source, manifest, profile):
@@ -89,24 +88,16 @@ def verify_web_entry(root, release, source, manifest, profile):
         assert all(p.read_bytes() == raw for p, raw in before.items())
         # Both actual daemons reload from persistent host configuration after restart.
         ctl('restart', 'php8.3-fpm.service'); ctl('restart', 'nginx.service')
-        draft = copy.deepcopy(profile); del draft['tls']; del draft['configuration']['secrets']
-        for name in ['root', 'clamav_socket']: del draft['configuration']['files'][name]
-        submit_configuration_browser(root, release, state, authority, token, draft, initialized=True,
-            evidence_name='browser-entry', endpoint_origin=origin)
-        worker = ['php8.3', str(release/'installer/bin/run-web-preparation.php'), str(directory/'binding.json'), str(state)]
-        result = subprocess.run(worker, capture_output=True, timeout=180)
-        assert result.returncode == 0 and not result.stderr, 'Initial endpoint draft failed native root preparation'
-        assert json.loads(result.stdout)['prepared'] is True
-        assert not (directory/'prepared/data/journal.json').exists()
-        assert not (authority/'web-apply.json').exists() and not (authority/'configuration-approval.json').exists()
-        assert not (state/'apply-request.json').exists() and not (state/'apply-approval.json').exists()
-        assert all(p.read_bytes() == raw for p, raw in owned.items())
+        verify_journey(root, release, source, directory, origin, token, profile)
+        assert all(p.read_bytes() == raw for p, raw in owned.items() if p not in [pool, site])
     finally:
         # This fixture exclusively owns these nodes. Never remove changed operator configuration.
         for path in [site, pool]:
             if path in owned:
-                assert path.read_bytes() == owned[path]
-                path.unlink()
+                parked = Path(str(path)+('.retired' if path == pool else '.handover'))
+                current = path if path.exists() else parked
+                assert not current.is_symlink() and current.read_bytes() == owned[path]
+                current.unlink()
         if owned:
             ctl('reload', 'php8.3-fpm.service'); ctl('reload', 'nginx.service')
             for path in [ready, started]:

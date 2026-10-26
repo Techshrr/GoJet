@@ -353,8 +353,8 @@ observed progress and final completion. Replacement configuration is submitted t
 a real browser at the same Nginx endpoint after persistent system FPM switching
 and a real service restart, then prepared by its own timer. The switch regression
 also constructs a missing-ready-receipt boundary; this is not a power-loss claim.
-Same-origin handover coverage passed at the commit recorded in STATUS. New result
-and retirement coverage requires its corresponding native CI run to pass.
+Same-origin handover coverage passed at the commit recorded in STATUS. Result
+and retirement coverage has also passed at the commit recorded in STATUS.
 It exercises actual reload failure, a worker killed during native reload, explicit
 restoration of the Installer, protected foreign files, Nginx restart and product
 health/completion. Pre/post-rename interruption cases are constructed boundary
@@ -367,4 +367,15 @@ The same-origin desktop/mobile result test uses an explicitly preapproved readin
 state fixture and negative network fixtures. Its successful completion comes from
 actual Nginx handover, service/TLS health and the real root lock/receipt publisher;
 it does not claim that this new test repeats the entire interactive configuration
-journey. The separate existing browser configuration/apply/timer regressions remain.
+journey. The first-entry regression now continues through a separate uninterrupted
+browser journey using an empty database and the same persistent endpoint: actual form
+submission, scheduled root preparation, explicit root approval and handover authorization,
+browser acknowledgement, one apply POST, actual root apply timer, desktop/mobile result
+observation, then explicit retirement of preparation/preflight/apply timers and FPM.
+No web state, approval, progress or completion is injected in this continuous journey.
+The parent verifies that approval does not mutate the database, the actual migration and
+administrator counts, executor exit before retirement, and preservation of private records.
+Browser TLS uses a disposable self-signed test certificate; root health checks verify it.
+Evidence is `payload/browser-journey/result.json` with source/seal identity and screenshots.
+This new continuous coverage still needs its corresponding native CI result; it does not
+replace account-security or exact target-system acceptance.

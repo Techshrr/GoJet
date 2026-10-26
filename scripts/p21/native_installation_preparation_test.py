@@ -336,6 +336,7 @@ $state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_ge
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
     actual_release_preparation=True, single_command_native_apply=True,
     native_initial_web_entry=True, initial_entry_browser_to_root_preparation=True,
+    continuous_first_install_browser_to_retirement=True, continuous_installation_without_state_fixtures=True,
     initial_entry_survives_service_restart=True, initial_entry_missing_receipt_recovery=True,
     scheduled_root_executor=True, executor_idle_and_started_barriers=True,
     unprivileged_http_apply_mailbox=True, root_bound_web_apply=True, web_apply_replay_refused=True,

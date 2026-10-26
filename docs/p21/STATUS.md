@@ -9,21 +9,25 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 
 ## 最新已核实的 CI
 
-当前已核实源码：`66cf3e965532d9f2e05247d864eeb415b222b654`。
+当前已核实源码：`97f6a30b52827989632ffba70bd77567797d835d`。
 
 | 工作流 | Run | 结果 |
 | --- | --- | --- |
-| Native Payload Build | [40215936883](https://github.com/Techshrr/GoJet/actions/runs/40215936883) | 成功 |
-| Native Release Package | [40215936834](https://github.com/Techshrr/GoJet/actions/runs/40215936834) | 成功 |
-| Native Service Environment | [40215936830](https://github.com/Techshrr/GoJet/actions/runs/40215936830) | 成功 |
-| Native Migration Execution | [40215936833](https://github.com/Techshrr/GoJet/actions/runs/40215936833) | 成功 |
-| Native Data Bootstrap | [40215936811](https://github.com/Techshrr/GoJet/actions/runs/40215936811) | 成功 |
-| Native Installer Web | [40215936903](https://github.com/Techshrr/GoJet/actions/runs/40215936903) | 成功 |
-| P00 Bootstrap and G0 Traceability | [40215942511](https://github.com/Techshrr/GoJet/actions/runs/40215942511) | 成功 |
+| Native Payload Build | [40231567114](https://github.com/Techshrr/GoJet/actions/runs/40231567114) | 成功 |
+| Native Release Package | [40231567120](https://github.com/Techshrr/GoJet/actions/runs/40231567120) | 成功 |
+| Native Installer Web | [40231567105](https://github.com/Techshrr/GoJet/actions/runs/40231567105) | 成功 |
+| P00 Bootstrap and G0 Traceability | [40231573493](https://github.com/Techshrr/GoJet/actions/runs/40231573493) | 成功 |
+
+Service Environment、Migration Execution、Data Bootstrap 三项在功能提交
+`1ac1a5d4da089450d5cd2d6247dfd39f99085845` 已成功；后续两次提交仅调整浏览器
+测试。上表不表示所有工作流都在同一提交重新运行。
 
 原生日志确认首次持久网页入口、服务重启、真实浏览器到 root 准备及缺失成功回执
 恢复通过，也包含此前的重填 FPM 切换回归。同地址交接、重载失败及真实进程终止
-后的恢复也已通过。本次完成回执、浏览器反馈和安装器收尾新增回归尚待对应 CI。
+后的恢复已通过。完成回执、桌面/手机反馈、回执恢复和安装器收尾也已通过。
+新增连续验收复用首次入口测试，从空数据库、真实网页配置到准备定时器、独立 root
+审批、网页确认及单次安装提交、执行定时器、同地址完成反馈和三个调度器收尾；
+不注入网页状态、批准或成功回执。此项新增验收须以对应原生 CI 结果为准。
 这些结果不是全部项目验收通过，也不替代指定 Ubuntu 24.04.4 目标机验证；
 此前检查到的原生 runner 为 24.04.5。
 
@@ -43,13 +47,13 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 已经通过原生回归，首次入口部署也已通过。新增 root 授权的同地址站点交接，保留
 原入口配置供失败/中断恢复，交接后正式站点拒绝 `/install`；对应原生 CI 已通过。
 新增与批准计划绑定的只读完成回执、桌面/手机完成反馈，以及完成后显式 root 停用
-已登记定时器和安装器 FPM 池；回执缺失及收尾中断可按相同身份显式续办，CI 待核实。
+已登记定时器和安装器 FPM 池；回执缺失及收尾中断可按相同身份显式续办，原生 CI 已通过。
 
 ## 尚未完成的工作
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 初装接续 | 完成回执/浏览器反馈/安装器收尾的原生 CI；统一从首次配置到完成反馈与收尾的连续验收 |
+| 初装接续 | 新增连续验收的原生 CI；完整配置到收尾使用同一网页地址和同一批准计划 |
 | 恢复 | 初次入口部分发布、重填发布和调度器发布自身的中断恢复等剩余边界 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
 | 运维 | 原生升级、数据库备份恢复、兼容边界和完整恢复手册 |
