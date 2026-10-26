@@ -57,7 +57,30 @@ final class DependencyPreflight
                 return $line;
             };
             if ($r['password'] !== '' && $send(['AUTH', $r['password']]) !== "+OK\r\n") { return false; }
-            return $send(['SELECT', (string)$r['db']]) === "+OK\r\n" && $send(['PING']) === "+PONG\r\n";
+            if ($send(['SELECT', (string)$r['db']]) !== "+OK\r\n" || $send(['PING']) !== "+PONG\r\n") { return false; }
+            // Connectivity alone accepts read-only replicas and users without data access.
+            // Never touch application keys; NX prevents overwrites and EX bounds residue
+            // even when the connection dies or the account cannot delete its own probe.
+            $key = 'gojet:installer:preflight:'.bin2hex(random_bytes(16));
+            $value = bin2hex(random_bytes(32)); $owned = false;
+            try {
+                if ($send(['SET', $key, $value, 'NX', 'EX', '15']) !== "+OK\r\n") { return false; }
+                $owned = true;
+                if ($send(['GET', $key]) !== '$'.strlen($value)."\r\n") { return false; }
+                $body = '';
+                while (strlen($body) < strlen($value) + 2) {
+                    $chunk = fread($socket, strlen($value) + 2 - strlen($body));
+                    if ($chunk === false || $chunk === '') { return false; }
+                    $body .= $chunk;
+                }
+                if (!hash_equals($value."\r\n", $body) || $send(['DEL', $key]) !== ":1\r\n") { return false; }
+                $owned = false;
+                return true;
+            } finally {
+                if ($owned) {
+                    try { $send(['DEL', $key]); } catch (\Throwable) { /* The probe expires independently. */ }
+                }
+            }
         } finally { fclose($socket); }
     }
 

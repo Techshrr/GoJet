@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 import time
 from archive import verify_archive
+from native_redis_preflight_test import exercise_redis_access
 
 repo = Path(__file__).resolve().parents[2]
 archive, source = Path(sys.argv[1]).resolve(), sys.argv[2]
@@ -48,6 +49,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
         report = json.loads(result.stdout)
         assert report['source'] == source and report['installation_complete'] is False
         assert plan['database']['password'].encode() not in result.stdout
+        assert not p['redis']['password'] or p['redis']['password'].encode() not in result.stdout
         assert result.returncode == (0 if report['ready'] else 2)
         return report
 
@@ -78,6 +80,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
         except OSError as error:
             print(json.dumps({'native_clamd_socket_errno':error.errno}), file=sys.stderr)
     assert baseline['ready'], 'Native preflight failed checks: '+str(baseline['checks'])
+    redis_access = exercise_redis_access(call, plan)
     # Real protocol rejection, distinct from a missing socket or stale signatures.
     clamd_config = Path('/etc/clamav/clamd.conf')
     original_config = clamd_config.read_text()
@@ -177,5 +180,6 @@ print(json.dumps(dict(source=source, real_native_dependencies=True, baseline=bas
     stopped_nginx_fpm_rejected=True, unreachable_mysql_redis_rejected=True,
     missing_required_executables_rejected=missing_executables,
     bad_database_redis_credentials_rejected=True, missing_clamav_rejected=True, disabled_version_command_rejected=True,
+    redis_access=redis_access,
     unsafe_storage_rejected=True, untrusted_helper_not_executed=True, root_only=True,
     dependencies_restored=True, final_lock_written=False, full_p21_t010_acceptance=False)))

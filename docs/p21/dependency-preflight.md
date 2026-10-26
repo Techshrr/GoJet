@@ -15,7 +15,14 @@ Unix socket. Configuration variants outside this profile require explicit suppor
 Checks include the root-approved complete release manifest, a responsive systemd
 manager, installed/config-valid/active Nginx and PHP 8.3 FPM, PHP PDO MySQL/OpenSSL,
 a real MySQL8 connection with migration-compatible autocommit/trigger settings,
-and authenticated Redis SELECT/PING. ClamAV freshness/version and storage probes
+and authenticated Redis SELECT/PING plus a write/read/delete round trip in the
+configured database. Each probe uses an independent random
+`gojet:installer:preflight:*` key, `SET NX EX 15`, exact value comparison and
+confirmed deletion. It never overwrites application keys; if a connection or
+delete permission fails, the key expires within 15 seconds. Read-only replicas
+and accounts lacking SET, GET or DEL cannot report ready. This is a bounded
+dependency probe, not a workload benchmark or proof of every runtime Redis command.
+ClamAV freshness/version and storage probes
 reuse the shipped Go filepreflight helper, executed as the actual `gojet` account
 only after the entire release passes integrity verification. Provision storage,
 quarantine and published directories with gojet ownership and mode0700; grant
@@ -35,7 +42,7 @@ The complete T010 wrong-version/absent-dependency acceptance matrix remains
 pending; the authenticated status handoff is described below.
 
 The native fixture additionally removes each real Nginx, PHP-FPM, systemctl and
-runuser executable in turn on the disposable CI host, without substituting fake
+systemd-run executable in turn on the disposable CI host, without substituting fake
 version output. Each absence must block readiness and the corresponding checks;
 the exact original inode/mode is restored in a finally block and readiness is
 verified again. This covers missing executables independently of stopped units.
@@ -47,6 +54,14 @@ updates and the native daemon; it does not mock scanner health. It exercises
 stopped Nginx/FPM, unreachable or wrong-credential databases/cache, unavailable
 scanner socket, unsafe storage and untrusted helper permissions, then restores
 the dependencies and checks readiness again. Tests run only in disposable runners.
+
+The Redis access fixture starts a separate loopback Redis with its own private
+ACL file and no persistence. It individually denies SET, GET and DEL while PING
+still succeeds, then exercises a real read-only replica and restored write access.
+It verifies cleanup, actual expiry when DEL is denied, and preservation of existing
+keys in both the configured and default databases. The fixture never changes the
+host Redis ACL or replication state. See STATUS for the verified CI checkpoint;
+the new access cases require their own native run before being counted as passed.
 
 ## Protected snapshot read
 
