@@ -377,5 +377,42 @@ The parent verifies that approval does not mutate the database, the actual migra
 administrator counts, executor exit before retirement, and preservation of private records.
 Browser TLS uses a disposable self-signed test certificate; root health checks verify it.
 Evidence is `payload/browser-journey/result.json` with source/seal identity and screenshots.
-This new continuous coverage still needs its corresponding native CI result; it does not
+This continuous coverage has passed at the source recorded in STATUS; it does not
 replace account-security or exact target-system acceptance.
+
+
+## Explicit first-entry publication recovery
+
+`recover-web-entry.php ORIGINAL_ENTRY_DIRECTORY` reads the same bounded JSON on stdin
+as `provision-web-entry.php`. Use the original root-private request (mode 0600), the
+same verified release and the same directory. For example, after inspecting the
+original entry receipt and remaining files:
+
+```sh
+sudo sh -c 'exec php8.3 /verified-release/installer/bin/recover-web-entry.php /original-entry < /root/original-entry-request.json'
+```
+
+A complete matching root started receipt is mandatory. Before changing anything, the
+command validates the source, package, TLS, every existing private file, pool and state
+node, and the absence of conflicting listeners. It can complete an unpublished prefix:
+started only, a protected root directory, one or both private inputs, initial state
+creation/ownership transfer, or the completed state with the pool/vhost still missing.
+Only absent files are published. A root-only 0700 entry can finish initial state creation;
+a previously traversable 0755 entry with missing state or inputs is refused. Changed,
+linked, writable, used or unknown state is not reset. Existing authenticated/advanced
+state is not copied into a fresh attempt. The ordinary provisioning command retains its
+partial-publication refusal; the existing fully-published missing-ready recovery remains.
+
+The recovery takes the existing activation/FPM locks and writes ready only after native
+syntax/reload and verified HTTPS health. It never prepares data, approves a draft or
+executes installation. Completed handover/retirement cannot be reversed. Corrupt/missing
+root authority, truncated/foreign nodes, unknown staging files and ambiguous socket or
+publication order require inspection; preserve them instead of deleting records to retry.
+
+New native tests construct ten entry publication prefixes, changed bindings/files,
+unsafe permissions/links and missing live state. Scheduler tests cover absent/partial/full
+unit publication, missing ready, changed root inputs and serialization. They preserve a
+real completed preparation barrier and reject recovery after actual installation completion.
+These are publication-boundary fixtures, not machine power-loss claims. The continuous
+first-install browser journey remains a separate regression and has passed at the source
+recorded in STATUS; the newly added recovery cases require their own native CI result.

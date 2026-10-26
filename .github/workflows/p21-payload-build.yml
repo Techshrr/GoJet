@@ -110,6 +110,7 @@ jobs:
           php8.3 -l installer/bin/refresh-web-preflight.php
           php8.3 -l installer/bin/render-web-preflight-schedule.php
           php8.3 -l installer/src/PreflightScheduleInstallation.php
+          php8.3 -l installer/bin/recover-web-schedule.php
           php8.3 -l installer/bin/install-web-preflight-schedule.php
           php8.3 -l installer/bin/render-web-apply-schedule.php
           php8.3 -l installer/bin/install-web-apply-schedule.php
@@ -142,6 +143,7 @@ jobs:
           php8.3 -l installer/bin/switch-web-configuration.php
           php8.3 -l installer/src/WebEntryProvisioning.php
           php8.3 -l installer/bin/provision-web-entry.php
+          php8.3 -l installer/bin/recover-web-entry.php
           php8.3 -l installer/bin/render-web-preparation-schedule.php
           php8.3 -l installer/bin/install-web-preparation-schedule.php
           php8.3 -l installer/bin/prepare-installation.php

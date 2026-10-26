@@ -19,6 +19,33 @@ ready。执行调度与预检调度使用各自的记录；预检授权不会隐
 部分安装或中断不会被新命令覆盖，必须检查 `/var/lib/gojet-installer-authority`
 下对应的记录和 `/etc/systemd/system` 单元。不得用删除记录作为通用重试办法。
 
+## 调度器发布中断后的显式恢复
+
+先核对原始 root 绑定、`*-schedule-started.json` 和单元文件；确认只是调度器发布
+中断，再使用同一已核验发行目录内的命令。不要删除 started 或 worker 的执行记录。
+
+```sh
+# 恢复准备调度；两个路径必须与首次发布时完全相同。
+sudo php8.3 /固定发行目录/installer/bin/recover-web-schedule.php preparation /原始绑定.json /原始状态目录
+# 重填配置的准备调度还须在最后带上原始 predecessor 绑定路径。
+# 恢复依赖观察调度，不授予安装执行权限。
+sudo php8.3 /固定发行目录/installer/bin/recover-web-schedule.php preflight
+# 恢复已有 root 批准计划的安装调度，可能接收已经排队的网页请求。
+sudo php8.3 /固定发行目录/installer/bin/recover-web-schedule.php apply
+```
+
+新发布的 started 记录使用 schema 2，同时绑定原始 root 输入文件摘要和全部单元摘要。
+恢复只补齐缺失的完整单元，不覆盖现有文件；权限、链接、输入或单元发生变化，或
+实际加载来源/drop-in 不匹配、worker 正在运行时拒绝。已有 ready 但被管理员停用的
+timer 不会被恢复命令重新启用。旧 schema 1 记录仍可用于安装器收尾，但不具备新恢复
+所需的输入绑定，不能自动升级或猜测原始输入。
+
+单元先在不会被 systemd 加载的临时文件中写完并同步，再无覆盖发布。所有单元通过
+语法、来源和字节核验后才启用 timer；已完整启用而仅缺 ready 的场景可补回回执。
+恢复与发布共用全局锁，收尾也获取该锁。完成锁、准备/安装 worker 的 started 记录
+始终保留，恢复调度不等于重跑安装。无法校验的截断记录或单元、遗留双硬链接等仍需
+人工核查，不会作为缺失文件自动重建。
+
 worker 仍重新验证 root 绑定、专用账户所有权、私有 mailbox、已批准摘要和密封发行包，
 在数据/服务修改前写入一次性 `web-apply-started.json`。该记录一旦存在，后续 timer
 触发直接跳过；执行失败、超时、断电或中断均不会自动重放。900 秒执行超时会终止

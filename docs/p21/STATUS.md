@@ -9,25 +9,23 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 
 ## 最新已核实的 CI
 
-当前已核实源码：`97f6a30b52827989632ffba70bd77567797d835d`。
+当前已核实源码：`0aebc79337c019d6eadf65c8cce9ea5691822d53`。
 
 | 工作流 | Run | 结果 |
 | --- | --- | --- |
-| Native Payload Build | [40231567114](https://github.com/Techshrr/GoJet/actions/runs/40231567114) | 成功 |
-| Native Release Package | [40231567120](https://github.com/Techshrr/GoJet/actions/runs/40231567120) | 成功 |
-| Native Installer Web | [40231567105](https://github.com/Techshrr/GoJet/actions/runs/40231567105) | 成功 |
-| P00 Bootstrap and G0 Traceability | [40231573493](https://github.com/Techshrr/GoJet/actions/runs/40231573493) | 成功 |
+| Native Payload Build | [40254834668](https://github.com/Techshrr/GoJet/actions/runs/40254834668) | 成功 |
+| Native Release Package | [40254834596](https://github.com/Techshrr/GoJet/actions/runs/40254834596) | 成功 |
+| P00 Bootstrap and G0 Traceability | [40254839171](https://github.com/Techshrr/GoJet/actions/runs/40254839171) | 成功 |
 
-Service Environment、Migration Execution、Data Bootstrap 三项在功能提交
-`1ac1a5d4da089450d5cd2d6247dfd39f99085845` 已成功；后续两次提交仅调整浏览器
-测试。上表不表示所有工作流都在同一提交重新运行。
+Installer Web 最近一次成功为 `97f6a30`（Run 40231567105）；Service Environment、
+Migration Execution、Data Bootstrap 三项在功能提交 `1ac1a5d` 已成功。后续提交是
+测试及文档变更；上表不表示所有工作流都在同一提交重新运行。
 
-原生日志确认首次持久网页入口、服务重启、真实浏览器到 root 准备及缺失成功回执
-恢复通过，也包含此前的重填 FPM 切换回归。同地址交接、重载失败及真实进程终止
-后的恢复已通过。完成回执、桌面/手机反馈、回执恢复和安装器收尾也已通过。
-新增连续验收复用首次入口测试，从空数据库、真实网页配置到准备定时器、独立 root
-审批、网页确认及单次安装提交、执行定时器、同地址完成反馈和三个调度器收尾；
-不注入网页状态、批准或成功回执。此项新增验收须以对应原生 CI 结果为准。
+原生日志已确认完整首次安装连续链路：空数据库、首次持久入口、真实网页配置、
+准备定时器、独立 root 审批、网页确认及单次安装提交、执行定时器、同地址桌面/手机
+完成反馈、三个调度器和 FPM 安装器池收尾。该连续链路不注入网页状态、批准或完成
+记录，仍包含此前服务/站点故障、恢复及重填入口回归。
+本次新增首次入口与调度器部分发布的显式恢复，须核查对应原生 CI 后才能列为通过。
 这些结果不是全部项目验收通过，也不替代指定 Ubuntu 24.04.4 目标机验证；
 此前检查到的原生 runner 为 24.04.5。
 
@@ -53,8 +51,8 @@ Service Environment、Migration Execution、Data Bootstrap 三项在功能提交
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 初装接续 | 新增连续验收的原生 CI；完整配置到收尾使用同一网页地址和同一批准计划 |
-| 恢复 | 初次入口部分发布、重填发布和调度器发布自身的中断恢复等剩余边界 |
+| 初装接续 | 连续首次安装原生链路已通过；指定目标机与最终统一候选验收仍保留 |
+| 恢复 | 首次入口/调度器部分发布恢复新增 CI；重填发布等剩余边界、损坏记录的人工处理说明 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
 | 运维 | 原生升级、数据库备份恢复、兼容边界和完整恢复手册 |
 | 最终验收 | 精确目标系统、统一候选源码/包摘要、全部受影响回归、G11 审查与签署 |

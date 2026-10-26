@@ -59,7 +59,10 @@ final class InstallerRetirement
             $started = ApplyRequest::read($path, 0);
             $ready = ApplyRequest::read(self::AUTHORITY.'/'.$kind.'-schedule-ready.json', 0);
             $names = ['gojet-installer-'.$kind.'.service', 'gojet-installer-'.$kind.'.timer'];
-            if (array_keys($started) !== ['schema', 'units'] || $started['schema'] !== 1 || !is_array($started['units'])
+            $legacy = array_keys($started) === ['schema', 'units'] && $started['schema'] === 1;
+            $bound = array_keys($started) === ['schema', 'input_sha256', 'units'] && $started['schema'] === 2
+                && is_string($started['input_sha256']) && preg_match('/^[a-f0-9]{64}$/D', $started['input_sha256']);
+            if ((!$legacy && !$bound) || !is_array($started['units'] ?? null)
                 || array_keys($started['units']) !== $names || $ready !== ['schema' => 1, 'scheduler_enabled' => true]) {
                 throw new \RuntimeException('Incomplete scheduler publication');
             }
@@ -83,7 +86,7 @@ final class InstallerRetirement
         InstallationCompletion::run($prepared, true);
         $locks = [];
         try {
-            foreach (['installation-apply.lock', 'service-activation.lock', 'fpm-switch.lock'] as $name) {
+            foreach (['installation-apply.lock', 'service-activation.lock', 'fpm-switch.lock', 'scheduler-publication.lock'] as $name) {
                 $path = self::AUTHORITY.'/'.$name;
                 if (!self::exists($path)) { $mask = umask(0077); try { $f = fopen($path, 'x+b'); } finally { umask($mask); } if ($f === false) { throw new \RuntimeException('Retirement lock unavailable'); } fclose($f); }
                 if (self::read($path, 0600) !== '') { throw new \RuntimeException('Invalid lock'); }

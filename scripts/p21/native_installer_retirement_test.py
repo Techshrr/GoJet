@@ -41,7 +41,7 @@ def verify_retirement(root, release, prepared, entry, scheduler_owned):
     try:
         call(False); assert not started.exists()
     finally: service.write_bytes(scheduler_owned[service])
-    for name in ['service-activation.lock', 'fpm-switch.lock']:
+    for name in ['service-activation.lock', 'fpm-switch.lock', 'scheduler-publication.lock']:
         with (authority/name).open('r+b') as held:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
             call(False)

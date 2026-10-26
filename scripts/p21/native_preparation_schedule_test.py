@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 import subprocess
 import time
+from native_schedule_recovery_test import verify_schedule_recovery
 
 
 @contextmanager
@@ -87,6 +88,7 @@ def preparation_schedule(release, binding, state, destination, authority, predec
         assert json.loads(result.stdout) == dict(scheduler_enabled=True, installation_complete=False)
         assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
         assert ctl('is-active', names[1]).stdout.strip() == b'active'
+        verify_schedule_recovery(release, 'preparation', [binding, state]+([predecessor] if predecessor is not None else []))
         for p in paths:
             assert p.read_text() == units[p.name] and p.stat().st_uid == 0 and p.stat().st_mode & 0o777 == 0o644
         for p in [started, ready]:
@@ -110,6 +112,12 @@ def preparation_schedule(release, binding, state, destination, authority, predec
                 time.sleep(0.5)
             raise AssertionError('Real preparation timer did not finish')
         yield wait_prepared
+        snapshots = {p: p.read_bytes() for p in [attempt, prepared, destination/'seal.json']}
+        ready.unlink()
+        recovered = run(['php8.3', str(release/'installer/bin/recover-web-schedule.php'), 'preparation',
+            str(binding), str(state)]+([str(predecessor)] if predecessor is not None else []))
+        assert json.loads(recovered.stdout)['already_applied'] is False
+        assert all(p.read_bytes() == raw for p, raw in snapshots.items())
         ctl('stop', names[1], names[0])
         snapshots = {p: p.read_bytes() for p in [attempt, prepared, destination/'seal.json']}
         ctl('start', names[0])

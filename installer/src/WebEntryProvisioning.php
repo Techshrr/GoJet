@@ -122,7 +122,105 @@ final class WebEntryProvisioning
             self::absent(self::AUTHORITY.'/'.$name);
         }
     }
-    public static function run(string $directory, array $input): array
+    private static function exists(string $path): bool
+    {
+        clearstatcache(true, $path); return file_exists($path) || is_link($path);
+    }
+    /** Resume only an unpublished prefix. Live/missing state and changed files are never rebuilt. */
+    private static function recoverPublication(string $directory, array $input, array $private, array $rendered, array $account, string $baseline): void
+    {
+        // A published vhost requires the full original publication, verified by run() below.
+        if (self::exists(self::SITE)) { return; }
+        self::absent(self::SITE.'.handover'); self::absent(self::POOL.'.retired');
+        $present = self::exists($directory); $mode = null;
+        if ($present) {
+            $stat = lstat($directory); $mode = $stat['mode'] & 07777;
+            if (realpath($directory) !== $directory || !is_dir($directory) || $stat['uid'] !== 0
+                || !in_array($mode, [0700, 0755], true)) { throw new \RuntimeException('Unsafe partial entry'); }
+            $names = array_diff(scandir($directory), ['.', '..']);
+            if (array_diff($names, ['binding.json', 'web.json', 'state', 'fpm.sock'])) {
+                throw new \RuntimeException('Entry has advanced or contains unknown files');
+            }
+        }
+        $missing = [];
+        foreach ($private as $name => $raw) {
+            $path = $directory.'/'.$name;
+            if (self::exists($path)) {
+                if (self::read($path, 0600) !== $raw) { throw new \RuntimeException('Changed partial entry input'); }
+            } else { $missing[$path] = $raw; }
+        }
+        if (self::exists($directory.'/web.json') && !self::exists($directory.'/binding.json')) {
+            throw new \RuntimeException('Ambiguous entry publication order');
+        }
+        $state = $directory.'/state'; $stateExists = self::exists($state);
+        $initial = ['schema' => 2, 'step' => 0, 'status' => 'ready', 'session' => null,
+            'expires' => 0, 'csrf' => null, 'attempts' => 0, 'retry_at' => 0];
+        if ($stateExists) {
+            $stat = lstat($state);
+            if (realpath($state) !== $state || ($stat['mode'] & 0177777) !== 0040700
+                || !in_array($stat['uid'], [0, $account['uid']], true)
+                || !in_array($stat['gid'], [0, $account['gid']], true) || $missing !== []
+                || array_diff(scandir($state), ['.', '..', 'state.json', 'state.lock'])) {
+                throw new \RuntimeException('Unsafe partial state');
+            }
+            foreach (['state.json', 'state.lock'] as $name) {
+                $path = $state.'/'.$name;
+                if (!self::exists($path)) {
+                    if ($mode !== 0700 || $stat['uid'] !== 0) { throw new \RuntimeException('Missing published state'); }
+                    continue;
+                }
+                $file = lstat($path);
+                if (realpath($path) !== $path || ($file['mode'] & 0177777) !== 0100600 || $file['nlink'] !== 1
+                    || !in_array($file['uid'], [0, $account['uid']], true)
+                    || !in_array($file['gid'], [0, $account['gid']], true) || $file['size'] > 4096
+                    || ($mode === 0755 && ($file['uid'] !== $account['uid'] || $file['gid'] !== $account['gid']))) {
+                    throw new \RuntimeException('Changed partial state ownership');
+                }
+                if ($name === 'state.json' && ApplyRequest::read($path, $file['uid']) !== $initial) {
+                    throw new \RuntimeException('Partial entry state already used');
+                }
+                if ($name === 'state.lock' && $file['size'] !== 0) { throw new \RuntimeException('Changed state lock'); }
+            }
+            if ($mode === 0755 && ($stat['uid'] !== $account['uid'] || $stat['gid'] !== $account['gid'])) {
+                throw new \RuntimeException('Changed published state ownership');
+            }
+            if (!self::exists($state.'/state.json') && self::exists($state.'/state.lock') && fileowner($state.'/state.lock') !== 0) {
+                throw new \RuntimeException('Ambiguous partial initialization');
+            }
+        }
+        if ($mode === 0755 && (!$stateExists || $missing !== [])) { throw new \RuntimeException('Missing live entry input'); }
+        $poolExists = self::exists(self::POOL);
+        if ($poolExists && ($mode !== 0755 || self::read(self::POOL, 0600) !== $rendered['fpm'])) {
+            throw new \RuntimeException('Changed or out-of-order pool');
+        }
+        if (self::exists($directory.'/fpm.sock') && !$poolExists) { throw new \RuntimeException('Ambiguous entry socket'); }
+        $ports = SiteActivation::listenPorts($rendered['nginx']);
+        if ($ports === [] || array_intersect($ports, SiteActivation::listenPorts($baseline))) { throw new \RuntimeException('Existing entry listener'); }
+        $probe = @stream_socket_server('tcp://0.0.0.0:'.$ports[0], $errno, $error);
+        if ($probe === false) { throw new \RuntimeException('Occupied recovery port'); } fclose($probe);
+        // All existing nodes are checked before the first mutation. No existing file is replaced.
+        if (!$present) {
+            if (!mkdir($directory, 0700)) { throw new \RuntimeException('Entry recovery mkdir failed'); }
+            self::sync(dirname($directory));
+        }
+        foreach ($missing as $path => $raw) { self::publish($path, $raw, 0600); }
+        if (!$stateExists && !mkdir($state, 0700)) { throw new \RuntimeException('State recovery mkdir failed'); }
+        if (!self::exists($state.'/state.json')) {
+            (new InstallState($state, $input['bootstrap_sha256']))->initialize();
+        } elseif (!self::exists($state.'/state.lock')) { self::publish($state.'/state.lock', '', 0600); }
+        if ($mode !== 0755) {
+            foreach ([$state.'/state.json', $state.'/state.lock', $state] as $path) {
+                if (!chown($path, $account['uid']) || !chgrp($path, $account['gid'])) { throw new \RuntimeException('State recovery ownership failed'); }
+                self::sync($path);
+            }
+            if (!chmod($directory, 0755)) { throw new \RuntimeException('Entry recovery traversal failed'); }
+            self::sync($directory); self::sync(dirname($directory));
+        }
+        if (!$poolExists) { self::publish(self::POOL, $rendered['fpm'], 0600); }
+        self::publish(self::SITE, $rendered['nginx'], 0644);
+        clearstatcache(true, $directory);
+    }
+    public static function run(string $directory, array $input, bool $recover = false): array
     {
         if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) { throw new \RuntimeException('Root required'); }
         $keys = ['schema', 'origin', 'release', 'manifest_sha256', 'source', 'bootstrap_sha256', 'tls', 'files'];
@@ -191,8 +289,12 @@ final class WebEntryProvisioning
             $baseline = self::nginx();
             $started = self::AUTHORITY.'/web-entry-started.json'; $ready = self::AUTHORITY.'/web-entry-ready.json';
             $exists = file_exists($started) || is_link($started);
+            if ($recover && !$exists) { throw new \RuntimeException('Original entry receipt required'); }
             if ($exists) {
                 if (ApplyRequest::read($started, 0) !== $identity) { throw new \RuntimeException('Entry identity changed'); }
+                if ($recover && !self::exists($ready)) {
+                    self::recoverPublication($directory, $input, $private, $rendered, $account, $baseline);
+                }
                 CompletionLock::verifyProvisioningPath($directory.'/installed.lock');
                 if ((fileperms($directory) & 07777) !== 0755) { throw new \RuntimeException('Incomplete entry publication'); }
                 foreach ($private as $name => $raw) { if (self::read($directory.'/'.$name, 0600) !== $raw) { throw new \RuntimeException('Changed entry input'); } }

@@ -49,9 +49,9 @@ renderer outputs and verifies actual HTTPS readiness; its native CI has passed.
 Root-authorized same-origin product handover is implemented with explicit failure
 recovery and has passed native CI. Matching root completion receipts now provide
 browser feedback after the entry closes; a separate guarded root command retires
-registered timers and the Installer FPM pool. Their native CI has passed. A continuous
-first-entry/browser/timer/retirement regression is now included; its corresponding
-CI result must be checked separately. Unified target-system acceptance and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
+registered timers and the Installer FPM pool. Their native CI has passed. The continuous
+first-entry/browser/timer/retirement regression has also passed. Explicit partial
+entry publication recovery is now included and needs its corresponding native CI result. Unified target-system acceptance and complete upgrade/restore acceptance remain open. See [STATUS.md](STATUS.md)
 for the current overall boundary rather than inferring it from this renderer.
 
 The renderer also requires a `completion` input, normally

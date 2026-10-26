@@ -8,6 +8,7 @@ import pwd
 import socket
 import subprocess
 from native_installation_journey_test import verify_journey
+from native_entry_publication_recovery_test import verify_entry_publication_recovery
 
 
 def verify_web_entry(root, release, source, manifest, profile):
@@ -86,6 +87,7 @@ def verify_web_entry(root, release, source, manifest, profile):
         pool.write_bytes(owned[pool])
         assert call(success=True)['already_applied'] is False
         assert all(p.read_bytes() == raw for p, raw in before.items())
+        verify_entry_publication_recovery(release, directory, request, owned)
         # Both actual daemons reload from persistent host configuration after restart.
         ctl('restart', 'php8.3-fpm.service'); ctl('restart', 'nginx.service')
         verify_journey(root, release, source, directory, origin, token, profile)

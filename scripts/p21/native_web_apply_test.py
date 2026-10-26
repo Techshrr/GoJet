@@ -7,6 +7,7 @@ import pwd
 import re
 import subprocess
 import time
+from native_schedule_recovery_test import verify_schedule_recovery
 from native_browser_apply import submit_browser, observe_browser, confirm_approval_browser
 
 
@@ -87,6 +88,7 @@ def verify_preflight_schedule(release, authority, account):
         assert started.read_bytes() == receipt
         assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
         assert all(observe(before, True)['checks'].values()), 'Scheduled preflight must verify every dependency'
+        verify_schedule_recovery(release, 'preflight')
         assert ctl('is-active', names[1]).stdout.strip() == b'active'
         # A subsequent tick, not a direct service invocation, must detect the real outage.
         ctl('stop', 'redis-server.service')
@@ -210,6 +212,7 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
         assert subprocess.run(install, capture_output=True, timeout=120).returncode == 1
         assert started.read_bytes() == provision_receipt
         assert ctl('is-enabled', names[1]).stdout.strip() == b'enabled'
+        verify_schedule_recovery(release, 'apply')
         assert ctl('is-active', names[1]).stdout.strip() == b'active'
         ctl('start', names[0])
         assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
@@ -257,6 +260,8 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
             raise AssertionError('Root timer did not complete the approved installation')
         assert json.loads(marker.read_text())['source'] == source
         original = receipt.read_bytes()
+        recovered = subprocess.run(['php8.3', str(release/'installer/bin/recover-web-schedule.php'), 'apply'], capture_output=True, timeout=120)
+        assert recovered.returncode == 1 and not recovered.stdout and receipt.read_bytes() == original
         ctl('start', names[0])
         assert ctl('show', names[0], '--property=ConditionResult', '--value').stdout.strip() == b'no'
         assert receipt.read_bytes() == original
