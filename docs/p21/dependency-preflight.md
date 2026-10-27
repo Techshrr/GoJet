@@ -55,6 +55,18 @@ stopped Nginx/FPM, unreachable or wrong-credential databases/cache, unavailable
 scanner socket, unsafe storage and untrusted helper permissions, then restores
 the dependencies and checks readiness again. Tests run only in disposable runners.
 
+The native configuration fixture adds an exclusive temporary invalid include to Nginx
+and PHP-FPM in turn. It requires the real syntax checker to fail while the daemon
+stays active with the same PID, and requires only the affected readiness check to
+fail. Removing the include must restore syntax validity and aggregate readiness;
+no daemon reload or restart hides the failure. A separate MySQL fixture temporarily
+disables the disposable server's global autocommit default, checks the value on a
+new real session, and requires the production PDO preflight to reject it. A finally
+block restores the initial setting, followed by a fresh readiness check. The CI-only
+admin password is passed through the subprocess environment, never probe arguments
+or result JSON. These additions require native CI verification and do not complete
+the wrong-version matrix or T010 acceptance.
+
 The Redis access fixture starts a separate loopback Redis with its own private
 ACL file and no persistence. It individually denies SET, GET and DEL while PING
 still succeeds, then exercises a real read-only replica and restored write access.

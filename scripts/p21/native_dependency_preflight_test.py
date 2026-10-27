@@ -14,6 +14,7 @@ import tempfile
 import time
 from archive import verify_archive
 from native_redis_preflight_test import exercise_redis_access
+from native_configuration_preflight_test import exercise_service_configuration, exercise_mysql_settings
 
 repo = Path(__file__).resolve().parents[2]
 archive, source = Path(sys.argv[1]).resolve(), sys.argv[2]
@@ -80,6 +81,8 @@ with tempfile.TemporaryDirectory(prefix='gojet-preflight-') as temporary:
         except OSError as error:
             print(json.dumps({'native_clamd_socket_errno':error.errno}), file=sys.stderr)
     assert baseline['ready'], 'Native preflight failed checks: '+str(baseline['checks'])
+    service_configuration = exercise_service_configuration(call)
+    mysql_settings = exercise_mysql_settings(call)
     redis_access = exercise_redis_access(call, plan)
     # Real protocol rejection, distinct from a missing socket or stale signatures.
     clamd_config = Path('/etc/clamav/clamd.conf')
@@ -181,5 +184,6 @@ print(json.dumps(dict(source=source, real_native_dependencies=True, baseline=bas
     missing_required_executables_rejected=missing_executables,
     bad_database_redis_credentials_rejected=True, missing_clamav_rejected=True, disabled_version_command_rejected=True,
     redis_access=redis_access,
+    service_configuration=service_configuration, mysql_settings=mysql_settings,
     unsafe_storage_rejected=True, untrusted_helper_not_executed=True, root_only=True,
     dependencies_restored=True, final_lock_written=False, full_p21_t010_acceptance=False)))
