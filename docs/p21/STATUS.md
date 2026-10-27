@@ -57,7 +57,7 @@ manifest SHA-256 为 `4b7ec5b8e6254a53bb0c95ef66e50c702c6c0ceee0e822324958ebd708
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 下一项：前置回归 | P09 T001–T025 在 485487a 上通过；T026/P20 证据格式衔接已修复并本地回放，当前提交 CI 待验证；前置关闭检查排队超时仍保留 |
+| 下一项：前置关闭证据 | 025160f 的 P09 T001–T026、P20 文件安全部分及 P05–P07 关闭检查已通过；P08/P09 历史签署与附件留存阻塞仍保留 |
 | 初装接续 | 连续首次安装原生链路已通过；指定目标机与最终统一候选验收仍保留 |
 | 恢复 | 发布恢复已通过；损坏记录/未知文件的人工处理与完整恢复手册 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
@@ -67,35 +67,55 @@ manifest SHA-256 为 `4b7ec5b8e6254a53bb0c95ef66e50c702c6c0ceee0e822324958ebd708
 
 冻结条目 T001–T018 的验收要求保留于
 [正式测试计划](../../artifacts/v10/P21/test-plan.json)。本文件不替代正式结果或改变标准。
-P09 受保护浏览器回归已在 `485487a4657b83628ab61d6be49b7917ca9e07e9` 上通过：
+P09 受保护浏览器及证据衔接已在源码
+`025160f88b9421e250be546e25a8d795d18b3c30` 上验证。本次状态更新仅记录该源码的
+结果，不把文档提交或之后的候选自动视为已验收。
 
 | 工作流 | Run | 结果 |
 | --- | --- | --- |
-| P09 Real Files and ClamAV Integration（T001–T018） | [40373645411](https://github.com/Techshrr/GoJet/actions/runs/40373645411) | 成功 |
-| P09 Files Health and Installer Preflight（T019–T020） | [40373650114](https://github.com/Techshrr/GoJet/actions/runs/40373650114) | 成功 |
-| P09 Workspace Files Browser（T021–T025） | [40373645402](https://github.com/Techshrr/GoJet/actions/runs/40373645402) | 成功 |
+| P09 Files Contract | [40436097392](https://github.com/Techshrr/GoJet/actions/runs/40436097392) | 成功 |
+| P09 Real Files and ClamAV Integration（T001–T018） | [40436095497](https://github.com/Techshrr/GoJet/actions/runs/40436095497) | 成功 |
+| P09 Files Health and Installer Preflight（T019–T020） | [40436097544](https://github.com/Techshrr/GoJet/actions/runs/40436097544) | 成功 |
+| P09 Workspace Files Browser（T021–T025） | [40436097055](https://github.com/Techshrr/GoJet/actions/runs/40436097055) | 成功 |
+| P09 Evidence Coherence（T026 及 P20 文件安全部分） | [40438004082](https://github.com/Techshrr/GoJet/actions/runs/40438004082) | 成功 |
+| P09 Evidence Coherence（原 PR run 重试） | [40436095637](https://github.com/Techshrr/GoJet/actions/runs/40436095637) | 成功 |
+| P05 Closure（重试） | [40436095514](https://github.com/Techshrr/GoJet/actions/runs/40436095514) | 成功 |
+| P06 Closure（重试） | [40436095600](https://github.com/Techshrr/GoJet/actions/runs/40436095600) | 成功 |
+| P07 Closure（重试） | [40436095610](https://github.com/Techshrr/GoJet/actions/runs/40436095610) | 成功 |
 
-原始浏览器附件 `12678043361` 已独立下载，ZIP 完整性与 SHA-256
-`d783426ef9ab47e7c401509983e40a19cf40854f98a89ded5810a03f1a0be73b` 已复核。
-五项结果均绑定上述源码；桌面正常和手机扫描器故障截图已查看。T024 确认实际 TLS
-登录、认证/阶段拒绝、真实存储/ClamAV 结果、故障与恢复、过期/缺失状态清除、无安装
-POST、无阶段推进和零意外浏览器错误。起始阶段及完成标记仍是明确夹具，不能作为
-完整安装验收。接口映射和边界见 [P09 受保护浏览器回归](p09-protected-browser.md)。
+汇总附件 `12708563113` 已独立下载，ZIP 完整性及 SHA-256
+`2bca2223631daaa534d69a7e06988ba2f6a507a312f7e12dc6119df21e0f35cd` 已复核。
+26 项结果均为 PASS 且绑定上述源码；索引中的 25 项输入及 12 张截图摘要均与原文件
+匹配。该汇总采用同源码后续 Integration run `40441546345`；其余生产者见附件清单。
+P20 文件安全附件 `12708752801` 的 ZIP 与 SHA-256
+`36af10a381356fb0d5ec772acbc7c58c5ad76aacb511ef3c453b4202c43867a9` 也已验证。
+其 `formal_p20_t028_claim=false`、`admin_governance_bound=false` 和
+`next_case_unlocked=false` 均保留，不能作为整个 P20 T028 通过证明。
 
-同源码 T026 工作流 [40373644512](https://github.com/Techshrr/GoJet/actions/runs/40373644512)
-在汇总附件时因旧的 9 张截图限制失败；旧校验器和 P20 文件安全消费者也仍要求公开
-安装入口的旧响应结构。本轮改为明确的 12 张截图清单及共享的受保护证据校验器，
-保留真实探测、认证、阶段、故障关闭、恢复及不越权声明。5 组负向测试通过。
-原始汇总附件 `12678774357` 的 SHA-256
-`3f68d50148469d78251591b6643cbd81fe58bfa91e2f5c674a35713178dde672` 与 ZIP 完整性已验证；
-基于其中未改写的 25 项原始证据，本地回放 T026 和 P20 文件安全校验通过。
-故意把扫描器故障改为健康、移除手机故障截图均被拒绝。此为新校验代码的本地验证，
-不是新提交 CI 或整体关闭证明；新提交 CI 仍待验证。
+T024 覆盖实际 TLS 登录、认证/阶段拒绝、真实存储/ClamAV 结果、故障与恢复、过期/
+缺失状态清除、无安装 POST、无阶段推进和零意外浏览器错误。起始阶段及完成标记
+仍是明确夹具，不能作为完整安装验收。接口映射和边界见
+[P09 受保护浏览器回归](p09-protected-browser.md)。共享校验器的 5 组负向测试也已在
+上述一致性 CI 中通过，旧公开入口结构不能替代当前受保护证据。
 
-同源码 P05 Closure 等前置关闭检查因 runner 排队超过其 15 分钟等待窗口而失败，
-所等待的 P03/P05 基础工作流后来已成功；该问题与生产功能故障分别记录。
-P09 Closure [40373645598](https://github.com/Techshrr/GoJet/actions/runs/40373645598) 仍失败，
-后续必须解决前置 CI 编排及按同一候选重验，不能删减前置要求或凭局部成功宣称关闭。
+本次按依赖顺序重试，消除了该源码的 P05–P07 及 P09 一致性检查的排队超时失败；
+没有修改等待窗口、删减前置要求或声称已解决所有未来候选的 CI 排队问题。
+重试进一步定位到两项独立阻塞：
+
+- P08 Closure [40436095696](https://github.com/Techshrr/GoJet/actions/runs/40436095696)，
+  job `122064703375`，受影响工作流及证据下载通过；T016 拒绝历史签署的 pre-sign SHA
+  `7b5c0f095c2a5852cd55697cbb08bdad1dc65263` 与当前父提交 `485487a` 不一致。
+- P09 Closure [40436097385](https://github.com/Techshrr/GoJet/actions/runs/40436097385)，
+  job `122064710826`，26 项前置工作流及当前证据下载通过；绑定历史 P08 附件
+  `9477523498` 时 HTTP 404，T027 尚未执行。原历史 run `32579404081` 仍为成功，
+  但附件列表为空。原 job `97047721945` 日志保留 signed PASS 和上传摘要
+  `aede44ebad79a78adc872f33a874f8aea1ae24bb430b0e06eaa2da32739c0a2d`，没有完整
+  closure/T016 JSON，不能还原原 ZIP 或假称附件仍可下载。
+
+下一步需要恢复可独立验证的历史原始证据，或建立有明确审查的新候选签署/证据链。
+P09 自身的历史签署也绑定旧 pre-sign SHA，恢复附件后仍需处理该校验；不能仅换一个
+附件 ID 或改写签署 SHA。冻结计划、原历史签署和严格关闭校验保持不变，P08/P09
+当前候选的签署关闭以及 P21/G11 均未完成。
 
 ## 文档入口
 

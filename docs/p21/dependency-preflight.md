@@ -93,7 +93,10 @@ The payload fixture exercises the shipped HTTP adapter as gojet-installer and
 real root refreshes, including stopped Redis and altered sealed preparation.
 This fixture covers the adapter; browser coverage is described below. T024 protected desktop/mobile browser evidence passed on source `485487a` in
 [run 40373645402](https://github.com/Techshrr/GoJet/actions/runs/40373645402).
-P09 coherence/closure and the complete P21 gates remain open. See [current status](STATUS.md) for the
+P09 T001–T026 and the P20 file safety section subsequently passed on source `025160f`
+in [run 40438004082](https://github.com/Techshrr/GoJet/actions/runs/40438004082).
+P08/P09 signed closure remains blocked by historical review binding and unavailable
+inherited artifact bytes; the complete P21 gates remain open. See [current status](STATUS.md) for the
 installation integration and remaining acceptance work.
 
 
