@@ -1,7 +1,11 @@
 """Executed file safety parity section; does not certify all of T028."""
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from p09.protected_installer_evidence import validate_handoff
 
 
 def require(value, reason):
@@ -58,9 +62,7 @@ def inspect(root: Path, head: str):
             and public.get('blocked_public_state') == 'blocked' and public.get('blocked_binary_status') == 403,
             'public safety state differs from binary authority')
     installer = read('browser', '024', True)
-    require(installer.get('fault_installer') == {'status': 503, 'state': 'hard-failure'}
-            and installer.get('private_dependency_detail_leaked') is False,
-            'installer failure masked or dependency details leaked')
+    validate_handoff(installer)
     return {'section': 'clamav-api-workspace-public-installer', 'source_evidence': refs,
             'uncertainty_modes': 4, 'formal_p20_t028_claim': False, 'next_case_unlocked': False,
             'admin_governance_bound': False,

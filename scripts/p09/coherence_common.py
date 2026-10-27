@@ -43,7 +43,9 @@ EXPECTED_CAPTURES = {
     "P09-T023-desktop-workspace.png", "P09-T023-desktop-public.png",
     "P09-T023-tablet-workspace.png", "P09-T023-tablet-public.png",
     "P09-T023-mobile-workspace.png", "P09-T023-mobile-public.png",
-    "P09-T024-admin-storage.png", "P09-T024-installer-hard-failure.png",
+    "P09-T024-admin-storage.png",
+    "P09-T024-desktop-installer-files-healthy.png", "P09-T024-mobile-installer-files-healthy.png",
+    "P09-T024-desktop-installer-scanner-failed.png", "P09-T024-mobile-installer-scanner-failed.png",
     "P09-T025-320-reduced-motion.png",
 }
 

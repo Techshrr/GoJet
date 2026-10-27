@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt, hashlib, json, re, subprocess
 from pathlib import Path
 from typing import Any
+from coherence_common import EXPECTED_CAPTURES
 
 ROOT=Path(__file__).resolve().parents[2]; P09=ROOT/'artifacts'/'v10'/'P09'
 R=P09/'results'; C=P09/'clamav'; B=P09/'browser'; PLAN=P09/'test-plan.json'; REG=P09/'regression-manifest.json'; COH=P09/'evidence-index.json'; IDX=P09/'closure-evidence-index.json'; REVIEW=P09/'review.md'; CLOSURE=P09/'closure.json'; T027=R/'P09-T027.json'
@@ -63,7 +64,7 @@ def vcases(head,e):
   except Exception as x:e.append(f'invalid {cid}: {x}'); continue
   req(d.get('case_id',d.get('case'))==cid and d.get('status')=='PASS' and d.get('implementation_commit')==head and d.get('errors')==[],f'{cid} evidence invalid',e)
   if cid=='P09-T026':
-   o=d.get('observations',{}); req(o.get('input_evidence_count')==25 and o.get('same_exact_head') is True and o.get('capture_count')==9,'T026 coherence observations drift',e); ids=o.get('producer_run_ids',{}); req(isinstance(ids,dict) and set(ids)=={'P09 Files Contract','P09 Real Files and ClamAV Integration','P09 Files Health and Installer Preflight','P09 Workspace Files Browser'},'T026 producer bindings drift',e)
+   o=d.get('observations',{}); req(o.get('input_evidence_count')==25 and o.get('same_exact_head') is True and o.get('capture_count')==len(EXPECTED_CAPTURES),'T026 coherence observations drift',e); ids=o.get('producer_run_ids',{}); req(isinstance(ids,dict) and set(ids)=={'P09 Files Contract','P09 Real Files and ClamAV Integration','P09 Files Health and Installer Preflight','P09 Workspace Files Browser'},'T026 producer bindings drift',e)
   out.append({'case_id':cid,'path':str(p.relative_to(ROOT)),'sha256':digest(p),'status':d.get('status'),'implementation_commit':d.get('implementation_commit')})
  req(tuple(x['case_id'] for x in out)==INPUT,'closure evidence set/order mismatch',e); return out
 

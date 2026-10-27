@@ -91,8 +91,9 @@ rechecks live dependencies independently of this advisory snapshot.
 
 The payload fixture exercises the shipped HTTP adapter as gojet-installer and
 real root refreshes, including stopped Redis and altered sealed preparation.
-This fixture covers the adapter; browser coverage is described below. The complete
-T024 acceptance gate remains pending. See [current status](STATUS.md) for the
+This fixture covers the adapter; browser coverage is described below. T024 protected desktop/mobile browser evidence passed on source `485487a` in
+[run 40373645402](https://github.com/Techshrr/GoJet/actions/runs/40373645402).
+P09 coherence/closure and the complete P21 gates remain open. See [current status](STATUS.md) for the
 installation integration and remaining acceptance work.
 
 
