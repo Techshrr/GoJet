@@ -64,8 +64,10 @@ disables the disposable server's global autocommit default, checks the value on 
 new real session, and requires the production PDO preflight to reject it. A finally
 block restores the initial setting, followed by a fresh readiness check. The CI-only
 admin password is passed through the subprocess environment, never probe arguments
-or result JSON. These additions require native CI verification and do not complete
-the wrong-version matrix or T010 acceptance.
+or result JSON. These cases passed on source `407d8d163645b8ee33fbfe09d61d8ac4d9da3bc4` in
+[native payload run 40476527019](https://github.com/Techshrr/GoJet/actions/runs/40476527019),
+including recovery and the subsequent continuous installation/retirement regression.
+They do not complete the wrong-version matrix or T010 acceptance.
 
 The Redis access fixture starts a separate loopback Redis with its own private
 ACL file and no persistence. It individually denies SET, GET and DEL while PING

@@ -9,12 +9,14 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 
 ## 最新已核实的 CI
 
-原生安装链路已核实源码：`5b921a1509d5cf169bd6c66417e28f97eae527ca`。
+原生安装链路最新已核实源码：`407d8d163645b8ee33fbfe09d61d8ac4d9da3bc4`。
+下表 Payload 与 Release Package 为该源码；其余独立工作流保留此前 `5b921a1` 的验证记录，
+不把不同源码的结果合并成统一候选验收。
 
 | 工作流 | Run | 结果 |
 | --- | --- | --- |
-| Native Payload Build | [40325314726](https://github.com/Techshrr/GoJet/actions/runs/40325314726) | 成功 |
-| Native Release Package | [40325314763](https://github.com/Techshrr/GoJet/actions/runs/40325314763) | 成功 |
+| Native Payload Build | [40476527019](https://github.com/Techshrr/GoJet/actions/runs/40476527019) | 成功 |
+| Native Release Package | [40476526982](https://github.com/Techshrr/GoJet/actions/runs/40476526982) | 成功 |
 | Native Installer Web | [40325314791](https://github.com/Techshrr/GoJet/actions/runs/40325314791) | 成功 |
 | Native Service Environment | [40325314744](https://github.com/Techshrr/GoJet/actions/runs/40325314744) | 成功 |
 | Native Migration Execution | [40325314725](https://github.com/Techshrr/GoJet/actions/runs/40325314725) | 成功 |
@@ -24,13 +26,13 @@ P21/G11 尚未关闭，包保持 `installable=false`，尚未交付生产安装�
 既有故障/安全边界回归均已通过原生 CI。连续链路从空数据库、真实网页配置，经
 root 准备与独立审批、单次安装提交、真实定时器执行，到同地址桌面/手机完成反馈及
 安装器收尾，不注入网页状态、批准或完成记录。
-重填配置替换目录的发布恢复也已通过上述 Payload CI（job 121580387215）；
+重填配置替换目录的发布恢复也已通过上述 Payload CI（job 122096012130）；
 日志确认原有停用记录及执行屏障保留。新增 Redis 读写/删除验证已通过真实 ACL
 逐项禁止 SET、GET、DEL，以及真实只读副本故障回归；已有键保留、成功清理、
 删除受限后自动过期、恢复后重新通过均已核实。完整 T010 依赖矩阵仍未关闭。
 原生日志绑定的包 SHA-256 为
-`e67ae1944db771e3af90dfc6b22a30c44586acde2b4ad65703ad919214402dc2`，
-manifest SHA-256 为 `4b7ec5b8e6254a53bb0c95ef66e50c702c6c0ceee0e822324958ebd708f77015`。
+`ff118b9b016eecf5d6ea6115777a951ea29f0e44c7e6b24c6786c11cc2a89f83`，
+manifest SHA-256 为 `6a069babacad39f6fc045e39277f7e99a7ed96b582c3206b343ba8bceae3e34d`。
 此处摘要来自该 CI 的原生验证输出，不表示本轮另外下载并复核了整个压缩包。
 这些结果不是全部项目验收通过，也不替代指定 Ubuntu 24.04.4 目标机验证；
 本轮原生 runner 为 24.04.5。
@@ -132,8 +134,21 @@ Freeze [40467361268](https://github.com/Techshrr/GoJet/actions/runs/40467361268)
 
 本轮继续 T010 的独立原生故障矩阵：新增 Nginx/PHP-FPM 配置损坏但守护进程仍活跃、
 MySQL 新连接继承关闭 autocommit 的场景，要求相关单项失败、整体不 ready、其余依赖
-正常；恢复现场后重新检查通过。代码与工作流语法及本地可运行的 P21 测试已验证，
-原生执行待新提交 CI。没有改动生产预检逻辑，完整错误版本矩阵和正式 T010 验收仍开放。
+正常；恢复现场后重新检查通过。上述故障场景已在 `407d8d1` 的 Payload run `40476527019`、job `122096012130`
+通过，后续连续首次安装、31 项迁移、八服务启动、故障恢复及安装器收尾也通过。
+没有改动生产预检逻辑，完整错误版本矩阵和正式 T010 验收仍开放。
+
+P20 候选执行入口现增加明确的 `p21-regression-only` 模式，接入 Candidate Freeze、
+T036 和 T037 的候选检查。该模式仅适用于固定 P21 契约祖先的后续源码，验证 P20
+原签署的直接父子关系、集成提交及 P21 契约父链，逐字节绑定九项冻结文件，拒绝
+工作区修改及符号链接。原 `candidate_phase.verify` 和 T049 关闭校验保持不变。
+回归附件额外保存 `candidate-authority/execution-scope.json`，明确
+`merge_authoritative=false`、`formal_p20_t049_claim=false`、`new_signature_issued=false`，
+不宣称 P21/P22 完成。候选回归成功不替代新的正式签署或最终发布验收。
+
+24 项发布校验测试通过，包括真实临时 Git 历史中的冻结文件篡改、无关祖先、错误
+checkout、权限声明提升、签署入口误用等负向测试；本地实际源码的回归入口也已验证。
+这些是入口校验结果，新提交的候选/性能/可观测性 CI 及其下游结果仍待核实。
 
 ## 文档入口
 
