@@ -80,5 +80,23 @@ def exercise_mysql_settings(call):
         sql('SET GLOBAL autocommit=1;')
     assert sql('SELECT @@GLOBAL.autocommit, @@SESSION.autocommit;') == '1\t1'
     assert call()['ready'] is True, 'Native MySQL settings did not recover'
+
+    # Exercise the other production PDO admission condition against the real
+    # server. A host without binary logging cannot prove this rejection branch.
+    original_trust = sql('SELECT @@GLOBAL.log_bin_trust_function_creators;')
+    assert original_trust == '1', 'Native MySQL fixture requires initial function-creator trust'
+    assert sql('SELECT @@GLOBAL.log_bin;') == '1', 'Native MySQL fixture requires real binary logging'
+    try:
+        sql('SET GLOBAL log_bin_trust_function_creators=0;')
+        assert sql('SELECT @@log_bin, @@log_bin_trust_function_creators;') == '1\t0'
+        report = call()
+        assert report['ready'] is False and report['checks']['mysql'] is False
+        assert all(value is True for key, value in report['checks'].items() if key != 'mysql')
+    finally:
+        sql('SET GLOBAL log_bin_trust_function_creators=1;')
+    assert sql('SELECT @@log_bin, @@log_bin_trust_function_creators;') == '1\t1'
+    assert call()['ready'] is True, 'Native MySQL function-creator trust did not recover'
     return dict(disabled_autocommit_rejected=True, real_session_default_verified=True,
+                binary_logging_enabled=True, disabled_function_creator_trust_rejected=True,
+                original_function_creator_trust_restored=True,
                 original_setting_restored=True, recovered_readiness_verified=True)

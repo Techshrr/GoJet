@@ -59,7 +59,7 @@ manifest SHA-256 为 `6a069babacad39f6fc045e39277f7e99a7ed96b582c3206b343ba8bcea
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 当前回归与签署 | 5a6d456 的 P20 T001–T008、T028–T034、T036 通过，P18 T019–T024 通过；T035 自动证据完成、独立审查未通过，P19 汇总附件选择修复待 CI；正式签署关闭仍单独保留 |
+| 当前回归与签署 | 5a6d456 的 P20 T001–T008、T028–T034、T036 通过，P18 T019–T024 通过；T035 自动证据完成、独立审查未通过；25c81d1 的 P19 汇总与 T036 通过，其余回归按依赖重试；正式签署关闭仍单独保留 |
 | 初装接续 | 连续首次安装原生链路已通过；指定目标机与最终统一候选验收仍保留 |
 | 恢复 | 发布恢复已通过；损坏记录/未知文件的人工处理与完整恢复手册 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
@@ -161,7 +161,7 @@ T036 原始附件 `12741196886` 的 ZIP 完整性和 SHA-256
 正式 T036 为 PASS，范围仅限同源码 P04/P07/P19 的性能与 bundle 隔离，
 `next_case_unlocked=false`；CI 实验室结果不等同于生产端性能遥测。
 
-最新回归源码为 `5a6d456fc4fc4620350fbfdda47418ed518a0d11`，已核实：
+上一轮回归源码 `5a6d456fc4fc4620350fbfdda47418ed518a0d11` 的已核实记录：
 
 | 工作流 | Run | 结果与范围 |
 | --- | --- | --- |
@@ -194,7 +194,7 @@ T036 原始附件 `12741196886` 的 ZIP 完整性和 SHA-256
   用实际 API 元数据回放已选中 `12815241741`，排除旧失败附件 `12761574247`。
 
 本地 19 项 API 传输、分页、T031 准入及 P19 附件选择测试通过；修改的 YAML、Shell、
-内嵌 Python 语法和 P19/P21 冻结契约检查通过。新代码的完整 CI 仍待运行。
+内嵌 Python 语法和 P19/P21 冻结契约检查通过。25c81d1 的 CI 进度见下文。
 T035 同源码重试 run [40552037374](https://github.com/Techshrr/GoJet/actions/runs/40552037374)、
 job `122812943482` 的证据收集和自动诊断步骤通过，正式准入仍为 FAIL：
 `unsigned/incomplete/failed review`。Issue [#188](https://github.com/Techshrr/GoJet/issues/188) 的现有 PASS 审查仍绑定历史源码
@@ -204,7 +204,38 @@ job `122812943482` 的证据收集和自动诊断步骤通过，正式准入仍�
 `8be2c268ff247ba53ebc1fff705d38d82cead91424e06d398cafe3914bae5ae5`。
 自动诊断的 72 项观察通过，`formal_p20_t035_claim=false`；证据清单摘要为
 `sha256:7655afbca9cecc9d7254e8a7a6ca97dff8f078492b156748b35289ed387b6026`。
-正式 T035 仍为 FAIL。P19 整体汇总、完整下游验收及 P21/G11 均未关闭。
+正式 T035 仍为 FAIL，不能把历史审查自动沿用到新源码。完整下游验收及 P21/G11 均未关闭。
+
+## 25c81d1 回归与 T010 接续
+
+最新已核实回归源码：`25c81d1465f61f7a43bcba795a10ad64080005fa`。
+
+| 工作流 | Run | 已核实结果 |
+| --- | --- | --- |
+| P19 Evidence Coherence | [40687821309](https://github.com/Techshrr/GoJet/actions/runs/40687821309) | T001–T030 输入与 T031 汇总通过，附件绑定修复通过 CI |
+| P20 T036 | [40687817565](https://github.com/Techshrr/GoJet/actions/runs/40687817565) | 成功 |
+| P18 Docs Quality Integration | [40687817869](https://github.com/Techshrr/GoJet/actions/runs/40687817869) | 成功 |
+| P13 Evidence Coherence | [40687817673](https://github.com/Techshrr/GoJet/actions/runs/40687817673) | 原等待排队生产者超时；同源码重试 job 122888678613 通过 |
+| P17 Browser Governance Authority | [40687817847](https://github.com/Techshrr/GoJet/actions/runs/40687817847) | T030–T033 成功；T033 重试 job 122888702933 通过 |
+| P17 Evidence Coherence | [40687817949](https://github.com/Techshrr/GoJet/actions/runs/40687817949) | 同源码重试 job 122890872706 通过 |
+
+P19 原始汇总附件 `12822475726` 已下载，ZIP 完整性及 SHA-256
+`32db35c4dd8627c189ce9f840ecea8677dd071e410216d416ad26fc784ddd07a` 已核实。
+30 项输入结果均为精确源码 PASS，索引的全部原始文件摘要匹配；T031 为 PASS、
+`merge_authoritative=false`。保留的历史 P18 权限使用原成功 job 日志绑定，
+`original_archive_available=false`、`new_signature_issued=false`，不冒称历史 ZIP 仍在。
+
+T031 新增 API 传输测试在 job `122814632667` 通过；该运行的正式汇总仍因上游 T030
+失败而停止，不属于传输修复失败。P13 原超时导致 T028–T034 连锁失败，按依赖顺序
+重试。P17 T033 原 job `122814624216` 在启动 Orca 时进程退出，尚未执行页面用例；
+同源码重试成功，但未确定 Orca 退出的底层原因，不能声称已修复该环境波动。
+
+T010 增加真实 MySQL 二进制日志配置负向回归：要求实际 `log_bin=1`，将
+`log_bin_trust_function_creators` 从 1 设为 0，由新连接确认，再调用实际 PHP/PDO
+预检；仅 MySQL 单项应失败、整体不得 ready。`finally` 恢复原值，新连接和完整预检
+均须确认恢复。没有模拟版本、替换 SQL 响应或修改生产预检逻辑，也不会写完成锁。
+本地 Python 语法及 P21 冻结契约检查通过；当前工作环境没有 MySQL/PHP 原生运行条件，
+此新增场景仍待 Native Payload CI 验证。完整 T010 和指定目标机验收保持开放。
 
 ## 文档入口
 
