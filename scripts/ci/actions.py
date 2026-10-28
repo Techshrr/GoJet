@@ -4,16 +4,26 @@ import urllib.request
 import urllib.error
 import json
 import time
+from http.client import IncompleteRead
 
 
 def github_json(url, headers, *, opener=urllib.request.urlopen, sleep=time.sleep,
                 clock=time.time, max_wait=1200):
-    """Retry identified API throttling; permission errors remain fatal."""
+    """Retry throttling and bounded truncated reads; invalid evidence stays fatal."""
     deadline = clock() + max_wait
+    truncated_reads = 0
     while True:
         try:
             with opener(urllib.request.Request(url, headers=headers), timeout=30) as response:
                 return json.load(response)
+        except IncompleteRead:
+            # Restart the same GET. Never parse or combine a partial JSON body.
+            truncated_reads += 1
+            delay = 2 ** (truncated_reads - 1)
+            if truncated_reads >= 3 or clock() + delay > deadline:
+                raise
+            print(f'GitHub API response truncated; retry in {delay} seconds', flush=True)
+            sleep(delay)
         except urllib.error.HTTPError as exc:
             body = exc.read(8192).decode('utf-8', errors='replace').lower()
             rate_limited = exc.code == 429 or (exc.code == 403 and (

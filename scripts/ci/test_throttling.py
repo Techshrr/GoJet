@@ -1,5 +1,7 @@
 import io
+import json
 import unittest
+from http.client import IncompleteRead
 from urllib.error import HTTPError
 from scripts.ci.actions import github_json
 
@@ -26,6 +28,60 @@ class ThrottlingTests(unittest.TestCase):
         for code in (403, 404):
             with self.subTest(code=code), self.assertRaises(HTTPError):
                 self.run_response(code, {}, b'{"message":"Resource not accessible"}')
+
+
+class TruncatedResponseTests(unittest.TestCase):
+    class TruncatedBody(io.BytesIO):
+        def read(self, *args):
+            # Even a parseable prefix must never become accepted evidence.
+            raise IncompleteRead(b'{"status":"PASS"}', 100)
+
+    def test_retry_whole_request_and_discard_partial_body(self):
+        responses = [self.TruncatedBody(), io.BytesIO(b'{"status":"FAIL"}')]
+        requests, waits = [], []
+        def opener(request, **kwargs):
+            requests.append((request.full_url, request.get_method(), dict(request.header_items()), kwargs))
+            return responses[len(requests) - 1]
+        result = github_json('https://api.github.com/test?page=2', {'Authorization': 'Bearer test'},
+                             opener=opener, sleep=waits.append, clock=lambda: 1000)
+        self.assertEqual(result, {'status': 'FAIL'})
+        self.assertEqual(waits, [1])
+        self.assertEqual(requests[0], requests[1])
+        self.assertEqual(requests[0][1], 'GET')
+        self.assertTrue(all(response.closed for response in responses))
+
+    def test_persistent_truncation_is_bounded_and_fails(self):
+        responses, waits = [], []
+        def opener(*args, **kwargs):
+            response = self.TruncatedBody()
+            responses.append(response)
+            return response
+        with self.assertRaises(IncompleteRead):
+            github_json('https://api.github.com/test', {}, opener=opener,
+                        sleep=waits.append, clock=lambda: 1000)
+        self.assertEqual(len(responses), 3)
+        self.assertEqual(waits, [1, 2])
+        self.assertTrue(all(response.closed for response in responses))
+
+    def test_truncation_obeys_shared_retry_deadline(self):
+        waits, now = [], [1000]
+        def sleep(delay):
+            waits.append(delay)
+            now[0] += delay
+        with self.assertRaises(IncompleteRead):
+            github_json('https://api.github.com/test', {}, opener=lambda *a, **kw: self.TruncatedBody(),
+                        sleep=sleep, clock=lambda: now[0], max_wait=2)
+        self.assertEqual(waits, [1])
+
+    def test_malformed_complete_json_is_not_retried(self):
+        calls, waits = [], []
+        def opener(*args, **kwargs):
+            calls.append(1)
+            return io.BytesIO(b'{"status":')
+        with self.assertRaises(json.JSONDecodeError):
+            github_json('https://api.github.com/test', {}, opener=opener, sleep=waits.append)
+        self.assertEqual(calls, [1])
+        self.assertEqual(waits, [])
 
 
 if __name__ == '__main__':

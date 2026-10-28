@@ -59,7 +59,7 @@ manifest SHA-256 为 `6a069babacad39f6fc045e39277f7e99a7ed96b582c3206b343ba8bcea
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 当前回归与签署 | 419ca40 的 P20 T001–T008 和 T036 已通过；补齐 T028 所需 P15 触发链，修复 P18 连续浏览器会话；正式签署关闭仍单独保留 |
+| 当前回归与签署 | 5a6d456 的 P20 T001–T008、T028–T034、T036 通过，P18 T019–T024 通过；T035 自动证据完成、独立审查未通过，P19 汇总附件选择修复待 CI；正式签署关闭仍单独保留 |
 | 初装接续 | 连续首次安装原生链路已通过；指定目标机与最终统一候选验收仍保留 |
 | 恢复 | 发布恢复已通过；损坏记录/未知文件的人工处理与完整恢复手册 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归；保留已发现缺陷 |
@@ -161,19 +161,50 @@ T036 原始附件 `12741196886` 的 ZIP 完整性和 SHA-256
 正式 T036 为 PASS，范围仅限同源码 P04/P07/P19 的性能与 bundle 隔离，
 `next_case_unlocked=false`；CI 实验室结果不等同于生产端性能遥测。
 
-当前下游阻塞与修复：
+最新回归源码为 `5a6d456fc4fc4620350fbfdda47418ed518a0d11`，已核实：
 
-- T028 run `40503846835`、job `122188017331` 等待
-  `p15-authentication-oauth-account.yml` 超时。该源码的七项 P15 原始生产者均成功，
-  但契约/汇总工作流的路径过滤未触发。现使整条八工作流 P15 证据链覆盖 T028 的
-  PR 路径集合，保留原有触发路径、只读权限及全部证据校验。
-- P18 Docs Quality run `40503873670`、job `122188116135` 在 T019 通过后第二次
-  启动 Orca 时进程退出，T020–T024 未完成。现让 T019–T021 在同一个真实桌面/Orca
-  会话内顺序运行，每项仍独立打开浏览器；失败必须停止后续项。T022–T024 原样保留，
-  不跳过真实辅助技术验证或改写浏览器断言。此处没有断言 Orca 退出的更底层原因。
+| 工作流 | Run | 结果与范围 |
+| --- | --- | --- |
+| P15 Authentication OAuth Account Contract | [40552041359](https://github.com/Techshrr/GoJet/actions/runs/40552041359) | contract guard / T028 coherence job 122358073371 通过；独立历史 T029 closure 仍失败，不能称整个工作流成功 |
+| P18 Docs Quality Integration | [40552037699](https://github.com/Techshrr/GoJet/actions/runs/40552037699) | T019–T024 全部通过，单一真实桌面/Orca 会话修复得到验证 |
+| P20 Candidate and Traceability Freeze | [40552037055](https://github.com/Techshrr/GoJet/actions/runs/40552037055) | 成功，仍为 P21 回归执行范围 |
+| P20 T028 / T029 / T030 | [40552037298](https://github.com/Techshrr/GoJet/actions/runs/40552037298) / [40552037187](https://github.com/Techshrr/GoJet/actions/runs/40552037187) / [40552037174](https://github.com/Techshrr/GoJet/actions/runs/40552037174) | 正式单项 PASS，P15 缺失触发链已解除 |
+| P20 T031 / T032 / T033 / T034 | [40552037538](https://github.com/Techshrr/GoJet/actions/runs/40552037538) / [40552042276](https://github.com/Techshrr/GoJet/actions/runs/40552042276) / [40552041644](https://github.com/Techshrr/GoJet/actions/runs/40552041644) / [40552041521](https://github.com/Techshrr/GoJet/actions/runs/40552041521) | 同源码按依赖重试，正式单项 PASS |
+| P19 Website Performance and Runtime | [40558296576](https://github.com/Techshrr/GoJet/actions/runs/40558296576) | attempt 2 的 T027–T030 通过；原失败保留 |
+| P20 T036 | [40552037332](https://github.com/Techshrr/GoJet/actions/runs/40552037332) | 同源码重试通过，正式性能单项 PASS |
 
-路径覆盖、YAML/Shell 语法以及中间项失败时停止后续项的本地检查已通过。
-新增工作流配置需由新提交 CI 验证；T028–T035 和 P21/G11 整体验收仍未关闭。
+已独立下载并核对 ZIP 完整性、源码及结果的原始附件：
+
+- P18 `12757533312`：SHA-256 `b60dc893f155163c57a3f2e486c4e0030ca19db9b5f92bc2b99466fed3c0e668`，T019–T024 均为 PASS。
+- T028 `12763368484`：SHA-256 `cf71a304ac0fcf0e22c84a3cac9d92cd62303e4d5820c399dc039d4ee2e52766`，正式 T028 PASS。
+- T031 `12814818093`：SHA-256 `8ab0712e7c3e5c77eda8846c1b57205d0d98802fbca21c5962d752441b46aceb`，包含 T028–T031 的正式 PASS；T031 清单的原始文件摘要已逐项匹配。
+- P19 重试 `12815241741`：SHA-256 `03698d1d413a695a85ef6983da6124beacd00487f09fe323731d51165795fe9d`，T027–T030 PASS，实际 longTasks 为空。
+- P19 原失败 `12761574247`：SHA-256 `4d3aa986ca62f270338f49285348672bf85d1d3fe122b5ad60065c8c5f965141`，T028 记录 57ms 长任务，发生于 1433.1ms。一次重试成功不证明性能波动的根因已修复；阈值、采样和断言均未修改，原失败附件保留。
+
+本轮发现并修复两项证据收集问题：
+
+- T031 原 job `122358062131` 在读取 GitHub API 响应时抛出 `IncompleteRead`，
+  已读取 330823 字节，尚缺 886914 字节。新增最多两次完整 GET 重试，共享原等待预算；
+  丢弃部分响应，不拼接或解析残缺 JSON。持续截断、非法完整 JSON、无权限和附件不存在
+  均保持失败。重试后的旧源码 job `122810397566` 已通过，但不等于新重试代码已完成 CI 验证。
+- P19 coherence 重试 job `122811227739` 发现同一 run 保留两份同名性能附件，
+  因旧逻辑只接受唯一名称而停止。现按成功 run 的开始时间、run ID 和精确源码绑定
+  本次附件；旧附件单独存在、过期、歧义、错源码或列表截断仍拒绝。清单新增 attempt
+  和时间信息，原 ZIP 摘要验证、30 项原始证据检查及历史权限绑定不变。
+  用实际 API 元数据回放已选中 `12815241741`，排除旧失败附件 `12761574247`。
+
+本地 19 项 API 传输、分页、T031 准入及 P19 附件选择测试通过；修改的 YAML、Shell、
+内嵌 Python 语法和 P19/P21 冻结契约检查通过。新代码的完整 CI 仍待运行。
+T035 同源码重试 run [40552037374](https://github.com/Techshrr/GoJet/actions/runs/40552037374)、
+job `122812943482` 的证据收集和自动诊断步骤通过，正式准入仍为 FAIL：
+`unsigned/incomplete/failed review`。Issue [#188](https://github.com/Techshrr/GoJet/issues/188) 的现有 PASS 审查仍绑定历史源码
+`007b20244081a9d0336c19262e0f095c9d101976`，不覆盖当前源码与证据包；
+不能用自动检查代替新的独立审查。原审查包 [12815656978](https://github.com/Techshrr/GoJet/actions/runs/40552037374/artifacts/12815656978)
+已独立下载并核对 ZIP，SHA-256 为
+`8be2c268ff247ba53ebc1fff705d38d82cead91424e06d398cafe3914bae5ae5`。
+自动诊断的 72 项观察通过，`formal_p20_t035_claim=false`；证据清单摘要为
+`sha256:7655afbca9cecc9d7254e8a7a6ca97dff8f078492b156748b35289ed387b6026`。
+正式 T035 仍为 FAIL。P19 整体汇总、完整下游验收及 P21/G11 均未关闭。
 
 ## 文档入口
 
