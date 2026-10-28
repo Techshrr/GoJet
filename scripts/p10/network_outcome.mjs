@@ -9,3 +9,12 @@ export function confirmedNoContentDeletion(row, proof) {
     row.url === proof.request_url && row.method === 'DELETE' && row.resource_type === 'fetch' &&
     row.navigation === false && row.response_status === 204 && row.failure?.errorText === 'net::ERR_ABORTED');
 }
+
+// Context shutdown can deliver the final requestfailed event. Validate the
+// complete record after shutdown and retain a detached snapshot for evidence.
+export async function closeAndValidateDiagnostics(context, report, validate) {
+  await context.close();
+  const snapshot = structuredClone(report);
+  validate(snapshot);
+  return snapshot;
+}
