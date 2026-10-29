@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
+import { installFrameDiagnostics } from './performance_diagnostics.mjs';
 
 const root = process.cwd();
 const dist = `${root}/frontend/apps/site/dist`;
@@ -57,6 +58,7 @@ async function t027() {
 async function t028() {
   const errors = [];
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  await context.addInitScript(installFrameDiagnostics);
   await context.addInitScript(() => {
     window.__p19Perf = { lcp: 0, cls: 0, events: [], longTasks: [],
       longTasksSupported: PerformanceObserver.supportedEntryTypes.includes('longtask') };
@@ -75,7 +77,8 @@ async function t028() {
     // Event Timing clamps durationThreshold to 16ms. The first-input entry is
     // reported even for faster trusted interactions (W3C Event Timing §1.3).
     // Retain actual durations; never synthesize a zero or slow down the page.
-    const record = list => { for (const entry of list.getEntries()) if (entry.interactionId > 0) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId, entryType: entry.entryType }); };
+    const record = list => { for (const entry of list.getEntries()) if (entry.interactionId > 0) window.__p19Perf.events.push({ name: entry.name, duration: entry.duration, interactionId: entry.interactionId, entryType: entry.entryType,
+      startTime: entry.startTime, processingStart: entry.processingStart, processingEnd: entry.processingEnd }); };
     if (PerformanceObserver.supportedEntryTypes.includes('event')) new PerformanceObserver(record).observe({ type: 'event', durationThreshold: 16, buffered: true });
     if (PerformanceObserver.supportedEntryTypes.includes('first-input')) new PerformanceObserver(record).observe({ type: 'first-input', buffered: true });
   });
@@ -88,6 +91,7 @@ async function t028() {
   await page.locator('.site-primary-link').first().click(); await page.waitForTimeout(250);
   const metrics = await page.evaluate(() => ({
     ...window.__p19Perf,
+    frameDiagnostics: window.__p19ReadFrameDiagnostics(),
     supported: PerformanceObserver.supportedEntryTypes,
     resources: performance.getEntriesByType('resource').map((entry) => ({ name: entry.name, initiatorType: entry.initiatorType, duration: entry.duration, transferSize: entry.transferSize })),
     observedUntilMs: performance.now(),
@@ -130,13 +134,15 @@ async function t028() {
   const totalMs = Date.now() - started;
   await context.close();
   return emit('P19-T028', 'CWV image font and cache budgets', errors, {
-    labProfile: { viewport: '1440x900', latencyMs: 40, downloadMbps: 10, uploadMbps: 5, browser: executablePath },
+    labProfile: { viewport: '1440x900', latencyMs: 40, downloadMbps: 10, uploadMbps: 5,
+      browser: executablePath, browserVersion: browser.version() },
     lcpMs: metrics.lcp, inpMs: inp, cls: metrics.cls, wallClockMs: totalMs,
     eventEntries: metrics.events, renderedPrincipalImageCount: metrics.renderedImages.length,
     imageContract: metrics.renderedImages.length ? 'rendered images must provide intrinsic dimensions' : 'no principal rendered Website image; responsive AVIF/WebP transfer is not invoked',
     fontStrategy: fontResources.length ? 'same-origin font assets only' : 'no network webfont dependency; Design System local/system fallback avoids invisible-text blocking',
     fontResources, nativePerformance: {
       supportedEntryTypes: metrics.supported, longTasks: metrics.longTasks,
+      frameDiagnostics: metrics.frameDiagnostics,
       observationStartMs: 0, observedUntilMs: metrics.observedUntilMs,
       navigation: metrics.navigation, renderedImages: metrics.renderedImages,
       fontFaces: metrics.fontFaces, resources: metrics.resources,

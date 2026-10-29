@@ -44,21 +44,23 @@ Data Bootstrap 工作流的较早成功记录见 Git 历史，不将其拼接成
 
 ## 当前回归
 
-以下结果也绑定 `9009d0391239fa84b2a1219f4b883140d064017e`。
+以下结果绑定 `adc19ceabff056bf050e15756190b1078209601f`，原生安装链路仍以本文件上方的 `9009d03` 为准。
 
 | 范围 | Run | 结果 |
 | --- | --- | --- |
-| P20 T028 | [40709942540](https://github.com/Techshrr/GoJet/actions/runs/40709942540) | 成功 |
-| P20 T029 | [40709946919](https://github.com/Techshrr/GoJet/actions/runs/40709946919) | 成功 |
-| P20 T030 | [40709942439](https://github.com/Techshrr/GoJet/actions/runs/40709942439) | 成功 |
-| P20 T031 | [40709947827](https://github.com/Techshrr/GoJet/actions/runs/40709947827) | 成功 |
-| P20 T032 | [40709941973](https://github.com/Techshrr/GoJet/actions/runs/40709941973) | 成功 |
-| P20 T033 | [40709942724](https://github.com/Techshrr/GoJet/actions/runs/40709942724) | 成功 |
-| P20 T034 | [40709942354](https://github.com/Techshrr/GoJet/actions/runs/40709942354) | 成功 |
-| P19 Performance and Runtime | [40709947500](https://github.com/Techshrr/GoJet/actions/runs/40709947500) | 同源码 attempt 2 的 T027–T030 成功，原失败保留 |
-| P19 Evidence Coherence | [40709942307](https://github.com/Techshrr/GoJet/actions/runs/40709942307) | 重试成功；job 122979262782 |
-| P20 T036 | [40709947892](https://github.com/Techshrr/GoJet/actions/runs/40709947892) | 重试成功，含 T001–T008 候选及契约前置 |
-| P20 T035 | [40709946990](https://github.com/Techshrr/GoJet/actions/runs/40709946990) | FAIL；删除诊断记录不一致，见下文 |
+| P10 浏览器 | [40735134311](https://github.com/Techshrr/GoJet/actions/runs/40735134311) | 成功，删除诊断修复已验证 |
+| P20 T028 | [40735133756](https://github.com/Techshrr/GoJet/actions/runs/40735133756) | 重试成功 |
+| P20 T029 | [40735133358](https://github.com/Techshrr/GoJet/actions/runs/40735133358) | 重试成功 |
+| P20 T030 | [40735133538](https://github.com/Techshrr/GoJet/actions/runs/40735133538) | 重试成功 |
+| P20 T031 | [40735134018](https://github.com/Techshrr/GoJet/actions/runs/40735134018) | 重试成功 |
+| P20 T032 | [40735137521](https://github.com/Techshrr/GoJet/actions/runs/40735137521) | 重试成功 |
+| P20 T033 | [40735133315](https://github.com/Techshrr/GoJet/actions/runs/40735133315) | 重试成功 |
+| P20 T034 | [40735133496](https://github.com/Techshrr/GoJet/actions/runs/40735133496) | 重试成功 |
+| P19 Evidence Coherence | [40735132815](https://github.com/Techshrr/GoJet/actions/runs/40735132815) | 成功 |
+| P20 T036 | [40735133625](https://github.com/Techshrr/GoJet/actions/runs/40735133625) | 成功 |
+| P20 T035 | [40735134094](https://github.com/Techshrr/GoJet/actions/runs/40735134094) | 重试后自动诊断通过，独立审查准入 FAIL |
+
+以下原始性能失败与重试附件绑定较早的 `9009d03`，保留用于调查波动，不冒充 `adc19ce` 证据。
 
 P19 汇总原始附件 `12836262674` 已下载并复核 ZIP、30 项精确源码 PASS 与全部输入摘要，
 ZIP SHA-256 为 `f071122f39c85376496bcbae46ae824b17046e9957bdcef6690aea09a0b31a9a`。
@@ -73,7 +75,7 @@ P19/T036 单项成功不代表整个项目发布通过。
 没有修改阈值、采样、页面代码或性能断言；不能仅凭重试成功声称性能波动根因已修复。
 CI 实验室数据不等于生产端性能遥测。
 
-## T035 当前阻塞与本轮修复
+## 删除诊断修复验证与 T035 接续
 
 job `122892173021` 的自动诊断拒绝 `unclassified deletion network failure`。
 原始审查附件 `12831509890` 已下载并复核，SHA-256
@@ -90,12 +92,48 @@ P10-T017 的实际删除已返回 204，公开资源为 410，数据库 tombston
 本地验证：3 项 P10 分类与异步关闭测试、9 项 T035 Python 测试、12 项 T035 Node
 测试通过，P10 冻结契约与 Node 语法检查通过。原失败附件的延迟事件回放也确认新快照
 保留事件且分类一致；回放没有改写原始附件，不充当新的真实浏览器 PASS。
-该修复仍待新提交的 P10 原生浏览器和下游 T035 CI 验证。
+修复已在 `adc19ceabff056bf050e15756190b1078209601f` 的真实 P10 浏览器
+run [40735134311](https://github.com/Techshrr/GoJet/actions/runs/40735134311)、job `122981522084` 通过。
+原始附件 `12837967081` 已下载并核对 ZIP 和精确源码，SHA-256
+`83dbede652f242b1bc4bb159cb5028f664846000949871a487c32d7869b489a0`。
+T017 的原始报告确实包含那一笔 DELETE/204 的 `net::ERR_ABORTED`，完整保留并正确分类；
+`request_failures` 与 `confirmed_no_content_completions` 一致，持久化删除证明齐全，
+console/page/HTTP 错误均为空。不是仅在没有延迟事件的运行中碰巧通过。
 
-自动诊断通过后，仍必须满足当前源码对应的独立 WCAG 审查。
+该源码 P09 汇总曾等待原始生产者超时，导致 T028–T035 连锁失败；同源码 P09 汇总
+重试 job `123214748005` 与 T028 job `123215563144` 已通过。
+P04 原 run `40735132971` 的 T007 有一次布局偏移超预算；同源码后续 run `40735476653`
+成功，原 PR run 重试 job `123214944165` 也成功，失败记录保留。其底层波动原因未关闭。
+下游 T029–T034 已按依赖重试通过。T035 job `123215886247` 的证据收集和自动诊断
+通过，正式准入仍拒绝 `unsigned/incomplete/failed review`；不再出现删除诊断不一致。
+当前审查包 [12866548808](https://github.com/Techshrr/GoJet/actions/runs/40735134094/artifacts/12866548808)
+已独立下载并核对 ZIP，SHA-256 为
+`b563907ac6f470ec408a9a0c8c4e62749c4ba5209426c8a8c6a6f37a08d3275b`。
+72 项自动观察通过；331 份原始文件摘要全部匹配，当前审查截图为 113 张。
+证据清单摘要为 `sha256:c93cfae857ab6206acf2c561a75d5275ed5eeee08a7296012dfebfc3cca4540f`。
+`formal_p20_t035_claim=false` 与正式 FAIL 保留；上述核验不冒充独立 WCAG 审查。
+
+自动诊断已通过，仍必须满足当前源码对应的独立 WCAG 审查。
 Issue [#188](https://github.com/Techshrr/GoJet/issues/188) 的现有 PASS 绑定历史源码
 `007b20244081a9d0336c19262e0f095c9d101976`，不能自动覆盖新候选。
 较早 `5a6d456` 的 72 项自动观察通过及审查包只证明该源码，不替代当前源码验收。
+
+## 性能归因接续
+
+此前失败只记录了长任务持续时间与总体 INP，缺少脚本/布局归因。本轮在原浏览器测试
+附加原生 Long Animation Frames 观察，记录脚本来源、调用位置、强制样式/布局耗时、
+渲染阶段和阻塞时长；Event Timing 另外保留 `startTime`、`processingStart`、
+`processingEnd`，并记录实际浏览器版本。使用
+[Chrome 官方 Long Animation Frames API](https://developer.chrome.com/docs/web-platform/long-animation-frames)。
+
+归因从导航前开始，包含缓冲的初始记录和最终读取时尚未派发的条目；不支持此 API 时
+显式记录 `supported=false`，不伪造零耗时或成功结论。仅保留可序列化的指定字段，
+不把 Window 对象写进证据。原 long-task、LCP、INP、CLS、网络条件、点击操作和
+通过/失败规则保持不变，补充数据不替代正式准入。
+
+2 项独立序列化环境中的观察器测试和 6 项既有 T036 性能准入测试通过；Node 语法、
+工作流 YAML/Shell 和 P19 冻结契约检查通过。本地无可执行的 Chrome，新增诊断字段
+仍待真实 CI 验证；这只是为定位性能波动补充证据，不宣称已修复性能问题。
 
 ## 签署与权限边界
 
@@ -112,7 +150,7 @@ coherence 为必须通过的回归。旧签署 SHA 不匹配或历史附件过�
 
 | 范围 | 待完成事项 |
 | --- | --- |
-| 当前回归 | 验证删除诊断时序修复；继续调查性能波动；完成统一候选的全部受影响回归 |
+| 当前回归 | 删除诊断修复已通过真实 P10 浏览器和 T035 自动复核；验证性能归因并调查波动，完成统一候选回归 |
 | 可访问性 | 当前精确源码、截图、源文件及证据包对应的独立审查与 T035 正式准入 |
 | 依赖与安全 | 完整缺失/错误版本矩阵，提权、篡改、用户及管理员账户安全回归 |
 | 恢复与运维 | 损坏记录/未知文件处理、原生升级、数据库备份恢复与完整恢复手册 |
