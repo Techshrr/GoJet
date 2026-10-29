@@ -29,3 +29,32 @@ pending; this engine alone does not satisfy P21 closure or P22 production recove
 Only fixed error categories, migration ID, SQLSTATE and numeric driver code may
 be exposed in diagnostics; SQL statements, credentials and raw database errors
 must not be returned to the installer browser.
+
+## Upgrade migration inspection
+
+`Migrations::inspectUpgrade(PDO, currentRoot, currentCatalogHash,
+candidateRoot, candidateCatalogHash)` checks the migration boundary before an
+upgrade. The privileged caller must first verify both packages and obtain their
+catalog hashes from the verified manifests, not from a browser request.
+
+The candidate must retain every current migration's ID, filename, bytes, digest
+and rollback rule. Both catalogs and all SQL are validated before the database
+is inspected. Under the same MySQL advisory lock as migration application, the
+database must contain exactly the current catalog's complete, applied journal.
+Missing, extra, interrupted or changed history is rejected. The result lists
+pending migration IDs without applying SQL or creating/updating journal rows.
+The lock is released on success and failure.
+
+This inspection is a snapshot, not a durable authorization. The upgrade executor
+must revalidate packages and database history at execution time. Its result keeps
+`upgrade_authorized=false` and `backup_restore_verified=false`: release version
+compatibility, consistent backup and restore rehearsal, configuration preservation,
+atomic release switching and service recovery remain unimplemented orchestration
+requirements. A compatible migration prefix alone never permits a binary rollback.
+
+The native migration workflow exercises a 31-to-32 migration candidate without
+executing its new DDL, unchanged catalogs, removed/rewritten migrations, a competing
+lock, failed/interrupted journal and active transaction rejection. It compares
+the entire journal and table inventory before/after inspection. These tests are
+part of the existing MySQL 8 / PHP 8.3 workflow; local Python catalog checks do not
+substitute for their native execution.

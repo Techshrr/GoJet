@@ -73,6 +73,50 @@ final class Migrations
         return $rows;
     }
 
+    /** Read-only upgrade history check. Both catalogs must be bound to verified packages by the caller.
+     * This is not upgrade authorization: backup/restore, version compatibility and
+     * service health remain separate requirements. Apply must recheck under its lock.
+     */
+    public static function inspectUpgrade(PDO $db, string $currentRoot, string $currentHash, string $candidateRoot, string $candidateHash): array
+    {
+        $current = self::load($currentRoot, $currentHash);
+        $candidate = self::load($candidateRoot, $candidateHash);
+        if (count($candidate) < count($current)) { throw new RuntimeException('upgrade removes migration history'); }
+        foreach ($current as $index => $row) {
+            foreach (['id', 'path', 'bytes', 'sha256', 'rollback'] as $key) {
+                if ($row[$key] !== $candidate[$index][$key]) { throw new RuntimeException('upgrade rewrites migration history'); }
+            }
+        }
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        if ($db->inTransaction() || !preg_match('/^8\./', (string)$db->query('SELECT VERSION()')->fetchColumn())
+            || (int)$db->query('SELECT @@autocommit')->fetchColumn() !== 1) {
+            throw new RuntimeException('native MySQL8 autocommit required');
+        }
+        $database = $db->query('SELECT DATABASE()')->fetchColumn();
+        if (!is_string($database) || $database === '') { throw new RuntimeException('database selection required'); }
+        $lock = 'gojet-migrate-'.substr(hash('sha256', $database), 0, 40);
+        $stmt = $db->prepare('SELECT GET_LOCK(?, 0)'); $stmt->execute([$lock]);
+        if ((int)$stmt->fetchColumn() !== 1) { throw new RuntimeException('migration lock busy'); }
+        try {
+            $tables = $db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('gojet_schema_migrations', $tables, true)) { throw new RuntimeException('upgrade requires managed migration history'); }
+            $history = $db->query('SELECT id, checksum, status FROM gojet_schema_migrations ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+            if (count($history) !== count($current)) { throw new RuntimeException('upgrade current history incomplete or foreign'); }
+            foreach ($history as $index => $record) {
+                if ((int)$record['id'] !== $current[$index]['id'] || $record['checksum'] !== $current[$index]['sha256']
+                    || $record['status'] !== 'applied') { throw new RuntimeException('upgrade history requires verified recovery'); }
+            }
+            return ['schema' => 'gojet.upgrade-migration-inspection.v1',
+                'current_catalog_sha256' => $currentHash, 'candidate_catalog_sha256' => $candidateHash,
+                'applied_migrations' => count($current),
+                'pending_migration_ids' => array_column(array_slice($candidate, count($current)), 'id'),
+                'migration_history_compatible' => true, 'database_mutated' => false,
+                'upgrade_authorized' => false, 'backup_restore_verified' => false];
+        } finally {
+            $stmt = $db->prepare('SELECT RELEASE_LOCK(?)'); $stmt->execute([$lock]);
+        }
+    }
+
     public static function apply(PDO $db, string $root, string $catalogHash, string $source, string $version): array
     {
         if (!preg_match('/^[a-f0-9]{40}$/D', $source) || !preg_match('/^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/D', $version)) { throw new RuntimeException('invalid release identity'); }
