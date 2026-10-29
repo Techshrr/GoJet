@@ -15,6 +15,7 @@ from native_browser_apply import submit_configuration_browser
 from native_preparation_schedule_test import preparation_schedule
 from native_preparation_recovery_test import verify_preparation_recovery
 from native_configuration_restart_test import verify_configuration_restart
+from native_upgrade_test import verify_upgrade
 
 
 def verify_apply(root, release, source, digest, request):
@@ -139,6 +140,7 @@ def verify_apply(root, release, source, digest, request):
             journal = (destination/name).read_text()
             assert profile['admin']['password'] not in journal
             assert profile['configuration']['database']['password'] not in journal
+        return verify_upgrade(root, release, destination, source, profile)
     finally:
         public = Path("/var/lib/gojet-installation-result/result.json")
         if public.exists():

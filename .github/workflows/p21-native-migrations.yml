@@ -51,6 +51,11 @@ jobs:
           php8.3 -l installer/src/DatabaseBackup.php
           php8.3 -l scripts/p21/php/backup_test.php
           sudo env P21_BACKUP_PASSWORD=root P21_MIGRATION_ROOT="$PWD" P21_SOURCE="$P21_SOURCE" php8.3 scripts/p21/php/backup_test.php | tee artifacts/v10/P21/migrations/backup-restore.json
+      - name: Verify upgrade restore and filesystem transaction together
+        run: |
+          set -euo pipefail
+          sudo env P21_UPGRADE_TEST_PASSWORD=root php8.3 scripts/p21/php/upgrade_database_test.php | tee artifacts/v10/P21/migrations/upgrade-database.json
+          sudo php8.3 scripts/p21/php/upgrade_filesystem_test.php | tee artifacts/v10/P21/migrations/upgrade-filesystem.json
       - name: Verify private durable installer state
         run: |
           set -euo pipefail

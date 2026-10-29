@@ -90,6 +90,10 @@ jobs:
           sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_preflight; CREATE USER 'gojet_preflight'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT SELECT ON gojet_p21_preflight.* TO 'gojet_preflight'@'127.0.0.1';"
           sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
+      - name: Verify upgrade maintenance and Redis boundaries
+        run: |
+          set -euo pipefail
+          sudo python3 scripts/p21/native_upgrade_boundaries_test.py | tee artifacts/v10/P21/payload/upgrade-boundaries.json
       - name: Verify four compiled static apps through native Nginx
         run: |
           set -euo pipefail
@@ -150,7 +154,7 @@ jobs:
           php8.3 -l installer/bin/prepare-installation.php
           php8.3 -l installer/bin/run-prepared-data.php
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_journey; CREATE DATABASE gojet_p21_applied; CREATE DATABASE gojet_p21_prepared; CREATE USER 'gojet_prepared'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_prepared.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_applied.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_journey.* TO 'gojet_prepared'@'127.0.0.1';"
-          sudo env P21_NODE="$(command -v node)" PLAYWRIGHT_BROWSERS_PATH=/opt/p21-browsers python3 scripts/p21/native_installation_preparation_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/installation-preparation.json
+          sudo env P21_MYSQL_ADMIN_PASSWORD=root P21_NODE="$(command -v node)" PLAYWRIGHT_BROWSERS_PATH=/opt/p21-browsers python3 scripts/p21/native_installation_preparation_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/installation-preparation.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

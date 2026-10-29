@@ -331,10 +331,10 @@ $state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_ge
     assert request['admin']['password'] not in journal and profile['secrets']['admin'] not in journal
     verify_services(root, release, destination, storage, profile)
     verify_web_entry(root, release, source, digest, request)
-    verify_apply(root, release, source, digest, request)
+    upgrade_report = verify_apply(root, release, source, digest, request)
     assert not list(root.rglob('installed.lock'))
 print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha256=digest,
-    actual_release_preparation=True, single_command_native_apply=True,
+    actual_release_preparation=True, single_command_native_apply=True, upgrade=upgrade_report,
     replacement_partial_publication_recovery=True, replacement_recovery_preserves_retirement=True,
     entry_partial_publication_recovery=True, scheduler_partial_publication_recovery=True,
     recovery_preserves_execution_barriers=True, native_initial_web_entry=True, initial_entry_browser_to_root_preparation=True,

@@ -37,6 +37,9 @@ final class DatabaseBackup
                 $connection['user'], $connection['password'], [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_TIMEOUT => 10]);
             if (!preg_match('/^8\./', (string)$db->query('SELECT VERSION()')->fetchColumn())) { throw new \RuntimeException('Native MySQL8 required'); }
             $server = (string)$db->query('SELECT @@server_uuid')->fetchColumn();
+            $query = $db->prepare('SELECT DEFAULT_CHARACTER_SET_NAME,DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=?');
+            $query->execute([$connection['name']]); $encoding = $query->fetch(\PDO::FETCH_NUM);
+            if ($encoding !== ['utf8mb4', 'utf8mb4_0900_ai_ci']) { throw new \RuntimeException('Unsupported backup encoding'); }
         } catch (\Throwable) {
             throw new \RuntimeException('Backup database connection or server validation failed');
         }
@@ -80,7 +83,7 @@ final class DatabaseBackup
             // Credentials must be removed before any success receipt is published.
             if (!unlink($credentials)) { throw new \RuntimeException('Backup credential cleanup failed'); }
             $result = ['schema' => 'gojet.database-backup.v1', 'database' => $connection['name'],
-                'server_uuid' => $server, 'file' => 'database.sql', 'bytes' => filesize($dump),
+                'server_uuid' => $server, 'encoding' => $encoding, 'file' => 'database.sql', 'bytes' => filesize($dump),
                 'sha256' => hash_file('sha256', $dump), 'consistency' => 'mysqldump-lock-all-tables',
                 'restore_verified' => false, 'upgrade_authorized' => false];
             self::writePrivate($directory.'/complete.json', json_encode($result, JSON_THROW_ON_ERROR)."\n");
