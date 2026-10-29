@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/ci/**'
       - 'scripts/p20/**'
       - 'scripts/p11/**'
       - 'scripts/p16/**'

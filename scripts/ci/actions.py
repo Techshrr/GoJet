@@ -9,21 +9,13 @@ from http.client import IncompleteRead
 
 def github_json(url, headers, *, opener=urllib.request.urlopen, sleep=time.sleep,
                 clock=time.time, max_wait=1200):
-    """Retry throttling and bounded truncated reads; invalid evidence stays fatal."""
+    """Retry throttling and bounded transport failures; invalid evidence stays fatal."""
     deadline = clock() + max_wait
-    truncated_reads = 0
+    transport_failures = 0
     while True:
         try:
             with opener(urllib.request.Request(url, headers=headers), timeout=30) as response:
                 return json.load(response)
-        except IncompleteRead:
-            # Restart the same GET. Never parse or combine a partial JSON body.
-            truncated_reads += 1
-            delay = 2 ** (truncated_reads - 1)
-            if truncated_reads >= 3 or clock() + delay > deadline:
-                raise
-            print(f'GitHub API response truncated; retry in {delay} seconds', flush=True)
-            sleep(delay)
         except urllib.error.HTTPError as exc:
             body = exc.read(8192).decode('utf-8', errors='replace').lower()
             rate_limited = exc.code == 429 or (exc.code == 403 and (
@@ -45,6 +37,20 @@ def github_json(url, headers, *, opener=urllib.request.urlopen, sleep=time.sleep
                 interval = min(delay, 60)
                 sleep(interval)
                 delay -= interval
+        except (IncompleteRead, TimeoutError, urllib.error.URLError) as exc:
+            # urllib wraps connect timeouts; response reads can raise directly.
+            # Do not retry certificate, DNS, permission or other URL failures.
+            if isinstance(exc, urllib.error.URLError) and not isinstance(exc.reason, TimeoutError):
+                raise
+            # Restart the same GET, discarding any partial body. Timeouts and
+            # truncation share one bounded retry allowance and the rate-limit deadline.
+            transport_failures += 1
+            delay = 2 ** (transport_failures - 1)
+            if transport_failures >= 3 or clock() + delay > deadline:
+                raise
+            reason = 'response truncated' if isinstance(exc, IncompleteRead) else 'request timed out'
+            print(f'GitHub API {reason}; retry in {delay} seconds', flush=True)
+            sleep(delay)
 
 
 def workflow_runs(api, repository, head_sha, *, event=None):
