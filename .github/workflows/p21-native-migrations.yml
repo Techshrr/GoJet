@@ -42,6 +42,15 @@ jobs:
           PY
           mkdir -p artifacts/v10/P21/migrations
           P21_MIGRATION_ROOT="$PWD" php8.3 scripts/p21/php/migrations_test.php | tee artifacts/v10/P21/migrations/native.json
+      - name: Back up and restore actual native database in isolation
+        env:
+          P21_SOURCE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_backup CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE gojet_p21_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE USER 'gojet_backup_limited'@'127.0.0.1' IDENTIFIED BY 'p21-limited-only'; GRANT SELECT ON gojet_p21_backup.* TO 'gojet_backup_limited'@'127.0.0.1';"
+          php8.3 -l installer/src/DatabaseBackup.php
+          php8.3 -l scripts/p21/php/backup_test.php
+          sudo env P21_BACKUP_PASSWORD=root P21_MIGRATION_ROOT="$PWD" P21_SOURCE="$P21_SOURCE" php8.3 scripts/p21/php/backup_test.php | tee artifacts/v10/P21/migrations/backup-restore.json
       - name: Verify private durable installer state
         run: |
           set -euo pipefail
