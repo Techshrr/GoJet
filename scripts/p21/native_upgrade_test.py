@@ -5,7 +5,7 @@ and changes static bytes. This is a transition test, not a new binary release or
 owner-controlled production acceptance. No fault hook is shipped in PHP.
 """
 import hashlib
-import http.client
+from http.client import HTTPSConnection
 import json
 import os
 from pathlib import Path
@@ -59,7 +59,7 @@ def verify_upgrade(root, release, prepared, source, profile):
     def administrator_session(login=False):
         nonlocal session_cookie
         context=ssl.create_default_context(cafile=profile['tls']['certificate'])
-        connection=http.client.HTTPSConnection('localhost',18443,context=context,timeout=10)
+        connection=HTTPSConnection('localhost',18443,context=context,timeout=10)
         try:
             headers={'Origin':configuration['origin'],'Content-Type':'application/json'}
             if login:
