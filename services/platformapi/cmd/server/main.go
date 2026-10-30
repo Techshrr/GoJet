@@ -16,9 +16,27 @@ import (
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
 	qrcodes "github.com/Techshrr/GoJet/internal/qr"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "platformapi", os.Stdout) {
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--validate-bootstrap-admin" {
+		if len(os.Args) != 2 || validateInitialAdministrator(os.Stdin, os.Stdout) != nil {
+			_, _ = os.Stderr.WriteString("initial administrator validation refused\n")
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "--bootstrap-admin" {
+		if len(os.Args) != 2 || bootstrapInitialAdministrator(os.Stdin, os.Stdout) != nil {
+			_, _ = os.Stderr.WriteString("initial administrator creation refused\n")
+			os.Exit(1)
+		}
+		return
+	}
 	logger := logging.New(os.Stdout, "platformapi")
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	redisAddr := strings.TrimSpace(os.Getenv("GOJET_REDIS_ADDR"))

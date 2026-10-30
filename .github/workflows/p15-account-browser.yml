@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # T028 requires this complete same-head P15 producer/coherence chain.
+      - 'scripts/p20/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
       - 'go.mod'
       - 'go.sum'
       - 'package.json'

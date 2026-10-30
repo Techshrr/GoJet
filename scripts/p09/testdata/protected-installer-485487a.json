@@ -1,0 +1,76 @@
+{
+  "admin_route": "/admin/platform/storage",
+  "admin_state": "healthy",
+  "installer": {
+    "viewports": {
+      "desktop": {
+        "unauthenticated_routes": 401,
+        "environment_route": 200,
+        "premature_services_health": 409,
+        "services_status": 200,
+        "out_of_phase_environment_health": 409,
+        "healthy": {
+          "status": "failed",
+          "storage": true,
+          "clamav": true
+        },
+        "scanner_down": {
+          "status": "failed",
+          "storage": true,
+          "clamav": false
+        },
+        "unsafe_storage": {
+          "status": "failed",
+          "storage": false,
+          "clamav": true
+        },
+        "stale_hidden": true,
+        "missing_hidden": true,
+        "recovered": true,
+        "apply_posts": 0,
+        "layout_verified": true,
+        "unexpected_browser_errors": 0
+      },
+      "mobile": {
+        "unauthenticated_routes": 401,
+        "environment_route": 200,
+        "premature_services_health": 409,
+        "services_status": 200,
+        "out_of_phase_environment_health": 409,
+        "healthy": {
+          "status": "failed",
+          "storage": true,
+          "clamav": true
+        },
+        "scanner_down": {
+          "status": "failed",
+          "storage": true,
+          "clamav": false
+        },
+        "unsafe_storage": {
+          "status": "failed",
+          "storage": false,
+          "clamav": true
+        },
+        "stale_hidden": true,
+        "missing_hidden": true,
+        "recovered": true,
+        "apply_posts": 0,
+        "layout_verified": true,
+        "unexpected_browser_errors": 0
+      }
+    },
+    "root_completion_guard": true,
+    "completion_marker_is_fixture": true,
+    "full_installation_verified": false,
+    "certificate_verified_tls": true,
+    "real_unprivileged_filepreflight": true,
+    "starting_phases_are_fixtures": true,
+    "unchecked_p21_dependencies_are_false": true,
+    "privileged_apply_verified": false,
+    "state_not_advanced": true
+  },
+  "p17_completion_claimed": false,
+  "p22_completion_claimed": false,
+  "private_dependency_detail_leaked": false
+}

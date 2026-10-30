@@ -14,9 +14,13 @@ import (
 	filedomain "github.com/Techshrr/GoJet/internal/files"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "fileworker", os.Stdout) {
+		return
+	}
 	logger := logging.New(os.Stdout, "fileworker")
 	mysqlDSN := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
 	storageRoot := strings.TrimSpace(os.Getenv("GOJET_FILE_STORAGE_ROOT"))

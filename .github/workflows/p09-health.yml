@@ -76,7 +76,6 @@ jobs:
       GOJET_TEST_MYSQL_DATABASE: gojet_test
       GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
       GOJET_P09_FILEPREFLIGHT: /tmp/gojet-p09/filepreflight
-      GOJET_P09_INSTALLER_INDEX: installer/public/index.php
       GOJET_P09_REAL_CLAMD_ADDRESS: 127.0.0.1:3310
       GOJET_P09_FAULT_SERVER: scripts/p09/clamd_fault_server.py
 

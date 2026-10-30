@@ -16,14 +16,19 @@ The specification pack defines product behavior before code:
 
 ## Development status
 
-GoJet V10 is under active implementation. GitHub Issues are the persistent project ledger:
+The active implementation branch is `develop/p21-native-release-package`, with
+[draft PR #207](https://github.com/Techshrr/GoJet/pull/207). P21 native installation
+and release acceptance remain open; the payload is not a production release.
 
-- [Master Development Tracker — Issue #1](https://github.com/Techshrr/GoJet/issues/1)
-- [P00 — Issue #2](https://github.com/Techshrr/GoJet/issues/2) — completed
-- [Current node P01 — Issue #8](https://github.com/Techshrr/GoJet/issues/8)
-- [Current P01 implementation — PR #9](https://github.com/Techshrr/GoJet/pull/9)
+[Current status and remaining work](docs/p21/STATUS.md) is the current project entry
+point. The target acceptance system is Ubuntu 24.04.4 LTS x86_64. Final delivery must
+contain runtime files only and complete Chinese installation/configuration/recovery
+instructions. Do not install an old development artifact as a production candidate.
 
-The active implementation branch is `develop/p01-engineering-foundation`. P00/G0 is complete; P01 is building the reproducible frontend engineering foundation. A node or Gate is not considered complete until its specification-defined tests, exact-commit evidence and accountable review have passed.
+The planned public brand/domain is Linketic.com. Repository, module and existing
+assets retain their GoJet identity; no live GoJet main-domain migration is required.
+The [master tracker](https://github.com/Techshrr/GoJet/issues/1), frozen test plans and
+signed reviews retain their respective implementation and acceptance authority.
 
 ## Product surfaces
 

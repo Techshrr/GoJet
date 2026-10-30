@@ -12,6 +12,7 @@ on:
       - 'migrations/**'
       - 'services/platformapi/**'
       - 'installer/**'
+      - 'deploy/sysusers/**'
       - 'frontend/apps/workspace/**'
       - 'frontend/apps/admin/**'
       - 'frontend/packages/api-client/**'
@@ -85,8 +86,6 @@ jobs:
       GOJET_TEST_PLATFORM_URL: http://127.0.0.1:18081
       GOJET_TEST_WORKSPACE_URL: http://127.0.0.1:4174
       GOJET_TEST_ADMIN_URL: http://127.0.0.1:4175
-      GOJET_TEST_INSTALL_URL: http://127.0.0.1:4176
-      GOJET_TEST_INSTALL_FAULT_URL: http://127.0.0.1:4177
       GOJET_TEST_WORKSPACE_ID: ws-p09-browser
       GOJET_TEST_ACTOR_ID: p09-browser-owner
       GOJET_P09_FILEWORKER: /tmp/gojet-p09-browser/fileworker
@@ -131,7 +130,8 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            default-mysql-client redis-tools php-cli clamav clamav-daemon clamav-freshclam
+            default-mysql-client redis-tools php8.3-cli php8.3-fpm nginx clamav clamav-daemon clamav-freshclam
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
           mysql --version
           redis-cli --version
           php --version
@@ -196,7 +196,7 @@ jobs:
           git diff --exit-code -- go.mod go.sum
           pnpm install --frozen-lockfile
           for script in scripts/p09/browser*.mjs; do node --check "$script"; done
-          python3 -m py_compile scripts/p09/clamd_fault_server.py scripts/p09/validate_contract.py
+          python3 -m py_compile scripts/p09/clamd_fault_server.py scripts/p09/browser_installer.py scripts/p09/validate_contract.py
           go test ./internal/files ./internal/links ./services/platformapi/cmd/server
           go vet ./internal/files ./internal/links ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/platformapi/cmd/filepreflight
           php -l installer/public/index.php
@@ -233,7 +233,7 @@ jobs:
             /tmp/gojet-p09-browser/filepreflight \
             > artifacts/v10/P09/runtime/browser-native-binaries.sha256
 
-      - name: Start platform Workspace Admin and Installer surfaces
+      - name: Start platform Workspace and Admin surfaces
         shell: bash
         run: |
           set -euo pipefail
@@ -243,17 +243,10 @@ jobs:
           echo $! > artifacts/v10/P09/runtime/browser-workspace.pid
           nohup pnpm --filter @gojet/admin exec vite preview --host 127.0.0.1 --port 4175 > artifacts/v10/P09/runtime/browser-admin.log 2>&1 &
           echo $! > artifacts/v10/P09/runtime/browser-admin.pid
-          php -S 127.0.0.1:4176 installer/public/index.php > artifacts/v10/P09/runtime/browser-installer.log 2>&1 &
-          echo $! > artifacts/v10/P09/runtime/browser-installer.pid
-          GOJET_CLAMAV_ADDRESS=127.0.0.1:39998 php -S 127.0.0.1:4177 installer/public/index.php > artifacts/v10/P09/runtime/browser-installer-fault.log 2>&1 &
-          echo $! > artifacts/v10/P09/runtime/browser-installer-fault.pid
           for attempt in $(seq 1 60); do
-            fault_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4177/install/health || true)"
             if curl -fsS http://127.0.0.1:18081/healthz >/dev/null \
               && curl -fsS http://127.0.0.1:4174/app/files >/dev/null \
-              && curl -fsS http://127.0.0.1:4175/admin/platform/storage >/dev/null \
-              && curl -fsS http://127.0.0.1:4176/install/environment >/dev/null \
-              && [ "$fault_status" = "503" ]; then
+              && curl -fsS http://127.0.0.1:4175/admin/platform/storage >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -262,8 +255,6 @@ jobs:
           cat artifacts/v10/P09/runtime/browser-platformapi.log || true
           cat artifacts/v10/P09/runtime/browser-workspace.log || true
           cat artifacts/v10/P09/runtime/browser-admin.log || true
-          cat artifacts/v10/P09/runtime/browser-installer.log || true
-          cat artifacts/v10/P09/runtime/browser-installer-fault.log || true
           exit 1
 
       - name: Run P09-T021 through P09-T025 browser evidence
@@ -322,8 +313,6 @@ jobs:
         run: |
           set +e
           for file in \
-            browser-installer-fault.pid \
-            browser-installer.pid \
             browser-admin.pid \
             browser-workspace.pid \
             browser-platformapi.pid \
