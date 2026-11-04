@@ -1,0 +1,130 @@
+{
+  "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+  "tree": "78c22aafd5797f757a6fbcb0c49cfc8b181bc7bb",
+  "mysql_restore": "passed locally and in CI",
+  "migration_run": 41831361934,
+  "migration_job": 126579075322,
+  "native_integration_run": 41831361993,
+  "native_integration_job": 126579074887,
+  "native_integration": "passed",
+  "production_acceptance": false,
+  "full_schema_restore_local": {
+    "full_catalog": 31,
+    "table_count": 104,
+    "trigger_count": 4,
+    "native_mysql": true,
+    "real_rehearsal": true,
+    "real_restore": true,
+    "candidate_tables_removed": true,
+    "binary_unicode_preserved": true,
+    "wrong_binding_rejected": true,
+    "wrong_database_rejected": true,
+    "missing_schema_recovery": true,
+    "tamper_rejected_before_mutation": true,
+    "full_upgrade_verified": false,
+    "source": "7708c4f997cb4d8f03b790612c2d30efde1025b4"
+  },
+  "previous_native_integration": [
+    {
+      "run": 40983665313,
+      "job": 123829477460,
+      "result": "failed before upgrade at administrator login; test omitted required correlation ID"
+    },
+    {
+      "source": "7708c4f997cb4d8f03b790612c2d30efde1025b4",
+      "run": 41828777040,
+      "job": 126570242673,
+      "result": "failed at public HTTP readiness after partial-DDL recovery; administrator login, database/file restoration and private eight-service health had passed"
+    }
+  ],
+  "reload_boundary_local": {
+    "native_nginx": true,
+    "reload_acknowledgement_not_readiness": true,
+    "public_tls_probe_without_capability": true,
+    "systemd_tested": false,
+    "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2"
+  },
+  "verified_at": "2026-11-05",
+  "upgrade": {
+    "native_upgrade": true,
+    "native_database_required_recovery": true,
+    "interrupted_phases": [
+      "prepared",
+      "stopping",
+      "adopting",
+      "backing-up",
+      "backed-up",
+      "rehearsing",
+      "migrating",
+      "switching",
+      "starting",
+      "verifying",
+      "restoring",
+      "recovery-committed",
+      "recovered",
+      "committed",
+      "complete"
+    ],
+    "real_partial_ddl_recovered": true,
+    "missing_schema_recovered": true,
+    "maintenance_requires_private_capability": true,
+    "loopback_proxy_bypass_refused": true,
+    "committed_data_preserved": true,
+    "first_install_authority_unchanged": true,
+    "existing_administrator_session_preserved": true,
+    "login_audit_preserved": true,
+    "stale_risk_projections_removed": true,
+    "unrelated_redis_data_preserved": true,
+    "candidate_uses_same_compiled_binaries": true,
+    "production_acceptance": false
+  },
+  "archive_sha256": "677c91382130701a9247a7ce831ffb0d418b593d84182bceb19b1ea92e35ee22",
+  "manifest_sha256": "50fe20e28adc771fbc7426ea094b901c1f68af50cb73e2f1cc3ef4ecda239fa4",
+  "native_installation_report": "native-installation.json",
+  "artifact": {
+    "id": 13323338186,
+    "url": "https://github.com/Techshrr/GoJet/actions/runs/41831361993/artifacts/13323338186",
+    "zip_sha256_reported_by_ci": "5c95ea45993e2a52e60309c67c646142b3171992877a9bc46775514a10c0ce04",
+    "independently_downloaded": false
+  },
+  "related_workflows": [
+    {
+      "run": 41831361934,
+      "job": 126579075322,
+      "name": "Migration Execution",
+      "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+      "conclusion": "success"
+    },
+    {
+      "run": 41831361921,
+      "job": 126579073772,
+      "name": "Service Environment",
+      "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+      "conclusion": "success"
+    },
+    {
+      "run": 41831362041,
+      "job": 126579074560,
+      "name": "Data Bootstrap",
+      "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+      "conclusion": "success"
+    },
+    {
+      "run": 41831362284,
+      "job": 126579076003,
+      "name": "Installer Web",
+      "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+      "conclusion": "success"
+    },
+    {
+      "run": 41831361865,
+      "job": 126579074347,
+      "name": "Release Package",
+      "source": "d8bc11a38a82de0ca4c75cdc80830aa4e27385b2",
+      "conclusion": "success"
+    }
+  ],
+  "installable": false,
+  "full_t014_acceptance": false,
+  "g11_closed": false
+}

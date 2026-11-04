@@ -23,8 +23,9 @@ Checksum drift, missing catalog history, interrupted started state or failed DDL
 blocks further application. Preserve the error, catalog and journal; restore the
 verified pre-upgrade database backup or perform an explicitly reviewed recovery.
 Never delete a journal row to force retry and never switch only binaries across
-an incompatible schema. The complete backup/restore/upgrade orchestration remains
-pending; this engine alone does not satisfy P21 closure or P22 production recovery.
+an incompatible schema. The [native upgrade executor](native-upgrade.md) now integrates
+backup, restore and configuration switching; see [current validation status](STATUS.md).
+This engine alone does not satisfy P21 closure or P22 production recovery.
 
 Only fixed error categories, migration ID, SQLSTATE and numeric driver code may
 be exposed in diagnostics; SQL statements, credentials and raw database errors
@@ -49,8 +50,8 @@ This inspection is a snapshot, not a durable authorization. The upgrade executor
 must revalidate packages and database history at execution time. Its result keeps
 `upgrade_authorized=false` and `backup_restore_verified=false`: release version
 compatibility, consistent backup and restore rehearsal, configuration preservation,
-atomic release switching and service recovery remain unimplemented orchestration
-requirements. A compatible migration prefix alone never permits a binary rollback.
+atomic release switching and service recovery are enforced separately by the native
+upgrade executor. A compatible migration prefix alone never permits a binary rollback.
 
 The native migration workflow exercises a 31-to-32 migration candidate without
 executing its new DDL, unchanged catalogs, removed/rewritten migrations, a competing
