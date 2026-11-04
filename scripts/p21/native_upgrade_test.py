@@ -13,6 +13,7 @@ import shutil
 import signal
 import ssl
 import subprocess
+import sys
 
 from catalog import catalog
 from archive import encode
@@ -61,7 +62,8 @@ def verify_upgrade(root, release, prepared, source, profile):
         context=ssl.create_default_context(cafile=profile['tls']['certificate'])
         connection=HTTPSConnection('localhost',18443,context=context,timeout=10)
         try:
-            headers={'Origin':configuration['origin'],'Content-Type':'application/json'}
+            headers={'Origin':configuration['origin'],'Content-Type':'application/json',
+                     'X-Correlation-ID':'p21-upgrade-existing-administrator'}
             if login:
                 body=json.dumps({k:profile['admin'][k] for k in ['email','password']})
                 connection.request('POST','/api/admin/auth/login',body,headers)
@@ -69,7 +71,13 @@ def verify_upgrade(root, release, prepared, source, profile):
                 headers['Cookie']=session_cookie
                 connection.request('GET','/api/admin/auth/session',headers=headers)
             response=connection.getresponse(); body=json.loads(response.read())
-            assert response.status==200, 'Existing administrator/session stopped working'
+            # Report only status and the API's fixed error code, never response bodies,
+            # cookies, credentials or CSRF tokens.
+            error=body.get('error', {}).get('code', 'unknown')
+            allowed={'invalid_request','unauthorized','forbidden','not_found','conflict',
+                     'locked','rate_limited','totp_required','invalid_totp','internal_error'}
+            assert response.status==200, ('Administrator '+('login' if login else 'session')+
+                f' failed: HTTP {response.status}, '+(error if error in allowed else 'unknown'))
             if login:
                 session_cookie=response.getheader('Set-Cookie').split(';',1)[0]
             else:
@@ -155,6 +163,7 @@ def verify_upgrade(root, release, prepared, source, profile):
     stopped = []
     try:
         administrator_session(login=True)
+        print('upgrade: existing administrator login verified', file=sys.stderr, flush=True)
         sql('CREATE TABLE gojet_upgrade_evidence(id INT PRIMARY KEY,value LONGBLOB) ENGINE=InnoDB; '
             'INSERT INTO gojet_upgrade_evidence VALUES(1,0x00FF0102)')
         good = candidate('upgrade-candidate')
@@ -170,6 +179,7 @@ def verify_upgrade(root, release, prepared, source, profile):
             stream.write(b'corrupt failed candidate')
         execute(job, binding, recovery=True)
         restored()
+        print('upgrade: partial DDL and damaged candidate recovery verified', file=sys.stderr, flush=True)
 
         for phase in ['prepared', 'stopping', 'adopting', 'backing-up', 'backed-up',
                       'rehearsing', 'migrating', 'switching', 'starting', 'verifying']:
@@ -206,6 +216,7 @@ def verify_upgrade(root, release, prepared, source, profile):
                 assert redis('EXISTS','risk:link:987654321:'+('a'*64))=='0'
                 assert redis('GET','gojet:upgrade:unrelated-fixture')=='retain'
             stopped.append(phase)
+            print('upgrade: recovery verified at '+phase, file=sys.stderr, flush=True)
 
         job, binding = prepare('commit-upgrade', good)
         execute(job, binding, stop='committed')
