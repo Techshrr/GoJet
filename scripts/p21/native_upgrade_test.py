@@ -157,7 +157,9 @@ def verify_upgrade(root, release, prepared, source, profile):
         assert sql('SELECT HEX(value) FROM gojet_upgrade_evidence WHERE id=1') == '00FF0102'
         assert evidence.read_bytes() == original and evidence.stat().st_mode & 0o777 == 0o640
         assert not (storage/'published/candidate-only').exists()
-        assert http() == '200' and not (authority/'pending.json').exists()
+        status = http()
+        assert status == '200', 'Recovered public route returned HTTP '+status
+        assert not (authority/'pending.json').exists(), 'Recovery barrier was not cleared'
         assert marker.read_bytes() == installed
 
     stopped = []

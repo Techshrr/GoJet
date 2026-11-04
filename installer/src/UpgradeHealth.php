@@ -10,7 +10,7 @@ require_once __DIR__.'/Migrations.php';
 /** Live release, eight daemons, dependency and TLS checks; no synthetic installation records. */
 final class UpgradeHealth
 {
-    public static function verify(array $release, string $pointer): void
+    public static function verify(array $release, string $pointer, bool $privateProbe = true): void
     {
         UpgradeIO::root();
         UpgradeSwitch::live($pointer, $release['snapshot'], $release['configuration_hashes']);
@@ -60,23 +60,24 @@ final class UpgradeHealth
             throw new \RuntimeException('Nginx unavailable');
         }
         $root = $release['dependencies']['release'];
+        $request = fn(string $path, ?string $host = null) => self::request($release, $path, $host, $privateProbe);
         $paths = ['/' => $root.'/static/site/index.html','/app' => $root.'/static/workspace/index.html','/admin' => $root.'/static/admin/index.html'];
         $docs = glob($root.'/static/docs/*/index.html');
         if (!$docs) { throw new \RuntimeException('Docs entry unavailable'); }
         foreach ($docs as $entry) { $paths['/docs/'.basename(dirname($entry)).'/'] = $entry; }
         foreach ($paths as $path => $file) {
-            [$code,$body] = self::request($release, $path);
+            [$code,$body] = $request($path);
             if ($code !== 200 || !hash_equals((string)hash_file('sha256',$file), hash('sha256',$body))) {
                 throw new \RuntimeException('Upgrade static route health failed');
             }
         }
-        [$code,$body] = self::request($release,'/api/public/auth/providers');
+        [$code,$body] = $request('/api/public/auth/providers');
         if ($code !== 200 || !is_array(json_decode($body,true,16,JSON_THROW_ON_ERROR))
-            || !in_array(self::request($release,'/api/workspaces/1/files')[0],[401,403],true)
-            || self::request($release,'/install')[0] !== 404 || self::request($release,'/install/environment')[0] !== 404
-            || self::request($release,'/','unrelated.invalid')[0] !== 421) { throw new \RuntimeException('Upgrade HTTP boundary failed'); }
+            || !in_array($request('/api/workspaces/1/files')[0],[401,403],true)
+            || $request('/install')[0] !== 404 || $request('/install/environment')[0] !== 404
+            || $request('/','unrelated.invalid')[0] !== 421) { throw new \RuntimeException('Upgrade HTTP boundary failed'); }
     }
-    private static function request(array $release, string $path, ?string $host = null): array
+    private static function request(array $release, string $path, ?string $host, bool $privateProbe): array
     {
         $url = parse_url($release['origin']);
         if (($url['scheme'] ?? '') !== 'https' || !preg_match('/^[a-z0-9.-]+$/D', $url['host'] ?? '')) {
@@ -86,7 +87,7 @@ final class UpgradeHealth
             'ssl'=>['verify_peer'=>true,'verify_peer_name'=>true,'allow_self_signed'=>false,'peer_name'=>$url['host'],
                 'SNI_enabled'=>true,'cafile'=>$release['certificate']],
             'http'=>['timeout'=>3,'follow_location'=>0,'ignore_errors'=>true,'protocol_version'=>1.1,
-                'header'=>'Host: '.($host ?? $url['host'].(isset($url['port']) ? ':'.$url['port'] : ''))."\r\nX-GoJet-Upgrade-Probe: ".UpgradeMaintenance::token()."\r\nConnection: close\r\n"]]);
+                'header'=>'Host: '.($host ?? $url['host'].(isset($url['port']) ? ':'.$url['port'] : ''))."\r\n".($privateProbe ? "X-GoJet-Upgrade-Probe: ".UpgradeMaintenance::token()."\r\n" : '')."Connection: close\r\n"]]);
         $http_response_header = [];
         $h = @fopen('https://127.0.0.1:'.($url['port'] ?? 443).$path,'rb',false,$context);
         if ($h === false) { throw new \RuntimeException('Upgrade TLS request failed'); }

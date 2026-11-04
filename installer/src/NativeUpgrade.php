@@ -162,12 +162,12 @@ final class NativeUpgrade
         if (count($state['events'])>512) { throw new \RuntimeException('Upgrade recovery attempt bound exceeded'); }
         UpgradeIO::record($job.'/state.json',$state);
     }
-    private static function waitHealthy(array $r): void
+    private static function waitHealthy(array $r, bool $privateProbe = true): void
     {
         $deadline=microtime(true)+60; $stable=null;
         do {
             try {
-                UpgradeHealth::verify($r,self::POINTER);
+                UpgradeHealth::verify($r,self::POINTER,$privateProbe);
                 if ($stable!==null && microtime(true)-$stable>=1) { return; }
                 $stable ??= microtime(true); usleep(200000);
             } catch (\Throwable) {
@@ -202,6 +202,9 @@ final class NativeUpgrade
                 self::waitHealthy($release); UpgradeMaintenance::gate(false);
                 UpgradeIO::command(['/usr/sbin/nginx','-t']);
                 UpgradeIO::command(['/usr/bin/systemctl','reload','nginx.service']);
+                // reload acknowledges the signal before new Nginx workers serve traffic.
+                // Keep the committed barrier until ordinary requests see the open release.
+                self::waitHealthy($release,false);
                 self::phase($job,$state,$new?'complete':'recovered');
                 if ($hasPending && !unlink($pending)) { throw new \RuntimeException('Completion cleanup failed'); }
                 UpgradeIO::sync(self::AUTHORITY);
@@ -247,6 +250,7 @@ final class NativeUpgrade
                 self::phase($job,$state,'committed');
                 UpgradeMaintenance::gate(false); UpgradeIO::command(['/usr/sbin/nginx','-t']);
                 UpgradeIO::command(['/usr/bin/systemctl','reload','nginx.service']);
+                self::waitHealthy($p['new'],false);
                 self::phase($job,$state,'complete');
                 if (!unlink($pending)) { throw new \RuntimeException('Upgrade barrier cleanup failed'); }
                 UpgradeIO::sync(self::AUTHORITY);
@@ -285,6 +289,7 @@ final class NativeUpgrade
         self::phase($job,$state,'recovery-committed');
         UpgradeMaintenance::gate(false); UpgradeIO::command(['/usr/sbin/nginx','-t']);
         UpgradeIO::command(['/usr/bin/systemctl','reload','nginx.service']);
+        self::waitHealthy($p['old'],false);
         self::phase($job,$state,'recovered');
         if (!unlink(self::AUTHORITY.'/pending.json')) { throw new \RuntimeException('Recovery barrier cleanup failed'); }
         UpgradeIO::sync(self::AUTHORITY);

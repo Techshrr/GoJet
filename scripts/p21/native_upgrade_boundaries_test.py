@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
 import socket
 import subprocess
 import tempfile
@@ -48,12 +49,20 @@ def main():
                 'echo GoJet\\Installer\\UpgradeMaintenance::render($argv[2]);',token))
             gate.chmod(0o600)
             port=free_port()
+            tls_port=free_port()
+            certificate=root/'certificate.pem'
+            key=root/'private.key'
+            subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes',
+                '-keyout',str(key),'-out',str(certificate),'-days','1','-subj','/CN=localhost',
+                '-addext','subjectAltName=DNS:localhost'],check=True,capture_output=True,timeout=15)
             nginx=root/'nginx.conf'
-            nginx.write_text(f'user root; daemon off; master_process off; pid {root}/nginx.pid; '
+            nginx.write_text(f'user root; daemon off; worker_processes 1; pid {root}/nginx.pid; '
                 f'error_log {root}/nginx.log; events {{}} http {{ access_log off; '
                 f'client_body_temp_path {root}/body; proxy_temp_path {root}/proxy; '
                 f'fastcgi_temp_path {root}/fastcgi; uwsgi_temp_path {root}/uwsgi; scgi_temp_path {root}/scgi; '
-                f'server {{ listen 127.0.0.1:{port}; include {gate}; location / {{ return 200 "ready"; }} }} }}')
+                f'server {{ listen 127.0.0.1:{port}; listen 127.0.0.1:{tls_port} ssl; '
+                f'ssl_certificate {certificate}; ssl_certificate_key {key}; '
+                f'include {gate}; location / {{ return 200 "ready"; }} }} }}')
             binary=os.environ.get('P21_NGINX_BIN','/usr/sbin/nginx')
             check=subprocess.run([binary,'-t','-p',str(root),'-c',str(nginx)],capture_output=True,timeout=10)
             assert check.returncode==0, 'Native Nginx rejected maintenance configuration: '+check.stderr.decode().replace(token,'[probe]')
@@ -68,6 +77,30 @@ def main():
                     assert response.status==expected, 'Maintenance allowed a forged/missing capability'
                 finally:
                     connection.close()
+
+            # Exercise the shipped TLS probe without the maintenance capability.
+            # A paused master keeps its existing worker alive: sending reload alone
+            # must not be mistaken for restored public access.
+            code='require $argv[1]."/installer/src/UpgradeHealth.php"; '
+            code+='$m=new ReflectionMethod(GoJet\\Installer\\UpgradeHealth::class,"request"); '
+            code+='echo $m->invoke(null,["origin"=>$argv[2],"certificate"=>$argv[3]],"/",null,false)[0];'
+            def public_status():
+                return php(code,f'https://localhost:{tls_port}',str(certificate))
+            assert public_status()=='503', 'Public health probe bypassed maintenance'
+            process.send_signal(signal.SIGSTOP)
+            try:
+                gate.write_text('\n')
+                process.send_signal(signal.SIGHUP)
+                assert public_status()=='503', 'Fixture did not retain pre-reload workers'
+            finally:
+                process.send_signal(signal.SIGCONT)
+            deadline=time.monotonic()+10
+            while True:
+                status=public_status()
+                if status=='200':
+                    break
+                assert status=='503' and time.monotonic()<deadline, 'Public access did not recover after reload'
+                time.sleep(.05)
 
             redis_port=free_port()
             binary=os.environ.get('P21_REDIS_SERVER_BIN','/usr/bin/redis-server')
@@ -95,6 +128,7 @@ def main():
             assert event in redis('XRANGE','gojet:analytics:clicks:v1','-','+')
             print(json.dumps(dict(native_nginx=True, native_redis=True, forged_loopback_headers_rejected=True,
                 private_probe_accepted=True, stale_risk_keys_removed=True, repeated_invalidation_safe=True,
+                reload_acknowledgement_not_readiness=True, public_tls_probe_without_capability=True,
                 unrelated_data_and_analytics_stream_preserved=True, systemd_tested=False)))
         finally:
             for process in reversed(processes):
