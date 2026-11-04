@@ -90,6 +90,12 @@ jobs:
           sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
           MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_preflight; CREATE USER 'gojet_preflight'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT SELECT ON gojet_p21_preflight.* TO 'gojet_preflight'@'127.0.0.1';"
           sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
+      - name: Verify complete durable risk projection recovery
+        run: |
+          set -euo pipefail
+          go build -o artifacts/v10/P21/build/risk-restore-fixture ./scripts/p21/risk_restore_runner
+          go build -o /tmp/gojet-risk-restore-operationsmonitor ./services/platformapi/cmd/operationsmonitor
+          sudo env P21_MYSQL_ADMIN_PASSWORD=root python3 scripts/p21/native_risk_projection_test.py artifacts/v10/P21/build/risk-restore-fixture /tmp/gojet-risk-restore-operationsmonitor | tee artifacts/v10/P21/payload/risk-projection-recovery.json
       - name: Verify upgrade maintenance and Redis boundaries
         run: |
           set -euo pipefail

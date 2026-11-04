@@ -161,11 +161,25 @@ def verify_upgrade(root, release, prepared, source, profile):
         assert status == '200', 'Recovered public route returned HTTP '+status
         assert not (authority/'pending.json').exists(), 'Recovery barrier was not cleared'
         assert marker.read_bytes() == installed
+        assert risk_fixture('--check-only')['links_checked'] == 209
+
+    def risk_fixture(mode):
+        fixture = Path(__file__).resolve().parents[2]/'artifacts/v10/P21/build/risk-restore-fixture'
+        risk_env = env | dict(
+            GOJET_MYSQL_DSN=f"root:{administrator['password']}@tcp(127.0.0.1:3306)/{dbname}?parseTime=true&charset=utf8mb4",
+            GOJET_REDIS_ADDR=f"127.0.0.1:{configuration['redis']['port']}",
+            GOJET_REDIS_DB=str(configuration['redis']['db']),
+            GOJET_REDIS_PASSWORD=configuration['redis']['password'],
+            GOJET_RISK_POLICY_VERSION=configuration['risk']['policy_version'])
+        result = subprocess.run([str(fixture), mode], env=risk_env, capture_output=True, timeout=90)
+        assert result.returncode == 0 and not result.stderr, 'Durable risk projection fixture failed: '+mode
+        return json.loads(result.stdout)
 
     stopped = []
     try:
         administrator_session(login=True)
         print('upgrade: existing administrator login verified', file=sys.stderr, flush=True)
+        assert risk_fixture('--seed-only')['links'] == 209
         sql('CREATE TABLE gojet_upgrade_evidence(id INT PRIMARY KEY,value LONGBLOB) ENGINE=InnoDB; '
             'INSERT INTO gojet_upgrade_evidence VALUES(1,0x00FF0102)')
         good = candidate('upgrade-candidate')
@@ -205,6 +219,13 @@ def verify_upgrade(root, release, prepared, source, profile):
                 execute(job, binding, recovery=True, stop='restoring')
                 sql('DROP DATABASE `'+dbname+'`', selected=False)
                 # Interrupted DROP/import is recovered from the same original backup.
+            if phase == 'migrating':
+                # PID1 can outlive the killed upgrade client. Recovery must stop
+                # this transient worker before touching the restored authority.
+                subprocess.run(['systemd-run','--quiet','--collect','--service-type=exec',
+                    '--unit=gojet-risk-projection-restore.service','--property=User=gojet',
+                    '--property=RuntimeMaxSec=180s','/usr/bin/sleep','120'],
+                    env=env,check=True,capture_output=True,timeout=15)
             if phase == 'switching':
                 execute(job, binding, recovery=True, stop='recovery-committed')
                 # Once committed, recovery cleanup must retain subsequent writes.
@@ -214,6 +235,8 @@ def verify_upgrade(root, release, prepared, source, profile):
             result = execute(job, binding, recovery=True)
             assert result['recovered'] and not result['upgrade_complete']
             restored()
+            assert subprocess.run(['systemctl','is-active','--quiet','gojet-risk-projection-restore.service'],
+                                  env=env,capture_output=True,timeout=10).returncode != 0
             if phase in ['migrating', 'switching', 'starting', 'verifying']:
                 assert redis('EXISTS','risk:link:987654321:'+('a'*64))=='0'
                 assert redis('GET','gojet:upgrade:unrelated-fixture')=='retain'
@@ -234,9 +257,14 @@ def verify_upgrade(root, release, prepared, source, profile):
         assert http() == '200' and not (authority/'pending.json').exists()
         assert execute(job, binding)['upgrade_complete']
         administrator_session()
+        assert risk_fixture('--check-only')['links_checked'] == 209
+        projection = json.loads((job/'state.json').read_text())['risk_projection_restore']
+        assert projection == dict(complete=True, visited=208, projected=206, withheld=2)
         assert sql("SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.auth.login' AND result='success'")=='1'
         assert marker.read_bytes() == installed
         return dict(native_upgrade=True, native_database_required_recovery=True,
+                    durable_risk_projection_restored=True, risk_projection_links_checked=209,
+                    orphaned_projection_worker_stopped=True,
                     interrupted_phases=stopped+['restoring', 'recovery-committed', 'recovered', 'committed', 'complete'],
                     real_partial_ddl_recovered=True, missing_schema_recovered=True,
                     maintenance_requires_private_capability=True, loopback_proxy_bypass_refused=True,

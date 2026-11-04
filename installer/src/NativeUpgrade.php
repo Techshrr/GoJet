@@ -5,6 +5,7 @@ require_once __DIR__.'/UpgradeHealth.php';
 require_once __DIR__.'/UpgradeStorage.php';
 require_once __DIR__.'/UpgradeMaintenance.php';
 require_once __DIR__.'/UpgradeRedis.php';
+require_once __DIR__.'/UpgradeRisk.php';
 require_once __DIR__.'/DatabaseBackup.php';
 require_once __DIR__.'/DatabaseRestore.php';
 require_once __DIR__.'/InstallationPreparation.php';
@@ -222,7 +223,7 @@ final class NativeUpgrade
             }
             try {
                 if ($recover) { return self::recover($job,$p,$state); }
-                self::phase($job,$state,'stopping'); UpgradeMaintenance::gate(true); self::services(false);
+                self::phase($job,$state,'stopping'); UpgradeMaintenance::gate(true); self::services(false); UpgradeRisk::stop();
                 // Nginx remains alive, but all application writers are stopped. Static reads are harmless.
                 self::phase($job,$state,'adopting');
                 UpgradeSwitch::adopt(self::POINTER,$p['old']['snapshot'],$p['old']['configuration_hashes'],$p['original_hashes']);
@@ -240,6 +241,7 @@ final class NativeUpgrade
                 self::phase($job,$state,'migrating');
                 Migrations::apply($db,$p['new']['dependencies']['release'],$p['new_catalog'],$p['new']['dependencies']['source'],$p['version']);
                 $state['invalidated_risk_keys']=UpgradeRedis::invalidate($p['new']['dependencies']['redis']);
+                $state['risk_projection_restore']=UpgradeRisk::rebuild($p['new']);
                 self::phase($job,$state,'switching');
                 UpgradeSwitch::point(self::POINTER,$p['old']['snapshot'],$p['new']['snapshot']);
                 UpgradeIO::command(['/usr/sbin/nginx','-t']);
@@ -265,7 +267,7 @@ final class NativeUpgrade
     }
     private static function recover(string $job,array $p,array &$state): array
     {
-        UpgradeMaintenance::gate(true); self::services(false);
+        UpgradeMaintenance::gate(true); self::services(false); UpgradeRisk::stop();
         $mutated=in_array($state['phase'],['migrating','switching','starting','restoring','verifying'],true);
         if ($mutated) {
             if (!isset($state['database_receipt_sha256'],$state['storage_receipt_sha256'])) { throw new \RuntimeException('Verified recovery backup missing'); }
@@ -274,8 +276,9 @@ final class NativeUpgrade
             UpgradeStorage::verify($job,$state['storage_receipt_sha256']);
             DatabaseRestore::restore($p['administrator'],$job.'/database',$state['database_receipt_sha256'],$state['rehearsal']);
             UpgradeStorage::restore($job,$state['storage_receipt_sha256']);
-            $state['invalidated_risk_keys']=UpgradeRedis::invalidate($p['old']['dependencies']['redis']);
         }
+        $state['invalidated_risk_keys']=UpgradeRedis::invalidate($p['old']['dependencies']['redis']);
+        $state['risk_projection_restore']=UpgradeRisk::rebuild($p['old']);
         if (is_link(self::POINTER)) {
             $current=readlink(self::POINTER);
             if ($current===$p['new']['snapshot']) { UpgradeSwitch::point(self::POINTER,$current,$p['old']['snapshot']); }

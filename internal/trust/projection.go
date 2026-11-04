@@ -15,6 +15,7 @@ import (
 type ProjectionCandidate struct {
 	WorkspaceID string
 	LinkID      uint64
+	Fingerprint string
 }
 
 type ProjectionResult struct {
@@ -84,18 +85,22 @@ LIMIT 1`, workspaceID, linkID, fingerprint, policyVersion))
 }
 
 func (s *Store) ListProjectionCandidates(ctx context.Context, policyVersion string, limit int) ([]ProjectionCandidate, error) {
+	return s.listProjectionPage(ctx, policyVersion, 0, ^uint64(0), limit)
+}
+
+func (s *Store) listProjectionPage(ctx context.Context, policyVersion string, after, through uint64, limit int) ([]ProjectionCandidate, error) {
 	policyVersion = strings.TrimSpace(policyVersion)
 	if s == nil || s.db == nil || policyVersion == "" || limit < 1 || limit > 500 {
 		return nil, ErrInvalid
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT DISTINCT d.workspace_id,d.link_id
+SELECT DISTINCT d.workspace_id,d.link_id,l.risk_fingerprint
 FROM destination_risk_decisions d
-JOIN links l ON l.id=d.link_id AND l.deleted_at IS NULL
-WHERE d.policy_version=? AND d.risk_fingerprint=l.risk_fingerprint
+JOIN links l ON l.id=d.link_id AND l.workspace_id=d.workspace_id AND l.deleted_at IS NULL
+WHERE d.policy_version=? AND d.risk_fingerprint=l.risk_fingerprint AND l.id>? AND l.id<=?
   AND d.state IN ('allow','review','block','unknown')
 ORDER BY d.link_id
-LIMIT ?`, policyVersion, limit)
+LIMIT ?`, policyVersion, after, through, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +108,7 @@ LIMIT ?`, policyVersion, limit)
 	out := make([]ProjectionCandidate, 0)
 	for rows.Next() {
 		var candidate ProjectionCandidate
-		if err := rows.Scan(&candidate.WorkspaceID, &candidate.LinkID); err != nil {
+		if err := rows.Scan(&candidate.WorkspaceID, &candidate.LinkID, &candidate.Fingerprint); err != nil {
 			return nil, err
 		}
 		out = append(out, candidate)
@@ -156,7 +161,7 @@ func ProjectCurrentDestinationDecision(ctx context.Context, store *Store, runtim
 	if ttl <= 0 {
 		return ProjectionResult{}, ErrStaleFingerprint
 	}
-	runtimeDecision, err := runtime.PutDecision(ctx, authority.Decision.LinkID, authority.Fingerprint, state, authority.PolicyVersion, ttl)
+	runtimeDecision, err := runtime.PutDecisionUntil(ctx, authority.Decision.LinkID, authority.Fingerprint, state, authority.PolicyVersion, now.Add(ttl))
 	if err != nil {
 		return ProjectionResult{}, err
 	}
@@ -174,13 +179,14 @@ type RiskProjector struct {
 	PolicyVersion string
 	MaxTTL        time.Duration
 	BatchSize     int
+	cursor        uint64
 }
 
 func (p *RiskProjector) RunOnce(ctx context.Context) (int, error) {
-	if p == nil || p.Store == nil || p.Runtime == nil || strings.TrimSpace(p.PolicyVersion) == "" || p.MaxTTL <= 0 || p.BatchSize < 1 {
+	if p == nil || p.Store == nil || p.Runtime == nil || strings.TrimSpace(p.PolicyVersion) == "" || p.MaxTTL <= 0 || p.BatchSize < 1 || p.BatchSize > 500 || p.MaxTTL > 24*time.Hour {
 		return 0, ErrInvalid
 	}
-	candidates, err := p.Store.ListProjectionCandidates(ctx, p.PolicyVersion, p.BatchSize)
+	candidates, err := p.Store.listProjectionPage(ctx, p.PolicyVersion, p.cursor, ^uint64(0), p.BatchSize)
 	if err != nil {
 		return 0, err
 	}
@@ -189,12 +195,74 @@ func (p *RiskProjector) RunOnce(ctx context.Context) (int, error) {
 	for _, candidate := range candidates {
 		_, err := ProjectCurrentDestinationDecision(ctx, p.Store, p.Runtime, candidate.WorkspaceID, candidate.LinkID, p.PolicyVersion, now, p.MaxTTL)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrStaleFingerprint) || errors.Is(err, ErrConflict) {
+			if err := p.Runtime.DeleteDecision(ctx, candidate.LinkID, candidate.Fingerprint); err != nil {
+				return projected, err
+			}
+			p.cursor = candidate.LinkID
 			continue
 		}
 		if err != nil {
 			return projected, err
 		}
 		projected++
+		p.cursor = candidate.LinkID
+	}
+	if len(candidates) < p.BatchSize {
+		p.cursor = 0
 	}
 	return projected, nil
+}
+
+// ProjectionRestore reports only a completed bounded scan of durable authority.
+// The caller must stop all writers and invalidate old projection keys first.
+type ProjectionRestore struct {
+	Complete  bool `json:"complete"`
+	Visited   int  `json:"visited"`
+	Projected int  `json:"projected"`
+	Withheld  int  `json:"withheld"`
+}
+
+// Rebuild does not call providers, consume jobs or deliver webhooks. Unknown,
+// expired and stale authority is withheld, never converted into an allow.
+func (p *RiskProjector) Rebuild(ctx context.Context, maximum int) (ProjectionRestore, error) {
+	result := ProjectionRestore{}
+	if p == nil || p.Store == nil || p.Store.db == nil || p.Runtime == nil ||
+		strings.TrimSpace(p.PolicyVersion) == "" || p.MaxTTL <= 0 || p.MaxTTL > 24*time.Hour ||
+		p.BatchSize < 1 || p.BatchSize > 500 || maximum < 1 || maximum > 100000 {
+		return result, ErrInvalid
+	}
+	var through uint64
+	if err := p.Store.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(id),0) FROM links").Scan(&through); err != nil {
+		return result, err
+	}
+	var after uint64
+	for {
+		candidates, err := p.Store.listProjectionPage(ctx, p.PolicyVersion, after, through, p.BatchSize)
+		if err != nil {
+			return result, err
+		}
+		for _, candidate := range candidates {
+			if result.Visited >= maximum {
+				return result, ErrInvalid
+			}
+			_, err := ProjectCurrentDestinationDecision(ctx, p.Store, p.Runtime, candidate.WorkspaceID,
+				candidate.LinkID, p.PolicyVersion, time.Now().UTC(), p.MaxTTL)
+			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrStaleFingerprint) || errors.Is(err, ErrConflict) {
+				if err := p.Runtime.DeleteDecision(ctx, candidate.LinkID, candidate.Fingerprint); err != nil {
+					return result, err
+				}
+				result.Withheld++
+			} else if err != nil {
+				return result, err
+			} else {
+				result.Projected++
+			}
+			result.Visited++
+			after = candidate.LinkID
+		}
+		if len(candidates) < p.BatchSize {
+			result.Complete = true
+			return result, nil
+		}
+	}
 }

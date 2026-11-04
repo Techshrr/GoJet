@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"log/slog"
 	"os"
@@ -24,7 +25,11 @@ func main() {
 		return
 	}
 	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
+	restore := flag.Bool("restore-risk-projections", false, "rebuild durable destination-risk projections without processing jobs")
 	flag.Parse()
+	if flag.NArg() != 0 || (*restore && *once) {
+		os.Exit(1)
+	}
 	logger := logging.New(os.Stdout, "operationsmonitor")
 
 	dsn := strings.TrimSpace(os.Getenv("GOJET_MYSQL_DSN"))
@@ -32,7 +37,7 @@ func main() {
 	providerName := strings.TrimSpace(os.Getenv("GOJET_RISK_PROVIDER_NAME"))
 	providerEndpoint := strings.TrimSpace(os.Getenv("GOJET_RISK_PROVIDER_ENDPOINT"))
 	policyVersion := strings.TrimSpace(os.Getenv("GOJET_RISK_POLICY_VERSION"))
-	if dsn == "" || redisAddr == "" || providerName == "" || providerEndpoint == "" || policyVersion == "" {
+	if dsn == "" || redisAddr == "" || policyVersion == "" || (!*restore && (providerName == "" || providerEndpoint == "")) {
 		logger.Error("required operationsmonitor configuration missing",
 			"mysql_dsn_present", dsn != "",
 			"redis_addr_present", redisAddr != "",
@@ -79,6 +84,21 @@ func main() {
 
 	allowTTL := durationEnv("GOJET_RISK_ALLOW_TTL", 15*time.Minute, time.Minute, 24*time.Hour, logger)
 	projectionTTL := durationEnv("GOJET_RISK_PROJECTION_TTL", 5*time.Minute, time.Second, 24*time.Hour, logger)
+	if *restore {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		projector := &trust.RiskProjector{Store: trust.NewStore(db), Runtime: runtimeRisk,
+			PolicyVersion: policyVersion, MaxTTL: projectionTTL, BatchSize: 100}
+		result, err := projector.Rebuild(ctx, 100000)
+		if err != nil {
+			logger.Error("risk projection restore incomplete")
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	interval := durationEnv("GOJET_OPSMONITOR_INTERVAL", 2*time.Second, 250*time.Millisecond, time.Minute, logger)
 	leaseTTL := durationEnv("GOJET_RISK_LEASE_TTL", 2*time.Minute, time.Second, 15*time.Minute, logger)
 	retryBase := durationEnv("GOJET_RISK_RETRY_BASE", 2*time.Second, 0, time.Minute, logger)
