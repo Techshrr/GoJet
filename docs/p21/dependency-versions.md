@@ -34,4 +34,23 @@ FPM 探测文件在 finally 中恢复，核对原进程 PID 与文件身份。
 - https://mariadb.com/docs/server/clients-and-utilities/deployment-tools/mariadb-install-db
 
 此测试不重建候选，也不重跑已通过的完整升级恢复链路。原依赖故障、文件和 Redis 权限、
-八服务、恢复及浏览器证据继续绑定其原始报告。本批真实 CI 通过后再登记结果；G11 不由测试自动签署。
+八服务、恢复及浏览器证据继续绑定其原始报告。本批真实 CI 已通过，G11 不由测试自动签署。
+
+## 验证结果（2026-11-06）
+
+测试源码 `a49023029aedcc2c915dbdf8d0f54d34d400c79b` 的
+[专用 CI 42075233647](https://github.com/Techshrr/GoJet/actions/runs/42075233647) 成功。
+实际使用 PHP 8.1.2-1ubuntu2.28 CLI/FPM、MariaDB 10.11.14；三个拒绝场景、
+其他七项保持健康、原 FPM 文件身份/进程保留、原依赖恢复、未迁移数据库和未写完成锁全部通过。
+候选仍为 `270e8459f2862525fd8e75db7a375b4346da4dcf`，归档 SHA-256 仍为
+`e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9`。
+
+[原始报告](../../artifacts/v10/P21/dependency-versions/native.json)及
+[验证记录](../../artifacts/v10/P21/dependency-versions/validation.json)已保存；
+下载的 ZIP 摘要为 `8629cd9ccd22c2cb94eacc9cf7a6dde3864ecdc8124c856831185378aa881076`。
+
+首次 run 42038788401 停在数据库夹具初始化。Noble 把初始化脚本依赖的 my_print_defaults
+放在 mariadb-client-core，原夹具只解包了 server 相关包，遗漏这个工具。
+修正后提取 client-core 及其库、预先验证完整 bootstrap 工具集，并保留有限初始化诊断；
+产品安装器和原候选包没有修改。失败尝试保留记录，不作为当前阻塞。
+本地网络代理不能下载这组夹具，本地原生行为不计通过；上述证据来自真实隔离 CI。

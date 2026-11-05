@@ -88,11 +88,14 @@
     },
     {
       "case_acceptance": "pending-complete-contract-review",
-      "evidence_scope": "Eight-check baseline and real dependency failures verified. Full wrong-version rejection matrix is not claimed closed.",
+      "evidence_scope": "Eight-check baseline and real dependency failures verified; supplemental native evidence now verifies PHP 8.1 CLI/FPM and MariaDB 10.11 rejection, other seven healthy checks, preserved authority and restored readiness on the same archive. No exhaustive version enumeration claimed.",
       "id": "P21-T010",
+      "missing_version_rejection_evidence": "resolved for the documented concrete matrix",
       "name": "Mandatory dependency preflight",
       "reports": [
-        "artifacts/v10/P21/candidate/dependency-preflight.json"
+        "artifacts/v10/P21/candidate/dependency-preflight.json",
+        "artifacts/v10/P21/dependency-versions/native.json",
+        "artifacts/v10/P21/dependency-versions/validation.json"
       ]
     },
     {

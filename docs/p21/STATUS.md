@@ -1,11 +1,20 @@
 # P21 当前交付状态
 
-更新：2026-11-05。分支：`develop/p21-native-release-package`；开发 PR：[#207](https://github.com/Techshrr/GoJet/pull/207)。
+更新：2026-11-06。分支：`develop/p21-native-release-package`；开发 PR：[#207](https://github.com/Techshrr/GoJet/pull/207)。
 P21/G11 尚未关闭，包保持 `installable=false`，未部署生产。
 
 最新已验证候选源码：`270e8459f2862525fd8e75db7a375b4346da4dcf`。
 本批发布手册、候选包和完整原生链路已通过一次集中 CI；实际附件已独立下载并复核。
 [候选交付说明](candidate-delivery.md)与[证据绑定](../../artifacts/v10/P21/candidate/validation.json)记录本批结果。
+
+## 当前增量：真实依赖版本拒绝证据
+
+测试源码 `a49023029aedcc2c915dbdf8d0f54d34d400c79b`，候选源码及归档保持上文身份。
+[专用 CI 42075233647](https://github.com/Techshrr/GoJet/actions/runs/42075233647) 已通过：
+真实 PHP 8.1 CLI、PHP 8.1 FPM、MariaDB 10.11 均被拒绝；对应场景的其他七项依赖保持健康，
+恢复原环境后重新通过，不产生完成锁、迁移或安装权威变更。
+报告及下载附件摘要已独立核验，详见[版本拒绝验证](dependency-versions.md)。
+这项此前缺失的具体证据已补齐；不重建候选，也不重复运行完整升级恢复链路。
 
 ## 当前增量：发布手册与候选索引
 
@@ -57,7 +66,7 @@ manifest SHA-256：`50fe20e28adc771fbc7426ea094b901c1f68af50cb73e2f1cc3ef4ecda23
 
 ## 剩余交付边界
 
-1. P21：操作手册已随包交付，候选包及证据已固定；接续按 18 项清单完成覆盖核对和 G11 审查，其中 T010 完整错误版本拒绝矩阵尚未宣告验收通过。
+1. P21：操作手册已随包交付，候选包及证据已固定；接续按 18 项清单完成覆盖核对和 G11 审查；T010 的真实 PHP/数据库版本拒绝证据已补齐，不再列为缺失。
 2. P22/G12：指定干净目标系统安装、八服务重启及整机重启恢复。
 3. P22/G13：真实业务外部依赖、生产升级回滚和 Release Owner 验收；执行生产操作须另行授权。
 

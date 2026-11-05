@@ -50,7 +50,8 @@ CI 在全部原生测试成功后运行 scripts/p21/finalize_candidate.py，将 
 附件 ID 13404611783，GitHub 当前保留至 2026-12-05；尚未作为永久正式 Release 发布。
 
 CI runner 实际为 Ubuntu 24.04.5，不能冒充指定 Ubuntu 24.04.4 目标机验收。
-原始依赖报告保留 full_p21_t010_acceptance=false，完整错误版本拒绝矩阵仍须核对；
+原始依赖报告保留其组件范围标记 full_p21_t010_acceptance=false；后续[专用版本拒绝验证](dependency-versions.md)
+已在同一不可变包上补齐真实 PHP CLI/FPM 与数据库不兼容输入证据，原报告不反写；
 [十八项审查导航](../../artifacts/v10/gates/G11/native-package/review-checklist.json)逐项说明证据范围，
 没有把自动化检查成功改写成十八项全部验收通过。
 

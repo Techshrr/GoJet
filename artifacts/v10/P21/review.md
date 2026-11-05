@@ -19,9 +19,15 @@ The downloaded artifact was independently verified; the candidate index reproduc
 - [Eighteen-case review navigation](../gates/G11/native-package/review-checklist.json)
 - [Packaged Chinese runbooks](../../../docs/release/README.md)
 
-Remaining P21 work is complete contract coverage review and G11 acceptance; the original
-T010 report does not yet claim the entire wrong-version rejection matrix. Automated results
-are not eighteen case approvals. Preserve original component-scope false flags and evidence
+Remaining P21 work is complete contract coverage review and G11 acceptance.
+The previously missing concrete version-refusal evidence is now supplied by
+[native dependency run 42075233647](https://github.com/Techshrr/GoJet/actions/runs/42075233647)
+on test source `a49023029aedcc2c915dbdf8d0f54d34d400c79b`, using this exact unchanged archive.
+Real PHP 8.1 CLI/FPM and MariaDB 10.11 are refused with the other seven checks healthy;
+original readiness, FPM identity and installation authority are preserved. The artifact was
+independently downloaded and verified. See [the bound report](dependency-versions/validation.json).
+This is a concrete incompatibility matrix, not exhaustive version certification.
+Automated results are not eighteen case approvals. Preserve original component-scope false flags and evidence
 provenance. The same-binary transition fixture does not certify arbitrary historical releases.
 No requirement for two prior formal releases is added.
 

@@ -59,5 +59,22 @@
   "run": 42001339781,
   "runbook_allowlist": "scripts/p21/runbooks.py",
   "schema": "gojet.g11-evidence-index.v1",
-  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf"
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "supplemental_evidence": {
+    "dependency_versions": {
+      "candidate_source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+      "reports": {
+        "artifacts/v10/P21/dependency-versions/native.json": {
+          "bytes": 3795,
+          "sha256": "27d28ecd101383fff7b718f7639de97d76440446bcbd43d6dc6158438cf1cddc"
+        },
+        "artifacts/v10/P21/dependency-versions/validation.json": {
+          "bytes": 2794,
+          "sha256": "6f1d5b9c2191d31f219a572ae233cd5f603acba8e5b4278af23c596c155c5f82"
+        }
+      },
+      "run": 42075233647,
+      "test_source": "a49023029aedcc2c915dbdf8d0f54d34d400c79b"
+    }
+  }
 }
