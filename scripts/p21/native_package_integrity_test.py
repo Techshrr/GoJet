@@ -45,6 +45,12 @@ with tempfile.TemporaryDirectory(prefix='gojet-integrity-') as temporary:
     rejected(call(manifest='0'*64))
     rejected(call(commit='0'*40))
     rejected(call(nonroot=True))
+    runbook = release/'runbooks/install.md'
+    original_runbook = runbook.read_bytes()
+    runbook.write_bytes(original_runbook+b'\nUnapproved operator instruction.\n')
+    rejected(call())
+    runbook.write_bytes(original_runbook)
+    assert call().returncode == 0
     target = release/'deploy/sysusers/gojet.conf'
     original = target.read_bytes()
     target.write_bytes(original+b'\n')
@@ -92,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-integrity-') as temporary:
     assert call().returncode == 0
 print(json.dumps(dict(source=source, archive_sha256=expected_archive, manifest_sha256=digest,
     members=report['members'], actual_release_verified=True, root_only=True,
-    wrong_authority_rejected=True, missing_tampered_extra_rejected=True,
+    wrong_authority_rejected=True, missing_tampered_extra_rejected=True, runbook_tampering_rejected=True,
     symlink_hardlink_rejected=True, owner_modes_rejected=True,
     checksum_inventory_rejected=True, restored_payload_verified=True,
     dependency_preflight_complete=False, installable=False)))

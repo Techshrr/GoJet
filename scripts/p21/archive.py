@@ -6,6 +6,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import tarfile
+from runbooks import PATHS as RUNBOOK_PATHS
 
 META={'manifest.json','sbom.cdx.json','SHA256SUMS'}
 BINS={'redirectengine','analyticsworker','analyticsreconciler','platformapi','mailworker','fileworker','operationsmonitor','logreceiver','filepreflight'}
@@ -16,7 +17,7 @@ def allowed(name):
     p=PurePosixPath(name)
     if not name or str(p)!=name or p.is_absolute() or '..' in p.parts or '\\' in name: return False
     if any(x.startswith('.') or x.lower() in {'node_modules','docker','compose','dockerfile','node','npm','pnpm'} for x in p.parts): return False
-    if name in META: return True
+    if name in META or name in RUNBOOK_PATHS: return True
     if name in {'deploy/sysusers/gojet.conf','deploy/tmpfiles/gojet.conf','deploy/logrotate/gojet-nginx','deploy/nginx/static-apps.conf','deploy/nginx/platform-proxy.conf','deploy/nginx/redirect-proxy.conf'}: return True
     if name.startswith('deploy/systemd/'):
         return name in {'deploy/systemd/gojet-'+n+'.service' for n in BINS-{'filepreflight'}}
