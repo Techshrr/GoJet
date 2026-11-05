@@ -6,6 +6,7 @@ require_once __DIR__.'/UpgradeStorage.php';
 require_once __DIR__.'/UpgradeMaintenance.php';
 require_once __DIR__.'/UpgradeRedis.php';
 require_once __DIR__.'/UpgradeRisk.php';
+require_once __DIR__.'/UpgradeCompatibility.php';
 require_once __DIR__.'/DatabaseBackup.php';
 require_once __DIR__.'/DatabaseRestore.php';
 require_once __DIR__.'/InstallationPreparation.php';
@@ -79,12 +80,9 @@ final class NativeUpgrade
             UpgradeIO::disjoint([$job,$candidate,$old['dependencies']['release'],$old['dependencies']['storage'],self::AUTHORITY,$currentPrepared]);
             $new=$old; $new['dependencies']['release']=$candidate; $new['dependencies']['manifest_sha256']=$manifestHash; $new['dependencies']['source']=$source;
             $oldManifest=self::manifest($old); $newManifest=self::manifest($new);
-            // This release family has one reviewed compatibility boundary. A new minor
-            // or major line must explicitly extend it together with its migration tests.
-            foreach ([$oldManifest['version'],$newManifest['version']] as $version) {
-                if (!preg_match('/^10\.0\.0(?:-rc\.[0-9]+)?$/D',$version)) { throw new \RuntimeException('Unsupported version compatibility boundary'); }
-            }
-            if (version_compare($newManifest['version'],$oldManifest['version'],'<')) { throw new \RuntimeException('Downgrade requires restore'); }
+            UpgradeCompatibility::versions($oldManifest['version'],$newManifest['version']);
+            $compatibility=['old'=>UpgradeCompatibility::verify($old,$oldManifest),
+                'new'=>UpgradeCompatibility::verify($new,$newManifest)];
             $database=$old['dependencies']['database'];
             if (($administrator['name']??'')!==$database['name'] || ($administrator['port']??null)!==$database['port']) { throw new \RuntimeException('Backup administrator database mismatch'); }
             $db=UpgradeIO::connection($administrator);
@@ -133,7 +131,7 @@ final class NativeUpgrade
             if ($ports) { $web['http_port']=(int)reset($ports); }
             $files['nginx.conf']=UpgradeMaintenance::guarded(ProductWebConfig::render($web)); $new['snapshot']=$job.'/after';
             $new['configuration_hashes']=UpgradeSwitch::snapshot($new['snapshot'],$files);
-            $plan=['schema'=>'gojet.native-upgrade.v1','old'=>$old,'new'=>$new,'administrator'=>$administrator,
+            $plan=['schema'=>'gojet.native-upgrade.v1','old'=>$old,'new'=>$new,'administrator'=>$administrator,'compatibility'=>$compatibility,
                 'old_catalog'=>$oldCatalog,'new_catalog'=>$newCatalog,'version'=>$newManifest['version'],'active_sha256'=>$activeHash,'original_hashes'=>$originalHashes];
             UpgradeIO::record($job.'/plan.json',$plan);
             UpgradeIO::record($job.'/state.json',['phase'=>'prepared','plan_sha256'=>hash_file('sha256',$job.'/plan.json')]);

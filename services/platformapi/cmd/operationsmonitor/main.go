@@ -24,6 +24,9 @@ func main() {
 	if releaseinfo.Print(os.Args[1:], "operationsmonitor", os.Stdout) {
 		return
 	}
+	if releaseinfo.PrintUpgradeCapabilities(os.Args[1:], "operationsmonitor", os.Stdout) {
+		return
+	}
 	once := flag.Bool("once", false, "run one operationsmonitor iteration, then exit")
 	restore := flag.Bool("restore-risk-projections", false, "rebuild durable destination-risk projections without processing jobs")
 	flag.Parse()

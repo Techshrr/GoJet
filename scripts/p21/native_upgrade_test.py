@@ -176,6 +176,7 @@ def verify_upgrade(root, release, prepared, source, profile):
         return json.loads(result.stdout)
 
     stopped = []
+    rejected_candidates = []
     try:
         administrator_session(login=True)
         print('upgrade: existing administrator login verified', file=sys.stderr, flush=True)
@@ -184,6 +185,54 @@ def verify_upgrade(root, release, prepared, source, profile):
             'INSERT INTO gojet_upgrade_evidence VALUES(1,0x00FF0102)')
         good = candidate('upgrade-candidate')
         bad = candidate('upgrade-failing-candidate', True)
+        # Exercise actual preparation with checksum-valid incompatible candidates.
+        # No failure may create a plan/barrier or stop/restart a running writer.
+        incompatible = root/'upgrade-incompatible-candidate'
+        shutil.copytree(good, incompatible)
+        original_manifest = (incompatible/'manifest.json').read_bytes()
+        original_monitor = (incompatible/'bin/operationsmonitor').read_bytes()
+        baseline_journal = sql('SELECT id,checksum,source,release_version,status FROM gojet_schema_migrations ORDER BY id')
+        baseline_tables = sql('SHOW TABLES')
+        baseline_pids = subprocess.check_output(['systemctl','show',*[f'gojet-{s}.service' for s in SERVICES],
+            '--property=MainPID','--value'],env=env,timeout=15)
+        for label, version in [('downgrade','10.0.0-rc.0'),('new-minor','10.1.0'),('new-major','11.0.0'),
+                               ('noncanonical-rc','10.0.0-rc.01'),('unsupported-prerelease','10.0.0-beta.1'),
+                               ('build-metadata','10.0.0+build'),('binary-version','10.0.0-rc.2'),
+                               ('binary-source',None),('binary-service',None),('missing-recovery-capability',None)]:
+            m=json.loads(original_manifest)
+            (incompatible/'bin/operationsmonitor').write_bytes(original_monitor)
+            if version: m['version']=version
+            if label=='binary-source': m['source']='a'*40
+            if label=='binary-service':
+                (incompatible/'bin/operationsmonitor').write_bytes((good/'bin/platformapi').read_bytes())
+            if label=='missing-recovery-capability':
+                fixture=Path(__file__).resolve().parents[2]/'artifacts/v10/P21/build/version-only-fixture'
+                (incompatible/'bin/operationsmonitor').write_bytes(fixture.read_bytes())
+            monitor=incompatible/'bin/operationsmonitor'
+            m['files']['bin/operationsmonitor']=dict(bytes=monitor.stat().st_size,mode=0o755,sha256=digest(monitor))
+            (incompatible/'manifest.json').write_bytes(encode(m))
+            names=sorted([*m['files'],'manifest.json','sbom.cdx.json'])
+            (incompatible/'SHA256SUMS').write_text(''.join(digest(incompatible/n)+'  '+n+'\n' for n in names))
+            integrity=subprocess.run(['php8.3',str(release/'installer/bin/verify-package.php'),
+                str(incompatible),digest(incompatible/'manifest.json'),m['source']],
+                env=env,capture_output=True,timeout=30)
+            assert integrity.returncode==0 and json.loads(integrity.stdout)['integrity_verified'], 'Invalid matrix fixture: '+label
+            rejected_job=home/('reject-'+label)
+            command=['php8.3',str(release/'installer/bin/prepare-upgrade.php'),str(prepared),
+                     str(incompatible),digest(incompatible/'manifest.json'),m['source'],str(rejected_job)]
+            result=subprocess.run(command,input=json.dumps(administrator).encode(),capture_output=True,timeout=180,env=env)
+            assert result.returncode==1 and not result.stdout, 'Incompatible candidate accepted: '+label
+            assert result.stderr==b'Upgrade preparation refused; no migration or service switch was authorized.\n'
+            assert not rejected_job.exists() and not (authority/'pending.json').exists()
+            assert sql('SELECT id,checksum,source,release_version,status FROM gojet_schema_migrations ORDER BY id')==baseline_journal
+            assert sql('SHOW TABLES')==baseline_tables and marker.read_bytes()==installed
+            assert all(path.read_bytes()==raw for path,raw in targets.items())
+            assert subprocess.check_output(['systemctl','show',*[f'gojet-{s}.service' for s in SERVICES],
+                '--property=MainPID','--value'],env=env,timeout=15)==baseline_pids
+            assert http()=='200'
+            rejected_candidates.append(label)
+        shutil.rmtree(incompatible)
+        print('upgrade: incompatible candidates refused before service or database changes',file=sys.stderr,flush=True)
         # A real DDL failure leaves the candidate table and failed migration journal.
         job, binding = prepare('ddl-failure', bad)
         execute(job, binding, refused=True)
@@ -260,11 +309,16 @@ def verify_upgrade(root, release, prepared, source, profile):
         assert risk_fixture('--check-only')['links_checked'] == 209
         projection = json.loads((job/'state.json').read_text())['risk_projection_restore']
         assert projection == dict(complete=True, visited=208, projected=206, withheld=2)
+        compatibility=json.loads((job/'plan.json').read_text())['compatibility']
+        assert all(row['source']==source and row['service_identities']==8 and row['helper_identities']==1
+                   and row['risk_projection_restore']=='gojet.risk-projection-restore.v1' for row in compatibility.values())
         assert sql("SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.auth.login' AND result='success'")=='1'
         assert marker.read_bytes() == installed
         return dict(native_upgrade=True, native_database_required_recovery=True,
                     durable_risk_projection_restored=True, risk_projection_links_checked=209,
                     orphaned_projection_worker_stopped=True,
+                    incompatible_candidates_rejected_before_mutation=rejected_candidates,
+                    old_and_new_executable_identity_and_recovery_contract_verified=True,
                     interrupted_phases=stopped+['restoring', 'recovery-committed', 'recovered', 'committed', 'complete'],
                     real_partial_ddl_recovered=True, missing_schema_recovered=True,
                     maintenance_requires_private_capability=True, loopback_proxy_bypass_refused=True,
