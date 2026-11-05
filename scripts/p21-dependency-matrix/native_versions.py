@@ -125,7 +125,12 @@ def main():
         init = [maria/'bin/mariadb-install-db', '--no-defaults', '--basedir='+str(maria),
                 '--datadir='+str(datadir), '--auth-root-authentication-method=normal',
                 '--skip-test-db', '--skip-name-resolve', '--user=root']
-        successful(init, env=env, timeout=90)
+        initialized = execute(init, env=env, timeout=90)
+        if initialized.returncode:
+            # Bootstrap precedes credential creation; only this fixture's own
+            # bounded initialization diagnostic is safe to retain.
+            raise RuntimeError('Isolated database initialization failed: '+
+                               (initialized.stdout+initialized.stderr)[-3000:])
         with socket.socket() as probe:
             probe.bind(('127.0.0.1', 0)); port = probe.getsockname()[1]
         server_log = (private/'server.log').open('w')
@@ -138,7 +143,10 @@ def main():
             admin = ['mysql', '--no-defaults', '--protocol=socket', '--socket='+str(socket_path), '-uroot', '-NB']
             deadline = time.monotonic()+30
             while time.monotonic() < deadline:
-                assert server.poll() is None, 'Isolated unsupported database exited'
+                if server.poll() is not None:
+                    server_log.flush()
+                    raise RuntimeError('Isolated unsupported database exited: '+
+                                       (private/'server.log').read_text()[-3000:])
                 result = execute(admin, data='SELECT VERSION();', timeout=5)
                 if result.returncode == 0: break
                 time.sleep(.2)

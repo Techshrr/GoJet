@@ -24,7 +24,7 @@ def prepare(root):
     security = os.environ.get('P21_UBUNTU_SECURITY_URL', 'https://security.ubuntu.com/ubuntu')
     for distribution, packages, target in [
         ('jammy', ['php8.1-cli', 'php8.1-fpm', 'php8.1-common', 'php8.1-mysql'], 'php81'),
-        ('noble', ['mariadb-server', 'mariadb-server-core', 'liburing2', 'libnuma1'], 'mariadb'),
+        ('noble', ['mariadb-server-core', 'mariadb-client-core', 'libmariadb3', 'liburing2', 'libnuma1'], 'mariadb'),
     ]:
         area = root/distribution
         area.mkdir(mode=0o755)
@@ -57,6 +57,13 @@ def prepare(root):
                             'architecture': architecture, 'sha256': hashlib.sha256(deb.read_bytes()).hexdigest()})
         if found != set(packages):
             raise RuntimeError('Missing fixture package')
+    # Noble places my_print_defaults in client-core, although install-db is in
+    # server-core. Check the complete bootstrap toolset before native tests.
+    for name in ('usr/bin/mariadb-install-db', 'usr/bin/my_print_defaults',
+                 'usr/bin/resolveip', 'usr/sbin/mariadbd'):
+        path = root/'mariadb'/name
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise RuntimeError('Missing executable fixture dependency: '+name)
     manifest = {'schema': 'gojet.dependency-version-fixtures.v1', 'signed_ubuntu_apt_metadata': True,
                 'debian_maintainer_scripts_executed': False, 'host_packages_replaced': False, 'packages': records}
     (root/'provenance.json').write_text(json.dumps(manifest, indent=2)+'\n')
