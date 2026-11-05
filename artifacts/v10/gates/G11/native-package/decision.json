@@ -1,0 +1,12 @@
+{
+  "accountable_role": "Release Engineer",
+  "approved_by": null,
+  "archive_sha256": "e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9",
+  "decision": "PENDING",
+  "installable": false,
+  "production_authorized": false,
+  "reason": "Candidate assets and current native evidence assembled; full contract coverage and accountable G11 review remain open.",
+  "schema": "gojet.g11-decision.v1",
+  "signed": false,
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf"
+}

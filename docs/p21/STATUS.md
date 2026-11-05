@@ -3,8 +3,9 @@
 更新：2026-11-05。分支：`develop/p21-native-release-package`；开发 PR：[#207](https://github.com/Techshrr/GoJet/pull/207)。
 P21/G11 尚未关闭，包保持 `installable=false`，未部署生产。
 
-最新已验证源码：`683bb5f5354600f529f883aaaf342b0064ebacdf`。
-兼容性拒绝矩阵与带业务数据的八服务升级恢复通过，下文保留各批实现各自的证据绑定。
+最新已验证候选源码：`270e8459f2862525fd8e75db7a375b4346da4dcf`。
+本批发布手册、候选包和完整原生链路已通过一次集中 CI；实际附件已独立下载并复核。
+[候选交付说明](candidate-delivery.md)与[证据绑定](../../artifacts/v10/P21/candidate/validation.json)记录本批结果。
 
 ## 当前增量：发布手册与候选索引
 
@@ -13,7 +14,13 @@ P21/G11 尚未关闭，包保持 `installable=false`，未部署生产。
 最终 candidate.json 在同一原生 CI 的全部检查结束后生成，绑定精确归档、manifest、SBOM、
 九个二进制、迁移、手册以及八份原始报告，不修改已构建归档。
 缺失报告、异源提交、不同归档、失败断言或不完整恢复覆盖均拒绝生成成功索引。
-索引保留 G11 待审查和未获生产验收状态。此增量当前等待一次集中原生 CI，不能借用上一轮摘要。
+[Native Payload 42001339781](https://github.com/Techshrr/GoJet/actions/runs/42001339781) 第一次执行成功：
+两项 job、14 项 Python 检查、Go 回归、前端构建、连续安装、八服务、MySQL 恢复、209 链接风险重建、
+10 类不兼容候选拒绝及 15 个中断恢复阶段通过。最终 candidate.json 在本次 CI 内生成。
+实际下载 330 成员归档并独立重建索引成功；8 份原始报告、manifest、SBOM 与四份手册摘要均相符。
+归档 SHA-256：`e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9`。
+G11 证据导航已建立于 artifacts/v10/gates/G11/native-package；索引保留待审查状态。
+原始报告的范围限制未改写成全项验收通过，亦未借用上一轮包摘要。
 
 ## 本次交付：完整升级与恢复
 
@@ -50,7 +57,7 @@ manifest SHA-256：`50fe20e28adc771fbc7426ea094b901c1f68af50cb73e2f1cc3ef4ecda23
 
 ## 剩余交付边界
 
-1. P21：将操作手册纳入交付物、冻结最终候选包，核对发布资产与验收证据并完成 G11 审查。
+1. P21：操作手册已随包交付，候选包及证据已固定；接续按 18 项清单完成覆盖核对和 G11 审查，其中 T010 完整错误版本拒绝矩阵尚未宣告验收通过。
 2. P22/G12：指定干净目标系统安装、八服务重启及整机重启恢复。
 3. P22/G13：真实业务外部依赖、生产升级回滚和 Release Owner 验收；执行生产操作须另行授权。
 

@@ -1,0 +1,21 @@
+Selected command headers from successful GitHub job 127157041068 (run 42001339781, attempt 1).
+This is a command inventory excerpt, not the full execution transcript.
+Original log: https://github.com/Techshrr/GoJet/actions/runs/42001339781/job/127157041068
+
+2026-11-05T09:18:57.6890662Z ##[group]Run actions/checkout@v4
+2026-11-05T09:19:01.9368263Z ##[group]Run actions/setup-go@v5
+2026-11-05T09:19:17.5471574Z ##[group]Run actions/setup-node@v5
+2026-11-05T09:19:28.6478743Z ##[group]Run python3 scripts/p21/validate_contract.py
+2026-11-05T09:19:29.5311190Z ##[group]Run python3 scripts/p21/verify_build.py
+2026-11-05T09:20:52.0220993Z ##[group]Run corepack enable
+2026-11-05T09:21:31.8476884Z ##[group]Run pnpm exec playwright-core install --with-deps chromium
+2026-11-05T09:21:55.3292440Z ##[group]Run python3 scripts/p21/build_payload.py
+2026-11-05T09:22:31.6877302Z ##[group]Run set -euo pipefail
+2026-11-05T09:22:42.2321151Z ##[group]Run set -euo pipefail
+2026-11-05T09:23:05.9006261Z ##[group]Run set -euo pipefail
+2026-11-05T09:23:13.0264840Z ##[group]Run set -euo pipefail
+2026-11-05T09:23:13.8871416Z ##[group]Run set -euo pipefail
+2026-11-05T09:23:17.5495839Z ##[group]Run set -euo pipefail
+2026-11-05T09:24:28.1677208Z ##[group]Run set -euo pipefail
+2026-11-05T09:41:47.7414557Z ##[group]Run python3 scripts/p21/finalize_candidate.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz artifacts/v10/P21/build/native-build.json "$GITHUB_SHA"
+2026-11-05T09:41:49.9074946Z ##[group]Run actions/upload-artifact@v4

@@ -1,0 +1,17 @@
+{
+  "all_packaged_runbooks_match_source": true,
+  "all_report_hashes_verified": true,
+  "archive_members": 330,
+  "archive_sha256": "e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9",
+  "candidate_index_reproduced": true,
+  "downloaded_artifact_zip_bytes": 63374141,
+  "downloaded_artifact_zip_sha256": "16e27dac3f632ef7c56ca183708be331e6fbc9f4732dc9d101dd594b50f3971f",
+  "go_test_log_sha256": "26c69e4636d8b4294c7dd23782b4292d9273e1376d2fdd83374dbd9a9ea6d734",
+  "independent_download_verified": true,
+  "manifest_sha256": "c1863cff76f9c2efd499ca8d44d430f16bfa6598ad7ea2ad3a8bac18474390c2",
+  "native_code_executed_locally": false,
+  "production_deployment": false,
+  "sbom_components": 833,
+  "sbom_file_hashes_verified": true,
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf"
+}

@@ -1,0 +1,16 @@
+{
+  "archive": {
+    "bytes": 62625868,
+    "checksum_inventory_sha256": "90617d8b8d0f79a02bd6476419cfa71dc486f37b55e2032e36dc3b629633bd9d",
+    "manifest_sha256": "c1863cff76f9c2efd499ca8d44d430f16bfa6598ad7ea2ad3a8bac18474390c2",
+    "members": 330,
+    "name": "gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz",
+    "sbom_sha256": "539d40dd133cf48085a9671947b82551813c4dcefd474b9cac910b07bf0c0397",
+    "sha256": "e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9"
+  },
+  "schema": "gojet.g11-source.v1",
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "source_is_candidate_not_later_evidence_commit": true,
+  "tree": "f84d40352e5f62e15bc226ea778f40cc5d5338a7",
+  "version": "10.0.0-rc.1"
+}

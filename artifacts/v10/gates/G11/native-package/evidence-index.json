@@ -1,0 +1,63 @@
+{
+  "allowlist_and_denylist": "scripts/p21/archive.py",
+  "archive_independently_downloaded_and_verified": true,
+  "archive_members": 330,
+  "candidate": "artifacts/v10/P21/candidate/candidate.json",
+  "full_g11_approval": false,
+  "inventory": "artifacts/v10/P21/candidate/manifest.json",
+  "reports": {
+    "artifacts/v10/P21/candidate/candidate.json": {
+      "bytes": 3590,
+      "sha256": "3a653c33950dc234322247df258527c358c895a1393e4d8f4b4858b57a0784de"
+    },
+    "artifacts/v10/P21/candidate/dependency-preflight.json": {
+      "bytes": 1598,
+      "sha256": "1e600ed63859daf7c89efb0c6d3d5a550bdf0fc16086c7cee4642e3d08305deb"
+    },
+    "artifacts/v10/P21/candidate/download-verification.json": {
+      "bytes": 804,
+      "sha256": "2c56e56665cbd5a37f632dabc8070137ae21e85418698240f66c4dba1dd627e6"
+    },
+    "artifacts/v10/P21/candidate/installation-preparation.json": {
+      "bytes": 5635,
+      "sha256": "62138670b2185a3ef970e2b950043a66ebc968298f9afbd238e7a9991a9f436c"
+    },
+    "artifacts/v10/P21/candidate/manifest.json": {
+      "bytes": 58529,
+      "sha256": "c1863cff76f9c2efd499ca8d44d430f16bfa6598ad7ea2ad3a8bac18474390c2"
+    },
+    "artifacts/v10/P21/candidate/native-build.json": {
+      "bytes": 12378,
+      "sha256": "e07f6690e17ef72ee2ce786b7b858a3dfc895bd1136d23de568ed8853a33bc0d"
+    },
+    "artifacts/v10/P21/candidate/risk-projection-recovery.json": {
+      "bytes": 442,
+      "sha256": "ae7456cb6aa396bdaf62b3580d2476c4d3f6285c12ceceae0a2c2c7b2becdb40"
+    },
+    "artifacts/v10/P21/candidate/static-routing.json": {
+      "bytes": 736,
+      "sha256": "21bbd319987277c631a58890062703926d73c22a9066ef7b44ba765c86e79f69"
+    },
+    "artifacts/v10/P21/candidate/target-integrity.json": {
+      "bytes": 606,
+      "sha256": "a39db01c5bcb0fb9c5c2cd963a97f2fbf36e5070ed81dc78469161ee675980de"
+    },
+    "artifacts/v10/P21/candidate/upgrade-boundaries.json": {
+      "bytes": 359,
+      "sha256": "419287e18d2e3e43ebbd522148b324809de80755ae3543416a7230f3789bd737"
+    },
+    "artifacts/v10/P21/candidate/validation.json": {
+      "bytes": 3700,
+      "sha256": "7eec5b9eb1a0ae259c3f2175d581076652a82648ffc7ee7b36291f2fcfc15458"
+    },
+    "artifacts/v10/P21/candidate/verification.json": {
+      "bytes": 2328,
+      "sha256": "a5fe8dcd188c8ba6e34742cc71a6baabd8808c85444e25f7a042f1f8dca63622"
+    }
+  },
+  "review_checklist": "review-checklist.json",
+  "run": 42001339781,
+  "runbook_allowlist": "scripts/p21/runbooks.py",
+  "schema": "gojet.g11-evidence-index.v1",
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf"
+}
