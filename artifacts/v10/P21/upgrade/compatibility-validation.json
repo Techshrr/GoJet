@@ -1,0 +1,174 @@
+{
+  "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+  "tree": "1ecb45395d323f24b548da2233a465c6522cbf77",
+  "scope": "reject incompatible upgrade executables before planning or stopping writers",
+  "local": {
+    "version_matrix": true,
+    "numeric_rc_order": true,
+    "downgrade_rejected": true,
+    "noncanonical_and_unsupported_versions_rejected": true,
+    "binary_identity_binding": true,
+    "missing_wrong_and_malformed_capability_rejected": true,
+    "compiled_operationsmonitor_empty_environment": true,
+    "go_contract_tests": "passed",
+    "php_and_python_syntax": "passed",
+    "archive_tests": "7 passed; HTTP test skipped because php8.3 is not on local PATH",
+    "native_systemd_tested": false
+  },
+  "native_integration": "passed",
+  "native_integration_run": 41958283206,
+  "native_integration_job": 127018306687,
+  "executor_context_job": 127018306852,
+  "bounds": {
+    "supported_version_family": "10.0.0 and canonical 10.0.0-rc.N, N=0..999999999",
+    "same_version_approved_packages_allowed": true,
+    "downgrades_require_restore": true,
+    "service_identities_per_release": 8,
+    "helper_identities_per_release": 1,
+    "recovery_protocol": "gojet.risk-projection-restore.v1",
+    "probe_runtime_max_seconds": 5,
+    "probe_network_isolated": true,
+    "probe_environment_file": false
+  },
+  "missing_capability_binary_is_test_fixture": true,
+  "candidate_uses_same_compiled_binaries": true,
+  "formal_release_pair_verified": false,
+  "two_prior_formal_releases_required_by_p21": false,
+  "production_acceptance": false,
+  "installable": false,
+  "full_t014_acceptance": false,
+  "g11_closed": false,
+  "verified_at": "2026-11-05",
+  "native_installation_report": "compatibility-native-installation.json",
+  "upgrade": {
+    "native_upgrade": true,
+    "native_database_required_recovery": true,
+    "durable_risk_projection_restored": true,
+    "risk_projection_links_checked": 209,
+    "orphaned_projection_worker_stopped": true,
+    "incompatible_candidates_rejected_before_mutation": [
+      "downgrade",
+      "new-minor",
+      "new-major",
+      "noncanonical-rc",
+      "unsupported-prerelease",
+      "build-metadata",
+      "binary-version",
+      "binary-source",
+      "binary-service",
+      "missing-recovery-capability"
+    ],
+    "old_and_new_executable_identity_and_recovery_contract_verified": true,
+    "interrupted_phases": [
+      "prepared",
+      "stopping",
+      "adopting",
+      "backing-up",
+      "backed-up",
+      "rehearsing",
+      "migrating",
+      "switching",
+      "starting",
+      "verifying",
+      "restoring",
+      "recovery-committed",
+      "recovered",
+      "committed",
+      "complete"
+    ],
+    "real_partial_ddl_recovered": true,
+    "missing_schema_recovered": true,
+    "maintenance_requires_private_capability": true,
+    "loopback_proxy_bypass_refused": true,
+    "committed_data_preserved": true,
+    "first_install_authority_unchanged": true,
+    "existing_administrator_session_preserved": true,
+    "login_audit_preserved": true,
+    "stale_risk_projections_removed": true,
+    "unrelated_redis_data_preserved": true,
+    "candidate_uses_same_compiled_binaries": true,
+    "production_acceptance": false
+  },
+  "archive_sha256": "c65efea6f5042bfb0332c897e9bc25066c4477df612f17ff50c750ec6cb673a3",
+  "manifest_sha256": "43acbd4bdc33c8c7da65930bdd9ddf02ecf7da39ef578773de5a5d2b2b6436b8",
+  "related_workflows": [
+    {
+      "run": 41958283233,
+      "name": "P21 Native Release Package",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306435,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 41958283230,
+      "name": "P21 Native Service Environment",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306248,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 41958283227,
+      "name": "P21 Native Migration Execution",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306425,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 41958283273,
+      "name": "P21 Native Installer Web",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306390,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 41958283235,
+      "name": "P21 Native Initial Administrator",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306423,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 41958283213,
+      "name": "P21 Native Data Bootstrap",
+      "source": "683bb5f5354600f529f883aaaf342b0064ebacdf",
+      "jobs": [
+        {
+          "id": 127018306299,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "artifact": {
+    "id": 13384887991,
+    "url": "https://github.com/Techshrr/GoJet/actions/runs/41958283206/artifacts/13384887991",
+    "zip_sha256_reported_by_ci": "59f4e502c1e63d7d93f3ad837ca2a797dd1bf529da0d818a274477e9ad10238e",
+    "independently_downloaded": false
+  }
+}
