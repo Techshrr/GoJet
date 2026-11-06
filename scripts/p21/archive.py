@@ -13,6 +13,19 @@ BINS={'redirectengine','analyticsworker','analyticsreconciler','platformapi','ma
 SECRET=re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:AKIA|ASIA)[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{36,}')
 def digest(data): return hashlib.sha256(data).hexdigest()
 def encode(value): return (json.dumps(value,sort_keys=True,indent=2)+'\n').encode()
+def validate_php_dependencies(files):
+    """Check fixed packaged includes, including transitive and conditional includes."""
+    for name, raw in files.items():
+        if not name.startswith('installer/') or not name.endswith('.php'): continue
+        for expression in re.findall(r'^\s*(?:require|include)(?:_once)?\s+([^;]+);', raw.decode(), re.M):
+            match = re.fullmatch(r"(__DIR__|dirname\(__DIR__\))\s*\.\s*'(/[^']+)'", expression.strip())
+            if not match: raise ValueError('unsupported package include: '+name)
+            parent = PurePosixPath(name).parent
+            if match[1] != '__DIR__': parent = parent.parent
+            target = (parent / match[2].lstrip('/')).as_posix()
+            if '..' in PurePosixPath(target).parts or target not in files:
+                raise ValueError('missing package include: '+name+' -> '+target)
+
 def allowed(name):
     p=PurePosixPath(name)
     if not name or str(p)!=name or p.is_absolute() or '..' in p.parts or '\\' in name: return False
@@ -36,6 +49,7 @@ def validate_file(name,data,mode):
 def write_archive(files,output,source,version,components):
     if not re.fullmatch(r'[0-9a-f]{40}',source): raise ValueError('invalid source')
     if set(files)&META: raise ValueError('metadata supplied as payload')
+    validate_php_dependencies(files)
     entries={}
     for name,data in sorted(files.items()):
         mode=0o755 if name.startswith('bin/') else 0o644
@@ -68,6 +82,7 @@ def verify_archive(path,expected_sha,expected_source):
             if row.uid or row.gid or row.mtime or row.uname or row.gname: raise ValueError('noncanonical archive metadata')
             files[row.name]=data
     if not META<=files.keys(): raise ValueError('missing package metadata')
+    validate_php_dependencies(files)
     manifest=json.loads(files['manifest.json']); sbom=json.loads(files['sbom.cdx.json'])
     if manifest['source']!=expected_source or manifest['schema']!='gojet.native-payload.v1': raise ValueError('foreign source/schema')
     if manifest['phase']!='payload-only-not-installable' or manifest['installable'] is not False: raise ValueError('premature installable claim')
