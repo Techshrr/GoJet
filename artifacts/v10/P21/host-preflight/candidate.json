@@ -1,0 +1,95 @@
+{
+  "archive": {
+    "bytes": 62626613,
+    "checksum_inventory_sha256": "57376d6a11fe8f53ced67c4739abd6f5b996de86a15135709ef61689727d324c",
+    "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+    "members": 331,
+    "name": "gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz",
+    "sbom_sha256": "35cdef523726bebfd5f861ab176c9fe89d8e3b76985e51257b372083d08eae4d",
+    "sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542"
+  },
+  "evidence": {
+    "dependency-preflight.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 1800,
+      "sha256": "2ad7e94a5f112d1222ae2b50b77338e0b921e1eb27468b7174bbb58d8aeb44a6"
+    },
+    "installation-preparation.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 5635,
+      "sha256": "4cbf4257d79ea0ca039b5ed347cb2838ed07fc886c2d1aa69603e9e315a60631"
+    },
+    "native-build.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 12378,
+      "sha256": "af79ab87958dd8e7890ae699c11b1e3425373961fe5788a97a40f8bb7931e373"
+    },
+    "risk-projection-recovery.json": {
+      "binding": "ci-job-only",
+      "bytes": 442,
+      "sha256": "ae7456cb6aa396bdaf62b3580d2476c4d3f6285c12ceceae0a2c2c7b2becdb40"
+    },
+    "static-routing.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 736,
+      "sha256": "1f34d2ee5fd5028b6c1242c69396d90f3484adb3eb4cd456633db9bcc19cf2f4"
+    },
+    "target-integrity.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 606,
+      "sha256": "d4fdd490902f86871767d827d86f71ab6b58e2c5780b1ee5e077688be2bfc477"
+    },
+    "upgrade-boundaries.json": {
+      "binding": "ci-job-only",
+      "bytes": 359,
+      "sha256": "419287e18d2e3e43ebbd522148b324809de80755ae3543416a7230f3789bd737"
+    },
+    "verification.json": {
+      "binding": "report-source-and-ci-job",
+      "bytes": 2328,
+      "sha256": "87b1c99b847064ff85c1e6dbffac403ed165bf4037a045b58e8cd128c52793a7"
+    }
+  },
+  "g11_approval": "pending-technical-review",
+  "installable": false,
+  "limitations": [
+    "Runbook commands checked statically; operator instructions not executed as a standalone procedure.",
+    "Native tests ran in isolated CI; target-host reboot and real production providers remain P22 work.",
+    "Upgrade fixture uses the same compiled binaries; arbitrary historical releases are not certified.",
+    "Reports without a source field are bound to the producing CI job, not independently source-attested.",
+    "This index is neither a release signature nor deployment authorization."
+  ],
+  "native_test_evidence_complete": true,
+  "producer": {
+    "job": "payload",
+    "repository": "Techshrr/GoJet",
+    "run_attempt": "1",
+    "run_id": "42161906247"
+  },
+  "production_acceptance": false,
+  "runbooks": {
+    "runbooks/README.md": {
+      "bytes": 2772,
+      "mode": 420,
+      "sha256": "97afb07a86018a8a622ceeeb99222422ce1a2dc403cdacc5181307eef7721793"
+    },
+    "runbooks/install.md": {
+      "bytes": 7676,
+      "mode": 420,
+      "sha256": "5634c5ee2bba2c906b3426074d41a965bcee42b3ec92febeb8e877d70b0e0aea"
+    },
+    "runbooks/operations.md": {
+      "bytes": 3960,
+      "mode": 420,
+      "sha256": "5fcd223f5d0bc58a6e19bf024ccbf129c46438c1abc9344da5c48a3b52f3b331"
+    },
+    "runbooks/upgrade-recovery.md": {
+      "bytes": 6323,
+      "mode": 420,
+      "sha256": "8bdbf7690c40a4b6a8ab049a3563c1a6586a76650288f19487f10fbde6b278dc"
+    }
+  },
+  "schema": "gojet.release-candidate-evidence.v1",
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "version": "10.0.0-rc.1"
+}

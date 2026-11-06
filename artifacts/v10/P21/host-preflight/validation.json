@@ -1,0 +1,76 @@
+{
+  "archive": {
+    "bytes": 62626613,
+    "checksum_inventory_sha256": "57376d6a11fe8f53ced67c4739abd6f5b996de86a15135709ef61689727d324c",
+    "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+    "members": 331,
+    "name": "gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz",
+    "sbom_sha256": "35cdef523726bebfd5f861ab176c9fe89d8e3b76985e51257b372083d08eae4d",
+    "sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542"
+  },
+  "artifact": {
+    "bytes": 63384640,
+    "expires_at": "2026-12-06T04:41:29Z",
+    "id": 13477846868,
+    "name": "gojet-v10-p21-payload-32ea29d766b0ac0790964517ce4e220a1208bf0d",
+    "permanent_release_published": false,
+    "zip_sha256": "431243ff9291e37b6d27d01c72ac27f49bcb5e45dd64743ae96d9967b3f7500c"
+  },
+  "change_review": "review.json",
+  "ci": {
+    "attempt": 1,
+    "completed_at": "2026-11-06T04:41:36Z",
+    "conclusion": "success",
+    "frontend_typecheck_and_build": "passed",
+    "go_baseline": "passed",
+    "jobs": [
+      {
+        "conclusion": "success",
+        "id": 127709309316,
+        "name": "payload"
+      },
+      {
+        "conclusion": "success",
+        "id": 127709309556,
+        "name": "executor-context"
+      }
+    ],
+    "python_tests": {
+      "passed": 16,
+      "skipped": 0
+    },
+    "related_native_package": {
+      "conclusion": "success",
+      "job": 127709309264,
+      "run": 42161906123
+    },
+    "run": 42161906247,
+    "started_at": "2026-11-06T04:20:21Z",
+    "url": "https://github.com/Techshrr/GoJet/actions/runs/42161906247"
+  },
+  "component_evidence": "components/index.json",
+  "date": "2026-11-06",
+  "environment": {
+    "observed_os": "Ubuntu 24.04.5",
+    "real_systemd_pid1": true,
+    "runner_image": "20261101.360.1",
+    "target_ubuntu_24_04_4_verified": false
+  },
+  "g11_closed": false,
+  "independent_download_report": "download-verification.json",
+  "limitations": [
+    "Runbook commands checked statically; operator instructions not executed as a standalone procedure.",
+    "Native tests ran in isolated CI; target-host reboot and real production providers remain P22 work.",
+    "Upgrade fixture uses the same compiled binaries; arbitrary historical releases are not certified.",
+    "Reports without a source field are bound to the producing CI job, not independently source-attested.",
+    "This index is neither a release signature nor deployment authorization."
+  ],
+  "native_report": "installation-preparation.json",
+  "p21_all_cases_accepted": false,
+  "previous_candidate_source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "production_deployed": false,
+  "schema": "gojet.candidate-validation.v1",
+  "scope": "mandatory native host preflight and complete package/install/upgrade recovery regression",
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "tree": "924753e6bd0b941dea2a2a187fc5d8d086b1f73f"
+}

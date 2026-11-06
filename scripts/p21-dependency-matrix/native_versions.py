@@ -55,7 +55,7 @@ def php81_command(fixtures):
 def main():
     assert os.geteuid() == 0 and os.environ.get('P21_DISPOSABLE_NATIVE_CI') == '1'
     archive, fixtures, output = (Path(x).resolve() for x in sys.argv[1:4])
-    authority = json.loads((REPO/'artifacts/v10/P21/candidate/validation.json').read_bytes())
+    authority = json.loads((REPO/'artifacts/v10/P21/host-preflight/validation.json').read_bytes())
     source = authority['source']
     verified = verify_archive(archive, authority['archive']['sha256'], source)
     provenance = json.loads((fixtures/'provenance.json').read_bytes())
@@ -83,7 +83,8 @@ def main():
             assert not result.stderr and result.returncode == (0 if expected is None else 2), 'Preflight invocation failed'
             report = json.loads(result.stdout)
             assert report['source'] == source and report['installation_complete'] is False
-            assert len(report['checks']) == 8 and report['ready'] is (expected is None)
+            assert set(report['checks']) == {'package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'}
+            assert report['ready'] is (expected is None)
             assert all(value is (name != expected) for name, value in report['checks'].items()), 'Unexpected failed dependency'
             assert config['database']['password'] not in result.stdout
             assert not (receipts/'installed.lock').exists()

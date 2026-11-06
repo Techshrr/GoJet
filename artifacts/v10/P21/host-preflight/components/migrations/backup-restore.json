@@ -1,0 +1,1 @@
+{"native_mysql":true,"consistent_backup":true,"restore_drill":true,"tables_verified":104,"triggers_verified":4,"binary_null_unicode_roundtrip":true,"private_files":true,"existing_backup_preserved":true,"failed_export_has_no_receipt":true,"production_restore_implemented":false,"full_t014_acceptance":false}

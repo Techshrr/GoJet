@@ -1,0 +1,1 @@
+{"native_mysql":true,"real_rehearsal":true,"real_restore":true,"candidate_tables_removed":true,"binary_unicode_preserved":true,"wrong_binding_rejected":true,"wrong_database_rejected":true,"missing_schema_recovery":true,"tamper_rejected_before_mutation":true,"full_upgrade_verified":false}

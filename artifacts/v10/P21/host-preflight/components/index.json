@@ -1,0 +1,187 @@
+{
+  "schema": "gojet.native-host-component-evidence.v1",
+  "tested_source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+  "package_source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "unchanged_git_objects": {
+    "installer": "4f818763aa4672ce03583a71519f8fcc6e98a503",
+    "deploy": "bad547764fd613903989ac701c090c37d2ef6154",
+    "internal": "c0124256caaca6dd3d3ea506d1320653788953d0",
+    "services": "e4315743a02be7c39c745bf3f24518db9d0da512",
+    "migrations": "ce4008e1cde030e267f3586040385ae57d9a6117",
+    "scripts/p21/native_web_test.py": "bcb8f85db25c38d63b5d37cce6b75f5f0b75dc0d",
+    "scripts/p21/installer_browser_test.mjs": "c45d81c2e2210c0706c0fcbb62c0871742122ca1",
+    "scripts/p21/php": "39dba09d0e1d31d5981ffa51234a723c87c70470",
+    "scripts/p21/native_environment_test.py": "fb06681afeabbb2f78361fbbf64ee5fccd82b07e",
+    "scripts/p21/native_logrotate_test.py": "ee191e64ea4c9d1aad4d996d011b6d9fb79f1a32",
+    "scripts/p21/native_data_bootstrap_test.py": "ce5fd20fa3f45378e9d24d08937b3fb1c844ef89"
+  },
+  "artifacts": [
+    {
+      "run": 42150614507,
+      "id": 13472307531,
+      "digest": "sha256:3508efb29dd79a7f55eb2378ff7684ba6ea4a47fdeb5f871d7b487ac398940dd",
+      "source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+      "name": "native-web",
+      "downloaded_and_hash_verified": true,
+      "members": {
+        "browser.json": {
+          "sha256": "98548830c91eb3a03e4858698d4e914835697e4d0aef645dd195d603fe7cb9d6",
+          "bytes": 820
+        },
+        "desktop-approval-confirmed.png": {
+          "sha256": "ac298f69d337c693b040c11080cda8db2797bd53c1aee6ccc8c93d3b0d8bd0d2",
+          "bytes": 65222
+        },
+        "desktop-configuration-form.png": {
+          "sha256": "d354f4573b4cdf4e5c9fc31267063337846c2863b91d1fd4451539dec3f82962",
+          "bytes": 306626
+        },
+        "desktop-configuration-pending.png": {
+          "sha256": "8da7212ebb53101fc4c688c94ebfec69de4035731c9fb026a01a950420a39c61",
+          "bytes": 49225
+        },
+        "desktop-execution-failed.png": {
+          "sha256": "aed08afcac6ceaf3dffa82712bcc2bac4844d2419e543b388b8c4dbd85cd4165",
+          "bytes": 88258
+        },
+        "desktop-execution-running.png": {
+          "sha256": "3b528d6276644df3d85d5c4fc068e8abd745843d7647a3f20dbb95eab4456871",
+          "bytes": 87925
+        },
+        "desktop-login.png": {
+          "sha256": "df22d78f1a3dfa6ea0146d8538eac05e3a5d862dbda2ca8d7f50923020165e0b",
+          "bytes": 50521
+        },
+        "desktop-preflight-failed.png": {
+          "sha256": "789ae3d9a728ce79899a9197b13f17466473424f8c1f7a2c7334a433217ed260",
+          "bytes": 88535
+        },
+        "desktop-preflight-host-failed.png": {
+          "sha256": "8ccbff909e3e9f6f8aaa98ecb6d2d483df6424551928c565a9900a8d283b4ad9",
+          "bytes": 87980
+        },
+        "desktop-preflight-ready.png": {
+          "sha256": "2cfeef603a161ea41d7a07623fe22f42e144ae1ae92c8df6d95cb9b7ac473d65",
+          "bytes": 84978
+        },
+        "desktop-queued.png": {
+          "sha256": "b70328ef6a1094c7c4813c9779a9c4a1941d830596e2d2d5772f20211b43d730",
+          "bytes": 88678
+        },
+        "mobile-approval-confirmed.png": {
+          "sha256": "1cf1387bd31c33786432424f8626ce7ab2928826dbbe3a77ba17072361f98cd6",
+          "bytes": 62638
+        },
+        "mobile-configuration-form.png": {
+          "sha256": "35396d2e89c4897349ed4cbf554a0cafe2527a0cde0f738296f5db3c852aced7",
+          "bytes": 289715
+        },
+        "mobile-configuration-pending.png": {
+          "sha256": "ee986d499abcd59db2391a1b0647d097829562e0be94a69520badb9876b942f0",
+          "bytes": 48097
+        },
+        "mobile-execution-failed.png": {
+          "sha256": "63059405c8161def562838608b65754a27b166b1990e859cbb5d973a1a996730",
+          "bytes": 84944
+        },
+        "mobile-execution-running.png": {
+          "sha256": "4f8b3795ffe35bece659a0f15f84bc5a1404c611881dd834e43a42daeb809ea0",
+          "bytes": 85074
+        },
+        "mobile-login.png": {
+          "sha256": "1eb3e65d8b8ae200f336250ba93bf8cd48033f1960dadb510510d029678c896c",
+          "bytes": 48542
+        },
+        "mobile-preflight-failed.png": {
+          "sha256": "66376e6b472a501a8f00c2924b4601d04717943316c994682932efaccc9e7b62",
+          "bytes": 88080
+        },
+        "mobile-preflight-host-failed.png": {
+          "sha256": "38332dab572b4bd38a388d6238f18bd0bc3e70955ccff537cfa1c423753adb74",
+          "bytes": 88246
+        },
+        "mobile-preflight-ready.png": {
+          "sha256": "07328fcc303b5b837410d960b44a94080370b6809369d7b4be8a359c1d53ac0f",
+          "bytes": 84089
+        },
+        "mobile-queued.png": {
+          "sha256": "5ac8e95b3c68690a405fdffd364a39d69b4aa82dec2e86b08d078bbe60bf3dee",
+          "bytes": 84314
+        },
+        "result.json": {
+          "sha256": "8cd6c41d8a13b11832e26d685a1cb7eff2bed2e157487674538534bc7a3e277d",
+          "bytes": 464
+        }
+      }
+    },
+    {
+      "run": 42150614474,
+      "id": 13472372350,
+      "digest": "sha256:8d664e2b2b4cf79abdd6077fbf4b10c7f080b9cbf4813664b0d55df28e460883",
+      "source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+      "name": "migrations",
+      "downloaded_and_hash_verified": true,
+      "members": {
+        "backup-restore.json": {
+          "sha256": "8427fe8314ce34ec6ba997744cfed938ccc9f937aed0c972827947acd33ff1f3",
+          "bytes": 307
+        },
+        "installer-http.json": {
+          "sha256": "d23d0d22d3d9efe2ce3fce87f0a661c3989f846c7ba52862c545321209d41fd6",
+          "bytes": 306
+        },
+        "installer-state.json": {
+          "sha256": "29ee11c331d80c5f83dc1cde799e978003191a89c50c955a701aabb2bdb13ba9",
+          "bytes": 511
+        },
+        "native.json": {
+          "sha256": "66f98e45f2d331aa524e61dfbb651c49a8d8887a6466eb81e8b0398e611ac545",
+          "bytes": 376
+        },
+        "upgrade-database.json": {
+          "sha256": "8f54a3cf74f2f7d99b8bdf91ee26953c5c74bf491c1b58fe866af1d3a1ec98a7",
+          "bytes": 289
+        },
+        "upgrade-filesystem.json": {
+          "sha256": "c7f5d42cb0e0503a5fcb1367d1b4a0c1a92c136067e11834bba25318d9cf6eb2",
+          "bytes": 409
+        }
+      }
+    },
+    {
+      "run": 42150614471,
+      "id": 13472550393,
+      "digest": "sha256:11a2765422a21ffd5566f2bdf01616743227fb32ca2ebf03d1b5821bfc0991f1",
+      "source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+      "name": "environment",
+      "downloaded_and_hash_verified": true,
+      "members": {
+        "logrotate.json": {
+          "sha256": "42374c0b572b3b10b35a9ccf0adec07c4cff36b4245b2a81cc8185e7fe9fbfa1",
+          "bytes": 376
+        },
+        "result.json": {
+          "sha256": "35138d9efd123768e6e2209d0d302d1ad76abde24858da23de7ff030093d7a40",
+          "bytes": 449
+        }
+      }
+    },
+    {
+      "run": 42150614522,
+      "id": 13471089424,
+      "digest": "sha256:738e70472cc94c319da15262c17d98606b30ce11a228b59c830c2752c16208c9",
+      "source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+      "name": "data-bootstrap",
+      "downloaded_and_hash_verified": true,
+      "members": {
+        "result.json": {
+          "sha256": "a43dbcce21cb644d1af757752a3a884ce65bb8db7c81bee540663b94394d7d5a",
+          "bytes": 983
+        }
+      }
+    }
+  ],
+  "browser_observation": "Desktop and mobile host-failure screenshots visually inspected; no horizontal overflow; host failure is visible. Snapshot fixtures are UI evidence, not native host failure proof.",
+  "g11_approved": false,
+  "production_deployed": false
+}

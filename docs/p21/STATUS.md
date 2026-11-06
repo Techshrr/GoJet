@@ -3,9 +3,20 @@
 更新：2026-11-06。分支：`develop/p21-native-release-package`；开发 PR：[#207](https://github.com/Techshrr/GoJet/pull/207)。
 P21/G11 尚未关闭，包保持 `installable=false`，未部署生产。
 
-最新已验证候选源码：`270e8459f2862525fd8e75db7a375b4346da4dcf`。
-本批发布手册、候选包和完整原生链路已通过一次集中 CI；实际附件已独立下载并复核。
-[候选交付说明](candidate-delivery.md)与[证据绑定](../../artifacts/v10/P21/candidate/validation.json)记录本批结果。
+最新已验证候选源码：`32ea29d766b0ac0790964517ce4e220a1208bf0d`。
+[完整原生 CI 42161906247](https://github.com/Techshrr/GoJet/actions/runs/42161906247) 成功，实际新包已独立下载复核。
+[新包证据](../../artifacts/v10/P21/host-preflight/validation.json)与[18 项合同覆盖核对](contract-coverage.md)记录本批结果。
+
+## 当前增量：主机支持与容量检查
+
+新增 Ubuntu 24.04 / Linux x86_64 / 64 位 PHP、发布和存储分区空间检查；六种原生负例通过。
+九项预检贯穿 root 执行、完成锁与升级健康验证，并在桌面/移动浏览器显示。
+打包新增 PHP 引用完整性验证。整批已通过八服务、MySQL 恢复、配置切换、15 个中断恢复阶段、
+209 条风险投影和 10 类升级候选拒绝；新包包含 331 个成员，独立生成候选索引与 CI 完全一致。
+PHP 8.1 CLI/FPM 和 MariaDB 10.11 的拒绝验证将针对这份新包再执行一次；原版本报告保留原摘要。
+详见[主机预检](host-preflight.md)。
+
+以下为前序批次的独立记录，所列源码及摘要不冒充当前候选。
 
 ## 当前增量：真实依赖版本拒绝证据
 

@@ -1,0 +1,325 @@
+{
+  "native_units": {
+    "units": [
+      "gojet-analyticsreconciler.service",
+      "gojet-analyticsworker.service",
+      "gojet-fileworker.service",
+      "gojet-logreceiver.service",
+      "gojet-mailworker.service",
+      "gojet-operationsmonitor.service",
+      "gojet-platformapi.service",
+      "gojet-redirectengine.service"
+    ],
+    "syntax_verified": true,
+    "started": false,
+    "production_install_claim": false
+  },
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "version": "10.0.0-rc.1",
+  "native_version_checks": [
+    {
+      "service": "redirectengine",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "7e6525ab0c2bd03a10070bcf5920fa4d3f77afb9f88a5ca81dc37669d8e92fce",
+      "bytes": 23140042,
+      "daemon": true
+    },
+    {
+      "service": "analyticsworker",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "3ccf97904e9ff1898accc5ea32d2bf21ca73a8bb238dc5c4c8afc96a12ee77a6",
+      "bytes": 11542304,
+      "daemon": true
+    },
+    {
+      "service": "analyticsreconciler",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "4ac385e6b84eb758dfae832db9b93c78d29a08587d56d0b411c53c53449764c4",
+      "bytes": 11667062,
+      "daemon": true
+    },
+    {
+      "service": "platformapi",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "4ddf261b1e100ac5edd642db93748cc52d1ce39bf6469b87a90d003ac8cdc97d",
+      "bytes": 29016081,
+      "daemon": true
+    },
+    {
+      "service": "mailworker",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "6fff9548776368d47cabc03570a8b9e1339bef10182c7e8fa44349e90716d3a5",
+      "bytes": 10243793,
+      "daemon": true
+    },
+    {
+      "service": "fileworker",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "afa5a8f5c150285e1f088f67e01f9d4179b26f797e3c5af926107b7d649fd55d",
+      "bytes": 9455297,
+      "daemon": true
+    },
+    {
+      "service": "operationsmonitor",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "891d2b50e33c8577013d301a080965a16eed2fb1aee37a28094ee5dd54292a27",
+      "bytes": 13531680,
+      "daemon": true
+    },
+    {
+      "service": "logreceiver",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "364cb2ea315cf00734bbea13c0e2c8610e61b52d3b396acdd480c2f6c9289e17",
+      "bytes": 5980670,
+      "daemon": true
+    },
+    {
+      "service": "filepreflight",
+      "version": "10.0.0-rc.1",
+      "commit": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "sha256": "8e2cc889cb009fd417ee0b038f1544c99c05d2f3e1c27ea4c1fe8bee5877cd19",
+      "bytes": 6581937,
+      "daemon": false
+    }
+  ],
+  "migration_catalog": {
+    "schema": "gojet.migration-catalog.v1",
+    "migrations": [
+      {
+        "id": 1,
+        "path": "migrations/000001_links_vertical_slice.sql",
+        "sha256": "18fd08da5c8ae9e48ffa9ea778fb88863c29b11ac9c8b3c6446b7a3f98708881",
+        "bytes": 3747,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 2,
+        "path": "migrations/000002_custom_domains.sql",
+        "sha256": "13c119a4235b54a068b042d6410148147a5e7e99ba80a804d0502617e91a2f26",
+        "bytes": 7937,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 3,
+        "path": "migrations/000003_analytics.sql",
+        "sha256": "e1d687144ad9d739c9a60c99c5616c5aab215cacb5a15cb11f2697c9e198c124",
+        "bytes": 6970,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 4,
+        "path": "migrations/000004_qr.sql",
+        "sha256": "08cf761a556c929c136d62f695161a36f16fc8f11c2154f2cfa09a9ca601792b",
+        "bytes": 2718,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 5,
+        "path": "migrations/000005_files.sql",
+        "sha256": "074a6d1c284eab934cb4c0766314d7994e41542c7b8ee5e726fe08a0856d8932",
+        "bytes": 5292,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 6,
+        "path": "migrations/000006_text.sql",
+        "sha256": "2c00e475b83d7e7502d9cd56dd77b66f7a575cbf4311495b5e56963231845a3a",
+        "bytes": 3284,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 7,
+        "path": "migrations/000007_bio.sql",
+        "sha256": "833cd7eb246d732831d86e4c70d6bd6b7f4d9801e4cd05939c7c8ab2776c5f5a",
+        "bytes": 4235,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 8,
+        "path": "migrations/000008_workspace_organization.sql",
+        "sha256": "56835f2f00e37b74d9b307eee800d952ecec4fc96efa7c1aea76a22385e7498a",
+        "bytes": 12091,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 9,
+        "path": "migrations/000009_billing_payments_entitlements.sql",
+        "sha256": "290396e8239437a1c15d8c81d7dc65cf5bed4896a306524ff324a7d17da0de95",
+        "bytes": 12115,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 10,
+        "path": "migrations/000010_support_tickets_mail.sql",
+        "sha256": "2b19416c012021ceb3fbd233989bd9cf1352c2d51f6f6c3766b83a299692435c",
+        "bytes": 13815,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 11,
+        "path": "migrations/000011_support_ticket_linkage.sql",
+        "sha256": "3a448cad2b9a6058ff46664943ced367e90dc233e627aa2a3f4fb062a290003f",
+        "bytes": 614,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 12,
+        "path": "migrations/000012_support_mail_seed.sql",
+        "sha256": "02349d5de7b6a6d2c15111b917bd9f5dd827ca302b8329fe476030cb5f5dad1b",
+        "bytes": 1471,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 13,
+        "path": "migrations/000013_support_mail_admin.sql",
+        "sha256": "9937d0f355ba08e3ed0fc54a74b691b0ed9c435070993da161ead37dad245ad5",
+        "bytes": 1376,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 14,
+        "path": "migrations/000014_support_audit_logical.sql",
+        "sha256": "d6f7b1b81e7b18de1dd14965e68de4dc7da2e1439a0c0ef9c505170c4723ee6e",
+        "bytes": 412,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 15,
+        "path": "migrations/000015_authentication_oauth_account.sql",
+        "sha256": "c340fc6edfe8d37633072df36076e5f68373f50980232b1d9ec1b485090c65b7",
+        "bytes": 13642,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 16,
+        "path": "migrations/000016_auth_verification_mail.sql",
+        "sha256": "4d88a874f8b0487c26585867a3bace97cfd61a36ccd4ce2123783681d29e45b3",
+        "bytes": 1341,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 17,
+        "path": "migrations/000017_auth_login_recovery_mail.sql",
+        "sha256": "b5c46d0a9df869b1e0866941285fb38511ab9ddd2b4f793dc0310d5da8bd5ee3",
+        "bytes": 1365,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 18,
+        "path": "migrations/000018_auth_oauth_runtime.sql",
+        "sha256": "6f4484191b87f68bd3d96a3cd19f01095a355b2dec7d251f59aacab83a04e626",
+        "bytes": 934,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 19,
+        "path": "migrations/000019_auth_social_handoff.sql",
+        "sha256": "f0c89b6229065e5b8c4f74f64b9ab6966b6f4e9139e62a93278a26bd89e0524c",
+        "bytes": 2480,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 20,
+        "path": "migrations/000020_destination_risk.sql",
+        "sha256": "66fea4869f99a115d32aa771793c964e8578f5531859f0506677d19dcdd009d1",
+        "bytes": 7097,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 21,
+        "path": "migrations/000021_destination_risk_overrides.sql",
+        "sha256": "70e419583a6495282d2ffbe25fe6ee87053b2816e432420ade131015834ee7ea",
+        "bytes": 2493,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 22,
+        "path": "migrations/000022_domain_reputation.sql",
+        "sha256": "03a60d11e3c8ef09d900ffffb3a4f9c7208d544f88e2b3a34ccdac9d952e15df",
+        "bytes": 4597,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 23,
+        "path": "migrations/000023_abuse_trust.sql",
+        "sha256": "4af99a74dfddacc71edb6e834e7942ed00d319784985ef2280b5f0eda0e426e3",
+        "bytes": 3810,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 24,
+        "path": "migrations/000024_abuse_admin_actions.sql",
+        "sha256": "cba83d0aa691ece0e8e76bc97918db40dc1ce3be725cc85566eb84e93e83216b",
+        "bytes": 2896,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 25,
+        "path": "migrations/000025_admin_access_audit.sql",
+        "sha256": "ab84ec8ac892bdc3f81b32fdbf1c6d2bb6f25eb94b77201d80ae655fd7a05ed1",
+        "bytes": 10373,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 26,
+        "path": "migrations/000026_admin_domain_entitlements.sql",
+        "sha256": "2478eb84b25f2810b8f70f3a495c039f1434a884637c1eefe4e7b7bfd5e53381",
+        "bytes": 5321,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 27,
+        "path": "migrations/000027_admin_platform_governance.sql",
+        "sha256": "22dc37e6cfcf6d498b24cf44861f2accb1e4e2f24b16e15b1a1306250b2a384e",
+        "bytes": 5441,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 28,
+        "path": "migrations/000028_workspace_api_keys.sql",
+        "sha256": "f61ff849aac1b267d9227dc8880d74e79f61b6bc136dcd4b0b58b1c10b37227f",
+        "bytes": 1618,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 29,
+        "path": "migrations/000029_workspace_webhooks.sql",
+        "sha256": "749b5528440496c7776b12bf7bc902755daad0558c54fba9b387db3122b1fc8e",
+        "bytes": 3472,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 30,
+        "path": "migrations/000030_billing_provider_intents.sql",
+        "sha256": "8e7d6a268436345fbdeaf3b1527a3ea62157a56030d8c64aa4d68d3d556f6a15",
+        "bytes": 3099,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      },
+      {
+        "id": 31,
+        "path": "migrations/000031_oauth_optional_x_linkedin.sql",
+        "sha256": "458fa937940843e94ad65c67d0b8a9354be9f352ad70c541fd4450b5135b061b",
+        "bytes": 1407,
+        "rollback": "restore-verified-database-backup; no automatic down migration"
+      }
+    ],
+    "apply_requirement": "global lock; durable started/applied journal; checksum drift rejects; partial DDL requires recovery"
+  },
+  "package_completion_claim": false,
+  "scope": "native compilation and unit verification only",
+  "not_evaluated": [
+    "static frontend/package",
+    "native installation",
+    "upgrade/recovery",
+    "G11 approval",
+    "production acceptance"
+  ]
+}

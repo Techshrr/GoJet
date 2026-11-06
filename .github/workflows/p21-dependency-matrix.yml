@@ -4,7 +4,7 @@ on:
     branches: [develop/p21-native-release-package]
     paths:
       - 'scripts/p21-dependency-matrix/**'
-      - 'artifacts/v10/P21/candidate/validation.json'
+      - 'artifacts/v10/P21/host-preflight/validation.json'
       - '.github/workflows/p21-dependency-matrix.yml'
   workflow_dispatch:
 permissions:
@@ -29,7 +29,7 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           from pathlib import Path
-          c=json.loads(Path('artifacts/v10/P21/candidate/validation.json').read_bytes())
+          c=json.loads(Path('artifacts/v10/P21/host-preflight/validation.json').read_bytes())
           print('run='+str(c['ci']['run']))
           print('artifact='+c['artifact']['name'])
           print('archive='+c['archive']['name'])
@@ -64,11 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/p21-dependency-matrix/*.py
-          mkdir -p artifacts/v10/P21/dependency-versions
-          sudo env P21_DISPOSABLE_NATIVE_CI=1 python3 scripts/p21-dependency-matrix/native_versions.py "$RUNNER_TEMP/gojet-candidate/payload/${{ steps.candidate.outputs.archive }}" "$RUNNER_TEMP/gojet-wrong-dependencies" "$PWD/artifacts/v10/P21/dependency-versions/native.json"
+          mkdir -p artifacts/v10/P21/host-preflight/dependency-versions
+          sudo env P21_DISPOSABLE_NATIVE_CI=1 python3 scripts/p21-dependency-matrix/native_versions.py "$RUNNER_TEMP/gojet-candidate/payload/${{ steps.candidate.outputs.archive }}" "$RUNNER_TEMP/gojet-wrong-dependencies" "$PWD/artifacts/v10/P21/host-preflight/dependency-versions/native.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gojet-v10-p21-dependency-versions-${{ github.sha }}
           retention-days: 30
-          path: artifacts/v10/P21/dependency-versions/
+          path: artifacts/v10/P21/host-preflight/dependency-versions/
