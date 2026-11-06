@@ -6,6 +6,7 @@ No service, package, database, configuration or filesystem changes are made.
 """
 
 import datetime
+import fnmatch
 import hashlib
 import json
 import os
@@ -31,6 +32,20 @@ def file_text(path):
         return Path(path).read_text().strip()
     except OSError:
         return None
+
+
+def service_units():
+    # A filtered systemctl query exits 1 when a fresh host has no matching units.
+    # Query the complete inventory first so an empty match is distinguishable
+    # from a real systemctl failure; retain the latter's exit status unchanged.
+    result = command(["systemctl", "list-unit-files", "--no-pager", "--no-legend"])
+    if result["exit_code"] == 0:
+        patterns = ("gojet*", "nginx*", "php*fpm*", "mysql*", "mariadb*", "redis*", "clamav*")
+        result["stdout"] = "\n".join(
+            line for line in result["stdout"].splitlines()
+            if line.split() and any(fnmatch.fnmatchcase(line.split()[0], pattern) for pattern in patterns)
+        )
+    return result
 
 
 def path_state(path):
@@ -65,9 +80,7 @@ def main():
         "machine_id_sha256": hashlib.sha256(identity.encode()).hexdigest() if identity else None,
         "virtualization": command(["systemd-detect-virt"]),
         "container": command(["systemd-detect-virt", "--container"]),
-        "service_units": command(["systemctl", "list-unit-files", "--no-pager", "--no-legend",
-                                  "gojet*", "nginx*", "php*fpm*", "mysql*", "mariadb*",
-                                  "redis*", "clamav*"]),
+        "service_units": service_units(),
         "active_services": command(["systemctl", "list-units", "--type=service", "--state=running",
                                     "--no-pager", "--no-legend"]),
         "listeners": command(["ss", "-H", "-lnt"]),
