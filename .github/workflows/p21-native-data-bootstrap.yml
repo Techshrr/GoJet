@@ -1,0 +1,47 @@
+name: P21 Native Data Bootstrap
+on:
+  push:
+    branches: [develop/p21-native-release-package]
+    paths: ['installer/**', 'services/platformapi/**', 'internal/admin/**', 'migrations/**', 'scripts/p21/native_data_bootstrap_test.py', 'scripts/p21/native_configuration_test.py', '.github/workflows/p21-native-data-bootstrap.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  data-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache: true
+      - name: Validate contract and build native executable
+        run: |
+          python3 scripts/p21/validate_contract.py
+          go build -ldflags "-X github.com/Techshrr/GoJet/internal/releaseinfo.Version=10.0.0-rc.1 -X github.com/Techshrr/GoJet/internal/releaseinfo.Commit=$GITHUB_SHA" -o /tmp/gojet-p21-platformapi ./services/platformapi/cmd/server
+          go build -o /tmp/gojet-p21-operationsmonitor ./services/platformapi/cmd/operationsmonitor
+      - name: Prepare isolated native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-mysql redis-server
+          sudo systemctl start mysql redis-server
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_data_success CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE gojet_p21_data_failure CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE USER 'gojet_test'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_data_success.* TO 'gojet_test'@'127.0.0.1'; GRANT ALL ON gojet_p21_data_failure.* TO 'gojet_test'@'127.0.0.1';"
+          php8.3 -l installer/src/NativeConfiguration.php
+          php8.3 -l installer/bin/configure-services.php
+          php8.3 -l installer/src/DataBootstrap.php
+          php8.3 -l installer/bin/data-bootstrap.php
+      - name: Execute root data phase and recovery barriers
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P21/data-bootstrap
+          sudo python3 scripts/p21/native_data_bootstrap_test.py /tmp/gojet-p21-platformapi "$GITHUB_SHA" /tmp/gojet-p21-operationsmonitor | tee artifacts/v10/P21/data-bootstrap/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gojet-v10-p21-data-bootstrap-${{ github.sha }}
+          path: artifacts/v10/P21/data-bootstrap/
+          retention-days: 30

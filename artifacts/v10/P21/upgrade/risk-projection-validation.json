@@ -1,0 +1,124 @@
+{
+  "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+  "tree": "84b3b03b70981ebcbeddea9bdb9490970498a6e4",
+  "scope": "complete durable destination-risk projection recovery before upgrade and recovery reopen",
+  "local": {
+    "native_mysql": true,
+    "mysql_version": "8.0.46",
+    "native_redis": true,
+    "links": 209,
+    "background_pagination": true,
+    "complete_rebuild": true,
+    "native_recovery_command": true,
+    "unknown_expired_changed_targets_withheld": true,
+    "manual_override_preserved": true,
+    "absolute_allow_deadline_preserved": true,
+    "bounded_and_canceled_failure": true,
+    "redis_failure_blocks_completion": true,
+    "jobs_authority_and_unrelated_redis_preserved": true,
+    "systemd_tested": false,
+    "go_targeted_tests": "passed: internal/trust, internal/links, operationsmonitor and risk_restore_runner",
+    "php_syntax": "passed: UpgradeRisk.php and NativeUpgrade.php",
+    "python_tests": "8 tests: 7 passed, 1 skipped (php8.3 not on local PATH)"
+  },
+  "native_integration": "passed",
+  "native_integration_run": 41895162234,
+  "native_integration_job": 126802608504,
+  "bounds": {
+    "maximum_candidates": 100000,
+    "rebuild_timeout_seconds": 60,
+    "transient_service_timeout_seconds": 75,
+    "old_and_new_binary_recovery_command_required": true
+  },
+  "candidate_uses_same_compiled_binaries": true,
+  "production_acceptance": false,
+  "installable": false,
+  "full_t014_acceptance": false,
+  "g11_closed": false,
+  "verified_at": "2026-11-05",
+  "executor_context_job": 126802608143,
+  "upgrade": {
+    "native_upgrade": true,
+    "native_database_required_recovery": true,
+    "durable_risk_projection_restored": true,
+    "risk_projection_links_checked": 209,
+    "orphaned_projection_worker_stopped": true,
+    "interrupted_phases": [
+      "prepared",
+      "stopping",
+      "adopting",
+      "backing-up",
+      "backed-up",
+      "rehearsing",
+      "migrating",
+      "switching",
+      "starting",
+      "verifying",
+      "restoring",
+      "recovery-committed",
+      "recovered",
+      "committed",
+      "complete"
+    ],
+    "real_partial_ddl_recovered": true,
+    "missing_schema_recovered": true,
+    "maintenance_requires_private_capability": true,
+    "loopback_proxy_bypass_refused": true,
+    "committed_data_preserved": true,
+    "first_install_authority_unchanged": true,
+    "existing_administrator_session_preserved": true,
+    "login_audit_preserved": true,
+    "stale_risk_projections_removed": true,
+    "unrelated_redis_data_preserved": true,
+    "candidate_uses_same_compiled_binaries": true,
+    "production_acceptance": false
+  },
+  "native_installation_report": "risk-projection-native-installation.json",
+  "native_projection_report": "risk-projection-recovery.json",
+  "archive_sha256": "4472fcc82a6829f98112aeeec0b99f1ae46d895ead15cf3c66026f39eff52921",
+  "manifest_sha256": "7a62c6110b78bb96f9853ec45e247422e761610586b3acc957f8899637ac6741",
+  "artifact": {
+    "id": 13356962255,
+    "url": "https://github.com/Techshrr/GoJet/actions/runs/41895162234/artifacts/13356962255",
+    "zip_sha256_reported_by_ci": "77f93b2dcc52af5533f2d523efa8351e888a7f761b6b0ba77505bc1f11cd37cc",
+    "independently_downloaded": false
+  },
+  "related_workflows": [
+    {
+      "run": 41895162297,
+      "name": "P21 Native Migration Execution",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    },
+    {
+      "run": 41895161941,
+      "name": "P21 Native Service Environment",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    },
+    {
+      "run": 41895161931,
+      "name": "P21 Native Installer Web",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    },
+    {
+      "run": 41895161935,
+      "name": "P21 Native Initial Administrator",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    },
+    {
+      "run": 41895162456,
+      "name": "P21 Native Data Bootstrap",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    },
+    {
+      "run": 41895161903,
+      "name": "P21 Native Release Package",
+      "source": "b0794aef620ad14889d29f0e748d2deb5e7324eb",
+      "conclusion": "success"
+    }
+  ]
+}

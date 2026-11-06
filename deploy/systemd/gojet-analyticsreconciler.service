@@ -1,0 +1,38 @@
+[Unit]
+Description=GoJet analyticsreconciler
+Wants=network-online.target
+After=network-online.target gojet-logreceiver.service
+Requires=gojet-logreceiver.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=gojet
+Group=gojet
+WorkingDirectory=/opt/gojet/current
+EnvironmentFile=/etc/gojet/analyticsreconciler.env
+ExecStart=/opt/gojet/current/bin/analyticsreconciler
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gojet-analyticsreconciler
+
+[Install]
+WantedBy=multi-user.target

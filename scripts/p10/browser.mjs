@@ -1,5 +1,5 @@
 import { visualProbe } from '../p20/t034_visual_probe.mjs';
-import { confirmedNoContentDeletion } from './network_outcome.mjs';
+import { confirmedNoContentDeletion, closeAndValidateDiagnostics } from './network_outcome.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -195,10 +195,10 @@ async function caseT017(browser){
     client_redirect:true,server_status:204,public_status:410,database_tombstone:true,
     initial_version:removable.version,database_version:removable.version+1,audit_count:auditCount};
   evidence.delete_confirmation={keyboard_open:true,cancel_escape:true,cancel_button:true,focus_return:true,cancel_keeps_resource:true,confirmed_server_status:204,confirmed_public_status:410,durable:deletionProof};
-  evidence.diagnostics=opened.report;
-  try { assertDiagnostics(opened.report,'T017 confirmed deletion',[],deletionProof); }
-  catch(error) { error.details={...evidence,diagnostics:opened.report};throw error; }
-  await opened.context.close();
+  try {
+    evidence.diagnostics=await closeAndValidateDiagnostics(opened.context,opened.report,
+      report=>assertDiagnostics(report,'T017 confirmed deletion',[],deletionProof));
+  } catch(error) { error.details={...evidence,diagnostics:structuredClone(opened.report)};throw error; }
   return evidence;
 }
 

@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { HEAD, executablePath, WORKSPACE_URL, ADMIN_URL, INSTALL_URL, PLATFORM_URL, MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, REAL_CLAMD, viewports, browserDir, assert } from './browser_env.mjs';
+import { HEAD, executablePath, WORKSPACE_URL, ADMIN_URL, PLATFORM_URL, MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, REAL_CLAMD, viewports, browserDir, assert } from './browser_env.mjs';
 
 export function diagnostics() {
   return { console_errors: [], page_errors: [], http_errors: [], request_failures: [] };
@@ -42,12 +42,12 @@ export function writeResult(caseId, status, details, errors = []) {
       browser: executablePath,
       workspace: WORKSPACE_URL,
       admin: ADMIN_URL,
-      installer: INSTALL_URL,
+      installer: 'T024 isolated native TLS/Nginx/dedicated PHP-FPM',
       platformapi: PLATFORM_URL,
       mysql: `${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`,
       real_clamd: REAL_CLAMD,
       canonical_viewports: viewports,
-      authority: 'real built Workspace/Admin + native Go platformapi/fileworker/filepreflight + PHP Installer + real MySQL/local storage/clamd; no request interception or static browser fixture',
+      authority: 'real built Workspace/Admin + native Go platformapi/fileworker/filepreflight + real MySQL/local storage/clamd; T024 uses explicit starting-phase fixtures with live root-published P09 probes over native TLS/FPM; no request interception or full-install claim',
     },
     details,
     errors,

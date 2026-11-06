@@ -1,0 +1,62 @@
+{
+  "archive_sha256": "e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9",
+  "artifact": {
+    "bytes": 1414,
+    "downloaded_and_verified": true,
+    "expires_at": "2026-12-05T17:31:15Z",
+    "id": 13438850421,
+    "zip_sha256": "8629cd9ccd22c2cb94eacc9cf7a6dde3864ecdc8124c856831185378aa881076"
+  },
+  "candidate_source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "conclusion": "success",
+  "earlier_attempt": {
+    "conclusion": "failure",
+    "fixture_correction": "Noble my_print_defaults is in mariadb-client-core; extract that package and its client library, verify bootstrap executables before running.",
+    "job": 127283785985,
+    "phase": "MariaDB fixture initialization",
+    "run": 42038788401,
+    "test_source": "cadda599ee40435de9186e37e10278b75e923d93"
+  },
+  "g11_approved": false,
+  "job": 127413560475,
+  "limits": [
+    "PHP 8.1 and MariaDB 10.11 are concrete unsupported inputs, not an exhaustive list of versions.",
+    "This does not certify MariaDB support or claim a MySQL 9 test.",
+    "Existing component reports retain their original source and scope; no candidate bytes or reports are rewritten."
+  ],
+  "local_validation": {
+    "diff_check": "passed",
+    "local_fixture_download": "blocked by local network proxy; not counted as native verification",
+    "native_systemd_tested_locally": false,
+    "python_syntax": "passed",
+    "workflow_yaml_and_shell_syntax": "passed"
+  },
+  "manifest_sha256": "c1863cff76f9c2efd499ca8d44d430f16bfa6598ad7ea2ad3a8bac18474390c2",
+  "production_deployed": false,
+  "production_git_objects_unchanged": {
+    "deploy": "bad547764fd613903989ac701c090c37d2ef6154",
+    "frontend": "d46fabf68d36bd82eaa8e5bcc991a28403355716",
+    "go.mod": "807b98251ef5f1fa706334882350ae9f1df03b25",
+    "go.sum": "b22780233ffc30e1cdb746d9dcb1ff5cc7a0690d",
+    "installer": "d48d93736c8764515736fe90b2aaf3562b66a14e",
+    "internal": "c0124256caaca6dd3d3ea506d1320653788953d0",
+    "migrations": "ce4008e1cde030e267f3586040385ae57d9a6117",
+    "pnpm-lock.yaml": "0edcb3631d2483662de957625ebb8e330bc346fe",
+    "services": "e4315743a02be7c39c745bf3f24518db9d0da512"
+  },
+  "related_native_package": {
+    "conclusion": "success",
+    "job": 127413560713,
+    "run": 42075233645
+  },
+  "report": "native.json",
+  "report_sha256": "27d28ecd101383fff7b718f7639de97d76440446bcbd43d6dc6158438cf1cddc",
+  "run": 42075233647,
+  "run_attempt": 1,
+  "schema": "gojet.dependency-version-validation.v1",
+  "scope": "real unsupported PHP CLI/FPM and MySQL-protocol database rejection on the unchanged candidate",
+  "test_source": "a49023029aedcc2c915dbdf8d0f54d34d400c79b",
+  "test_tree": "c65f259fa48a57c2ea90e4197ffcf446ebac4c35",
+  "url": "https://github.com/Techshrr/GoJet/actions/runs/42075233647",
+  "verified_date": "2026-11-06"
+}

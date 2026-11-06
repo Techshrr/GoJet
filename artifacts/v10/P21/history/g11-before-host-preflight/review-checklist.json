@@ -1,0 +1,185 @@
+{
+  "cases": [
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Exact-source immutable contract check passed in CI.",
+      "id": "P21-T001",
+      "name": "Frozen entry and release identity",
+      "reports": [
+        "artifacts/v10/P21/candidate/validation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Nine static executables, version/source identities and hashes verified.",
+      "id": "P21-T002",
+      "name": "Eight native binaries",
+      "reports": [
+        "artifacts/v10/P21/candidate/native-build.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Four actual compiled apps and native routing verified.",
+      "id": "P21-T003",
+      "name": "Static frontend",
+      "reports": [
+        "artifacts/v10/P21/candidate/static-routing.json",
+        "artifacts/v10/P21/candidate/verification.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "31 immutable migration entries, build/package catalog and byte hashes match.",
+      "id": "P21-T004",
+      "name": "Immutable migration catalog",
+      "reports": [
+        "artifacts/v10/P21/candidate/native-build.json",
+        "artifacts/v10/P21/candidate/manifest.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Native migration and real partial-DDL/missing-schema restoration verified; full case review retains component evidence scope.",
+      "id": "P21-T005",
+      "name": "Empty database and migration locking",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Archive rejection tests, target extraction and independent read-back verified.",
+      "id": "P21-T006",
+      "name": "Package allowlist and clean extraction",
+      "reports": [
+        "artifacts/v10/P21/candidate/target-integrity.json",
+        "artifacts/v10/P21/candidate/download-verification.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Manifest, checksum inventory and SBOM file hashes match actual archive.",
+      "id": "P21-T007",
+      "name": "Checksum manifest and SBOM",
+      "reports": [
+        "artifacts/v10/P21/candidate/candidate.json",
+        "artifacts/v10/P21/candidate/download-verification.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Eight nonroot units and configuration activation verified; supplementary logging/environment evidence remains bound to its original source.",
+      "id": "P21-T008",
+      "name": "Native configuration",
+      "reports": [
+        "artifacts/v10/P21/candidate/native-build.json",
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Continuous protected browser/root-worker installation verified; full eight-route/access matrix requires case review with unchanged component evidence.",
+      "id": "P21-T009",
+      "name": "Installer access and state",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Eight-check baseline and real dependency failures verified; supplemental native evidence now verifies PHP 8.1 CLI/FPM and MariaDB 10.11 rejection, other seven healthy checks, preserved authority and restored readiness on the same archive. No exhaustive version enumeration claimed.",
+      "id": "P21-T010",
+      "missing_version_rejection_evidence": "resolved for the documented concrete matrix",
+      "name": "Mandatory dependency preflight",
+      "reports": [
+        "artifacts/v10/P21/candidate/dependency-preflight.json",
+        "artifacts/v10/P21/dependency-versions/native.json",
+        "artifacts/v10/P21/dependency-versions/validation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "TLS/site authority and inherited administrator creation verified.",
+      "id": "P21-T011",
+      "name": "Site and initial administrator",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Sealed root apply, serialization, replay barriers and nonroot probes verified.",
+      "id": "P21-T012",
+      "name": "Privileged apply boundary",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Eight-unit activation and health-gated completion verified in isolated CI, not a target-host reboot.",
+      "id": "P21-T013",
+      "name": "Services health and lock",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "15 interruption stages, real MySQL/file recovery, 209 risk links and 10 incompatible candidates verified; same-binary fixture limitation retained.",
+      "id": "P21-T014",
+      "name": "Native upgrade and rollback",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json",
+        "artifacts/v10/P21/candidate/risk-projection-recovery.json",
+        "artifacts/v10/P21/candidate/upgrade-boundaries.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Four shipped runbooks, package references and shell syntax verified. Commands were not executed as a standalone operator procedure.",
+      "id": "P21-T015",
+      "name": "Runbooks and support boundary",
+      "reports": [
+        "artifacts/v10/P21/candidate/verification.json",
+        "artifacts/v10/P21/candidate/target-integrity.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Actual browser submission/progress/closure verified; full visual/accessibility matrix remains separately scoped, with no UI changes in this batch.",
+      "id": "P21-T016",
+      "name": "Installer browser verification",
+      "reports": [
+        "artifacts/v10/P21/candidate/installation-preparation.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Candidate bytes and report inventory fixed; all-case/G11 acceptance is not inferred.",
+      "id": "P21-T017",
+      "name": "Immutable candidate and G11",
+      "reports": [
+        "artifacts/v10/P21/candidate/candidate.json",
+        "artifacts/v10/P21/candidate/manifest.json",
+        "artifacts/v10/P21/candidate/download-verification.json"
+      ]
+    },
+    {
+      "case_acceptance": "pending-complete-contract-review",
+      "evidence_scope": "Review-only evidence child prepared; accountable closure not asserted.",
+      "id": "P21-T018",
+      "name": "Accountable closure",
+      "reports": [
+        "artifacts/v10/P21/candidate/validation.json"
+      ]
+    }
+  ],
+  "g11_accountable_role": "Release Engineer",
+  "g1_accountable_role": "Platform Lead",
+  "production_authorization": false,
+  "purpose": "Evidence navigation, not eighteen PASS declarations.",
+  "schema": "gojet.g11-review-checklist.v1",
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf"
+}

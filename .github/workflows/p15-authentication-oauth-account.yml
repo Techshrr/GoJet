@@ -5,6 +5,14 @@ on:
     branches:
       - main
     paths:
+      # T028 requires this complete same-head P15 producer/coherence chain.
+      - 'scripts/p20/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
+      - 'migrations/**'
       - 'artifacts/v10/P15/test-plan.json'
       - 'artifacts/v10/P15/review.md'
       - 'scripts/p15/validate_contract.py'

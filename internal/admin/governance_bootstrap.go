@@ -7,8 +7,18 @@ import (
 	"time"
 )
 
+// ValidateBootstrapAdministratorInput checks the same credential rules used by creation.
+// It performs no hashing, database access, permission changes or account creation.
+func ValidateBootstrapAdministratorInput(email, password, correlationID string) error {
+	if !validCorrelation(correlationID) || !validPassword(password) {
+		return ErrInvalid
+	}
+	_, err := normalizeEmail(email)
+	return err
+}
+
 func (s *Service) BootstrapAdministrator(ctx context.Context, email, displayName, password string, permissions []string, correlationID string, now time.Time) (Administrator, error) {
-	if s == nil || s.db == nil || !validCorrelation(correlationID) || !validPassword(password) {
+	if s == nil || s.db == nil || ValidateBootstrapAdministratorInput(email, password, correlationID) != nil {
 		return Administrator{}, ErrInvalid
 	}
 	normalized, err := normalizeEmail(email)

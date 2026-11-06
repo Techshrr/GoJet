@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # T028 requires this complete same-head P15 producer/coherence chain.
+      - 'scripts/p20/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/**'
+      - 'services/**'
+      - 'internal/**'
+      - 'frontend/**'
       - 'scripts/p20/t034_visual_probe.mjs'
       - 'scripts/p20/t035_accessibility_probe.mjs'
       - 'scripts/p20/test_t035_accessibility_probe.mjs'

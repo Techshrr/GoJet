@@ -4,25 +4,36 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'go.mod'
-      - 'go.sum'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'artifacts/v10/P16/**'
-      - 'scripts/p16/**'
+      # Keep this cohort synchronized: evidence requires all five same-head producers.
       - '.github/workflows/p16-*.yml'
-      - 'internal/auth/**'
-      - 'internal/trust/**'
-      - 'internal/domains/**'
-      - 'internal/links/**'
-      - 'internal/workspace/**'
-      - 'internal/support/**'
-      - 'migrations/**'
-      - 'services/platformapi/**'
-      - 'services/redirectengine/**'
+      - '.github/workflows/p16-admin-risk-api.yml'
+      - '.github/workflows/p16-browser.yml'
+      - '.github/workflows/p16-destination-risk-integration.yml'
+      - '.github/workflows/p16-evidence.yml'
+      - '.github/workflows/p16-notification-producer.yml'
+      - '.github/workflows/p16-trust-destination-risk-abuse.yml'
+      - 'artifacts/v10/P15/review.md'
+      - 'artifacts/v10/P16/**'
+      - 'docs/security/SECURITY_INVARIANTS.md'
       - 'frontend/apps/admin/**'
       - 'frontend/apps/site/**'
       - 'frontend/packages/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/auth/**'
+      - 'internal/domains/**'
+      - 'internal/links/**'
+      - 'internal/support/**'
+      - 'internal/trust/**'
+      - 'internal/workspace/**'
+      - 'migrations/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/ci/**'
+      - 'scripts/p16/**'
+      - 'services/platformapi/**'
+      - 'services/redirectengine/**'
+      - 'specifications/**'
   workflow_dispatch:
 
 permissions:
@@ -53,6 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/p16/validate_contract.py scripts/p16/validate_coherence.py
+          python3 -m unittest discover -s scripts/ci -p test_p16_triggers.py
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Wait for exact-head P16 evidence producers and bind artifacts
@@ -89,6 +101,7 @@ jobs:
           def get(url):
               return github_json(url, headers)
 
+          started = time.monotonic()
           deadline = time.time() + 135 * 60
           while time.time() < deadline:
               runs = workflow_runs(get, repo, sha)
@@ -138,7 +151,9 @@ jobs:
               if not missing and not pending and len(entries) == len(required):
                   print(f'P16 producers/artifacts green for {sha}')
                   break
-              print(f'Waiting P16 producers missing={missing} pending={pending}')
+              if missing and time.monotonic() - started >= 10 * 60:
+                  raise SystemExit('P16 producers were not scheduled within 10 minutes; check workflow path filters or dispatch all required workflows on this exact SHA: ' + ', '.join(missing))
+              print(f'Waiting P16 producers missing={missing} pending={pending}', flush=True)
               time.sleep(30)
           else:
               raise SystemExit(f'timed out waiting for P16 producers on {sha}')

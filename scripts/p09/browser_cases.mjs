@@ -1,4 +1,5 @@
-import { WORKSPACE_URL, ADMIN_URL, INSTALL_URL, INSTALL_FAULT_URL, PLATFORM_URL, WORKSPACE, STORAGE_ROOT, REAL_CLAMD, BENIGN, EICAR, assert, sleep, resetFiles, uploadApi, patchPolicy, action, runWorker, workerPopen, stopProcess, startFault, waitUntil, dbState, holdFilesWriteLock, viewports, capturesDir } from './browser_env.mjs';
+import { execFileSync } from 'node:child_process';
+import { WORKSPACE_URL, ADMIN_URL, PLATFORM_URL, WORKSPACE, STORAGE_ROOT, REAL_CLAMD, BENIGN, EICAR, assert, sleep, resetFiles, uploadApi, patchPolicy, action, runWorker, workerPopen, stopProcess, startFault, waitUntil, dbState, holdFilesWriteLock, viewports, capturesDir, executablePath } from './browser_env.mjs';
 import { diagnostics, attachDiagnostics, assertDiagnostics, newPage, gotoWorkspace, waitPageState, layoutEvidence, assertLayout, tabUntil, focusEvidence } from './browser_ui.mjs';
 
 async function publicBinary(context, slug) {
@@ -162,22 +163,22 @@ export async function caseT024(browser) {
   assert(adminText.includes('P17 administrator completion') && adminText.includes('P22 installation closure'), 'later-node ownership disclaimer missing');
   assert(!adminText.includes(STORAGE_ROOT) && !adminText.includes(REAL_CLAMD) && !adminText.includes('GOJET_MYSQL_DSN'), 'Admin health leaked private dependency details');
   await page.screenshot({ path: `${capturesDir}/P09-T024-admin-storage.png`, fullPage: true });
-  const installer = {};
-  for (const route of ['/install/environment', '/install/services', '/install/health']) {
-    const response = await page.goto(`${INSTALL_URL}${route}`, { waitUntil: 'networkidle' });
-    assert(response?.status() === 200, `${route} installer status ${response?.status()}`);
-    assert(await page.locator('body').getAttribute('data-state') === 'step-pass', `${route} did not consume healthy preflight`);
-    installer[route] = { status: response.status(), state: 'step-pass' };
-  }
-  const failed = await page.goto(`${INSTALL_FAULT_URL}/install/health`, { waitUntil: 'networkidle' });
-  assert(failed?.status() === 503, `fault Installer status ${failed?.status()}`);
-  assert(await page.locator('body').getAttribute('data-state') === 'hard-failure', 'fault Installer did not fail closed');
-  const failureText = await page.locator('body').innerText();
-  assert(!failureText.includes('39998') && !failureText.includes(STORAGE_ROOT), 'Installer fault UI leaked private details');
-  await page.screenshot({ path: `${capturesDir}/P09-T024-installer-hard-failure.png`, fullPage: true });
   await context.close();
-  assertDiagnostics(report, 'P09-T024', { allowedHttp: [{ includes: '127.0.0.1:4177/install/health', status: 503 }] });
-  return { admin_route: '/admin/platform/storage', admin_state: 'healthy', installer, fault_installer: { status: failed.status(), state: 'hard-failure' }, p17_completion_claimed: false, p22_completion_claimed: false, private_dependency_detail_leaked: false };
+  assertDiagnostics(report, 'P09-T024 Admin');
+  const environment = {};
+  for (const name of ['GOJET_FILE_STORAGE_ROOT', 'GOJET_FILE_PREFLIGHT_BIN', 'GOJET_CLAMAV_NETWORK',
+    'GOJET_CLAMAV_ADDRESS', 'GOJET_CLAMAV_DIAL_TIMEOUT', 'GOJET_CLAMAV_SCAN_TIMEOUT', 'GOJET_CLAMAV_MAX_SIGNATURE_AGE']) {
+    assert(typeof process.env[name] === 'string' && process.env[name] !== '', `Missing native fixture setting: ${name}`);
+    environment[name] = process.env[name];
+  }
+  const installer = JSON.parse(execFileSync('sudo', ['-n', 'python3', 'scripts/p09/browser_installer.py'], {
+    input: JSON.stringify({node: process.execPath, chrome: executablePath, uid: process.getuid(), environment}),
+    encoding: 'utf8', timeout: 150000, maxBuffer: 1024 * 1024,
+  }));
+  assert(installer.certificate_verified_tls && installer.real_unprivileged_filepreflight
+    && installer.state_not_advanced, 'Protected Installer handoff evidence missing');
+  return { admin_route: '/admin/platform/storage', admin_state: 'healthy', installer,
+    p17_completion_claimed: false, p22_completion_claimed: false, private_dependency_detail_leaked: false };
 }
 
 export async function caseT025(browser) {

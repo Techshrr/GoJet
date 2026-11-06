@@ -1,0 +1,140 @@
+{
+  "schema": "gojet.p21-test-plan.v1",
+  "node": "P21",
+  "base": "c5b51ae9dbc01da5da38f2cee7d87e6a3122c3dd",
+  "p20_signed": "007b20244081a9d0336c19262e0f095c9d101976",
+  "p20_closure_run": 38712498479,
+  "release_version": "10.0.0-rc.1",
+  "initial_supported_target": "linux/amd64; Ubuntu 24.04 LTS; native dependencies",
+  "services": {
+    "redirectengine": "services/redirectengine/cmd/server",
+    "analyticsworker": "services/analyticsworker/cmd/worker",
+    "analyticsreconciler": "services/analyticsreconciler/cmd/reconciler",
+    "platformapi": "services/platformapi/cmd/server",
+    "mailworker": "services/platformapi/cmd/mailworker",
+    "fileworker": "services/platformapi/cmd/fileworker",
+    "operationsmonitor": "services/platformapi/cmd/operationsmonitor",
+    "logreceiver": "services/logreceiver/cmd/server"
+  },
+  "helpers": {
+    "filepreflight": "services/platformapi/cmd/filepreflight"
+  },
+  "apps": [
+    "site",
+    "docs",
+    "workspace",
+    "admin"
+  ],
+  "cases": [
+    {
+      "id": "P21-T001",
+      "name": "Frozen entry and release identity",
+      "oracle": "P20 signed closure and merge ancestry remain valid; version/platform/toolchain and normative sources fixed.",
+      "evidence": "artifacts/v10/P21/results/P21-T001.json"
+    },
+    {
+      "id": "P21-T002",
+      "name": "Eight native binaries",
+      "oracle": "Exactly eight service binaries plus declared non-daemon helpers; version/commit JSON works without credentials or startup; ELF machine and static linkage verified.",
+      "evidence": "artifacts/v10/P21/results/P21-T002.json"
+    },
+    {
+      "id": "P21-T003",
+      "name": "Static frontend",
+      "oracle": "All four compiled app outputs and required public assets; no source-only or build-host dependencies; PHP token assets packaged.",
+      "evidence": "artifacts/v10/P21/results/P21-T003.json"
+    },
+    {
+      "id": "P21-T004",
+      "name": "Immutable migration catalog",
+      "oracle": "Every numbered migration unique/contiguous, original bytes and SHA256 retained; explicit backup/restore rollback boundary.",
+      "evidence": "artifacts/v10/P21/results/P21-T004.json"
+    },
+    {
+      "id": "P21-T005",
+      "name": "Empty database and migration locking",
+      "oracle": "All migrations apply to native empty MySQL8; global lock, durable journal, checksum drift rejection and partial-DDL failure recovery tested.",
+      "evidence": "artifacts/v10/P21/results/P21-T005.json"
+    },
+    {
+      "id": "P21-T006",
+      "name": "Package allowlist and clean extraction",
+      "oracle": "Deterministic archive with exact allowlist; no traversal, symlinks, devices, duplicate paths, Docker/Compose, Node runtime, node_modules or credentials.",
+      "evidence": "artifacts/v10/P21/results/P21-T006.json"
+    },
+    {
+      "id": "P21-T007",
+      "name": "Checksum manifest and SBOM",
+      "oracle": "Every archive member accounted for; SHA256 and dependency SBOM match binaries/static outputs; tampering and missing files rejected.",
+      "evidence": "artifacts/v10/P21/results/P21-T007.json"
+    },
+    {
+      "id": "P21-T008",
+      "name": "Native configuration",
+      "oracle": "Eight independent non-root systemd units, environment files, tmpfiles/logrotate and Nginx/PHP/static/proxy configuration render and validate.",
+      "evidence": "artifacts/v10/P21/results/P21-T008.json"
+    },
+    {
+      "id": "P21-T009",
+      "name": "Installer access and state",
+      "oracle": "All eight IA INSTALL routes, private scoped session, CSRF, sequential durable state, secret redaction, noindex and post-lock404; existing design preserved.",
+      "evidence": "artifacts/v10/P21/results/P21-T009.json"
+    },
+    {
+      "id": "P21-T010",
+      "name": "Mandatory dependency preflight",
+      "oracle": "Individually reject absent/unhealthy/wrong Nginx, PHP8.3, MySQL8, Redis, systemd, ClamAV, package integrity and local-storage permissions.",
+      "evidence": "artifacts/v10/P21/results/P21-T010.json"
+    },
+    {
+      "id": "P21-T011",
+      "name": "Site and initial administrator",
+      "oracle": "Validate URL/TLS/storage conflicts and protected initial administrator creation through inherited Admin authority; no public privilege escalation.",
+      "evidence": "artifacts/v10/P21/results/P21-T011.json"
+    },
+    {
+      "id": "P21-T012",
+      "name": "Privileged apply boundary",
+      "oracle": "PHP cannot run arbitrary root commands; root-owned worker consumes validated sealed request; serializes apply and preserves least privilege.",
+      "evidence": "artifacts/v10/P21/results/P21-T012.json"
+    },
+    {
+      "id": "P21-T013",
+      "name": "Services health and lock",
+      "oracle": "Eight enable/start outcomes and DB/cache/storage/ClamAV/Nginx/HTTP health must pass before atomic installer lock; partial failures never report complete.",
+      "evidence": "artifacts/v10/P21/results/P21-T013.json"
+    },
+    {
+      "id": "P21-T014",
+      "name": "Native upgrade and rollback",
+      "oracle": "Verified package switch and configuration reload with backup/restore boundary; interrupted/failed migration or service start recovers safely; never binary-only rollback across incompatible schema.",
+      "evidence": "artifacts/v10/P21/results/P21-T014.json"
+    },
+    {
+      "id": "P21-T015",
+      "name": "Runbooks and support boundary",
+      "oracle": "Native install/operations/upgrade/restore runbooks executable and consistent with package; supported platform explicit; no production Docker or Node dependency.",
+      "evidence": "artifacts/v10/P21/results/P21-T015.json"
+    },
+    {
+      "id": "P21-T016",
+      "name": "Installer browser verification",
+      "oracle": "Desktop/mobile routes and success/error/progress/locked states; keyboard/accessibility, console and server-side authorization evidence.",
+      "evidence": "artifacts/v10/P21/results/P21-T016.json"
+    },
+    {
+      "id": "P21-T017",
+      "name": "Immutable candidate and G11",
+      "oracle": "All cases and affected regression exact-head PASS; archive digest fixed, inventory/eight versions/checksum/SBOM and G1/G11 evidence complete; no P22 claim.",
+      "evidence": "artifacts/v10/P21/results/P21-T017.json"
+    },
+    {
+      "id": "P21-T018",
+      "name": "Accountable closure",
+      "oracle": "Pending until complete verified evidence and technical review; review-only signed child binds immutable package source/digest without rebuilding or changing payload; final regression and provenance required.",
+      "evidence": "artifacts/v10/P21/results/P21-T018.json"
+    }
+  ],
+  "production_deployment_authorized": false,
+  "p22_completion_claim": false
+}

@@ -1,0 +1,66 @@
+{
+  "archive_sha256": "e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9",
+  "binaries": 8,
+  "component_count": 833,
+  "excluded_build_metadata": {
+    "admin/.vite/manifest.json": "590375f1e112de31fe3a35fec55f763b7ecd7fa9283d1fd9afb690608e232fd5",
+    "site/.vite/manifest.json": "aacbcb0c5afbf3daf6c68a00dd42380893f96928a70e20157cc92de023e8e809",
+    "workspace/.vite/manifest.json": "3fd59966178027a46293904dbfddde14a045b33b367ecc06030b6d4a6d1a7748"
+  },
+  "helpers": 1,
+  "installable": false,
+  "members": 330,
+  "migrations": 31,
+  "not_evaluated": [
+    "native installation",
+    "upgrade/recovery",
+    "G11 approval",
+    "production acceptance"
+  ],
+  "payload_bytes": 125293602,
+  "reproducible_archive": true,
+  "runbooks": {
+    "commands_executed": false,
+    "files": [
+      "runbooks/README.md",
+      "runbooks/install.md",
+      "runbooks/operations.md",
+      "runbooks/upgrade-recovery.md"
+    ],
+    "payload_references_checked": [
+      "deploy/logrotate/gojet-nginx",
+      "deploy/sysusers/gojet.conf",
+      "deploy/tmpfiles/gojet.conf",
+      "installer/bin/apply-installation.php",
+      "installer/bin/approve-web-configuration.php",
+      "installer/bin/authorize-entry-handover.php",
+      "installer/bin/check-installation.php",
+      "installer/bin/install-web-apply-schedule.php",
+      "installer/bin/install-web-preflight-schedule.php",
+      "installer/bin/install-web-preparation-schedule.php",
+      "installer/bin/prepare-installation.php",
+      "installer/bin/prepare-upgrade.php",
+      "installer/bin/provision-web-entry.php",
+      "installer/bin/recover-services.php",
+      "installer/bin/recover-site.php",
+      "installer/bin/recover-upgrade.php",
+      "installer/bin/recover-web-entry.php",
+      "installer/bin/recover-web-preparation.php",
+      "installer/bin/recover-web-schedule.php",
+      "installer/bin/restart-web-configuration.php",
+      "installer/bin/retire-installer.php",
+      "installer/bin/run-upgrade.php",
+      "installer/bin/switch-web-configuration.php",
+      "installer/bin/verify-package.php"
+    ],
+    "shell_blocks_syntax_checked": 9
+  },
+  "scope": "archive assembly and static integrity only",
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "static_apps": [
+    "site",
+    "docs",
+    "workspace",
+    "admin"
+  ]
+}

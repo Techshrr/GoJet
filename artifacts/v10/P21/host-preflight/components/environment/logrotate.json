@@ -1,0 +1,1 @@
+{"native_nginx_rotation": true, "descriptor_reopened": true, "delayed_compression_exact": true, "root_owned_directories": true, "private_log_permissions": true, "gojet_read_denied": true, "worker_traversal_failure_reproduced": true, "permissions_restored_reopen": true, "stopped_empty_missing_logs_supported": true, "copytruncate_used": false, "production_deployment": false}

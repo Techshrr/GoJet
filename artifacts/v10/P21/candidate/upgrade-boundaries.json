@@ -1,0 +1,1 @@
+{"native_nginx": true, "native_redis": true, "forged_loopback_headers_rejected": true, "private_probe_accepted": true, "stale_risk_keys_removed": true, "repeated_invalidation_safe": true, "reload_acknowledgement_not_readiness": true, "public_tls_probe_without_capability": true, "unrelated_data_and_analytics_stream_preserved": true, "systemd_tested": false}

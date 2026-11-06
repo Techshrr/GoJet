@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/Techshrr/GoJet/internal/files"
+	"github.com/Techshrr/GoJet/internal/releaseinfo"
 )
 
 func main() {
+	if releaseinfo.Print(os.Args[1:], "filepreflight", os.Stdout) {
+		return
+	}
 	report, err := run()
 	if err != nil {
 		report = files.DependencyHealthReport{Status: files.DependencyUnavailable}

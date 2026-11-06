@@ -2,7 +2,7 @@
 from integration_common import *
 
 PREFLIGHT = Path(os.environ.get("GOJET_P09_FILEPREFLIGHT", "/tmp/gojet-p09/filepreflight"))
-INSTALLER_INDEX = Path(os.environ.get("GOJET_P09_INSTALLER_INDEX", "installer/public/index.php"))
+INSTALLER_SOURCE = Path(__file__).resolve().parents[2] / "installer/src"
 HEALTH_CASES = {"P09-T019", "P09-T020"}
 
 
@@ -34,10 +34,12 @@ def installer_state(address: str):
         "GOJET_CLAMAV_DIAL_TIMEOUT": "500ms",
         "GOJET_CLAMAV_SCAN_TIMEOUT": "5s",
         "GOJET_CLAMAV_MAX_SIGNATURE_AGE": "72h",
-        "REQUEST_URI": "/install/environment",
     })
+    # T019 exercises the shipped PHP preflight component with the real native
+    # helper. The protected HTTP route handoff is separately owned by T024.
+    php = "require $argv[1]; require $argv[2]; echo GoJet\\Installer\\Shell::render(GoJet\\Installer\\FilePreflight::check()['state']);"
     completed = subprocess.run(
-        ["php", str(INSTALLER_INDEX)], env=env, text=True,
+        ["php", "-r", php, str(INSTALLER_SOURCE / "FilePreflight.php"), str(INSTALLER_SOURCE / "Shell.php")], env=env, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=12,
     )
     return completed.returncode, completed.stdout, completed.stderr
@@ -51,7 +53,8 @@ def assert_secret_safe(text: str) -> None:
 def case_t019():
     expect(PREFLIGHT.is_file(), f"native filepreflight missing: {PREFLIGHT}")
     expect(os.access(PREFLIGHT, os.X_OK), "native filepreflight is not executable")
-    expect(INSTALLER_INDEX.is_file(), f"installer index missing: {INSTALLER_INDEX}")
+    for name in ["FilePreflight.php", "Shell.php"]:
+        expect((INSTALLER_SOURCE / name).is_file(), f"installer component missing: {name}")
 
     healthy_rc, healthy, healthy_out, healthy_err = preflight(REAL_CLAMD)
     expect(healthy_rc == 0, f"healthy preflight rc={healthy_rc} report={healthy} stderr={healthy_err[-500:]}")
@@ -93,10 +96,22 @@ def case_t019():
 
     php_ok_rc, php_ok, php_ok_err = installer_state(REAL_CLAMD)
     expect(php_ok_rc == 0 and 'data-state="step-pass"' in php_ok, f"installer healthy state failed rc={php_ok_rc} stderr={php_ok_err[-500:]}")
-    with fault_server("stale") as (address, _):
-        php_fail_rc, php_fail, php_fail_err = installer_state(address)
-    expect(php_fail_rc == 0 and 'data-state="hard-failure"' in php_fail, f"installer fail-closed state missing rc={php_fail_rc} stderr={php_fail_err[-500:]}")
-    assert_secret_safe(php_ok + php_fail)
+    assert_secret_safe(php_ok)
+    php_faults = {}
+    def expect_php_failure(address, name):
+        rc, body, error = installer_state(address)
+        expect(rc == 0 and 'data-state="hard-failure"' in body, f"installer {name} fail-closed state missing rc={rc} stderr={error[-500:]}")
+        assert_secret_safe(body)
+        php_faults[name] = "hard-failure"
+    expect_php_failure(down_address, "daemon_down")
+    for mode in ["health-timeout", "stale", "health-indeterminate"]:
+        with fault_server(mode, hold_seconds=2.0) as (address, _):
+            expect_php_failure(address, mode)
+    os.chmod(quarantine, 0o755)
+    try:
+        expect_php_failure(REAL_CLAMD, "permission_error")
+    finally:
+        os.chmod(quarantine, original_mode)
 
     return {
         "healthy_exit": healthy_rc,
@@ -109,6 +124,9 @@ def case_t019():
         "permission_error_exit": perm_rc,
         "installer_healthy_state": "step-pass",
         "installer_fault_state": "hard-failure",
+        "installer_component_faults": php_faults,
+        "installer_evidence_scope": "shipped-php-preflight-and-shell-components",
+        "protected_http_handoff_verified": False,
         "preflight_secret_safe": True,
         "p22_release_closure_claimed": False,
     }

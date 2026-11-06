@@ -1,0 +1,59 @@
+{
+  "schema": "gojet.host-preflight-review.v1",
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "implementation_source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7",
+  "normative_requirement": "GoJet_V10_MASTER_PLAN_OPTIMIZED.md section 4.1 native installer OS/CPU/disk/permissions",
+  "changed_paths": [
+    ".github/workflows/p21-payload-build.yml",
+    "docs/release/install.md",
+    "installer/README.md",
+    "installer/public/assets/install.js",
+    "installer/src/DependencyPreflight.php",
+    "installer/src/HostPreflight.php",
+    "installer/src/InstallationPreparation.php",
+    "installer/src/PreflightSnapshot.php",
+    "scripts/p21/archive.py",
+    "scripts/p21/build_payload.py",
+    "scripts/p21/finalize_candidate.py",
+    "scripts/p21/installer_browser_test.mjs",
+    "scripts/p21/native_dependency_preflight_test.py",
+    "scripts/p21/native_host_preflight_test.py",
+    "scripts/p21/native_installation_journey_test.py",
+    "scripts/p21/native_web_apply_test.py",
+    "scripts/p21/php/host_preflight_test.php",
+    "scripts/p21/test_candidate.py",
+    "scripts/p21/test_php_payload.py"
+  ],
+  "earlier_failed_attempt": {
+    "run": 42150614477,
+    "job": 127672690688,
+    "conclusion": "failure",
+    "reason": "HostPreflight.php was allowlisted but omitted from build_payload.py assembly; packaged preflight could not load it.",
+    "correction": "Add the missing member and reject missing fixed PHP includes during assembly and independent archive read-back."
+  },
+  "local_checks": {
+    "python_tests": {
+      "passed": 15,
+      "skipped": 1
+    },
+    "python_syntax": true,
+    "workflow_yaml_and_shell_syntax": true,
+    "javascript_syntax": true,
+    "diff_check": true,
+    "php_execution": "not run locally: extracted PHP requires missing libargon2.so.1",
+    "native_systemd": "not available locally; GitHub native CI is authoritative"
+  },
+  "unchanged_application_objects": {
+    "internal": "c0124256caaca6dd3d3ea506d1320653788953d0",
+    "services": "e4315743a02be7c39c745bf3f24518db9d0da512",
+    "frontend": "d46fabf68d36bd82eaa8e5bcc991a28403355716",
+    "migrations": "ce4008e1cde030e267f3586040385ae57d9a6117",
+    "deploy": "bad547764fd613903989ac701c090c37d2ef6154",
+    "go.mod": "807b98251ef5f1fa706334882350ae9f1df03b25",
+    "go.sum": "b22780233ffc30e1cdb746d9dcb1ff5cc7a0690d",
+    "pnpm-lock.yaml": "0edcb3631d2483662de957625ebb8e330bc346fe"
+  },
+  "technical_review": "docs/p21/contract-coverage.md",
+  "g11_approved": false,
+  "production_deployed": false
+}

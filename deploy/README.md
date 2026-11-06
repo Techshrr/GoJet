@@ -9,4 +9,4 @@ Reserved native configuration roots:
 
 Production Dockerfiles, Compose files, `deploy/docker/`, PM2 and Node HTTP/SSR/dev-server runtime are prohibited.
 
-P00 freezes this boundary. Native configuration implementation and release verification are delivered by later nodes and Gates.
+Packaged native templates are consumed by the P21 preparation and activation commands. Current delivery limits are documented in [P21 status](../docs/p21/STATUS.md).

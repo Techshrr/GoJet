@@ -81,20 +81,29 @@ func (s *RedisRiskStore) PutDecision(ctx context.Context, linkID uint64, fingerp
 	if linkID == 0 || !validateFingerprint(fingerprint) || !validateDecisionState(state) || strings.TrimSpace(policyVersion) == "" || ttl <= 0 {
 		return RiskDecision{}, ErrInvalidInput
 	}
+	return s.PutDecisionUntil(ctx, linkID, fingerprint, state, policyVersion, time.Now().UTC().Add(ttl))
+}
+
+// PutDecisionUntil preserves an absolute durable-authority expiry. Redis command
+// latency cannot extend the allow deadline encoded in the runtime decision.
+func (s *RedisRiskStore) PutDecisionUntil(ctx context.Context, linkID uint64, fingerprint string, state RiskState, policyVersion string, until time.Time) (RiskDecision, error) {
 	now := time.Now().UTC()
+	if s == nil || s.client == nil || linkID == 0 || !validateFingerprint(fingerprint) || !validateDecisionState(state) || strings.TrimSpace(policyVersion) == "" || !until.After(now) {
+		return RiskDecision{}, ErrInvalidInput
+	}
 	decision := RiskDecision{
 		SchemaVersion: riskDecisionSchemaVersion,
 		Decision:      state,
 		Fingerprint:   fingerprint,
 		CheckedAt:     now,
-		ValidUntil:    now.Add(ttl),
+		ValidUntil:    until.UTC(),
 		PolicyVersion: strings.TrimSpace(policyVersion),
 	}
 	raw, err := json.Marshal(decision)
 	if err != nil {
 		return RiskDecision{}, err
 	}
-	if err := s.client.Set(ctx, RiskDecisionKey(linkID, fingerprint), raw, ttl).Err(); err != nil {
+	if err := s.client.Set(ctx, RiskDecisionKey(linkID, fingerprint), raw, until.Sub(now)).Err(); err != nil {
 		return RiskDecision{}, err
 	}
 	return decision, nil
@@ -130,3 +139,12 @@ func (s *RedisRiskStore) Resolve(ctx context.Context, linkID uint64, fingerprint
 // StoreRawForTest is intentionally not provided: malformed/missing/stale cases
 // are produced by the integration harness through its isolated Redis instance,
 // so production code cannot accidentally expose a malformed-decision writer.
+
+// DeleteDecision removes only the exact projection; queues and unrelated keys
+// remain untouched. Used when durable authority no longer permits projection.
+func (s *RedisRiskStore) DeleteDecision(ctx context.Context, linkID uint64, fingerprint string) error {
+	if s == nil || s.client == nil || linkID == 0 || !validateFingerprint(fingerprint) {
+		return ErrInvalidInput
+	}
+	return s.client.Del(ctx, RiskDecisionKey(linkID, fingerprint)).Err()
+}

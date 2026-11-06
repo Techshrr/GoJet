@@ -46,6 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          python3 -m unittest scripts.p19.test_producer_artifacts
           python3 -m py_compile scripts/p19/validate_contract.py scripts/p19/evidence_coherence.py
           python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
           python3 - <<'PY'
@@ -68,6 +69,7 @@ jobs:
           import json, os, time, urllib.parse, urllib.request
           from datetime import datetime, timezone
           from pathlib import Path
+          from scripts.p19.producer_artifacts import select_artifact
 
           sha=os.environ['EXACT_HEAD']; ref=os.environ['HEAD_REF']; repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
           required={
@@ -131,15 +133,17 @@ jobs:
               for name,spec in required.items():
                 run=latest[name]
                 artifacts=api(f'https://api.github.com/repos/{repo}/actions/runs/{run["id"]}/artifacts?per_page=100').get('artifacts',[])
-                matches=[item for item in artifacts if item.get('name')==spec['artifact'] and not item.get('expired')]
-                if len(matches)!=1:
-                  failed.append(f'{name}:artifact:{spec["artifact"]}')
+                try:
+                  item=select_artifact(artifacts,spec['artifact'],run,sha)
+                except (ValueError, KeyError, TypeError, AttributeError) as error:
+                  failed.append(f'{name}:artifact:{spec["artifact"]}:{error}')
                   continue
-                item=matches[0]
                 entries[name]={
                   'workflow_file':spec['workflow'],
                   'run_id':int(run['id']),
                   'run_number':int(run.get('run_number',0)),
+                  'run_attempt':int(run.get('run_attempt',1)),
+                  'run_started_at':run['run_started_at'],
                   'head_sha':run.get('head_sha'),
                   'event':run.get('event'),
                   'status':run.get('status'),
@@ -150,6 +154,7 @@ jobs:
                     'name':item['name'],
                     'digest':item.get('digest'),
                     'size_in_bytes':int(item.get('size_in_bytes',0)),
+                    'created_at':item['created_at'],
                   }],
                 }
             manifest={

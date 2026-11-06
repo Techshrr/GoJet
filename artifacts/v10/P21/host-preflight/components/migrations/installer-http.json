@@ -1,0 +1,1 @@
+{"real_php_http_entrypoint": true, "authentication_cookie_rotation": true, "origin_and_size_enforced": true, "route_order_enforced": true, "bootstrap_rate_limit": true, "post_lock_404": true, "forwarded_tls_spoof_rejected": true, "real_tls_and_browser_verified": false, "privileged_apply_verified": false}

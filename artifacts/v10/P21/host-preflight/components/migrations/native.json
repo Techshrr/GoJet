@@ -1,0 +1,1 @@
+{"upgrade_inspection_read_only":true,"upgrade_history_rewrite_and_removal_rejected":true,"upgrade_lock_and_failed_history_rejected":true,"native_mysql":true,"full_catalog":31,"delimiter_triggers":2,"rerun_noop":true,"lock_rejected":true,"drift_rejected":true,"interrupted_journal_rejected":true,"real_partial_ddl_rejected_on_retry":true,"original_bytes_tamper_rejected":true}

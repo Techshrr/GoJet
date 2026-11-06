@@ -1,0 +1,46 @@
+{
+  "archive_members": 331,
+  "archive_sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542",
+  "artifact_id": 13477846868,
+  "candidate_reproduced_exactly": true,
+  "g11_approved": false,
+  "host_preflight_packaged_and_exact": true,
+  "production_deployed": false,
+  "report_hashes_verified": {
+    "dependency-preflight.json": {
+      "bytes": 1800,
+      "sha256": "2ad7e94a5f112d1222ae2b50b77338e0b921e1eb27468b7174bbb58d8aeb44a6"
+    },
+    "installation-preparation.json": {
+      "bytes": 5635,
+      "sha256": "4cbf4257d79ea0ca039b5ed347cb2838ed07fc886c2d1aa69603e9e315a60631"
+    },
+    "native-build.json": {
+      "bytes": 12378,
+      "sha256": "af79ab87958dd8e7890ae699c11b1e3425373961fe5788a97a40f8bb7931e373"
+    },
+    "risk-projection-recovery.json": {
+      "bytes": 442,
+      "sha256": "ae7456cb6aa396bdaf62b3580d2476c4d3f6285c12ceceae0a2c2c7b2becdb40"
+    },
+    "static-routing.json": {
+      "bytes": 736,
+      "sha256": "1f34d2ee5fd5028b6c1242c69396d90f3484adb3eb4cd456633db9bcc19cf2f4"
+    },
+    "target-integrity.json": {
+      "bytes": 606,
+      "sha256": "d4fdd490902f86871767d827d86f71ab6b58e2c5780b1ee5e077688be2bfc477"
+    },
+    "upgrade-boundaries.json": {
+      "bytes": 359,
+      "sha256": "419287e18d2e3e43ebbd522148b324809de80755ae3543416a7230f3789bd737"
+    },
+    "verification.json": {
+      "bytes": 2328,
+      "sha256": "87b1c99b847064ff85c1e6dbffac403ed165bf4037a045b58e8cd128c52793a7"
+    }
+  },
+  "schema": "gojet.candidate-independent-download.v1",
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "zip_sha256": "431243ff9291e37b6d27d01c72ac27f49bcb5e45dd64743ae96d9967b3f7500c"
+}

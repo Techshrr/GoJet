@@ -8,8 +8,6 @@ for (const path of [browserDir, capturesDir]) mkdirSync(path, { recursive: true 
 
 export const WORKSPACE_URL = (process.env.GOJET_TEST_WORKSPACE_URL ?? 'http://127.0.0.1:4174').replace(/\/$/, '');
 export const ADMIN_URL = (process.env.GOJET_TEST_ADMIN_URL ?? 'http://127.0.0.1:4175').replace(/\/$/, '');
-export const INSTALL_URL = (process.env.GOJET_TEST_INSTALL_URL ?? 'http://127.0.0.1:4176').replace(/\/$/, '');
-export const INSTALL_FAULT_URL = (process.env.GOJET_TEST_INSTALL_FAULT_URL ?? 'http://127.0.0.1:4177').replace(/\/$/, '');
 export const PLATFORM_URL = (process.env.GOJET_TEST_PLATFORM_URL ?? 'http://127.0.0.1:18081').replace(/\/$/, '');
 export const WORKSPACE = process.env.GOJET_TEST_WORKSPACE_ID ?? 'ws-p09-browser';
 export const ACTOR = process.env.GOJET_TEST_ACTOR_ID ?? 'p09-browser-owner';

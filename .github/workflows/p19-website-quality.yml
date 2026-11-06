@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check scripts/p19/performance_cases.mjs
+          node --test scripts/p19/test_performance_diagnostics.mjs
           python3 -m py_compile scripts/p19/runtime_cases.py scripts/p19/content_manifest.py scripts/p19/validate_contract.py
           python3 scripts/p19/validate_contract.py > /tmp/p19-contract.json
           python3 - <<'PY'

@@ -1,0 +1,31 @@
+{
+  "attempts": [
+    {
+      "error": "Bad owner or permissions on /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf",
+      "exit_code": 255,
+      "stage": "local SSH config",
+      "target_contacted": false
+    },
+    {
+      "error": "Network is unreachable",
+      "exit_code": 255,
+      "password_authentication_reached": false,
+      "port": 22,
+      "stage": "TCP connect with isolated SSH configuration (-F /dev/null)"
+    }
+  ],
+  "authorization": "Owner supplied a temporary blank test server and credentials for P22; G11 review explicitly delegated.",
+  "credentials_stored": false,
+  "g12_pass": false,
+  "host_health_inferred": false,
+  "next_action": "Use an execution environment with authorized TCP 22 connectivity or an accessible server console; then collect read-only host inventory before any mutation.",
+  "recorded_at": "2026-11-06T11:23:49.938860+00:00",
+  "remote_commands_executed": false,
+  "remote_mutations": false,
+  "schema": "gojet.p22-connection.v1",
+  "status": "BLOCKED_EXECUTOR_NETWORK",
+  "target_address_published": false,
+  "target_claimed_os": "Ubuntu 24.04",
+  "target_os_observed": null,
+  "target_ref": "owner-temporary-ubuntu-01"
+}

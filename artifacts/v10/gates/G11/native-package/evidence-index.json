@@ -1,0 +1,141 @@
+{
+  "allowlist_and_denylist": "scripts/p21/archive.py",
+  "approval_record": "decision.json",
+  "archive_independently_downloaded_and_verified": true,
+  "archive_members": 331,
+  "candidate": "artifacts/v10/P21/host-preflight/candidate.json",
+  "full_g11_approval": true,
+  "inventory": "artifacts/v10/P21/host-preflight/manifest.json",
+  "original_reports_are_preapproval_snapshots": true,
+  "previous_evidence_index": "artifacts/v10/P21/history/g11-before-host-preflight/evidence-index.json",
+  "reports": {
+    "artifacts/v10/P21/host-preflight/candidate.json": {
+      "bytes": 3590,
+      "sha256": "d15ead3750fc744703d456ec41723e2c2bb18610a36913fd09243a3377fe004b"
+    },
+    "artifacts/v10/P21/host-preflight/components/data-bootstrap/result.json": {
+      "bytes": 983,
+      "sha256": "a43dbcce21cb644d1af757752a3a884ce65bb8db7c81bee540663b94394d7d5a"
+    },
+    "artifacts/v10/P21/host-preflight/components/environment/logrotate.json": {
+      "bytes": 376,
+      "sha256": "42374c0b572b3b10b35a9ccf0adec07c4cff36b4245b2a81cc8185e7fe9fbfa1"
+    },
+    "artifacts/v10/P21/host-preflight/components/environment/result.json": {
+      "bytes": 449,
+      "sha256": "35138d9efd123768e6e2209d0d302d1ad76abde24858da23de7ff030093d7a40"
+    },
+    "artifacts/v10/P21/host-preflight/components/index.json": {
+      "bytes": 7537,
+      "sha256": "cc8b52c2a503a0da06026564cad153335d4f8210f1b97adba83c1fa538b1a80a"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/backup-restore.json": {
+      "bytes": 307,
+      "sha256": "8427fe8314ce34ec6ba997744cfed938ccc9f937aed0c972827947acd33ff1f3"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/installer-http.json": {
+      "bytes": 306,
+      "sha256": "d23d0d22d3d9efe2ce3fce87f0a661c3989f846c7ba52862c545321209d41fd6"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/installer-state.json": {
+      "bytes": 511,
+      "sha256": "29ee11c331d80c5f83dc1cde799e978003191a89c50c955a701aabb2bdb13ba9"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/native.json": {
+      "bytes": 376,
+      "sha256": "66f98e45f2d331aa524e61dfbb651c49a8d8887a6466eb81e8b0398e611ac545"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/upgrade-database.json": {
+      "bytes": 289,
+      "sha256": "8f54a3cf74f2f7d99b8bdf91ee26953c5c74bf491c1b58fe866af1d3a1ec98a7"
+    },
+    "artifacts/v10/P21/host-preflight/components/migrations/upgrade-filesystem.json": {
+      "bytes": 409,
+      "sha256": "c7f5d42cb0e0503a5fcb1367d1b4a0c1a92c136067e11834bba25318d9cf6eb2"
+    },
+    "artifacts/v10/P21/host-preflight/components/native-web/browser.json": {
+      "bytes": 820,
+      "sha256": "98548830c91eb3a03e4858698d4e914835697e4d0aef645dd195d603fe7cb9d6"
+    },
+    "artifacts/v10/P21/host-preflight/components/native-web/result.json": {
+      "bytes": 464,
+      "sha256": "8cd6c41d8a13b11832e26d685a1cb7eff2bed2e157487674538534bc7a3e277d"
+    },
+    "artifacts/v10/P21/host-preflight/dependency-preflight.json": {
+      "bytes": 1800,
+      "sha256": "2ad7e94a5f112d1222ae2b50b77338e0b921e1eb27468b7174bbb58d8aeb44a6"
+    },
+    "artifacts/v10/P21/host-preflight/dependency-versions/native.json": {
+      "bytes": 3813,
+      "sha256": "cff0c23dd0abe15538a0b8e146417686abdb2be38e38f3d687ff06e350528015"
+    },
+    "artifacts/v10/P21/host-preflight/dependency-versions/validation.json": {
+      "bytes": 1281,
+      "sha256": "01f5e1028711dc4e501ff805efe22c03352435d63be3b3d0e0eaaabf185e80e1"
+    },
+    "artifacts/v10/P21/host-preflight/download-verification.json": {
+      "bytes": 1663,
+      "sha256": "3e24059cb03d4f95ec1d85627d0e17c877802be5746425d1dbf7dcf512d1b222"
+    },
+    "artifacts/v10/P21/host-preflight/installation-preparation.json": {
+      "bytes": 5635,
+      "sha256": "4cbf4257d79ea0ca039b5ed347cb2838ed07fc886c2d1aa69603e9e315a60631"
+    },
+    "artifacts/v10/P21/host-preflight/manifest.json": {
+      "bytes": 58700,
+      "sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba"
+    },
+    "artifacts/v10/P21/host-preflight/native-build.json": {
+      "bytes": 12378,
+      "sha256": "af79ab87958dd8e7890ae699c11b1e3425373961fe5788a97a40f8bb7931e373"
+    },
+    "artifacts/v10/P21/host-preflight/review.json": {
+      "bytes": 2521,
+      "sha256": "d150966217749d2210a8145c3c6faa544bfd45d25ee32005da6ac8529ed61a1b"
+    },
+    "artifacts/v10/P21/host-preflight/risk-projection-recovery.json": {
+      "bytes": 442,
+      "sha256": "ae7456cb6aa396bdaf62b3580d2476c4d3f6285c12ceceae0a2c2c7b2becdb40"
+    },
+    "artifacts/v10/P21/host-preflight/static-routing.json": {
+      "bytes": 736,
+      "sha256": "1f34d2ee5fd5028b6c1242c69396d90f3484adb3eb4cd456633db9bcc19cf2f4"
+    },
+    "artifacts/v10/P21/host-preflight/target-integrity.json": {
+      "bytes": 606,
+      "sha256": "d4fdd490902f86871767d827d86f71ab6b58e2c5780b1ee5e077688be2bfc477"
+    },
+    "artifacts/v10/P21/host-preflight/upgrade-boundaries.json": {
+      "bytes": 359,
+      "sha256": "419287e18d2e3e43ebbd522148b324809de80755ae3543416a7230f3789bd737"
+    },
+    "artifacts/v10/P21/host-preflight/validation.json": {
+      "bytes": 2892,
+      "sha256": "f70fce9ae29eb03663f1b08591c715add10553f82f290b0c6f935175901c78cb"
+    },
+    "artifacts/v10/P21/host-preflight/verification.json": {
+      "bytes": 2328,
+      "sha256": "87b1c99b847064ff85c1e6dbffac403ed165bf4037a045b58e8cd128c52793a7"
+    }
+  },
+  "review_checklist": "review-checklist.json",
+  "run": 42161906247,
+  "runbook_allowlist": "scripts/p21/runbooks.py",
+  "schema": "gojet.g11-evidence-index.v1",
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "supplemental_evidence": {
+    "components": {
+      "index": "artifacts/v10/P21/host-preflight/components/index.json",
+      "source_equivalence_recorded": true,
+      "tested_source": "9e8aa7617c69ea0932ef4e1b9338006203ee8ca7"
+    },
+    "dependency_versions": {
+      "candidate_source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+      "run": 42164219962,
+      "status": "verified-on-current-archive",
+      "test_source": "53b1c61dc5491ef9d2c5ed1052b43a8860b9d33b",
+      "validation": "artifacts/v10/P21/host-preflight/dependency-versions/validation.json"
+    }
+  },
+  "technical_coverage_review": "docs/p21/contract-coverage.md"
+}

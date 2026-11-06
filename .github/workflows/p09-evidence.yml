@@ -51,6 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/p09/validate.py scripts/p09/validate_coherence.py scripts/p09/coherence_*.py scripts/p09/validate_contract.py
+          python3 -m unittest discover -s scripts/p09 -p 'test_protected_installer_evidence.py'
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Wait for exact-head P09 evidence producers
@@ -205,7 +206,13 @@ jobs:
           test "$(find artifacts/v10/P09/results -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 14
           test "$(find artifacts/v10/P09/clamav -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 6
           test "$(find artifacts/v10/P09/browser -maxdepth 1 -type f -name 'P09-T*.json' | wc -l)" -eq 5
-          test "$(find artifacts/v10/P09/captures -maxdepth 1 -type f -name 'P09-T*.png' | wc -l)" -eq 9
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts/p09')
+          from coherence_common import CAPTURES, EXPECTED_CAPTURES
+          existing = {path.name for path in CAPTURES.glob('P09-T*.png') if path.is_file()}
+          assert existing == EXPECTED_CAPTURES, {'missing': sorted(EXPECTED_CAPTURES-existing), 'unexpected': sorted(existing-EXPECTED_CAPTURES)}
+          PY
 
       - name: Run P09-T026 exact-head evidence coherence
         shell: bash
@@ -213,7 +220,9 @@ jobs:
           set -euo pipefail
           python3 scripts/p09/validate.py --case P09-T026
           python3 - <<'PY'
-          import json, subprocess
+          import json, subprocess, sys
+          sys.path.insert(0, 'scripts/p09')
+          from coherence_common import EXPECTED_CAPTURES
           data = json.load(open('artifacts/v10/P09/results/P09-T026.json', encoding='utf-8'))
           head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           assert data['implementation_commit'] == head, (data['implementation_commit'], head)
@@ -222,7 +231,7 @@ jobs:
           obs = data['observations']
           assert obs['input_evidence_count'] == 25, obs
           assert obs['same_exact_head'] is True, obs
-          assert obs['capture_count'] == 9, obs
+          assert obs['capture_count'] == len(EXPECTED_CAPTURES), obs
           assert set(obs['producer_run_ids']) == {
               'P09 Files Contract',
               'P09 Real Files and ClamAV Integration',

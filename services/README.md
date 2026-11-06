@@ -13,4 +13,4 @@ Target command paths are fixed by the Master Plan:
 - `services/platformapi/cmd/operationsmonitor`
 - `services/logreceiver/cmd/server`
 
-P00 establishes this boundary only. Service implementation begins in its owning engineering/business nodes. No legacy GoJet service source may be imported.
+These executables are built into the native payload. Their current installation and acceptance status is documented in [P21 status](../docs/p21/STATUS.md). No legacy GoJet service source may be imported.

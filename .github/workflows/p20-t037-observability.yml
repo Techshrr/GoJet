@@ -198,6 +198,7 @@ jobs:
             scripts/p20/authority_cases.py \
             scripts/p20/evidence_index.py \
             scripts/p20/defect_cases.py
+          python3 -m unittest discover -s scripts/p20 -p 'test_release_candidate*.py'
           python3 scripts/p20/validate_contract.py > /tmp/p20-contract.json
           python3 - <<'PY'
           import json, os
@@ -209,8 +210,12 @@ jobs:
           import sys
           from pathlib import Path
           sys.path.insert(0, 'scripts/p20')
-          from candidate_phase import verify
-          verify(data, Path.cwd(), os.environ['EXACT_HEAD'])
+          from regression_phase import verify_execution
+          scope = verify_execution(data, Path.cwd(), os.environ['EXACT_HEAD'])
+          authority = Path('artifacts/v10/P20/candidate-authority')
+          authority.mkdir(parents=True, exist_ok=True)
+          (authority / 'execution-scope.json').write_text(json.dumps(scope, indent=2) + '\n')
+          print(json.dumps(scope, sort_keys=True))
           assert data['frozen_contract_preserved'] is True and data['merge_authoritative'] is False, data
           PY
 

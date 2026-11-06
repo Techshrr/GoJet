@@ -14,4 +14,4 @@ Frozen GoJet V10 shared package boundaries:
 
 `tokens` is the authoritative generated token package. Business apps must consume shared tokens/UI/API-client contracts rather than creating private design systems or transport clients.
 
-P00 establishes package ownership only; implementation begins in later nodes.
+The shared implementations live in these packages. Generated assets consumed by multiple runtime surfaces must remain synchronized with their source contracts.

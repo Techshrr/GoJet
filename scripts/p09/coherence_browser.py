@@ -1,4 +1,5 @@
 from coherence_common import *
+from protected_installer_evidence import validate_handoff
 
 def validate_browser(cases: dict[str, dict[str, Any]], errors: list[str]) -> dict[str, Any]:
     t021, t022, t023, t024, t025 = (details(cases.get(f"P09-T{i:03d}", {})) for i in range(21, 26))
@@ -17,9 +18,10 @@ def validate_browser(cases: dict[str, dict[str, Any]], errors: list[str]) -> dic
                 req(layout.get("root_overflow_px") == 0 and layout.get("body_overflow_px") == 0 and layout.get("clipped_required_controls_or_text") == [] and layout.get("overflowing_elements") == [], f"T023 {name} {surface} layout failure: {layout}", errors)
             declared.update([record.get("workspace_capture"), record.get("public_capture")])
     req(t023.get("root_body_overflow_zero") is True and t023.get("clipped_required_content") is False, "T023 summary drift", errors)
-    req(t024.get("admin_route") == "/admin/platform/storage" and t024.get("admin_state") == "healthy" and t024.get("fault_installer") == {"status": 503, "state": "hard-failure"} and t024.get("p17_completion_claimed") is False and t024.get("p22_completion_claimed") is False and t024.get("private_dependency_detail_leaked") is False, f"T024 handoff drift: {t024}", errors)
-    installer = t024.get("installer", {})
-    req(set(installer) == {"/install/environment", "/install/services", "/install/health"} and all(value == {"status": 200, "state": "step-pass"} for value in installer.values()), f"T024 installer routes drift: {installer}", errors)
+    try:
+        validate_handoff(t024)
+    except ValueError as error:
+        errors.append(str(error))
     req(t025.get("viewport") == {"width": 320, "height": 800} and t025.get("reduced_motion") is True and t025.get("color_only_safety_meaning") is False, f"T025 accessibility summary drift: {t025}", errors)
     req(isinstance(t025.get("keyboard_tabs_to_publish"), int) and 1 <= t025["keyboard_tabs_to_publish"] <= 60 and nested(t025, "focus", "active") is True, f"T025 keyboard/focus drift: {t025.get('focus')}", errors)
     states = t025.get("safety_states", {})

@@ -1,0 +1,50 @@
+{
+  "accountable_role": "Release Engineer",
+  "approved_at": "2026-11-06T11:21:56Z",
+  "approved_by": "Codex (owner-delegated Release Engineer)",
+  "archive_sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542",
+  "authorization": {
+    "delegated_role": "Release Engineer",
+    "instruction": "G11 你批准吧。",
+    "scope": "Approve G11 for the current candidate and proceed to P22 on the owner-provided temporary test host.",
+    "source": "Owner instruction in this conversation on 2026-11-06"
+  },
+  "decision": "PASS",
+  "evidence_index_sha256": "5715b88dc940c0eb8e5161f6a25a0f115395661e9a3050e13885a32810c0e5c8",
+  "g12_approved": false,
+  "g13_approved": false,
+  "hard_failures": [],
+  "installable": false,
+  "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+  "metadata_scope": "installable=false and original preapproval report flags are preserved payload-build metadata, not a live gate decision. This attributed approval is external to the immutable archive; no cryptographic package signature or permanent Release is claimed.",
+  "nonblocking_errata": [
+    {
+      "blocks_g11": false,
+      "disposition": "Use all nine mandatory checks. Correction documented in docs/p21/p22-handoff.md; preserve immutable archive bytes.",
+      "issue": "Text says eight checks; implementation and strict snapshots require nine, including host.",
+      "path": "runbooks/install.md section 3"
+    }
+  ],
+  "p21_all_cases_accepted": true,
+  "p22_entry_authorized": true,
+  "production_authorized": false,
+  "reason": "All eighteen P21 cases accepted after review of the native implementation, exact immutable candidate, twenty-seven hash-verified evidence files, supplemental version refusals and documented scope. No G11 hard failure remains.",
+  "remaining_scope": [
+    "G12 clean-host installation, eight-unit restart/reboot and recovery evidence",
+    "G13 real external-provider and production/rollback acceptance, separately authorized",
+    "Archive retention expires 2026-12-06; no permanent Release published"
+  ],
+  "review_checklist_sha256": "0fe678f7d2e4ffdb015c3b7a47b5d92979682f4f11f7e6fe740fb9443966117d",
+  "schema": "gojet.g11-decision.v1",
+  "signature": {
+    "capacity": "Owner-delegated Release Engineer",
+    "cryptographic": false,
+    "independent_human_review": false,
+    "signed_at": "2026-11-06T11:21:56Z",
+    "signer": "Codex",
+    "statement": "I approve the identified candidate for G11 within the recorded P21 scope under the owner delegation. This is not G12/G13 approval or production authorization.",
+    "type": "attributed-electronic-approval"
+  },
+  "signed": true,
+  "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d"
+}

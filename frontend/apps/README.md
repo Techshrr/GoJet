@@ -9,4 +9,4 @@ Frozen application boundaries:
 - `workspace` — customer Workspace
 - `admin` — governance/Admin
 
-P00 freezes these boundaries. Application scaffolding and dependencies are introduced by the owning nodes after P00 passes.
+The four applications are implemented in these directories. Their compiled static output is included in the native payload; installation acceptance is tracked in [P21 status](../../docs/p21/STATUS.md).
