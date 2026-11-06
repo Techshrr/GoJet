@@ -1,0 +1,18 @@
+{
+  "architecture": "amd64",
+  "go": "1.26.5",
+  "isolated_ci": true,
+  "job": 127157041068,
+  "native_dependencies": true,
+  "node_build_only": "24.19.0",
+  "observed_os": "Ubuntu 24.04.5",
+  "production": false,
+  "provider": "GitHub Actions",
+  "real_systemd_pid1": true,
+  "run": 42001339781,
+  "runner_image": "20261025.353.1",
+  "runner_label": "ubuntu-24.04",
+  "schema": "gojet.g11-environment.v1",
+  "source": "270e8459f2862525fd8e75db7a375b4346da4dcf",
+  "target_ubuntu_24_04_4_verified": false
+}

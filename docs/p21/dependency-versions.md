@@ -1,5 +1,14 @@
 # 固定候选的真实依赖版本拒绝验证
 
+## 当前候选验证（2026-11-06）
+
+候选源码 `32ea29d766b0ac0790964517ce4e220a1208bf0d` 的九项基线、真实 PHP 8.1 CLI/FPM 与 MariaDB 10.11 拒绝，
+已由 [CI 42164219962](https://github.com/Techshrr/GoJet/actions/runs/42164219962) 验证。其他八项健康，恢复后再次通过；没有重建候选或改写安装权威。
+[原始报告与下载验证](../../artifacts/v10/P21/host-preflight/dependency-versions/validation.json)绑定归档摘要
+`7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542`。
+
+以下为前序 270e845 候选的设计与独立记录，其摘要和原始报告保持不变。
+
 本批只增加测试与证据，不修改安装器、服务或已固定的 330 成员候选包。
 新工作流从 artifacts/v10/P21/candidate/validation.json 读取精确 run、artifact 和归档摘要，
 下载原包后校验归档及 manifest，调用的是包内 installer/bin/preflight.php。

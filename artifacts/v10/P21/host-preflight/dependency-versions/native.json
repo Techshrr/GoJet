@@ -1,0 +1,110 @@
+{
+  "schema": "gojet.native-dependency-version-matrix.v1",
+  "candidate_source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "test_source": "53b1c61dc5491ef9d2c5ed1052b43a8860b9d33b",
+  "archive_sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542",
+  "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+  "baseline": {
+    "package": true,
+    "host": true,
+    "systemd": true,
+    "nginx": true,
+    "php": true,
+    "mysql": true,
+    "redis": true,
+    "storage": true,
+    "clamav": true
+  },
+  "real_unsupported_cli": {
+    "version": "8.1.2-1ubuntu2.28",
+    "posix": true,
+    "mysql": true,
+    "openssl": true
+  },
+  "real_unsupported_fpm": "PHP 8.1.2-1ubuntu2.28 (fpm-fcgi) (built: Oct 19 2026 18:54:45)",
+  "real_unsupported_database": "10.11.14-MariaDB-0ubuntu0.24.04.1",
+  "php_cli_rejected": true,
+  "php_fpm_rejected": true,
+  "unsupported_database_rejected": true,
+  "all_other_checks_remain_healthy": true,
+  "database_connection_and_settings_verified": true,
+  "unsupported_database_not_migrated": true,
+  "fpm_inode_mode_bytes_and_live_pid_preserved": true,
+  "original_dependencies_recovered": true,
+  "installation_authority_unchanged": true,
+  "final_lock_written": false,
+  "version_outputs_simulated": false,
+  "candidate_rebuilt": false,
+  "production_deployment": false,
+  "fixture_provenance": {
+    "schema": "gojet.dependency-version-fixtures.v1",
+    "signed_ubuntu_apt_metadata": true,
+    "debian_maintainer_scripts_executed": false,
+    "host_packages_replaced": false,
+    "packages": [
+      {
+        "package": "php8.1-cli",
+        "version": "8.1.2-1ubuntu2.28",
+        "distribution": "jammy",
+        "architecture": "amd64",
+        "sha256": "5a2277b95d8136e9c401f7c8faa962e0661993d4ff5c6044250ff4e6c4063657"
+      },
+      {
+        "package": "php8.1-common",
+        "version": "8.1.2-1ubuntu2.28",
+        "distribution": "jammy",
+        "architecture": "amd64",
+        "sha256": "8e87023a5bb096f3774496451664397381ac787403f733f1e1c7df296dc96c90"
+      },
+      {
+        "package": "php8.1-fpm",
+        "version": "8.1.2-1ubuntu2.28",
+        "distribution": "jammy",
+        "architecture": "amd64",
+        "sha256": "40c9e8f870750ce689865fca601f3f017788c574b92451bcdd90e5a421531820"
+      },
+      {
+        "package": "php8.1-mysql",
+        "version": "8.1.2-1ubuntu2.28",
+        "distribution": "jammy",
+        "architecture": "amd64",
+        "sha256": "994a06259845b56aa79c176a0ba8805c080ab63482fc94cba86092ae5fb2b9a6"
+      },
+      {
+        "package": "libmariadb3",
+        "version": "1:10.11.14-0ubuntu0.24.04.1",
+        "distribution": "noble",
+        "architecture": "amd64",
+        "sha256": "1608427381a08eefd7e5b1c4cf5b4f360cbb7296f489989c2453ec26989a9fa5"
+      },
+      {
+        "package": "libnuma1",
+        "version": "2.0.18-1ubuntu0.24.04.1",
+        "distribution": "noble",
+        "architecture": "amd64",
+        "sha256": "f333b8edf6f0b705c19f2a67008194df66f7aab0fa2350dc98510569a033ff29"
+      },
+      {
+        "package": "liburing2",
+        "version": "2.5-1build1",
+        "distribution": "noble",
+        "architecture": "amd64",
+        "sha256": "c2aef62accee92a06263c3ad4ef46132c13e409b54296c44792a20491830a7b0"
+      },
+      {
+        "package": "mariadb-client-core",
+        "version": "1:10.11.14-0ubuntu0.24.04.1",
+        "distribution": "noble",
+        "architecture": "amd64",
+        "sha256": "b52694e010f55841f97b6bbf34bf88f7d1a2b47e59fae3e601da0f1f99ae4afb"
+      },
+      {
+        "package": "mariadb-server-core",
+        "version": "1:10.11.14-0ubuntu0.24.04.1",
+        "distribution": "noble",
+        "architecture": "amd64",
+        "sha256": "851dee13f004199973a044a3449c4ce55406e3065896998a2ed02e1a9d4f9fdb"
+      }
+    ]
+  }
+}

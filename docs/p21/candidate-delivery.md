@@ -1,5 +1,15 @@
 # P21 候选交付与证据复核
 
+## 当前候选（2026-11-06）
+
+源码 `32ea29d766b0ac0790964517ce4e220a1208bf0d`；归档包含 331 个成员，新增原生主机支持/容量检查与包内 PHP 引用完整性校验。
+归档 SHA-256：`7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542`。
+
+[完整原生验证](../../artifacts/v10/P21/host-preflight/validation.json)和[真实版本拒绝验证](../../artifacts/v10/P21/host-preflight/dependency-versions/validation.json)均通过，实际附件已下载核验，candidate.json 独立重建一致。
+[18 项工程覆盖核对](contract-coverage.md)已完成；G11 正式批准仍待完成，未部署生产。当前 CI 归档保留至 2026-12-06，未发布永久正式 Release。
+
+## 前序候选记录：270e845
+
 本批实现源码为 `270e8459f2862525fd8e75db7a375b4346da4dcf`。
 发布手册、归档及证据索引作为一个批次验证，不改变 Go/PHP 业务逻辑、数据库迁移或前端交互。
 

@@ -1,43 +1,26 @@
 # P21 — Native Release Package
 
-Status: **PENDING — COMPLETE CONTRACT COVERAGE AND G11 REVIEW**
+Status: **ENGINEERING COVERAGE REVIEW COMPLETE — ACCOUNTABLE G11 APPROVAL PENDING**
 
-Candidate `10.0.0-rc.1`, source `270e8459f2862525fd8e75db7a375b4346da4dcf`.
-Archive SHA-256: `e8abdc99ea137f41ba0e5df8a3ac0bf7fe38f65acfc9de24b0d3fd51f013e8d9`.
+Candidate `10.0.0-rc.1`, source `32ea29d766b0ac0790964517ce4e220a1208bf0d`.
+Archive SHA-256: `7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542`.
 
-The native install/upgrade/recovery implementation and four packaged operator runbooks are delivered.
-[Native payload run 42001339781](https://github.com/Techshrr/GoJet/actions/runs/42001339781)
-succeeded on its first attempt, including eight services, actual MySQL recovery, 209 risk links,
-ten incompatible-candidate refusals and fifteen interruption/recovery stages.
-The downloaded artifact was independently verified; the candidate index reproduces exactly.
+The missing OS/CPU/capacity preflight is implemented through native execution, completion and upgrade health, with the ninth check displayed in desktop/mobile Installer views. The initial packaging omission is corrected; archive assembly and read-back reject missing PHP includes.
 
-- [Immutable candidate and eight original report bindings](candidate/candidate.json)
-- [Full package inventory](candidate/manifest.json)
-- [Independent download verification](candidate/download-verification.json)
-- [Run/job/artifact bindings and limitations](candidate/validation.json)
-- [G11 evidence index](../gates/G11/native-package/evidence-index.json)
-- [Eighteen-case review navigation](../gates/G11/native-package/review-checklist.json)
-- [Packaged Chinese runbooks](../../../docs/release/README.md)
+[Native payload run 42161906247](https://github.com/Techshrr/GoJet/actions/runs/42161906247) passed all steps: 16 Python tests, native compilation/Go regression, four frontend builds, six host failures, continuous installation, eight services, MySQL/configuration recovery, 209 risk links, ten incompatible candidates and fifteen interruption/recovery stages. Actual archive bytes were independently downloaded and verified; the candidate index reproduces exactly.
 
-Remaining P21 work is complete contract coverage review and G11 acceptance.
-The previously missing concrete version-refusal evidence is now supplied by
-[native dependency run 42075233647](https://github.com/Techshrr/GoJet/actions/runs/42075233647)
-on test source `a49023029aedcc2c915dbdf8d0f54d34d400c79b`, using this exact unchanged archive.
-Real PHP 8.1 CLI/FPM and MariaDB 10.11 are refused with the other seven checks healthy;
-original readiness, FPM identity and installation authority are preserved. The artifact was
-independently downloaded and verified. See [the bound report](dependency-versions/validation.json).
-This is a concrete incompatibility matrix, not exhaustive version certification.
-Automated results are not eighteen case approvals. Preserve original component-scope false flags and evidence
-provenance. The same-binary transition fixture does not certify arbitrary historical releases.
-No requirement for two prior formal releases is added.
+[Dependency run 42164219962](https://github.com/Techshrr/GoJet/actions/runs/42164219962), test source `53b1c61dc5491ef9d2c5ed1052b43a8860b9d33b`, passed real PHP 8.1 CLI/FPM and MariaDB 10.11 refusals against this exact archive. All other eight checks stay healthy, original readiness and authority are preserved, and the downloaded report hash was verified.
 
-The master plan assigns G11 to **Release Engineer**, and the G1 architecture review to
-**Platform Lead**. QA and Security Reviewer belong to the relevant P22/G12/G13 roles;
-they are not an invented four-party G11 approval prerequisite. Reviewer identity and immutable
-source/archive/evidence bindings must be explicit; no role signature is inferred here.
+- [Current immutable candidate and original report bindings](host-preflight/candidate.json)
+- [Archive/download/CI validation](host-preflight/validation.json)
+- [Current-archive dependency versions](host-preflight/dependency-versions/validation.json)
+- [Component reports and unchanged-source bindings](host-preflight/components/index.json)
+- [Eighteen-case engineering review](../../../docs/p21/contract-coverage.md)
+- [G11 evidence and accountable review checklist](../gates/G11/native-package/review-checklist.json)
+- [Original attempt and correction](host-preflight/review.json)
 
-P22 owns the specified clean-host/reboot and owner-controlled production validation.
-CI ran Ubuntu 24.04.5, not the requested 24.04.4 target. The package remains installable=false;
-no production deployment or G11 approval is claimed. The CI archive expires 2026-12-05 and has
-not been published as a permanent formal Release. Historical PR progress is preserved in
-[the separate checkpoint](history/pr-207-before-candidate-delivery.md).
+The engineering coverage review is complete; this is not eighteen accountable approvals. G11 remains pending with Release Engineer. G1 belongs to Platform Lead; P22 roles retain their specified responsibilities. No signature or approval is fabricated.
+
+Original reports retain their component-scope false flags. The same-binary upgrade fixture does not certify arbitrary historical releases; the concrete dependency matrix is not exhaustive version certification. P21 runbook static validation is complete; clean-host execution, the specified Ubuntu 24.04.4 target/reboot and real external-provider/production acceptance remain P22 work. CI used Ubuntu 24.04.5. The package remains installable=false, no production deployment or permanent formal release is claimed, and the current archive expires 2026-12-06.
+
+[Previous review](history/review-before-host-preflight.txt) and [previous G11 index](history/g11-before-host-preflight/evidence-index.json) preserve earlier evidence without occupying the implementation mainline.

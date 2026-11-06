@@ -1,0 +1,29 @@
+{
+  "archive_sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542",
+  "artifact": {
+    "bytes": 1415,
+    "downloaded_and_verified": true,
+    "expires_at": "2026-12-06T04:51:01Z",
+    "id": 13478601698,
+    "zip_sha256": "5001f12a490395e4fcfaae907454d3a2e78cbff58a1959f118186b0fba032e24"
+  },
+  "candidate_source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "conclusion": "success",
+  "g11_approved": false,
+  "job": 127716779774,
+  "limits": [
+    "Not exhaustive version enumeration or MariaDB support certification.",
+    "No candidate rebuild; original reports and historical attempts retain their source and scope."
+  ],
+  "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+  "production_deployed": false,
+  "report": "native.json",
+  "report_sha256": "cff0c23dd0abe15538a0b8e146417686abdb2be38e38f3d687ff06e350528015",
+  "run": 42164219962,
+  "run_attempt": 1,
+  "schema": "gojet.dependency-version-validation.v1",
+  "scope": "Concrete real PHP CLI/FPM and MariaDB refusals on the immutable nine-check candidate, all other eight checks healthy",
+  "test_source": "53b1c61dc5491ef9d2c5ed1052b43a8860b9d33b",
+  "url": "https://github.com/Techshrr/GoJet/actions/runs/42164219962",
+  "verified_date": "2026-11-06"
+}
