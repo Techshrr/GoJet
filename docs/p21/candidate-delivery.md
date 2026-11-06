@@ -8,6 +8,8 @@
 [完整原生验证](../../artifacts/v10/P21/host-preflight/validation.json)和[真实版本拒绝验证](../../artifacts/v10/P21/host-preflight/dependency-versions/validation.json)均通过，实际附件已下载核验，candidate.json 独立重建一致。
 [18 项工程覆盖核对](contract-coverage.md)已完成；G11 正式批准仍待完成，未部署生产。当前 CI 归档保留至 2026-12-06，未发布永久正式 Release。
 
+当前候选的 G11 审查、目标机输入及随包手册“八项/九项”文字勘误见[交接说明](p22-handoff.md)。
+
 ## 前序候选记录：270e845
 
 本批实现源码为 `270e8459f2862525fd8e75db7a375b4346da4dcf`。

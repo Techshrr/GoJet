@@ -2,6 +2,8 @@
 
 更新：2026-11-06。分支：`develop/p21-native-release-package`；开发 PR：[#207](https://github.com/Techshrr/GoJet/pull/207)。
 P21/G11 尚未关闭，包保持 `installable=false`，未部署生产。
+工程实现与证据已具备正式审查条件；PR 转为待审，G11 仍需可归属的批准记录。
+下一步环境输入与连续验收顺序见[交接说明](p22-handoff.md)。当前未配置 P22 目标机，尚未执行目标机部署或重启。
 
 最新已验证候选源码：`32ea29d766b0ac0790964517ce4e220a1208bf0d`。
 [完整原生 CI 42161906247](https://github.com/Techshrr/GoJet/actions/runs/42161906247) 成功，实际新包已独立下载复核。
