@@ -49,7 +49,7 @@ class CandidateTests(unittest.TestCase):
         reports['risk-projection-recovery.json'] = json.loads((ROOT/'artifacts/v10/P21/upgrade/risk-projection-recovery.json').read_text())
         for name in ('target-integrity.json', 'installation-preparation.json'):
             reports[name].update(archive_sha256=result['archive_sha256'], manifest_sha256=manifest_sha)
-        reports['dependency-preflight.json']['baseline'] = {str(n): True for n in range(8)}
+        reports['dependency-preflight.json']['baseline'] = {name: True for name in ('package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav')}
         for name, value in reports.items(): (root/name).write_bytes(encode(value))
         return archive
 
@@ -78,7 +78,7 @@ class CandidateTests(unittest.TestCase):
             ('installation-preparation.json', lambda r: r['upgrade']['incompatible_candidates_rejected_before_mutation'].pop()),
             ('installation-preparation.json', lambda r: r['upgrade'].update(production_acceptance=True)),
             ('risk-projection-recovery.json', lambda r: r.update(links=100)),
-            ('dependency-preflight.json', lambda r: r['baseline'].update({'0': False})),
+            ('dependency-preflight.json', lambda r: r['baseline'].update({'host': False})),
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); archive = self.fixture(root)

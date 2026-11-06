@@ -26,7 +26,7 @@ REQUIRED = {
         'private_paths_not_served', 'certificate_verified_product_tls', 'wrong_host_sni_rejected'),
     'dependency-preflight.json': ('real_native_dependencies', 'stopped_nginx_fpm_rejected',
         'unreachable_mysql_redis_rejected', 'bad_database_redis_credentials_rejected',
-        'missing_clamav_rejected', 'unsafe_storage_rejected', 'dependencies_restored'),
+        'missing_clamav_rejected', 'unsafe_storage_rejected', 'dependencies_restored', 'native_host_boundaries_verified'),
     'installation-preparation.json': ('single_command_native_apply',
         'continuous_first_install_browser_to_retirement', 'continuous_installation_without_state_fixtures',
         'eight_packaged_units_started', 'eight_daemons_nonroot', 'eight_daemons_no_restart',
@@ -124,7 +124,7 @@ def finalize(archive, build_report, source, context):
     require(upgrade.get('production_acceptance') is False and risk.get('production_acceptance') is False,
             'unexpected production claim')
     baseline = reports['dependency-preflight.json']['baseline']
-    require(isinstance(baseline, dict) and len(baseline) == 8 and all(v is True for v in baseline.values()), 'incomplete dependency baseline')
+    require(isinstance(baseline, dict) and set(baseline) == {'package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'} and all(v is True for v in baseline.values()), 'incomplete dependency baseline')
     return {'schema': 'gojet.release-candidate-evidence.v1', 'source': source, 'version': manifest['version'],
         'producer': context, 'archive': {'name': archive.name, 'sha256': archive_sha, 'bytes': archive.stat().st_size,
             'members': len(files), 'manifest_sha256': manifest_sha, 'sbom_sha256': digest(files['sbom.cdx.json']),

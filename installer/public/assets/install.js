@@ -13,7 +13,7 @@
   const preflight = document.querySelector('#installer-preflight');
   const preflightSummary = document.querySelector('#preflight-summary');
   const preflightChecks = document.querySelector('#preflight-checks');
-  const checkNames = {package: 'Release integrity', systemd: 'Service manager', nginx: 'Nginx',
+  const checkNames = {package: 'Release integrity', host: 'Supported host and free space', systemd: 'Service manager', nginx: 'Nginx',
     php: 'PHP', mysql: 'MySQL', redis: 'Redis', storage: 'File storage', clamav: 'ClamAV'};
   const openAdmin = document.querySelector('#installer-open-admin');
   const openSite = document.querySelector('#installer-open-site');

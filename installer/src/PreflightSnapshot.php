@@ -6,7 +6,7 @@ require_once __DIR__.'/CompletionLock.php';
 /** Sanitized, short-lived observation, never permission to apply or complete. */
 final class PreflightSnapshot
 {
-    private const CHECKS = ['package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'];
+    private const CHECKS = ['package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'];
     private const TTL = 120;
     private static function authority(string $directory): void
     {

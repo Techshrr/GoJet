@@ -248,7 +248,7 @@ def run_scheduled_apply(release, authority, account, state, destination, source)
                 evidence['dependencies'] = [name for line in journal.splitlines()
                     if line.startswith('Web apply dependency failures: ')
                     for name in line.removeprefix('Web apply dependency failures: ').split(',')
-                    if name in {'package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'}][:8]
+                    if name in {'package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'}][:9]
                 evidence['locations'] = re.findall(r'^Web apply failure location: ([A-Za-z]+\.php:[0-9]+)$', journal, re.M)[:4]
                 evidence['file_probe'] = diagnose_scheduled_file_probe(release, destination, units[names[0]])
                 raise AssertionError('Scheduled root installation failed: '+json.dumps(evidence, sort_keys=True))

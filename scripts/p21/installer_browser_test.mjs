@@ -127,7 +127,7 @@ try {
         state_sha256: createHash('sha256').update(cfg.state).digest('hex'),
         updated_at: Math.floor(Date.now() / 1000) - age, phase, status}), {mode: 0o644});
     }
-    const checks = {package: true, systemd: true, nginx: true, php: true, mysql: true, redis: true, storage: true, clamav: true};
+    const checks = {package: true, host: true, systemd: true, nginx: true, php: true, mysql: true, redis: true, storage: true, clamav: true};
     function publishFixture(changes = {}, age = 0) {
       // Root-owned snapshot fixture: browser rendering/HTTP read only, not a native probe claim.
       fs.writeFileSync(snapshot, JSON.stringify({schema: 1,
@@ -170,9 +170,13 @@ try {
     }
     publishFixture(); await refreshChecks();
     assert.match(await page.locator('#preflight-summary').textContent(), /^All dependency checks passed/);
-    assert.equal(await page.locator('#preflight-checks dd').count(), 8);
+    assert.equal(await page.locator('#preflight-checks dd').count(), 9);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({path: path.join(output, label+'-preflight-ready.png'), fullPage: true});
+    publishFixture({host: false}); await refreshChecks();
+    assert.match(await page.locator('#preflight-summary').textContent(), /^Some dependency checks failed/);
+    assert.equal(await page.locator('#preflight-checks div', {hasText: 'Supported host and free space'}).locator('dd').textContent(), 'Failed');
+    await page.screenshot({path: path.join(output, label+'-preflight-host-failed.png'), fullPage: true});
     publishFixture({redis: false}); await refreshChecks();
     assert.match(await page.locator('#preflight-summary').textContent(), /^Some dependency checks failed/);
     assert.equal(await page.locator('#preflight-checks dd', {hasText: 'Failed'}).count(), 1);

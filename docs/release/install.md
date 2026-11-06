@@ -4,7 +4,7 @@
 
 ## 1. 主机与依赖准备
 
-验证基线为 Ubuntu 24.04、Linux amd64、systemd、PHP 8.3 CLI/FPM（posix、PDO MySQL 等必需扩展）、MySQL 8、Redis、Nginx、ClamAV。生产主机无需 Node、pnpm 或容器。操作员负责依赖安装、数据库权限、DNS、证书和容量；安装器不会代办这些事项。
+验证基线为 Ubuntu 24.04、Linux amd64、systemd、PHP 8.3 CLI/FPM（posix、PDO MySQL 等必需扩展）、MySQL 8、Redis、Nginx、ClamAV。生产主机无需 Node、pnpm 或容器。安装器明确拒绝非 Ubuntu 24.04、非 Linux x86_64 或非 64 位 PHP；发布目录所在文件系统必须还能容纳一份完整解包内容，存储根目录、quarantine 和 published 各自所在文件系统必须有可用空间。此检查不代替业务容量规划，也不承诺备份数据库所需空间。操作员负责依赖安装、数据库权限、DNS、证书和业务容量；安装器不会代办这些事项。
 
 MySQL、Redis 使用配置指定的本机端口和账户。专用数据库必须适合首次初始化；数据库初始化账户需要该库的迁移权限。配置和预检会验证 MySQL 设置。不要复用 CI 的数据库、口令或关闭生产检查。确认 Nginx 标准 conf.d 包含关系、php8.3-fpm 标准池加载关系、80/443 或批准端口无冲突；现有服务、站点或未知 systemd 覆盖会触发拒绝，先解决冲突而不是覆盖。
 

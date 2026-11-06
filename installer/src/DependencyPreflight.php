@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace GoJet\Installer;
 require_once __DIR__.'/PackageIntegrity.php';
 require_once __DIR__.'/UnprivilegedProbe.php';
+require_once __DIR__.'/HostPreflight.php';
 
 /** Native Ubuntu 24.04 dependency probes; fixed argv only, no apply or final lock. */
 final class DependencyPreflight
@@ -103,6 +104,7 @@ final class DependencyPreflight
         if (!is_int($p['redis']['db']) || $p['redis']['db'] < 0 || $p['redis']['db'] > 15) { throw new \RuntimeException('Invalid Redis database'); }
         $checks = [];
         $checks['package'] = self::probe(fn() => PackageIntegrity::verify($p['release'], $p['manifest_sha256'], $p['source'])['integrity_verified']);
+        $checks['host'] = $checks['package'] && self::probe(fn() => HostPreflight::check($p['release'], $p['storage']));
         $checks['systemd'] = self::probe(function (): bool {
             $r = self::process(['/usr/bin/systemctl', 'show', '--property=Version', '--value']);
             return $r['code'] === 0 && preg_match('/^[0-9]+/', trim($r['out'])) === 1 && is_dir('/run/systemd/system');

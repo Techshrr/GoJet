@@ -16,7 +16,7 @@ final class NativeDependencyFailure extends \RuntimeException
     public function __construct(array $checks)
     {
         $failed = [];
-        foreach (['package', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'] as $name) {
+        foreach (['package', 'host', 'systemd', 'nginx', 'php', 'mysql', 'redis', 'storage', 'clamav'] as $name) {
             if (($checks[$name] ?? false) !== true) { $failed[] = $name; }
         }
         $this->failedChecks = $failed;

@@ -54,6 +54,7 @@ jobs:
           python3 scripts/p21/validate_contract.py
           python3 -m unittest discover -s scripts/p21 -p 'test_*.py'
           php8.3 scripts/p21/php/upgrade_compatibility_test.php
+          php8.3 scripts/p21/php/host_preflight_test.php
       - name: Compile and verify native executables
         env:
           P21_KEEP_BINARIES: '1'

@@ -116,7 +116,7 @@ def verify_journey(root, release, source, entry, origin, token, profile):
         def checked():
             if not finished('preflight', authority/'preflight.json'): return False
             value = json.loads((authority/'preflight.json').read_text())
-            assert value['checks'] is not None and len(value['checks']) == 8 and all(value['checks'].values())
+            assert value['checks'] is not None and len(value['checks']) == 9 and all(value['checks'].values())
             return True
         wait_for(checked, 'Scheduled preflight')
         send(dict(root_approved=True)); expect('approved')
