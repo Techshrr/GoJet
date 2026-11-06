@@ -1,10 +1,12 @@
 {
   "allowlist_and_denylist": "scripts/p21/archive.py",
+  "approval_record": "decision.json",
   "archive_independently_downloaded_and_verified": true,
   "archive_members": 331,
   "candidate": "artifacts/v10/P21/host-preflight/candidate.json",
-  "full_g11_approval": false,
+  "full_g11_approval": true,
   "inventory": "artifacts/v10/P21/host-preflight/manifest.json",
+  "original_reports_are_preapproval_snapshots": true,
   "previous_evidence_index": "artifacts/v10/P21/history/g11-before-host-preflight/evidence-index.json",
   "reports": {
     "artifacts/v10/P21/host-preflight/candidate.json": {

@@ -1,6 +1,6 @@
 # P21 — Native Release Package
 
-Status: **ENGINEERING COVERAGE REVIEW COMPLETE — ACCOUNTABLE G11 APPROVAL PENDING**
+Status: **G11 PASS — OWNER-DELEGATED ACCOUNTABLE APPROVAL RECORDED**
 
 Candidate `10.0.0-rc.1`, source `32ea29d766b0ac0790964517ce4e220a1208bf0d`.
 Archive SHA-256: `7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542`.
@@ -19,8 +19,8 @@ The missing OS/CPU/capacity preflight is implemented through native execution, c
 - [G11 evidence and accountable review checklist](../gates/G11/native-package/review-checklist.json)
 - [Original attempt and correction](host-preflight/review.json)
 
-The engineering coverage review is complete; this is not eighteen accountable approvals. G11 remains pending with Release Engineer. G1 belongs to Platform Lead; P22 roles retain their specified responsibilities. No signature or approval is fabricated.
+All eighteen P21 cases are accepted within their recorded scope. The owner explicitly delegated G11 approval to Codex; [decision.json](../gates/G11/native-package/decision.json) records the Release Engineer electronic approval, timestamp and exact evidence bindings. This is attributed AI approval under owner delegation, not independent human review or a cryptographic signature. G1 and P22 roles retain their specified responsibilities.
 
-Original reports retain their component-scope false flags. The same-binary upgrade fixture does not certify arbitrary historical releases; the concrete dependency matrix is not exhaustive version certification. P21 runbook static validation is complete; clean-host execution, the specified Ubuntu 24.04.4 target/reboot and real external-provider/production acceptance remain P22 work. CI used Ubuntu 24.04.5. The package remains installable=false, no production deployment or permanent formal release is claimed, and the current archive expires 2026-12-06.
+Original reports retain their component-scope false flags. The same-binary upgrade fixture does not certify arbitrary historical releases; the concrete dependency matrix is not exhaustive version certification. P21 runbook static validation is complete; clean-host execution, the supported Ubuntu 24.04 LTS target/reboot and real external-provider/production acceptance remain P22 work. CI used Ubuntu 24.04.5. The package remains installable=false, no production deployment or permanent formal release is claimed, and the current archive expires 2026-12-06.
 
 [Previous review](history/review-before-host-preflight.txt) and [previous G11 index](history/g11-before-host-preflight/evidence-index.json) preserve earlier evidence without occupying the implementation mainline.

@@ -20,3 +20,5 @@ Supplemental unchanged-archive version run: https://github.com/Techshrr/GoJet/ac
 2026-11-06T04:25:23.0716334Z ##[group]Run set -euo pipefail
 2026-11-06T04:41:27.6757178Z ##[group]Run python3 scripts/p21/finalize_candidate.py artifacts/v10/P21/payload/gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz artifacts/v10/P21/build/native-build.json "$GITHUB_SHA"
 2026-11-06T04:41:29.7363413Z ##[group]Run actions/upload-artifact@v4
+
+2026-11-06T11:21:56Z Owner-delegated G11 review: verified all 27 evidence-index file sizes and SHA-256 values, exact 18 frozen case IDs and report references; reviewed native installation/recovery and dependency reports. PASS recorded in decision.json; no payload rebuild or repeat full regression.

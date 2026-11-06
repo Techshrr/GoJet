@@ -1,7 +1,9 @@
 {
   "cases": [
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Exact-source immutable contract check passed in CI.",
       "id": "P21-T001",
       "name": "Frozen entry and release identity",
@@ -11,7 +13,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Nine static executables, version/source identities and hashes verified.",
       "id": "P21-T002",
       "name": "Eight native binaries",
@@ -21,7 +25,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Four actual compiled apps and native routing verified.",
       "id": "P21-T003",
       "name": "Static frontend",
@@ -32,7 +38,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "31 immutable migration entries, build/package catalog and byte hashes match.",
       "id": "P21-T004",
       "name": "Immutable migration catalog",
@@ -43,7 +51,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Native migration and real partial-DDL/missing-schema restoration verified; full case review retains component evidence scope.",
       "id": "P21-T005",
       "name": "Empty database and migration locking",
@@ -55,7 +65,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Archive rejection tests, target extraction and independent read-back verified.",
       "id": "P21-T006",
       "name": "Package allowlist and clean extraction",
@@ -66,7 +78,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Manifest, checksum inventory and SBOM file hashes match actual archive.",
       "id": "P21-T007",
       "name": "Checksum manifest and SBOM",
@@ -77,7 +91,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Eight nonroot units and configuration activation verified; supplementary logging/environment evidence remains bound to its original source.",
       "id": "P21-T008",
       "name": "Native configuration",
@@ -90,7 +106,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Eight-route access/order/session/CSRF/private durable state evidence plus continuous browser-to-root installation; original component false scope flags retained.",
       "id": "P21-T009",
       "name": "Installer access and state",
@@ -103,7 +121,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Nine-check baseline; six native OS/CPU/disk failures; service/permission/protocol failures; real PHP 8.1 CLI/FPM and MariaDB 10.11 refused on this exact archive while the other eight checks stay healthy. Restoration and unchanged authority verified; no exhaustive version claim.",
       "id": "P21-T010",
       "name": "Mandatory dependency preflight",
@@ -115,7 +135,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "TLS/site authority and inherited administrator creation verified.",
       "id": "P21-T011",
       "name": "Site and initial administrator",
@@ -126,7 +148,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Sealed root apply, serialization, replay barriers and nonroot probes verified.",
       "id": "P21-T012",
       "name": "Privileged apply boundary",
@@ -136,7 +160,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Eight-unit activation and health-gated completion verified in isolated CI, not a target-host reboot.",
       "id": "P21-T013",
       "name": "Services health and lock",
@@ -146,7 +172,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "15 interruption stages, real MySQL/file recovery, 209 risk links and 10 incompatible candidates verified; same-binary fixture limitation retained.",
       "id": "P21-T014",
       "name": "Native upgrade and rollback",
@@ -158,7 +186,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Four packaged runbooks, references, shell syntax and tampering rejection verified. P21 static runbook validation is covered; clean-host execution belongs to P22.",
       "id": "P21-T015",
       "name": "Runbooks and support boundary",
@@ -169,7 +199,9 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
       "evidence_scope": "Desktop/mobile TLS/FPM browser evidence covers authentication, configuration, keyboard, ready/failed/stale/unavailable, execution, offline and post-lock states; no overflow or unexpected console errors. Host-failure screenshots visually inspected; snapshots are explicitly fixtures.",
       "id": "P21-T016",
       "name": "Installer browser verification",
@@ -181,8 +213,10 @@
       "technical_review": "coverage-reviewed"
     },
     {
-      "case_acceptance": "pending-accountable-review",
-      "evidence_scope": "331-member archive independently downloaded, hashed and read back; candidate index reproduced exactly. Supplemental components are bound by unchanged Git objects and versions by the exact archive; accountable acceptance is not inferred.",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
+      "evidence_scope": "331-member archive independently downloaded, hashed and read back; candidate index reproduced exactly. Supplemental components are bound by unchanged Git objects and versions by the exact archive; accountable acceptance is recorded separately in decision.json.",
       "id": "P21-T017",
       "name": "Immutable candidate and G11",
       "reports": [
@@ -193,21 +227,24 @@
       "technical_review": "immutable-candidate-verified"
     },
     {
-      "case_acceptance": "pending-accountable-review",
-      "evidence_scope": "Immutable source/archive and complete engineering review evidence bound; Release Engineer accountable decision remains pending.",
+      "accepted_at": "2026-11-06T11:21:56Z",
+      "accepted_by": "Codex (owner-delegated Release Engineer)",
+      "case_acceptance": "accepted",
+      "evidence_scope": "Owner explicitly delegated G11 approval to Codex; the attributed electronic approval binds this source/archive and all eighteen scoped cases.",
       "id": "P21-T018",
       "name": "Accountable closure",
       "reports": [
-        "artifacts/v10/P21/host-preflight/validation.json"
+        "artifacts/v10/P21/host-preflight/validation.json",
+        "artifacts/v10/gates/G11/native-package/decision.json"
       ],
-      "technical_review": "pending-accountable-approval"
+      "technical_review": "accountable-approval-recorded"
     }
   ],
   "engineering_review_completed": true,
   "g11_accountable_role": "Release Engineer",
   "g1_accountable_role": "Platform Lead",
   "production_authorization": false,
-  "purpose": "Engineering coverage review completed; distinct from accountable case/G11 acceptance.",
+  "purpose": "Accountable acceptance of all eighteen P21 cases within their recorded evidence scope; owner-delegated G11 approval, not independent human review or production acceptance.",
   "schema": "gojet.g11-review-checklist.v1",
   "source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
   "technical_coverage_review": "docs/p21/contract-coverage.md"

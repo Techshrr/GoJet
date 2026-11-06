@@ -1,0 +1,129 @@
+{
+  "archive_sha256": "7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542",
+  "candidate_source": "32ea29d766b0ac0790964517ce4e220a1208bf0d",
+  "cases": [
+    {
+      "gate": "G12",
+      "id": "P22-T001",
+      "name": "Clean host and exact archive",
+      "oracle": "Owner-declared blank host observed as Ubuntu 24.04 LTS/amd64/systemd, existing state reviewed; exact G11 archive and manifest hashes verified.",
+      "required_evidence": "host identity, original inventory, archive verification",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T002",
+      "name": "Mandatory preflight refusals",
+      "oracle": "Each of package/host/systemd/nginx/php/mysql/redis/storage/clamav refuses a distinct missing, wrong or unhealthy condition before migration/completion; other checks and restored nine-check baseline recorded.",
+      "required_evidence": "preflight matrix, authority before/after, refusal/recovery results",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T003",
+      "name": "Browser-to-root fresh installation",
+      "oracle": "Real HTTPS browser configuration, root approval and scheduled apply complete without state fixtures or manual code/database patches; empty DB receives immutable migration catalog.",
+      "required_evidence": "browser screenshots, redacted HTTP, root timeline, migration catalog",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T004",
+      "name": "Native runtime and storage",
+      "oracle": "Eight declared units enabled and active as nonroot, Nginx sole public business ingress, local-storage permissions correct, no Docker/Node runtime.",
+      "required_evidence": "unit properties, listener inventory, Nginx syntax, storage modes",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T005",
+      "name": "Completion and retirement",
+      "oracle": "Full health verified before root completion lock; Installer retired with matching authority and inaccessible public entry.",
+      "required_evidence": "completion authority, full health, HTTP lock and timer/pool status",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T006",
+      "name": "Eight-service restart",
+      "oracle": "All eight restarted with recorded new process identities and complete health/P0 recovery.",
+      "required_evidence": "before/after unit state and PID, full health/P0",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T007",
+      "name": "Whole-host reboot",
+      "oracle": "Same machine identity and different boot ID after actual reboot; all eight enabled/active and complete health/P0 pass without manual repairs.",
+      "required_evidence": "before/after boot identity, unit state, complete health/P0",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T008",
+      "name": "Nginx reload and revert",
+      "oracle": "Configuration test, atomic reload and failed-candidate revert preserve expected authority and restore ordinary TLS traffic.",
+      "required_evidence": "Nginx commands, config hashes, HTTP recovery",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T009",
+      "name": "MySQL backup and restore",
+      "oracle": "Real backup restored and schema/data compared, including necessary partial-DDL/missing-schema recovery.",
+      "required_evidence": "backup identity, restore rehearsal, data/schema comparisons",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T010",
+      "name": "Redis and risk recovery",
+      "oracle": "Dedicated test Redis flush/disconnect/reconnect and durable risk-cache rebuild restore data semantics without broad cleanup of unrelated state.",
+      "required_evidence": "DB/risk fixtures, Redis failure/recovery and health",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T011",
+      "name": "ClamAV and files",
+      "oracle": "Real healthy signatures/engine accept clean upload and reject EICAR; unavailable scanner prevents completion/unsafe publication.",
+      "required_evidence": "scanner health, clean/EICAR HTTP and storage results",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12",
+      "id": "P22-T012",
+      "name": "Upgrade and database-required rollback",
+      "oracle": "Identity-verified compatible candidate and rehearsed backups; failed upgrade and schema restoration recover configuration, data and eight-service/P0 health. Same-binary fixture limits remain explicit.",
+      "required_evidence": "candidate hashes, interruption/recovery timeline, restored DB/files/config, health/P0",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G13",
+      "id": "P22-T013",
+      "name": "Real production providers and rollback",
+      "oracle": "Separately authorized owner-controlled production verifies real P0 user/admin/payment/mail/OAuth/Turnstile/domain/SEO and complete native upgrade/rollback; no test substitutes.",
+      "required_evidence": "redacted real-provider/production records, Search Console, rollback proof",
+      "result": "NOT_RUN"
+    },
+    {
+      "gate": "G12/G13",
+      "id": "P22-T014",
+      "name": "Accountable final decisions",
+      "oracle": "Platform Lead + QA review G12; Release Owner + Security Reviewer + Platform Lead review G13. Owner G11 delegation does not manufacture later approvals.",
+      "required_evidence": "attributed decisions, timestamps and exact evidence indices",
+      "result": "NOT_RUN"
+    }
+  ],
+  "created_at": "2026-11-06T11:23:49.939021+00:00",
+  "execution_status": "BLOCKED_EXECUTOR_NETWORK",
+  "g11_decision": "artifacts/v10/gates/G11/native-package/decision.json",
+  "manifest_sha256": "fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba",
+  "node": "P22",
+  "normative_source": "specifications/GoJet_V10_MASTER_PLAN_OPTIMIZED.md P22/G12/G13",
+  "observed_target_environment": null,
+  "production_authorized": false,
+  "schema": "gojet.p22-test-plan.v1",
+  "supported_target": "Ubuntu 24.04 LTS / linux amd64 / native systemd",
+  "target_ref": "owner-temporary-ubuntu-01"
+}
