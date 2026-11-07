@@ -27,8 +27,10 @@ is sent. Inspect the workflow result for this exact source; do not infer PASS
 from the presence of an archive alone.
 
 The archive includes independently hashed payload and source, with a manifest,
-SBOM, and native executable version checks. No database schema migration is
-changed by this patch. Real host upgrade, reboot and business acceptance are
+SBOM, and native executable version checks. Existing migration files are unchanged. New migration 000032 appends
+`google_one_tap` to the settings key ENUM, preserving general/brand ordinals.
+The CI exercises the 31-to-32 managed migration with existing settings,
+verified backup, restore rehearsal and actual restore. Real host upgrade, reboot and business acceptance are
 separate observations, not substituted by this CI result.
 
 ## Upgrade, preserving the existing installation
