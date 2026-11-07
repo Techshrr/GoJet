@@ -47,6 +47,9 @@ func TestExistingConsumerAgainstPythonAdapter(t *testing.T) {
         defer r.Body.Close()
         client := &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 3*time.Second}
         req, _ := http.NewRequestWithContext(r.Context(), "POST", "http://127.0.0.1:"+port+"/v1/check", r.Body)
+        // Preserve the length as Nginx's buffered proxy does. A streaming
+        // request would be chunked, which the adapter intentionally rejects.
+        req.ContentLength = r.ContentLength
         req.Header.Set("Content-Type", "application/json")
         response, err := client.Do(req)
         if err != nil { w.WriteHeader(503); return }

@@ -27,6 +27,11 @@ jobs:
         run: python3 -B -m unittest discover -s integrations/google-webrisk -v
       - name: Existing Go client and policy over real TLS with Python adapter
         run: go test -count=1 -v ./scripts/p22/webrisk_probe
+      - name: Native Nginx and systemd credential boundary
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx
+          sudo env GITHUB_ACTIONS=true python3 -B integrations/google-webrisk/native_fixture.py
       - name: Build read-only native consumer probe
         env:
           CGO_ENABLED: '0'
