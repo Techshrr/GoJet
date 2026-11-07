@@ -34,6 +34,7 @@ export async function adminRequest<T>(path: string, init: RequestInit = {}, csrf
 export function ErrorNotice({ error }: { error: string }) {
   if (!error) return null;
   if (error === 'unauthorized' || error === 'http_401') return <InlineMessage variant="danger">Your administrator session has expired or is missing. <a href="/admin/login">Sign in</a> to continue.</InlineMessage>;
+  if (error === 'totp_required') return <InlineMessage variant="warning">This change requires a recent two-factor verification. <a href="/admin/access/administrators">Set up two-factor authentication</a>, then sign in again with your code.</InlineMessage>;
   const denied = error === 'forbidden';
   return <InlineMessage variant="danger">{denied ? 'Your administrator permission does not authorize this operation.' : `Request failed: ${error}`}</InlineMessage>;
 }

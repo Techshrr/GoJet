@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -8,6 +9,15 @@ const output = 'artifacts/v10/P22/admin-repair';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
+let totpSecret = '';
+function totp(secret) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bits = [...secret.replace(/=+$/, '').toUpperCase()].map(c => alphabet.indexOf(c).toString(2).padStart(5, '0')).join('');
+  const key = Buffer.from((bits.match(/.{8}/g) || []).map(byte => parseInt(byte, 2)));
+  const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+  const digest = createHmac('sha1', key).update(counter).digest();
+  return String((digest.readUInt32BE(digest[19] & 15) & 0x7fffffff) % 1000000).padStart(6, '0');
+}
 try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport });
@@ -20,6 +30,7 @@ try {
     await page.goto(`${origin}/admin/login`);
     await page.getByLabel('Email', { exact: true }).fill(process.env.P22_ADMIN_EMAIL);
     await page.getByLabel('Password', { exact: true }).fill(process.env.P22_ADMIN_PASSWORD);
+    if (totpSecret) await page.getByLabel('TOTP code', { exact: true }).fill(totp(totpSecret));
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByText('Authentication complete.', { exact: true }).waitFor();
     const routes = [
@@ -28,7 +39,7 @@ try {
       ['/admin/trust/domain-risk', 'No domain risk records'],
       ['/admin/trust/abuse', 'No abuse reports'],
       ['/admin/tickets', 'No tickets'], ['/admin/mail', 'Dispatch settings'],
-      ['/admin/commerce/plans', 'Create draft plan'], ['/admin/commerce/payments', 'Payments'],
+      ['/admin/commerce/plans', 'Create draft plan'], ['/admin/commerce/payments', 'No payment records'],
       ['/admin/commerce/fx', 'No FX rates'],
       ['/admin/platform/general', 'General settings have not been configured yet.'],
     ];
@@ -49,6 +60,15 @@ try {
       results.push({ viewport: viewport.width, path, passed: true });
     }
     if (viewport.width > 500) {
+      // Exercise real TOTP enrollment; high-risk settings keep their MFA boundary.
+      await page.goto(origin + '/admin/access/administrators');
+      await page.getByRole('button', { name: 'Enroll TOTP', exact: true }).click();
+      await page.locator('[data-secret-once] code').waitFor();
+      totpSecret = await page.locator('[data-secret-once] code').innerText();
+      await page.getByLabel('Six-digit code — TOTP confirmation code', { exact: true }).fill(totp(totpSecret));
+      await page.getByRole('button', { name: 'Confirm TOTP', exact: true }).click();
+      await page.getByText('TOTP enabled', { exact: true }).waitFor();
+      await page.goto(origin + '/admin/platform/general');
       await page.getByLabel('Site name', { exact: true }).fill('Native admin CI');
       await page.getByLabel('Public HTTPS address', { exact: true }).fill('https://example.test');
       await page.getByLabel('Support HTTPS address', { exact: true }).fill('https://example.test/support');

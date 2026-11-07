@@ -12,10 +12,10 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/v10/P21/build'
 def run(*args,**kwargs):
     return subprocess.check_output(args,cwd=ROOT,text=True,**kwargs).strip()
-def main():
+def main(release_version=None):
     OUT.mkdir(parents=True,exist_ok=True)
     plan=json.loads((ROOT/'artifacts/v10/P21/test-plan.json').read_text())
-    head=run('git','rev-parse','HEAD'); version=plan['release_version']
+    head=run('git','rev-parse','HEAD'); version=release_version or plan['release_version']
     sources=[str(ROOT/'internal/releaseinfo')]+[str(ROOT/p/'main.go') for p in (plan['services']|plan['helpers']).values()]
     formatting=run('gofmt','-l',*sources)
     if formatting: raise ValueError('gofmt required: '+formatting)

@@ -203,13 +203,15 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		api.SetAdminPermissionResolver(billingTestAdminPermissionResolver{actorID: actorID})
 	}
 	combined := http.NewServeMux()
- if !testAuth && os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") == "1" {
-  authority, err := buildNativeAdminAuthority(db, redisClient)
-  if err != nil { return nil, false, err }
-  adminAPI := billing.NewAPI(store, authority, nil, nil)
-  adminAPI.SetAdminPermissionResolver(authority)
-  combined.Handle("/api/admin/", adminAPI.Handler())
- }
+	if !testAuth && os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") == "1" {
+		authority, err := buildNativeAdminAuthority(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		adminAPI := billing.NewAPI(store, authority, nil, nil)
+		adminAPI.SetAdminPermissionResolver(authority)
+		combined.Handle("/api/admin/", adminAPI.Handler())
+	}
 	combined.Handle("GET /api/workspaces/{workspaceId}/billing", billing.NewWorkspaceBillingSummaryHandler(store, principalResolver, membershipResolver))
 	if productionEpayCallback != nil {
 		combined.Handle("GET /api/payments/callbacks/epay", productionEpayCallback)

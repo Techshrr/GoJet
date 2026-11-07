@@ -126,12 +126,14 @@ func buildTrustAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth bool
 		authorizer: authorizer,
 	}
 
- if !testAuth {
-  native, err := buildNativeAdminAuthority(db, redisClient)
-  if err != nil { return nil, false, err }
-  h.native = native
-  h.authorizer = native
- }
+	if !testAuth {
+		native, err := buildNativeAdminAuthority(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		h.native = native
+		h.authorizer = native
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/admin/destination-risks", h.handleDestinationRiskList)
 	mux.HandleFunc("GET /api/admin/destination-risks/{riskId}", h.handleDestinationRiskDetail)
@@ -229,12 +231,18 @@ func mountTrustAdminRoutes(root *http.ServeMux, handler http.Handler) {
 }
 
 func (h *trustAdminHTTPHandler) authorizedSession(w http.ResponseWriter, r *http.Request, permission string) (authn.Session, bool) {
- if h.native != nil {
-  p, err := h.native.resolve(r)
-  if err != nil { writeNativeAdminError(w, err); return authn.Session{}, false }
-  if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil { writeTrustAdminError(w, err); return authn.Session{}, false }
-  return authn.Session{ID:p.Session.ID, UserID:p.Administrator.ID}, true
- }
+	if h.native != nil {
+		p, err := h.native.resolve(r)
+		if err != nil {
+			writeNativeAdminError(w, err)
+			return authn.Session{}, false
+		}
+		if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil {
+			writeTrustAdminError(w, err)
+			return authn.Session{}, false
+		}
+		return authn.Session{ID: p.Session.ID, UserID: p.Administrator.ID}, true
+	}
 
 	session, err := authn.AuthenticateRequest(r.Context(), h.authStore, r, time.Now().UTC())
 	if err != nil {
@@ -249,12 +257,18 @@ func (h *trustAdminHTTPHandler) authorizedSession(w http.ResponseWriter, r *http
 }
 
 func (h *trustAdminHTTPHandler) mutationSession(w http.ResponseWriter, r *http.Request, permission string) (authn.Session, bool) {
- if h.native != nil {
-  p, err := h.native.resolve(r)
-  if err != nil { writeNativeAdminError(w, err); return authn.Session{}, false }
-  if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil { writeTrustAdminError(w, err); return authn.Session{}, false }
-  return authn.Session{ID:p.Session.ID, UserID:p.Administrator.ID}, true
- }
+	if h.native != nil {
+		p, err := h.native.resolve(r)
+		if err != nil {
+			writeNativeAdminError(w, err)
+			return authn.Session{}, false
+		}
+		if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil {
+			writeTrustAdminError(w, err)
+			return authn.Session{}, false
+		}
+		return authn.Session{ID: p.Session.ID, UserID: p.Administrator.ID}, true
+	}
 
 	now := time.Now().UTC()
 	session, err := authn.AuthenticateRequest(r.Context(), h.authStore, r, now)
@@ -519,8 +533,12 @@ func writeTrustAdminUnavailable(w http.ResponseWriter) {
 }
 
 func (h *trustAdminHTTPHandler) issueCSRF(r *http.Request, session authn.Session) (string, error) {
- if h.native == nil { return h.csrf.Issue(session.ID, time.Now().UTC()) }
- p, ok := nativeAdminPrincipal(r.Context(), session.UserID)
- if !ok || p.Session.ID != session.ID { return "", trust.ErrUnauthorized }
- return h.native.rotateCSRF(r.Context(), p, time.Now().UTC())
+	if h.native == nil {
+		return h.csrf.Issue(session.ID, time.Now().UTC())
+	}
+	p, ok := nativeAdminPrincipal(r.Context(), session.UserID)
+	if !ok || p.Session.ID != session.ID {
+		return "", trust.ErrUnauthorized
+	}
+	return h.native.rotateCSRF(r.Context(), p, time.Now().UTC())
 }
