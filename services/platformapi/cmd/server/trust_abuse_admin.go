@@ -73,6 +73,13 @@ func buildTrustAbuseAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth
 		authorizer: authorizer,
 	}
 
+ if !testAuth {
+  native, err := buildNativeAdminAuthority(db, redisClient)
+  if err != nil { return nil, false, err }
+  base.native = native
+  base.authorizer = native
+ }
+
 	var actionService *trust.AbuseActionService
 	policyVersion := strings.TrimSpace(os.Getenv("GOJET_RISK_POLICY_VERSION"))
 	if policyVersion != "" {
@@ -121,7 +128,7 @@ func (h *trustAbuseAdminHTTPHandler) handleList(w http.ResponseWriter, r *http.R
 		writeTrustAdminError(w, err)
 		return
 	}
-	csrfToken, err := h.base.csrf.Issue(session.ID, time.Now().UTC())
+	csrfToken, err := h.base.issueCSRF(r, session)
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return

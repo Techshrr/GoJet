@@ -156,7 +156,8 @@ func (s *Service) GetPlatformSetting(ctx context.Context, p Principal, key strin
 			// An unsaved opt-in setting is disabled; version zero preserves create CAS.
 			return PlatformSetting{Key: key, Value: map[string]string{"enabled": "false"}, Version: 0}, nil
 		}
-		return PlatformSetting{}, ErrNotFound
+		// An unset setting is a version-zero resource, not a missing route.
+		return PlatformSetting{Key: key, Value: map[string]string{}, Version: 0}, nil
 	}
 	if err != nil {
 		return PlatformSetting{}, err

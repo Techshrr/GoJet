@@ -33,7 +33,8 @@ export async function adminRequest<T>(path: string, init: RequestInit = {}, csrf
 
 export function ErrorNotice({ error }: { error: string }) {
   if (!error) return null;
-  const denied = error === 'forbidden' || error === 'unauthorized';
+  if (error === 'unauthorized' || error === 'http_401') return <InlineMessage variant="danger">Your administrator session has expired or is missing. <a href="/admin/login">Sign in</a> to continue.</InlineMessage>;
+  const denied = error === 'forbidden';
   return <InlineMessage variant="danger">{denied ? 'Your administrator permission does not authorize this operation.' : `Request failed: ${error}`}</InlineMessage>;
 }
 
@@ -45,7 +46,7 @@ export function ProtectedLayout({ children, state = 'normal' }: { children: Reac
   return <AdminShell state={state}>{children}</AdminShell>;
 }
 
-export function useAdminSession() {
+export function useAdminSession(enabled = true) {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
@@ -55,6 +56,6 @@ export function useAdminSession() {
     catch (err) { setSession(null); setError(err instanceof Error ? err.message : 'internal_error'); }
     finally { setBusy(false); }
   }, []);
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => { if (enabled) void reload(); }, [reload, enabled]);
   return { session, error, busy, reload };
 }

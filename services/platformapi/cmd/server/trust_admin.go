@@ -57,6 +57,7 @@ func (p deterministicDomainRiskProvider) Observe(_ context.Context, _ string) (t
 }
 
 type trustAdminHTTPHandler struct {
+	native     *nativeAdminAuthority
 	store      *trust.Store
 	domainRisk *trust.DomainRiskService
 	authStore  *authn.Store
@@ -124,6 +125,13 @@ func buildTrustAdminHandler(db *sql.DB, redisClient *redis.Client, testAuth bool
 		origins:    originPolicy,
 		authorizer: authorizer,
 	}
+
+ if !testAuth {
+  native, err := buildNativeAdminAuthority(db, redisClient)
+  if err != nil { return nil, false, err }
+  h.native = native
+  h.authorizer = native
+ }
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/admin/destination-risks", h.handleDestinationRiskList)
 	mux.HandleFunc("GET /api/admin/destination-risks/{riskId}", h.handleDestinationRiskDetail)
@@ -221,6 +229,13 @@ func mountTrustAdminRoutes(root *http.ServeMux, handler http.Handler) {
 }
 
 func (h *trustAdminHTTPHandler) authorizedSession(w http.ResponseWriter, r *http.Request, permission string) (authn.Session, bool) {
+ if h.native != nil {
+  p, err := h.native.resolve(r)
+  if err != nil { writeNativeAdminError(w, err); return authn.Session{}, false }
+  if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil { writeTrustAdminError(w, err); return authn.Session{}, false }
+  return authn.Session{ID:p.Session.ID, UserID:p.Administrator.ID}, true
+ }
+
 	session, err := authn.AuthenticateRequest(r.Context(), h.authStore, r, time.Now().UTC())
 	if err != nil {
 		writeAuthServiceError(w, err, false)
@@ -234,6 +249,13 @@ func (h *trustAdminHTTPHandler) authorizedSession(w http.ResponseWriter, r *http
 }
 
 func (h *trustAdminHTTPHandler) mutationSession(w http.ResponseWriter, r *http.Request, permission string) (authn.Session, bool) {
+ if h.native != nil {
+  p, err := h.native.resolve(r)
+  if err != nil { writeNativeAdminError(w, err); return authn.Session{}, false }
+  if err := h.authorizer.Authorize(r.Context(), p.Administrator.ID, permission); err != nil { writeTrustAdminError(w, err); return authn.Session{}, false }
+  return authn.Session{ID:p.Session.ID, UserID:p.Administrator.ID}, true
+ }
+
 	now := time.Now().UTC()
 	session, err := authn.AuthenticateRequest(r.Context(), h.authStore, r, now)
 	if err != nil {
@@ -265,7 +287,7 @@ func (h *trustAdminHTTPHandler) handleDestinationRiskList(w http.ResponseWriter,
 		writeTrustAdminError(w, err)
 		return
 	}
-	csrfToken, err := h.csrf.Issue(session.ID, time.Now().UTC())
+	csrfToken, err := h.issueCSRF(r, session)
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return
@@ -375,7 +397,7 @@ func (h *trustAdminHTTPHandler) handleDomainRiskList(w http.ResponseWriter, r *h
 		writeTrustAdminError(w, err)
 		return
 	}
-	csrfToken, err := h.csrf.Issue(session.ID, time.Now().UTC())
+	csrfToken, err := h.issueCSRF(r, session)
 	if err != nil {
 		writeAuthServiceError(w, err, false)
 		return
@@ -494,4 +516,11 @@ func writeTrustAdminError(w http.ResponseWriter, err error) {
 
 func writeTrustAdminUnavailable(w http.ResponseWriter) {
 	writeAuthJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "risk_provider_unavailable"})
+}
+
+func (h *trustAdminHTTPHandler) issueCSRF(r *http.Request, session authn.Session) (string, error) {
+ if h.native == nil { return h.csrf.Issue(session.ID, time.Now().UTC()) }
+ p, ok := nativeAdminPrincipal(r.Context(), session.UserID)
+ if !ok || p.Session.ID != session.ID { return "", trust.ErrUnauthorized }
+ return h.native.rotateCSRF(r.Context(), p, time.Now().UTC())
 }

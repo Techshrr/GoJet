@@ -1,0 +1,77 @@
+name: P22 Native Admin Repair
+on:
+  push:
+    branches: [fix/p22-native-admin-session]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-admin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_admin_repair
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7.4.10
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      GOJET_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/gojet_admin_repair?multiStatements=true&parseTime=true&charset=utf8mb4
+      GOJET_REDIS_ADDR: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Prepare toolchain and production frontend
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/admin typecheck
+          pnpm --filter @gojet/admin build
+          pnpm exec playwright-core install --with-deps chromium
+      - name: Focused Go regression
+        run: |
+          gofmt -w services/platformapi/cmd/server/native_admin_authority*.go services/platformapi/cmd/server/p22_native_admin_integration_test.go services/platformapi/cmd/server/billing.go services/platformapi/cmd/server/trust_admin.go services/platformapi/cmd/server/trust_abuse_admin.go
+          git diff > /tmp/p22-format.patch
+          python3 - <<'PY'
+          import base64,gzip
+          print('P22_FORMAT_PATCH='+base64.b64encode(gzip.compress(open('/tmp/p22-format.patch','rb').read())).decode())
+          PY
+          go test ./internal/admin ./internal/billing ./internal/support ./internal/trust ./services/platformapi/cmd/server
+      - name: Fresh migrated database
+        env:
+          MYSQL_PWD: root
+        run: |
+          mysql --protocol=tcp -h 127.0.0.1 -u root -e 'SET GLOBAL log_bin_trust_function_creators=1'
+          for migration in migrations/[0-9][0-9][0-9][0-9][0-9][0-9]_*.sql; do
+            mysql --protocol=tcp -h 127.0.0.1 -u root --default-character-set=utf8mb4 gojet_admin_repair < "$migration"
+          done
+      - name: Real cookie auth and desktop/mobile browser acceptance
+        env:
+          P22_DISPOSABLE_ADMIN_CI: '1'
+          P22_BROWSER_CI: '1'
+        run: go test -v -count=1 -timeout=10m ./services/platformapi/cmd/server -run '^TestP22NativeAdminIntegration$'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p22-native-admin-${{ github.sha }}
+          path: artifacts/v10/P22/admin-repair/
+          retention-days: 30
