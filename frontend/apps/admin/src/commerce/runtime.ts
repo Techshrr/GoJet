@@ -1,3 +1,4 @@
+import { moduleHeaders, type ModuleRuntime } from '../p17/moduleRuntime';
 export type CommerceMoney = { currency: string; amount_minor: number };
 export type CommerceEntitlement = { capability: string; limit_value: number; unit: string; source_version: number };
 export type CommercePlan = {
@@ -13,7 +14,7 @@ export type CommerceFX = {
   base_currency: string; quote_currency: string; rate: string; source: string; as_of: string;
   status: 'current' | 'stale' | 'provider-error' | 'override'; override_reason?: string; updated_at: string;
 };
-export type CommerceRuntime = { actorId: string; email: string; displayName: string };
+export type CommerceRuntime = ModuleRuntime;
 
 export class CommerceRequestError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -24,16 +25,14 @@ export function readCommerceRuntime(): CommerceRuntime | null {
   const actorId = String(import.meta.env.VITE_GOJET_TEST_ACTOR_ID ?? '').trim();
   const email = String(import.meta.env.VITE_GOJET_TEST_EMAIL ?? '').trim();
   if (!actorId || !email) return null;
-  return { actorId, email, displayName: String(import.meta.env.VITE_GOJET_TEST_DISPLAY_NAME ?? '').trim() };
+  return { testAuth: true, actorId, email, displayName: String(import.meta.env.VITE_GOJET_TEST_DISPLAY_NAME ?? '').trim() };
 }
 
 function headers(runtime: CommerceRuntime, json = false): Record<string, string> {
   return {
-    'X-GoJet-Test-Actor': runtime.actorId,
-    'X-GoJet-Test-Email': runtime.email,
-    'X-GoJet-Test-Display-Name': runtime.displayName,
+    ...moduleHeaders(runtime),
     Accept: 'application/json',
-    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    ...(json ? { 'Content-Type': 'application/json', ...(runtime.csrfToken ? { 'X-CSRF-Token': runtime.csrfToken } : {}) } : {}),
   };
 }
 

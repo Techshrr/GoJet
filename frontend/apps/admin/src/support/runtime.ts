@@ -1,4 +1,5 @@
-export type AdminSupportRuntime = { actorId: string; email: string; displayName: string };
+import { moduleHeaders, type ModuleRuntime } from '../p17/moduleRuntime';
+export type AdminSupportRuntime = ModuleRuntime;
 
 export class AdminSupportRequestError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -59,16 +60,14 @@ export function readAdminSupportRuntime(): AdminSupportRuntime | null {
   const actorId = String(import.meta.env.VITE_GOJET_TEST_ACTOR_ID ?? '').trim();
   const email = String(import.meta.env.VITE_GOJET_TEST_EMAIL ?? '').trim();
   if (!actorId || !email) return null;
-  return { actorId, email, displayName: String(import.meta.env.VITE_GOJET_TEST_DISPLAY_NAME ?? '').trim() };
+  return { testAuth: true, actorId, email, displayName: String(import.meta.env.VITE_GOJET_TEST_DISPLAY_NAME ?? '').trim() };
 }
 
 function headers(runtime: AdminSupportRuntime, json = false, idempotent = false): Record<string, string> {
   return {
-    'X-GoJet-Test-Actor': runtime.actorId,
-    'X-GoJet-Test-Email': runtime.email,
-    'X-GoJet-Test-Display-Name': runtime.displayName,
+    ...moduleHeaders(runtime),
     Accept: 'application/json',
-    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    ...(json ? { 'Content-Type': 'application/json', ...(runtime.csrfToken ? { 'X-CSRF-Token': runtime.csrfToken } : {}) } : {}),
     ...(idempotent ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
   };
 }

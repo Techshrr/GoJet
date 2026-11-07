@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useModuleRuntime, ModuleSessionNotice } from '../p17/moduleRuntime';
+import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, InlineMessage } from '@gojet/ui';
@@ -21,13 +22,14 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function AdminTicketsPage() {
-  const runtime = useMemo(() => readAdminSupportRuntime(), []);
+  const auth = useModuleRuntime(readAdminSupportRuntime()); const { runtime } = auth;
   const query = useQuery({
     queryKey: ['p14-admin-tickets'], enabled: runtime !== null, retry: false,
     queryFn: () => adminSupportGet<{ items: AdminTicket[] }>(runtime!, '/api/admin/support/tickets'),
   });
   const items = query.data?.items ?? [];
   const state = !runtime || query.isError ? 'error' : query.isPending ? 'loading' : items.length === 0 ? 'empty' : ticketState(items[0]?.status);
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'permission-denied' : 'normal'}><section className="admin-support-page" data-page="admin-tickets" data-state={state}>
     <header className="admin-support-header"><div><p className="admin-support-eyebrow">SUPPORT / TICKETS</p><h1>Support tickets</h1><p>Ticket state is operational support authority only. It never grants domain entitlement or billing authority.</p></div><Link to="/admin/mail">Mail operations</Link></header>
     {query.isPending && runtime ? <p role="status">Loading support tickets…</p> : null}
@@ -38,7 +40,7 @@ export function AdminTicketsPage() {
 }
 
 export function AdminTicketDetailPage() {
-  const runtime = useMemo(() => readAdminSupportRuntime(), []);
+  const auth = useModuleRuntime(readAdminSupportRuntime()); const { runtime } = auth;
   const { ticketId } = useParams({ from: '/admin/tickets/$ticketId' });
   const client = useQueryClient();
   const [kind, setKind] = useState<'support_reply' | 'internal_note'>('support_reply');
@@ -59,6 +61,7 @@ export function AdminTicketDetailPage() {
   const ticket = query.data?.ticket;
   const state = !runtime || query.isError || reply.isError || close.isError ? 'error' : query.isPending ? 'loading' : attachmentName ? 'attachment-blocked' : reply.isPending ? 'replying' : ticketState(ticket?.status);
   const submitReply = (event: React.FormEvent) => { event.preventDefault(); if (message.trim() && !attachmentName) reply.mutate(); };
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'permission-denied' : 'normal'}><section className="admin-support-page" data-page="admin-tickets" data-state={state}>
     <header className="admin-support-header"><div><p className="admin-support-eyebrow">SUPPORT / TICKET</p><h1>{ticket?.subject ?? 'Ticket detail'}</h1><p>Internal notes remain administrator-only and never enter requester mail or requester APIs.</p></div><Link to="/admin/tickets">Back to tickets</Link></header>
     {query.isPending && runtime ? <p role="status">Loading ticket…</p> : null}
@@ -71,7 +74,7 @@ export function AdminTicketDetailPage() {
 }
 
 export function AdminMailPage() {
-  const runtime = useMemo(() => readAdminSupportRuntime(), []);
+  const auth = useModuleRuntime(readAdminSupportRuntime()); const { runtime } = auth;
   const client = useQueryClient();
   const [recipient, setRecipient] = useState('');
   const queue = useQuery({ queryKey: ['p14-admin-mail-queue'], enabled: runtime !== null, retry: false, queryFn: () => adminSupportGet<{ items: AdminMailQueueItem[] }>(runtime!, '/api/admin/mail/queue') });
@@ -92,6 +95,7 @@ export function AdminMailPage() {
   const items = queue.data?.items ?? [];
   const state = !runtime || errorCount === 3 || saveSettings.isError || testSend.isError ? 'error' : pending ? 'loading' : errorCount > 0 ? 'partial' : items.length === 0 ? 'empty' : items[0]!.status;
   const checked = enabledOverride ?? settings.data?.settings.enabled ?? false;
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : errorCount === 3 ? 'permission-denied' : errorCount > 0 ? 'partial-service-degradation' : 'normal'}><section className="admin-support-page" data-page="admin-mail" data-state={state}>
     <header className="admin-support-header"><div><p className="admin-support-eyebrow">OPERATIONS / MAIL</p><h1>Mail operations</h1><p>Queue state is communication evidence only. Credentials remain runtime-managed and masked.</p></div><Link to="/admin/tickets">Support tickets</Link></header>
     {pending && runtime ? <p role="status">Loading mail operations…</p> : null}

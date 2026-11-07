@@ -24,10 +24,12 @@ def validate_static(root, app, repository=ROOT):
     missing=sorted(name for name in required if not (root/name).is_file())
     if missing: raise ValueError('missing static app output: '+app+': '+', '.join(missing))
 
-def main():
+def main(release_version=None):
     head=command('git','rev-parse','HEAD').strip()
     plan=json.loads((ROOT/'artifacts/v10/P21/test-plan.json').read_text())
+    if release_version is not None: plan['release_version']=release_version
     report=json.loads((ROOT/'artifacts/v10/P21/build/native-build.json').read_text())
+    assert report['version']==plan['release_version']
     assert report['source']==head
     files={}
     excluded_build_metadata={}

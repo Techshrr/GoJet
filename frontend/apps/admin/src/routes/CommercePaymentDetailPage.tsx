@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useModuleRuntime, ModuleSessionNotice } from '../p17/moduleRuntime';
 import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Card, InlineMessage } from '@gojet/ui';
@@ -7,10 +7,11 @@ import { CommerceNav } from '../commerce/CommerceNav';
 import { adminGet, readCommerceRuntime, type CommercePayment } from '../commerce/runtime';
 
 export default function CommercePaymentDetailPage() {
-  const runtime = useMemo(() => readCommerceRuntime(), []); const { paymentId } = useParams({ from: '/admin/commerce/payments/$paymentId' });
+  const auth = useModuleRuntime(readCommerceRuntime()); const { runtime } = auth; const { paymentId } = useParams({ from: '/admin/commerce/payments/$paymentId' });
   const query = useQuery({ queryKey: ['p13-admin-payment', paymentId], enabled: runtime !== null, queryFn: () => adminGet<{ payment: CommercePayment }>(runtime!, `/api/admin/payments/${encodeURIComponent(paymentId)}`), retry: false });
   const item = query.data?.payment; const state = !runtime || query.isError ? 'partial' : query.isPending ? 'loading' : item?.status ?? 'partial';
   const reference = item?.provider_transaction_id ? `••••${item.provider_transaction_id.slice(-4)}` : 'Unavailable';
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'partial-service-degradation' : 'normal'}><section className="commerce-page" data-page="admin-commerce-payment-detail" data-state={state}>
     <header><div><p className="commerce-eyebrow">COMMERCE / PAYMENTS</p><h1>Payment detail</h1><p>Only allowlisted operational fields are shown. Provider callback evidence and credentials remain server-side.</p></div></header><CommerceNav />
     {query.isPending && runtime ? <p role="status">Loading payment…</p> : null}{query.isError ? <InlineMessage variant="danger">Payment detail is unavailable.</InlineMessage> : null}
