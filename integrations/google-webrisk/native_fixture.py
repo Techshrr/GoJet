@@ -47,6 +47,7 @@ def main():
         install.run("nginx", "-t")
         install.run("systemctl", "daemon-reload")
         install.run("systemctl", "enable", "--now", "gojet-webrisk.service")
+        install.run("systemctl", "start", "nginx")
         install.run("systemctl", "reload", "nginx")
         context = ssl.create_default_context(cafile=str(cert / "fullchain.pem"))
         for _ in range(40):

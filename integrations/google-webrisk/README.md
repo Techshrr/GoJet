@@ -42,13 +42,14 @@ interactive terminal (not a shell heredoc), run:
 ```bash
 cd /root/GoJet-WebRisk-1.0.0
 sha256sum --check SHA256SUMS
-python3 -B install.py --host www.linketic.com --server-ip YOUR_CURRENT_SERVER_IPV4
+python3 -B install.py --host www.linketic.com
 ```
 
 Enter the Google API key at the hidden prompt. It is stored root:root 0600 in
 `/etc/gojet-webrisk/api-key`; systemd passes it using LoadCredential to DynamicUser.
 Do not send the key in chat, put it in a command argument, or use shell tracing.
-The script checks DNS, local IP routing, ports, existing site certificate and
+The script discovers the single DNS address and checks that it belongs to this
+host (an explicit `--server-ip` remains available), local IP routing, ports, the existing site certificate and
 Nginx before changes. Unknown existing paths stop installation. An installation
 error removes only newly created owned configuration and preserves the key.
 A repeat with identical code/config skips installation and reruns acceptance.
@@ -86,7 +87,7 @@ response indicates only the local process, not Google availability. Live results
 must be produced on the real host. Fixture tests are not live evidence. To rerun:
 
 ```bash
-python3 -B install.py --host www.linketic.com --server-ip YOUR_CURRENT_SERVER_IPV4
+python3 -B install.py --host www.linketic.com
 ```
 
 Only after the JSON says `"passed": true`, use these installer fields:

@@ -92,6 +92,13 @@ class InstallTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 install.validate_host(host, "8.8.4.4")
 
+    def test_discovery_deduplicates_address_and_refuses_multiple_hosts(self):
+        with patch.object(install.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("8.8.4.4", 9443))] * 2):
+            self.assertEqual(install.discover_server_ip("risk.example.com"), "8.8.4.4")
+        with patch.object(install.socket, "getaddrinfo", return_value=[]):
+            with self.assertRaises(RuntimeError):
+                install.discover_server_ip("risk.example.com")
+
     def test_unit_has_private_credentials_and_no_root_or_public_binding(self):
         unit = (Path(__file__).parent / "gojet-webrisk.service").read_text()
         self.assertIn("DynamicUser=yes", unit)

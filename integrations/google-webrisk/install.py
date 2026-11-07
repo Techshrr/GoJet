@@ -165,6 +165,15 @@ def validate_host(host, ip):
     run("openssl", "x509", "-in", certificate, "-noout", "-checkend", "604800")
 
 
+def discover_server_ip(host):
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", host) or "." not in host:
+        raise RuntimeError("invalid public hostname")
+    answers = {entry[4][0] for entry in socket.getaddrinfo(host, 9443, type=socket.SOCK_STREAM)}
+    if len(answers) != 1:
+        raise RuntimeError("site DNS must contain one direct server address")
+    return answers.pop()  # validate_host verifies public IPv4, local ownership and route before changes.
+
+
 def check_owned(receipt):
     for name, digest in receipt["files"].items():
         path = Path(name)
@@ -304,16 +313,17 @@ def main():
         raise RuntimeError("Ubuntu 24.04 required")
     if Path("/proc/1/comm").read_text().strip() != "systemd":
         raise RuntimeError("native systemd host required")
-    if args.remove:
-        remove()
-        return 0
-    if not args.host or not args.server_ip:
-        raise RuntimeError("--host and --server-ip required")
+    if not args.remove and not args.host:
+        raise RuntimeError("--host required")
     checked_private_dir()
     fd = os.open(PRIVATE / "install.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w"):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return 0 if install(args.host, args.server_ip) else 1
+        if args.remove:
+            remove()
+            return 0
+        ip = args.server_ip or discover_server_ip(args.host)
+        return 0 if install(args.host, ip) else 1
 
 
 if __name__ == "__main__":
