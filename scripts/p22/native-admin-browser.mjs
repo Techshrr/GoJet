@@ -75,6 +75,9 @@ try {
       await page.getByLabel('Reason for general settings change').fill('Native first-install regression');
       await page.getByRole('button', { name: 'Save general settings', exact: true }).click();
       await page.getByText('General settings saved.', { exact: true }).waitFor();
+      await page.getByLabel('Reason for change', { exact: true }).fill('Keep unconfigured Google login disabled');
+      await page.getByRole('button', { name: 'Save One Tap preference', exact: true }).click();
+      await page.getByText('Google One Tap preference saved.', { exact: true }).waitFor();
       await page.goto(origin + '/admin/commerce/plans');
       await page.getByLabel('Code', { exact: true }).fill('native-ci');
       await page.getByLabel('Name', { exact: true }).fill('Native CI draft');

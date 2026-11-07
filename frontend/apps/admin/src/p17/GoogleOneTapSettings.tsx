@@ -36,9 +36,13 @@ export function GoogleOneTapSettings({ session }: { session: AdminSession | null
     <h2>Google One Tap</h2>
     <p>Show a Google sign-in prompt to signed-out visitors. Google login must also be configured and enabled.</p>
     <ErrorNotice error={error} />
+    <div className="p17-form">
+    <fieldset><legend>Sign-in prompt</legend>
     <label><input type="checkbox" checked={enabled} disabled={busy || !session} onChange={(e) => setEnabled(e.target.checked)} /> Enable Google One Tap</label>
+    </fieldset>
     <label>Reason for change<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
     <Button type="button" disabled={busy || !session || !reason.trim()} onClick={() => void save()}>Save One Tap preference</Button>
+    </div>
     {message && <p role="status">{message}</p>}
   </section>;
 }
