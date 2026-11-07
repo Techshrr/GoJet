@@ -1,0 +1,46 @@
+name: P22 Google Web Risk Adapter
+on:
+  push:
+    branches: [fix/p22-google-webrisk-adapter]
+    paths:
+      - 'integrations/google-webrisk/**'
+      - 'scripts/p22/webrisk_probe/**'
+      - '.github/workflows/p22-google-webrisk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p22-webrisk-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+      - name: Adapter and deployment tests
+        run: python3 -B -m unittest discover -s integrations/google-webrisk -v
+      - name: Existing Go client and policy over real TLS with Python adapter
+        run: go test -count=1 -v ./scripts/p22/webrisk_probe
+      - name: Native Nginx and systemd credential boundary
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx
+          sudo env GITHUB_ACTIONS=true python3 -B integrations/google-webrisk/native_fixture.py
+      - name: Build read-only native consumer probe
+        env:
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags "-s -w -X main.source=${GITHUB_SHA}" -o integrations/google-webrisk/gojet-webrisk-probe ./scripts/p22/webrisk_probe
+      - name: Package source and consumer probe
+        run: python3 integrations/google-webrisk/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gojet-webrisk-${{ github.sha }}
+          path: artifacts/v10/P22/google-webrisk/GoJet-WebRisk-1.0.0.zip
+          if-no-files-found: error
+          retention-days: 30
