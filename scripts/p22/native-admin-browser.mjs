@@ -34,7 +34,7 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByText('Authentication complete.', { exact: true }).waitFor();
     const routes = [
-      ['/admin/operations/jobs', 'No jobs found.'], ['/admin/operations/services', 'No services found.'],
+      ['/admin/operations/jobs', 'No jobs found.'], ['/admin/operations/services', 'redirectengine'],
       ['/admin/users', 'No users found.'], ['/admin/workspaces', 'No workspaces found.'],
       ['/admin/trust/destination-risk', 'No destination risk records'],
       ['/admin/trust/domain-risk', 'No domain risk records'],
@@ -53,6 +53,7 @@ try {
       await page.goto(origin + path);
       await page.getByText(text, { exact: true }).first().waitFor();
       await page.waitForLoadState('networkidle');
+      if (path === '/admin/operations/services') assert.equal(await page.locator('.p17-list > li').count(), 8);
       assert.deepEqual(failures, [], `${path} API failures`);
       assert.equal(await page.getByText('Administrator authentication is required.', { exact: true }).count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2), false, `${path} horizontal overflow`);

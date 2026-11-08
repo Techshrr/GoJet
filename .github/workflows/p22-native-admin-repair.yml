@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   native-admin:
     runs-on: ubuntu-24.04
@@ -220,3 +221,47 @@ jobs:
           name: p22-native-failure-evidence-${{ github.sha }}
           path: artifacts/v10/P21/payload/*.json
           retention-days: 7
+  cross-release:
+    needs: upgrade-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: GoJet-AdminRepair-10.0.0-rc.2-${{ github.sha }}
+          path: /tmp/gojet-new-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: gojet-v10-p21-payload-32ea29d766b0ac0790964517ce4e220a1208bf0d
+          run-id: 42161906247
+          github-token: ${{ github.token }}
+          path: /tmp/gojet-old-artifact
+      - name: Prepare disposable native host
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx php8.3-fpm php8.3-mysql redis-server clamav clamav-daemon clamav-freshclam
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
+          sudo systemd-tmpfiles --create "$PWD/deploy/tmpfiles/gojet.conf"
+          sudo usermod -a -G clamav gojet
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket
+          sudo timeout 150 freshclam --stdout
+          sudo sed -i '/^[[:space:]]*EnableVersionCommand[[:space:]]/d' /etc/clamav/clamd.conf
+          printf '%s\n' 'EnableVersionCommand yes' | sudo tee -a /etc/clamav/clamd.conf > /dev/null
+          sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p22_transition; CREATE USER 'gojet_transition'@'127.0.0.1' IDENTIFIED BY 'p22-ci-only'; GRANT ALL ON gojet_p22_transition.* TO 'gojet_transition'@'127.0.0.1';"
+          sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
+      - name: Upgrade immutable rc1, restore interrupted DDL, commit actual candidate
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v10/P22/transition
+          OLD_ARCHIVE="$(find /tmp/gojet-old-artifact -name gojet-10.0.0-rc.1-linux-amd64-payload.tar.gz -type f)"
+          test -f "$OLD_ARCHIVE"
+          sudo env P22_DISPOSABLE_NATIVE_CI=1 P21_MYSQL_ADMIN_PASSWORD=root python3 scripts/p22/cross_release_test.py "$OLD_ARCHIVE" /tmp/gojet-new-artifact | tee artifacts/v10/P22/transition/cross-release.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p22-cross-release-${{ github.sha }}
+          path: artifacts/v10/P22/transition/cross-release.json
+          retention-days: 30
