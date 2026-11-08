@@ -36,8 +36,10 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     (release / 'bin/platformapi').chmod(0o755)
     (release / 'migration-catalog.json').write_text(json.dumps(catalog(release / 'migrations')))
     migration_count = len(catalog(release/'migrations')['migrations'])
+    identity = json.loads(subprocess.check_output([str(release/'bin/platformapi'), '--version'], text=True))
+    assert identity['commit'] == source and identity['service'] == 'platformapi'
     plan = dict(schema='gojet.root-data-bootstrap.v1', release=str(release), source=source,
-        version='10.0.0-rc.1', catalog_sha256=sha(release / 'migration-catalog.json'),
+        version=identity['version'], catalog_sha256=sha(release / 'migration-catalog.json'),
         platformapi_sha256=sha(release / 'bin/platformapi'),
         database=dict(host='127.0.0.1', port=3306, name='gojet_p21_data_success', user='gojet_test', password='p21-ci-only'),
         redis=dict(host='127.0.0.1', port=6379, db=4, password=''),

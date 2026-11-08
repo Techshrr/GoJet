@@ -63,7 +63,9 @@ def main():
         request = {'configuration':config,
             'admin':{'email':'transition@example.test','display_name':'Transition CI','password':secrets.token_urlsafe(32)},
             'tls':{'certificate':str(cert),'private_key':str(key),'http_port':18080}}
-        prepared = root/'prepared'
+        private = root/'private'
+        private.mkdir(mode=0o700)
+        prepared = private/'prepared'
         def command(tool, name, *args, value=None, stop=None):
             result = subprocess.run(['php8.3', str(tool/'installer/bin'/name), *map(str,args)],
                 input=None if value is None else json.dumps(value).encode(), capture_output=True,
@@ -92,14 +94,14 @@ def main():
             impl.write_text(code.replace(hook,hook+"\n        if (getenv('P22_STOP_PHASE')===$phase) { posix_kill(getmypid(),9); }",1))
             def prepare(job):
                 return command(new,'prepare-upgrade.php',prepared,new,candidate['manifest_sha256'],candidate['source'],job,value=administrator)['plan_sha256']
-            failed_job=root/'interrupted-job'; digest=prepare(failed_job)
+            failed_job=private/'interrupted-job'; digest=prepare(failed_job)
             command(tools,'run-upgrade.php',failed_job,digest,stop='switching')
             assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '32'
             assert command(new,'recover-upgrade.php',failed_job,digest)['recovered']
             assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
             assert sql("SELECT setting_key,version,CAST(value_json AS CHAR) FROM admin_platform_settings ORDER BY setting_key") == before_settings
             assert evidence.read_bytes() == b'old file data\x00\xff'
-            job=root/'successful-job'; digest=prepare(job)
+            job=private/'successful-job'; digest=prepare(job)
             assert command(new,'run-upgrade.php',job,digest)['upgrade_complete']
             assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '32'
             assert sql('SELECT id,checksum FROM gojet_schema_migrations WHERE id<=31 ORDER BY id') == before_journal

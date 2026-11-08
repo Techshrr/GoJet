@@ -23,7 +23,6 @@ from native_prepared_services_test import SERVICES
 def verify_upgrade(root, release, prepared, source, profile):
     migration_count = len(catalog(release/'migrations')['migrations'])
     next_migration = migration_count + 1
-    release_version = json.loads((release/'manifest.json').read_text())['version']
     authority = Path('/var/lib/gojet-upgrade-authority')
     gate = Path('/etc/nginx/gojet-upgrade-gate.conf')
     assert not authority.exists() and not authority.is_symlink()

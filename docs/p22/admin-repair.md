@@ -38,7 +38,7 @@ separate observations, not substituted by this CI result.
 1. Run `sha256sum --check SHA256SUMS` in the extracted package directory. Read
    `verification.json` for `manifest_sha256`, source and archive digest. Verify
    the payload against those exact values using its package verifier.
-2. Extract the payload into a **new** `/opt/gojet/releases/10.0.0-rc.2-<source>`
+2. Run `python3 stage-release.py stage`. The included launcher binds `release.json`, rejects unsafe members and existing release directories, uses an explicit extraction umask, then invokes the real PHP verifier. It extracts into a **new** `/opt/gojet/releases/10.0.0-rc.2-<source>`
    directory. Do not overwrite rc.1, copy individual binaries into rc.1, delete
    completion locks, run bootstrap, or reactivate the retired installer.
 3. Use `runbooks/upgrade-recovery.md` inside the payload. Confirm the existing
@@ -57,5 +57,4 @@ separate observations, not substituted by this CI result.
    recent TOTP verification: enroll through Access, then sign in with the code.
    Keep the Web Risk adapter and its credential file unchanged.
 
-This package does not authorize a production deployment. Use the dedicated
-acceptance host first and preserve its evidence and rollback material.
+This package does not authorize a production deployment. Native installation and recovery tests must pass in CI before delivery. Do not ask an operator to keep a billed host running while development defects are being repaired. Keep deployment backups private.

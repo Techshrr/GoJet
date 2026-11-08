@@ -107,6 +107,7 @@ jobs:
         run: |
           python3 scripts/p21/validate_contract.py
           python3 -m unittest discover -s scripts/p21 -p 'test_*.py'
+          python3 -m unittest discover -s scripts/p22 -p 'test_*.py'
           php8.3 scripts/p21/php/upgrade_compatibility_test.php
           python3 scripts/p22/build_admin_repair.py
           sudo python3 scripts/p21/native_package_integrity_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.2-linux-amd64-payload.tar.gz "$GITHUB_SHA" > artifacts/v10/P22/admin-repair-package/target-integrity.json
@@ -208,7 +209,7 @@ jobs:
         run: |
           cp artifacts/v10/P21/payload/{installation-preparation,dependency-preflight,static-routing,risk-projection-recovery,upgrade-boundaries}.json artifacts/v10/P22/admin-repair-package/
           cd artifacts/v10/P22/admin-repair-package
-          sha256sum START-HERE.md release.json stage-release.py *.json *.tar.gz > SHA256SUMS
+          sha256sum START-HERE.md stage-release.py *.json *.tar.gz > SHA256SUMS
           sha256sum --check SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
@@ -264,4 +265,32 @@ jobs:
         with:
           name: p22-cross-release-${{ github.sha }}
           path: artifacts/v10/P22/transition/cross-release.json
+          retention-days: 30
+  verified-bundle:
+    needs: [native-admin, upgrade-candidate, cross-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: GoJet-AdminRepair-10.0.0-rc.2-${{ github.sha }}
+          path: /tmp/p22-bundle/candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: p22-native-admin-${{ github.sha }}
+          path: /tmp/p22-bundle/admin
+      - uses: actions/download-artifact@v4
+        with:
+          name: p22-cross-release-${{ github.sha }}
+          path: /tmp/p22-bundle/transition
+      - name: Bind acceptance evidence and assemble one native bundle
+        run: |
+          python3 scripts/p22/assemble_verified_bundle.py /tmp/p22-bundle/candidate /tmp/p22-bundle/admin /tmp/p22-bundle/transition artifacts/v10/P22/delivery
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GoJet-Native-Verified-${{ github.sha }}
+          path: artifacts/v10/P22/delivery/
           retention-days: 30
