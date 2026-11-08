@@ -19,6 +19,7 @@ from native_upgrade_test import verify_upgrade
 
 
 def verify_apply(root, release, source, digest, request):
+    migration_count = len(json.loads((release/'migration-catalog.json').read_text())['migrations'])
     destination = root/'applied'
     profile = copy.deepcopy(request)
     profile['configuration']['database']['name'] = 'gojet_p21_applied'
@@ -124,7 +125,7 @@ def verify_apply(root, release, source, digest, request):
         first = prepare_web_apply(root, release, destination, source)
         assert first == dict(source=source, installation_complete=True, already_applied=False)
         assert (destination/'data/journal.json').read_bytes() == saved
-        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
         assert sql("SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
         raw = marker.read_bytes()
         state = json.loads(raw)

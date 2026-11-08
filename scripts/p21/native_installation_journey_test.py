@@ -15,6 +15,7 @@ from native_prepared_services_test import SERVICES
 
 
 def verify_journey(root, release, source, entry, origin, token, profile):
+    migration_count = len(json.loads((release/'migration-catalog.json').read_text())['migrations'])
     authority = Path('/var/lib/gojet-installer-authority')
     state, prepared = entry/'state', entry/'prepared'
     binding = entry/'binding.json'
@@ -129,7 +130,7 @@ def verify_journey(root, release, source, entry, origin, token, profile):
         expect('completed', 90)
         assert json.loads(marker.read_text())['source'] == source
         assert json.loads(marker.read_text())['seal_sha256'] == seal_hash
-        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
         assert sql('SELECT COUNT(*) FROM admin_administrators') == '1'
         assert sql("SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
         assert all(p.read_bytes() == raw for p, raw in sealed.items()), 'Execution changed the sealed plan'
@@ -154,7 +155,7 @@ def verify_journey(root, release, source, entry, origin, token, profile):
         evidence = json.loads((repo/'artifacts/v10/P21/payload/browser-journey/result.json').read_text())
         evidence.update(source=source, seal_sha256=seal_hash, empty_database_at_start=True,
             root_preparation_timer=True, root_apply_timer=True, root_approval_did_not_execute=True,
-            migrations_applied=31, administrators_created=1, three_schedulers_retired=True,
+            migrations_applied=migration_count, administrators_created=1, three_schedulers_retired=True,
             installer_socket_closed=True, private_records_preserved=True)
         (repo/'artifacts/v10/P21/payload/browser-journey/result.json').write_text(json.dumps(evidence)+'\n')
         # Cleanup is only for this successful disposable fixture, never an installer command.

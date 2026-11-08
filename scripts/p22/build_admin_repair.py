@@ -33,6 +33,12 @@ def main():
         manifest = archive.extractfile('manifest.json').read()
     verification['manifest_sha256'] = hashlib.sha256(manifest).hexdigest()
     verification['version'] = VERSION
+    (output/'release.json').write_text(json.dumps({
+        'version': VERSION, 'source': head,
+        'archive_sha256': hashlib.sha256(payload.read_bytes()).hexdigest(),
+        'manifest_sha256': verification['manifest_sha256'],
+    }, sort_keys=True, indent=2)+'\n')
+    shutil.copyfile(ROOT/'scripts/p22/stage_release.py', output/'stage-release.py')
     (output / 'verification.json').write_text(json.dumps(verification, indent=2) + '\n')
     subprocess.run(['git', 'archive', '--format=tar.gz', f'--prefix=GoJet-source-{head[:7]}/', '-o', str(output / f'gojet-source-{head[:7]}.tar.gz'), 'HEAD'], cwd=ROOT, check=True)
     shutil.copyfile(ROOT / 'docs/p22/admin-repair.md', output / 'START-HERE.md')

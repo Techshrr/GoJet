@@ -28,7 +28,7 @@ final class InstallationCompletion
         $authority = $url['host'].(isset($url['port']) ? ':'.$url['port'] : '');
         $context = stream_context_create([
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false,
-                'peer_name' => $url['host'], 'SNI_enabled' => true, 'cafile' => $certificate],
+                'peer_name' => $url['host'], 'SNI_enabled' => true, 'capath' => '/etc/ssl/certs', 'cafile' => $certificate],
             'http' => ['method' => 'GET', 'timeout' => 3, 'follow_location' => 0, 'ignore_errors' => true,
                 'header' => 'Host: '.($host ?? $authority)."\r\nConnection: close\r\n", 'protocol_version' => 1.1]]);
         // No DNS resolution, remote host, proxy, arbitrary path or redirected request.

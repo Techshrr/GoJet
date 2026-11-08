@@ -34,6 +34,7 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByText('Authentication complete.', { exact: true }).waitFor();
     const routes = [
+      ['/admin/operations/jobs', 'No jobs found.'], ['/admin/operations/services', 'No services found.'],
       ['/admin/users', 'No users found.'], ['/admin/workspaces', 'No workspaces found.'],
       ['/admin/trust/destination-risk', 'No destination risk records'],
       ['/admin/trust/domain-risk', 'No domain risk records'],

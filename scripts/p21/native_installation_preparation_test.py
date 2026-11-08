@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-preparation-', dir='/var/lib') as
         tar.extractall(release, filter='data')
     # Trust the checked-out tool before verifying any executable in the archive.
     shutil.copytree(repo/'installer', root/'tools')
+    migration_count = len(json.loads((release/'migration-catalog.json').read_text())['migrations'])
     digest = sha(release/'manifest.json')
     certificate, key = root/'certificate.pem', root/'private.key'
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
@@ -322,7 +323,7 @@ $state->submitConfiguration($auth['session'],$auth['csrf'],json_decode(stream_ge
     assert result.returncode == 0 and not result.stderr, 'Prepared native data execution failed'
     assert json.loads(result.stdout) == dict(data_complete=True, already_applied=False, installation_complete=False)
     assert json.loads(execute().stdout) == dict(data_complete=True, already_applied=True, installation_complete=False)
-    assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+    assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
     assert sql('SELECT COUNT(*) FROM admin_administrators') == '1'
     assert sql("SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
     for secret in [request['admin']['password'], profile['database']['password'], *profile['secrets'].values()]:
@@ -362,7 +363,7 @@ print(json.dumps(dict(source=source, archive_sha256=archive_digest, manifest_sha
     real_api_port_failure_cleaned=True, failed_activation_retry_blocked=True, activation_repeat_noop=True,
     eight_packaged_units_started=True, eight_daemons_nonroot=True, eight_daemons_no_restart=True,
     custom_storage_service_sandbox_verified=True, real_api_and_redirect_reachable=True,
-    native_migrations_applied=31, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True,
+    native_migrations_applied=migration_count, inherited_admin_created=True, invalid_admin_rejected_before_plan_or_migration=True,
     root_generated_service_keys=True, repeated_preparation_preserves_keys=True,
     root_bound_web_configuration_preparation=True, web_configuration_authority_fields_rejected=True,
     frozen_unprivileged_draft_prepared=True, root_preserves_web_state=True,

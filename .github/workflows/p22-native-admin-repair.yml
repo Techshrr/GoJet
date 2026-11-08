@@ -67,6 +67,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y php8.3-mysql
           mkdir -p artifacts/v10/P22/admin-repair
+          sudo env P22_DISPOSABLE_ADMIN_CI=1 python3 scripts/p22/tls_chain_test.py > artifacts/v10/P22/admin-repair/tls-chain.json
           sudo env P22_DISPOSABLE_ADMIN_CI=1 P22_MYSQL_ADMIN_PASSWORD=root P22_SOURCE="$GITHUB_SHA" php8.3 scripts/p22/settings_upgrade_test.php
       - name: Real cookie auth and desktop/mobile browser acceptance
         env:
@@ -82,7 +83,7 @@ jobs:
   upgrade-candidate:
     needs: native-admin
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,10 +110,113 @@ jobs:
           python3 scripts/p22/build_admin_repair.py
           sudo python3 scripts/p21/native_package_integrity_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.2-linux-amd64-payload.tar.gz "$GITHUB_SHA" > artifacts/v10/P22/admin-repair-package/target-integrity.json
           cd artifacts/v10/P22/admin-repair-package
-          sha256sum START-HERE.md verification.json target-integrity.json *.tar.gz > SHA256SUMS
+          sha256sum START-HERE.md release.json stage-release.py verification.json target-integrity.json *.tar.gz > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Install browser for full native journey
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/p21-browsers
+        run: pnpm exec playwright-core install --with-deps chromium
+      - name: Prepare native dependencies for aggregate preflight
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx php8.3-fpm php8.3-mysql redis-server clamav clamav-daemon clamav-freshclam
+          sudo systemd-sysusers "$PWD/deploy/sysusers/gojet.conf"
+          sudo usermod -a -G clamav gojet
+          sudo systemctl stop clamav-freshclam.service clamav-daemon.service clamav-daemon.socket
+          sudo timeout 150 freshclam --stdout
+          # Health authority requires engine/signature metadata; no admin commands.
+          sudo sed -i '/^[[:space:]]*EnableVersionCommand[[:space:]]/d' /etc/clamav/clamd.conf
+          printf '%s\n' 'EnableVersionCommand yes' | sudo tee -a /etc/clamav/clamd.conf > /dev/null
+          sudo systemctl start mysql redis-server nginx php8.3-fpm clamav-daemon.socket clamav-daemon.service
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "SET GLOBAL log_bin_trust_function_creators=1; CREATE DATABASE gojet_p21_preflight; CREATE USER 'gojet_preflight'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT SELECT ON gojet_p21_preflight.* TO 'gojet_preflight'@'127.0.0.1';"
+          sudo timeout 60 bash -c 'until test -S /run/clamav/clamd.ctl; do sleep 1; done'
+      - name: Verify complete durable risk projection recovery
+        run: |
+          set -euo pipefail
+          go build -o artifacts/v10/P21/build/risk-restore-fixture ./scripts/p21/risk_restore_runner
+          go build -o /tmp/gojet-risk-restore-operationsmonitor ./services/platformapi/cmd/operationsmonitor
+          go build -ldflags "-X github.com/Techshrr/GoJet/internal/releaseinfo.Version=10.0.0-rc.2 -X github.com/Techshrr/GoJet/internal/releaseinfo.Commit=$GITHUB_SHA" -o artifacts/v10/P21/build/version-only-fixture ./scripts/p21/compatibility_probe_fixture
+          sudo env P21_MYSQL_ADMIN_PASSWORD=root python3 scripts/p21/native_risk_projection_test.py artifacts/v10/P21/build/risk-restore-fixture /tmp/gojet-risk-restore-operationsmonitor | tee artifacts/v10/P21/payload/risk-projection-recovery.json
+      - name: Verify upgrade maintenance and Redis boundaries
+        run: |
+          set -euo pipefail
+          sudo python3 scripts/p21/native_upgrade_boundaries_test.py | tee artifacts/v10/P21/payload/upgrade-boundaries.json
+      - name: Verify four compiled static apps through native Nginx
+        run: |
+          set -euo pipefail
+          sudo python3 scripts/p21/native_static_routes_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.2-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/static-routing.json
+      - name: Verify aggregate native preflight and real dependency failures
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/UnprivilegedProbe.php
+          php8.3 -l installer/src/DependencyPreflight.php
+          php8.3 -l installer/bin/preflight.php
+          sudo env P21_MYSQL_ADMIN_PASSWORD=root python3 scripts/p21/native_dependency_preflight_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.2-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/dependency-preflight.json
+      - name: Verify sealed preparation through actual native database bootstrap
+        run: |
+          set -euo pipefail
+          php8.3 -l installer/src/ApplyRequest.php
+          php8.3 -l installer/src/PreflightSnapshot.php
+          php8.3 -l installer/src/ApplyProgress.php
+          php8.3 -l installer/bin/refresh-web-preflight.php
+          php8.3 -l installer/bin/render-web-preflight-schedule.php
+          php8.3 -l installer/src/PreflightScheduleInstallation.php
+          php8.3 -l installer/bin/recover-web-schedule.php
+          php8.3 -l installer/bin/install-web-preflight-schedule.php
+          php8.3 -l installer/bin/render-web-apply-schedule.php
+          php8.3 -l installer/bin/install-web-apply-schedule.php
+          php8.3 -l installer/src/WebInstallationApply.php
+          php8.3 -l installer/bin/provision-web-apply.php
+          php8.3 -l installer/bin/run-web-apply.php
+          php8.3 -l installer/src/InstallationApply.php
+          php8.3 -l installer/bin/apply-installation.php
+          php8.3 -l installer/src/InstallerRetirement.php
+          php8.3 -l installer/bin/retire-installer.php
+          php8.3 -l installer/src/InstallationResult.php
+          php8.3 -l installer/src/InstallationCompletion.php
+          php8.3 -l installer/bin/check-installation.php
+          php8.3 -l installer/bin/complete-installation.php
+          php8.3 -l installer/src/EntryHandover.php
+          php8.3 -l installer/bin/authorize-entry-handover.php
+          php8.3 -l installer/src/SiteActivation.php
+          php8.3 -l installer/bin/activate-site.php
+          php8.3 -l installer/bin/recover-site.php
+          php8.3 -l installer/src/ServiceActivation.php
+          php8.3 -l installer/bin/activate-services.php
+          php8.3 -l installer/bin/recover-services.php
+          php8.3 -l installer/src/InstallationPreparation.php
+          php8.3 -l installer/src/WebConfigurationPreparation.php
+          php8.3 -l installer/bin/run-web-preparation.php
+          php8.3 -l installer/bin/recover-web-preparation.php
+          php8.3 -l installer/src/WebConfigurationRestart.php
+          php8.3 -l installer/bin/restart-web-configuration.php
+          php8.3 -l installer/bin/recover-configuration-restart.php
+          php8.3 -l installer/src/WebConfigurationSwitch.php
+          php8.3 -l installer/bin/switch-web-configuration.php
+          php8.3 -l installer/src/WebEntryProvisioning.php
+          php8.3 -l installer/bin/provision-web-entry.php
+          php8.3 -l installer/bin/recover-web-entry.php
+          php8.3 -l installer/bin/render-web-preparation-schedule.php
+          php8.3 -l installer/bin/install-web-preparation-schedule.php
+          php8.3 -l installer/bin/prepare-installation.php
+          php8.3 -l installer/bin/run-prepared-data.php
+          MYSQL_PWD=root mysql -h127.0.0.1 -uroot -e "CREATE DATABASE gojet_p21_journey; CREATE DATABASE gojet_p21_applied; CREATE DATABASE gojet_p21_prepared; CREATE USER 'gojet_prepared'@'127.0.0.1' IDENTIFIED BY 'p21-ci-only'; GRANT ALL ON gojet_p21_prepared.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_applied.* TO 'gojet_prepared'@'127.0.0.1'; GRANT ALL ON gojet_p21_journey.* TO 'gojet_prepared'@'127.0.0.1';"
+          sudo env P21_MYSQL_ADMIN_PASSWORD=root P21_NODE="$(command -v node)" PLAYWRIGHT_BROWSERS_PATH=/opt/p21-browsers python3 scripts/p21/native_installation_preparation_test.py artifacts/v10/P21/payload/gojet-10.0.0-rc.2-linux-amd64-payload.tar.gz "$GITHUB_SHA" | tee artifacts/v10/P21/payload/installation-preparation.json
+      - name: Include native acceptance evidence
+        run: |
+          cp artifacts/v10/P21/payload/{installation-preparation,dependency-preflight,static-routing,risk-projection-recovery,upgrade-boundaries}.json artifacts/v10/P22/admin-repair-package/
+          cd artifacts/v10/P22/admin-repair-package
+          sha256sum START-HERE.md release.json stage-release.py *.json *.tar.gz > SHA256SUMS
           sha256sum --check SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: GoJet-AdminRepair-10.0.0-rc.2-${{ github.sha }}
           path: artifacts/v10/P22/admin-repair-package/
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: p22-native-failure-evidence-${{ github.sha }}
+          path: artifacts/v10/P21/payload/*.json
+          retention-days: 7

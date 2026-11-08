@@ -85,7 +85,7 @@ final class UpgradeHealth
         }
         $context = stream_context_create([
             'ssl'=>['verify_peer'=>true,'verify_peer_name'=>true,'allow_self_signed'=>false,'peer_name'=>$url['host'],
-                'SNI_enabled'=>true,'cafile'=>$release['certificate']],
+                'SNI_enabled'=>true,'capath' => '/etc/ssl/certs', 'cafile'=>$release['certificate']],
             'http'=>['timeout'=>3,'follow_location'=>0,'ignore_errors'=>true,'protocol_version'=>1.1,
                 'header'=>'Host: '.($host ?? $url['host'].(isset($url['port']) ? ':'.$url['port'] : ''))."\r\n".($privateProbe ? "X-GoJet-Upgrade-Probe: ".UpgradeMaintenance::token()."\r\n" : '')."Connection: close\r\n"]]);
         $http_response_header = [];
