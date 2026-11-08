@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useModuleRuntime, ModuleSessionNotice } from '../p17/moduleRuntime';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, DataTable, EmptyState, InlineMessage, useShellViewport } from '@gojet/ui';
 import { AdminShell } from '../shell/AdminShell';
@@ -6,7 +7,7 @@ import { CommerceNav } from '../commerce/CommerceNav';
 import { adminGet, adminWrite, readCommerceRuntime, type CommerceFX } from '../commerce/runtime';
 
 export default function CommerceFXPage() {
-  const runtime = useMemo(() => readCommerceRuntime(), []); const queryClient = useQueryClient(); const viewport = useShellViewport();
+  const auth = useModuleRuntime(readCommerceRuntime()); const { runtime } = auth; const queryClient = useQueryClient(); const viewport = useShellViewport();
   const [base, setBase] = useState('USD'); const [quote, setQuote] = useState('EUR'); const [rate, setRate] = useState(''); const [source, setSource] = useState('manual'); const [reason, setReason] = useState(''); const [confirming, setConfirming] = useState(false); const [validation, setValidation] = useState('');
   const query = useQuery({ queryKey: ['p13-admin-fx'], enabled: runtime !== null, queryFn: () => adminGet<{ items: CommerceFX[] }>(runtime!, '/api/admin/fx'), retry: false });
   const mutation = useMutation({
@@ -24,6 +25,7 @@ export default function CommerceFXPage() {
   });
   const items = query.data?.items ?? [];
   const pageState = !runtime || query.isError ? 'validation-error' : query.isPending ? 'loading' : confirming ? 'override-confirm' : validation ? 'validation-error' : items.some((item) => item.status === 'provider-error') ? 'provider-error' : items.some((item) => item.status === 'stale') ? 'stale' : items.length === 0 ? 'current' : 'current';
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'partial-service-degradation' : 'normal'}><section className="commerce-page" data-page="admin-commerce-fx" data-state={pageState}>
     <header><div><p className="commerce-eyebrow">COMMERCE</p><h1>FX authority</h1><p>Rates retain source, as-of time and explicit current/stale/provider-error/override state. Provider errors retain the last positive rate.</p></div></header><CommerceNav />
     {!runtime ? <InlineMessage variant="danger">billing.manage authority is unavailable.</InlineMessage> : null}{query.isPending && runtime ? <p role="status">Loading FX rates…</p> : null}{query.isError ? <InlineMessage variant="danger">FX authority is unavailable. Stale data is not presented as current.</InlineMessage> : null}{validation ? <InlineMessage variant="danger">{validation}</InlineMessage> : null}

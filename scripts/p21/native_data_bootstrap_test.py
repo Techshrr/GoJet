@@ -35,8 +35,11 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     shutil.copyfile(binary, release / 'bin/platformapi')
     (release / 'bin/platformapi').chmod(0o755)
     (release / 'migration-catalog.json').write_text(json.dumps(catalog(release / 'migrations')))
+    migration_count = len(catalog(release/'migrations')['migrations'])
+    identity = json.loads(subprocess.check_output([str(release/'bin/platformapi'), '--version'], text=True))
+    assert identity['commit'] == source and identity['service'] == 'platformapi'
     plan = dict(schema='gojet.root-data-bootstrap.v1', release=str(release), source=source,
-        version='10.0.0-rc.1', catalog_sha256=sha(release / 'migration-catalog.json'),
+        version=identity['version'], catalog_sha256=sha(release / 'migration-catalog.json'),
         platformapi_sha256=sha(release / 'bin/platformapi'),
         database=dict(host='127.0.0.1', port=3306, name='gojet_p21_data_success', user='gojet_test', password='p21-ci-only'),
         redis=dict(host='127.0.0.1', port=6379, db=4, password=''),
@@ -87,7 +90,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     assert result.returncode == 0 and not result.stderr, 'Native data bootstrap failed'
     assert json.loads(result.stdout) == dict(data_complete=True, already_applied=False, installation_complete=False)
     assert json.loads(call(success).stdout) == dict(data_complete=True, already_applied=True, installation_complete=False)
-    assert sql(plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+    assert sql(plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
     assert sql(plan['database']['name'], 'SELECT COUNT(*) FROM admin_administrators') == '1'
     assert sql(plan['database']['name'], "SELECT COUNT(*) FROM admin_audit_events WHERE action='admin.bootstrap' AND result='success'") == '1'
     verify_configuration(release, root, binary, plan)
@@ -137,7 +140,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
     refused(call(failed))
     journal = json.loads((failed / 'journal.json').read_text())
     assert journal['phase'] == 'failed' and journal['failed_at'] == 'admin-started'
-    assert sql(failed_plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+    assert sql(failed_plan['database']['name'], "SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
     assert sql(failed_plan['database']['name'], 'SELECT COUNT(*) FROM admin_administrators') == '0'
     before = (failed / 'journal.json').read_bytes()
     refused(call(failed))
@@ -192,7 +195,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-data-') as temporary:
         assert plan['admin']['password'] not in raw and plan['admin_cipher']['key_hex'] not in raw
         assert (directory / 'journal.json').stat().st_mode & 0o777 == 0o600
     assert not list(root.rglob('installed.lock'))
-print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_applied=31,
+print(json.dumps(dict(source=source, native_data_bootstrap=True, migrations_applied=migration_count,
     inherited_admin_created=True, repeat_noop=True, private_request_enforced=True,
     root_only=True, immutable_input_rejections=True, native_identity_checked=True,
     typed_configuration_rejected_unsafe_input=True, typed_eight_service_pid1_roundtrip=True,

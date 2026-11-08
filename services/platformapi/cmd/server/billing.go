@@ -194,10 +194,7 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		membershipResolver,
 		callbackVerifier,
 	)
-	// P17 owns the real billing.manage permission lifecycle. P13 only consumes
-	// that boundary. Until P17 is wired, production has no resolver and every
-	// admin commerce route fails closed. CI may opt into one explicit server-side
-	// test actor; no client-supplied role or permission header is authoritative.
+	// The explicit fixture authority is restricted to test-auth builds.
 	if testAuth && os.Getenv("GOJET_TEST_BILLING_ADMIN_ENABLED") == "1" {
 		actorID := strings.TrimSpace(os.Getenv("GOJET_TEST_BILLING_ADMIN_ACTOR"))
 		if actorID == "" {
@@ -206,6 +203,15 @@ func buildBillingHandler(db *sql.DB, redisClient *redis.Client, testAuth bool) (
 		api.SetAdminPermissionResolver(billingTestAdminPermissionResolver{actorID: actorID})
 	}
 	combined := http.NewServeMux()
+	if !testAuth && os.Getenv("GOJET_ADMIN_ACCESS_ENABLED") == "1" {
+		authority, err := buildNativeAdminAuthority(db, redisClient)
+		if err != nil {
+			return nil, false, err
+		}
+		adminAPI := billing.NewAPI(store, authority, nil, nil)
+		adminAPI.SetAdminPermissionResolver(authority)
+		combined.Handle("/api/admin/", adminAPI.Handler())
+	}
 	combined.Handle("GET /api/workspaces/{workspaceId}/billing", billing.NewWorkspaceBillingSummaryHandler(store, principalResolver, membershipResolver))
 	if productionEpayCallback != nil {
 		combined.Handle("GET /api/payments/callbacks/epay", productionEpayCallback)

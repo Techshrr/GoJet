@@ -21,6 +21,8 @@ from native_prepared_services_test import SERVICES
 
 
 def verify_upgrade(root, release, prepared, source, profile):
+    migration_count = len(catalog(release/'migrations')['migrations'])
+    next_migration = migration_count + 1
     authority = Path('/var/lib/gojet-upgrade-authority')
     gate = Path('/etc/nginx/gojet-upgrade-gate.conf')
     assert not authority.exists() and not authority.is_symlink()
@@ -115,12 +117,12 @@ def verify_upgrade(root, release, prepared, source, profile):
         migration = 'CREATE TABLE gojet_upgrade_added (id INT PRIMARY KEY) ENGINE=InnoDB;\n'
         if failing:
             migration += "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='disposable migration failure';\n"
-        (dest/'migrations/000032_upgrade_fixture.sql').write_text(migration)
+        (dest/f'migrations/{next_migration:06d}_upgrade_fixture.sql').write_text(migration)
         (dest/'migration-catalog.json').write_bytes(encode(catalog(dest/'migrations')))
         with (dest/'static/site/index.html').open('ab') as stream:
             stream.write(b'\n<!-- isolated upgrade candidate -->\n')
         m = json.loads((dest/'manifest.json').read_text())
-        for path in [dest/'migrations/000032_upgrade_fixture.sql', dest/'migration-catalog.json', dest/'static/site/index.html']:
+        for path in [dest/f'migrations/{next_migration:06d}_upgrade_fixture.sql', dest/'migration-catalog.json', dest/'static/site/index.html']:
             m['files'][str(path.relative_to(dest))] = dict(bytes=path.stat().st_size, mode=0o644, sha256=digest(path))
         (dest/'manifest.json').write_bytes(encode(m))
         names = sorted([*m['files'], 'manifest.json', 'sbom.cdx.json'])
@@ -152,7 +154,7 @@ def verify_upgrade(root, release, prepared, source, profile):
         return json.loads(r.stdout)
 
     def restored():
-        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '31'
+        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(migration_count)
         assert sql("SHOW TABLES LIKE 'gojet_upgrade_added'") == ''
         assert sql('SELECT HEX(value) FROM gojet_upgrade_evidence WHERE id=1') == '00FF0102'
         assert evidence.read_bytes() == original and evidence.stat().st_mode & 0o777 == 0o640
@@ -197,7 +199,7 @@ def verify_upgrade(root, release, prepared, source, profile):
             '--property=MainPID','--value'],env=env,timeout=15)
         for label, version in [('downgrade','10.0.0-rc.0'),('new-minor','10.1.0'),('new-major','11.0.0'),
                                ('noncanonical-rc','10.0.0-rc.01'),('unsupported-prerelease','10.0.0-beta.1'),
-                               ('build-metadata','10.0.0+build'),('binary-version','10.0.0-rc.2'),
+                               ('build-metadata','10.0.0+build'),('binary-version','10.0.0-rc.999999999'),
                                ('binary-source',None),('binary-service',None),('missing-recovery-capability',None)]:
             m=json.loads(original_manifest)
             (incompatible/'bin/operationsmonitor').write_bytes(original_monitor)
@@ -237,7 +239,7 @@ def verify_upgrade(root, release, prepared, source, profile):
         job, binding = prepare('ddl-failure', bad)
         execute(job, binding, refused=True)
         assert json.loads((job/'state.json').read_text())['phase'] == 'migrating'
-        assert sql("SELECT status FROM gojet_schema_migrations WHERE id=32") == 'failed'
+        assert sql(f"SELECT status FROM gojet_schema_migrations WHERE id={next_migration}") == 'failed'
         assert sql("SHOW TABLES LIKE 'gojet_upgrade_added'") == 'gojet_upgrade_added'
         # Recovery must depend on the sealed old package, not broken candidate bytes.
         with (bad/'static/site/index.html').open('ab') as stream:
@@ -294,7 +296,7 @@ def verify_upgrade(root, release, prepared, source, profile):
 
         job, binding = prepare('commit-upgrade', good)
         execute(job, binding, stop='committed')
-        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == '32'
+        assert sql("SELECT COUNT(*) FROM gojet_schema_migrations WHERE status='applied'") == str(next_migration)
         sql('INSERT INTO gojet_upgrade_evidence VALUES(3,0xBB)')
         evidence.write_bytes(b'new release committed data')
         execute(job, binding, recovery=True, stop='complete')

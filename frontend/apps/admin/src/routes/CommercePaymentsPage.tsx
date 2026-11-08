@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useModuleRuntime, ModuleSessionNotice } from '../p17/moduleRuntime';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Card, DataTable, EmptyState, InlineMessage, useShellViewport } from '@gojet/ui';
@@ -7,10 +7,11 @@ import { CommerceNav } from '../commerce/CommerceNav';
 import { adminGet, readCommerceRuntime, type CommercePayment } from '../commerce/runtime';
 
 export default function CommercePaymentsPage() {
-  const runtime = useMemo(() => readCommerceRuntime(), []); const viewport = useShellViewport();
+  const auth = useModuleRuntime(readCommerceRuntime()); const { runtime } = auth; const viewport = useShellViewport();
   const query = useQuery({ queryKey: ['p13-admin-payments'], enabled: runtime !== null, queryFn: () => adminGet<{ items: CommercePayment[] }>(runtime!, '/api/admin/payments?limit=100'), retry: false });
   const items = query.data?.items ?? [];
   const pageState = !runtime ? 'partial' : query.isPending ? 'loading' : query.isError ? 'partial' : items.length === 0 ? 'empty' : items.some((item) => item.status === 'refunded') ? 'refunded' : items.some((item) => item.status === 'failed') ? 'failed' : items.some((item) => item.status === 'paid') ? 'paid' : 'pending';
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'partial-service-degradation' : 'normal'}>
     <section className="commerce-page" data-page="admin-commerce-payments" data-state={pageState}>
       <header><div><p className="commerce-eyebrow">COMMERCE</p><h1>Payments</h1><p>Provider settlement records are server authority. Raw callback bodies, credentials and signatures are never exposed here.</p></div></header>

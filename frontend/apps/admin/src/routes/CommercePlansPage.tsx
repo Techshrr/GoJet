@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useModuleRuntime, ModuleSessionNotice } from '../p17/moduleRuntime';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, DataTable, EmptyState, InlineMessage, useShellViewport } from '@gojet/ui';
 import { AdminShell } from '../shell/AdminShell';
@@ -8,7 +9,7 @@ import { adminGet, adminWrite, parseEntitlements, readCommerceRuntime, type Comm
 const defaultEntitlements = 'links:100:count\ncustom_domains:1:count';
 
 export default function CommercePlansPage() {
-  const runtime = useMemo(() => readCommerceRuntime(), []);
+  const auth = useModuleRuntime(readCommerceRuntime()); const { runtime } = auth;
   const queryClient = useQueryClient();
   const viewport = useShellViewport();
   const [code, setCode] = useState(''); const [name, setName] = useState(''); const [currency, setCurrency] = useState('USD');
@@ -36,6 +37,7 @@ export default function CommercePlansPage() {
   const items = query.data?.items ?? [];
   const pageState = !runtime ? 'validation-error' : query.isPending ? 'loading' : query.isError ? 'validation-error' : conflict ? 'conflict' : validation ? 'validation-error' : items.length === 0 ? 'empty' : items.some((item) => item.status === 'archived') ? 'archived' : items.some((item) => item.status === 'active') ? 'active' : 'draft';
 
+  if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'partial-service-degradation' : 'normal'}>
     <section className="commerce-page" data-page="admin-commerce-plans" data-state={pageState}>
       <header><div><p className="commerce-eyebrow">COMMERCE</p><h1>Plans</h1><p>Plan code is immutable after creation. Versioned updates and terminal archive transitions are enforced by the server.</p></div></header>

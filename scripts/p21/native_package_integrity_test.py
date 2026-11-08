@@ -16,13 +16,22 @@ assert os.geteuid() == 0
 expected_archive = archive.with_name(archive.name+'.sha256').read_text().split()[0]
 verified = verify_archive(archive, expected_archive, source)
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
-with tempfile.TemporaryDirectory(prefix='gojet-integrity-') as temporary:
+with tempfile.TemporaryDirectory(prefix='gojet-integrity-', dir='/var/lib') as temporary:
     root = Path(temporary)
     root.chmod(0o755)
     release = root/'release'
-    release.mkdir(mode=0o755)
+    sys.path.insert(0, str(repo/'scripts/p22'))
+    from stage_release import stage
     with tarfile.open(archive, 'r:gz') as tar:
-        tar.extractall(release, filter='data')
+        raw_manifest = tar.extractfile('manifest.json').read()
+        version = json.loads(raw_manifest)['version']
+    mask = os.umask(0o077)
+    try:
+        stage(archive, {'archive_sha256': expected_archive, 'source': source, 'version': version,
+                       'manifest_sha256': hashlib.sha256(raw_manifest).hexdigest()}, release)
+    finally:
+        os.umask(mask)
+    assert all(p.stat().st_mode & 0o7777 == 0o755 for p in release.rglob('*') if p.is_dir())
     digest = sha(release/'manifest.json')
     # The verifier itself is from the trusted checkout, not executed from an
     # as-yet unverified release. Copy to a traversable root-owned tools directory.
@@ -97,7 +106,7 @@ with tempfile.TemporaryDirectory(prefix='gojet-integrity-') as temporary:
     manifest.write_bytes(original_manifest)
     assert call().returncode == 0
 print(json.dumps(dict(source=source, archive_sha256=expected_archive, manifest_sha256=digest,
-    members=report['members'], actual_release_verified=True, root_only=True,
+    members=report['members'], actual_release_verified=True, root_only=True, strict_umask_staging_verified=True,
     wrong_authority_rejected=True, missing_tampered_extra_rejected=True, runbook_tampering_rejected=True,
     symlink_hardlink_rejected=True, owner_modes_rejected=True,
     checksum_inventory_rejected=True, restored_payload_verified=True,

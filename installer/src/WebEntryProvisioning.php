@@ -101,7 +101,7 @@ final class WebEntryProvisioning
         $host = $url['host'].(isset($url['port']) ? ':'.$port : '');
         $context = stream_context_create([
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false,
-                'peer_name' => $url['host'], 'SNI_enabled' => true, 'cafile' => $web['certificate']],
+                'peer_name' => $url['host'], 'SNI_enabled' => true, 'capath' => '/etc/ssl/certs', 'cafile' => $web['certificate']],
             'http' => ['method' => 'GET', 'header' => 'Host: '.$host."\r\nAccept: application/json\r\nConnection: close\r\n",
                 'timeout' => 2, 'ignore_errors' => true, 'follow_location' => 0, 'max_redirects' => 0],
         ]);
