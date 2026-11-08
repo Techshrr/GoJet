@@ -1,0 +1,30 @@
+name: Publish sealed GoJet RC2
+on:
+  push:
+    branches: [release/p22-sealed-rc2]
+    paths:
+      - '.github/workflows/p22-publish-sealed-rc2.yml'
+      - 'scripts/p22/publish_sealed_rc2.py'
+      - 'scripts/p22/release-overlay/**'
+      - 'docs/p22/rc2-release-notes.md'
+permissions:
+  contents: read
+concurrency:
+  group: gojet-publish-v10.0.0-rc.2
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Techshrr/GoJet'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify immutable artifacts and publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/p22/publish_sealed_rc2.py --output "$RUNNER_TEMP/gojet-release" --publish

@@ -1,0 +1,13 @@
+{
+  "schema": "gojet.webrisk.delivery-evidence.v1",
+  "checked_date": "2026-11-08",
+  "archive_sha256": "e6045d32ce89af0d8640a3d069fb849251a0f5acdd414cf224654fdc308d6db0",
+  "tests": 24,
+  "failures": 0,
+  "errors": 0,
+  "tested_source_matches_archive": true,
+  "live_google_retested": false,
+  "live_acceptance_origin": "operator-provided transcript on 2026-11-07",
+  "historical_live_acceptance_passed": true,
+  "current_host_business_acceptance": false
+}

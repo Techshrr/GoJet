@@ -1,0 +1,11 @@
+{
+  "schema": "gojet.integrated-delivery.v1",
+  "native_source": "ce305a9207fd2fe46396e7cf433137c48ab5aec1",
+  "verification_source": "9913180dfed3acd017f401fc4caffa010bfae133",
+  "original_native_zip_sha256": "60c1a29b0a331a8a78a956984e105ba2ba8c72d4be3065ec55cf177e6a32141e",
+  "webrisk_zip_sha256": "e6045d32ce89af0d8640a3d069fb849251a0f5acdd414cf224654fdc308d6db0",
+  "native_ci_passed": true,
+  "production_deployed": false,
+  "external_services_retested": false,
+  "reboot_tested": false
+}
