@@ -93,7 +93,7 @@ def validate(candidate, admin, transition, source):
 
 def main():
     candidate, admin, transition, output = map(Path, sys.argv[1:5])
-    source=os.environ['GITHUB_SHA']
+    source=os.environ.get('GOJET_DELIVERY_SOURCE',os.environ['GITHUB_SHA'])
     identity, evidence=validate(candidate, admin, transition, source)
     repo=Path(__file__).resolve().parents[2]
     name=f"GoJet-Native-{identity['version']}-{source[:7]}"
@@ -121,6 +121,8 @@ def main():
         shutil.copyfile(repo/'docs/p22/delivery-acceptance.md',root/'ACCEPTANCE-ZH.md')
         acceptance={'schema':'gojet.native-delivery.v1','source':source,'release':identity,
             'native_ci_passed':True,'workflow_run_id':os.environ['GITHUB_RUN_ID'],
+            'verification_source':os.environ['GITHUB_SHA'],
+            'build_workflow_run_id':os.environ.get('GOJET_BUILD_RUN_ID',os.environ['GITHUB_RUN_ID']),
             'production_deployed':False,'external_credentials_tested':False,'reboot_tested':False,
             'evidence_sha256':{p.name:sha(p) for p in sorted((root/'evidence').iterdir())}}
         (root/'acceptance.json').write_text(json.dumps(acceptance,sort_keys=True,indent=2)+'\n')

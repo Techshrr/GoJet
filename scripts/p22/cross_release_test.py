@@ -23,6 +23,17 @@ OLD_ARCHIVE = '7e7343c34571f69038e090f20775e1a941b5a33b80825e755813dd08500f1542'
 OLD_MANIFEST = 'fce4900d7f900de2ad7655d6f7411e0771f7a1d4417668aad7538974db5310ba'
 
 
+def inject_checkpoint(code):
+    start=code.index('    private static function phase(')
+    end=code.index('    private static function waitHealthy(',start)
+    block=code[start:end]
+    hook="        UpgradeIO::record($job.'/state.json',$state);"
+    if block.count(hook) != 1 or 'P22_STOP_PHASE' in code:
+        raise ValueError('Ambiguous interruption checkpoint')
+    injected=block.replace(hook,hook+"\n        if (getenv('P22_STOP_PHASE')===$phase) { posix_kill(getmypid(),9); }",1)
+    return code[:start]+injected+code[end:]
+
+
 def main():
     assert os.geteuid() == 0 and os.environ.get('P22_DISPOSABLE_NATIVE_CI') == '1'
     old_archive, candidate_dir = map(lambda s: Path(s).resolve(), sys.argv[1:3])
@@ -89,9 +100,7 @@ def main():
             tools = root/'fault-tools'; (tools/'installer').mkdir(parents=True)
             shutil.copytree(new/'installer',tools/'installer',dirs_exist_ok=True)
             impl = tools/'installer/src/NativeUpgrade.php'
-            code = impl.read_text(); hook="        UpgradeIO::record($job.'/state.json',$state);"
-            assert code.count(hook) == 1
-            impl.write_text(code.replace(hook,hook+"\n        if (getenv('P22_STOP_PHASE')===$phase) { posix_kill(getmypid(),9); }",1))
+            impl.write_text(inject_checkpoint(impl.read_text()))
             def prepare(job):
                 return command(new,'prepare-upgrade.php',prepared,new,candidate['manifest_sha256'],candidate['source'],job,value=administrator)['plan_sha256']
             failed_job=private/'interrupted-job'; digest=prepare(failed_job)
