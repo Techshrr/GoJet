@@ -77,7 +77,7 @@ export default function AbuseReportPage() {
 
   const testVerification = import.meta.env.VITE_GOJET_TEST_AUTH_ENABLED === '1' && import.meta.env.VITE_GOJET_TEST_TRUST_TURNSTILE_ENABLED === '1';
   const testToken = String(import.meta.env.VITE_GOJET_TEST_TRUST_TURNSTILE_TOKEN ?? '').trim();
-  const siteKey = String(import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY ?? '').trim();
+  const siteKey = String(document.querySelector<HTMLMetaElement>('meta[name="gojet-turnstile-site-key"]')?.content || import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY || '').trim();
   const verificationConfigured = testVerification ? testToken !== '' : siteKey !== '';
 
   useEffect(() => {

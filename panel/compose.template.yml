@@ -1,0 +1,29 @@
+name: linketic
+services:
+  linketic:
+    platform: linux/amd64
+    build:
+      context: https://github.com/Techshrr/GoJet.git#SOURCE_COMMIT
+      dockerfile: panel/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:8088"
+    environment:
+      SITE_URL: "https://www.linketic.com"
+      INSTALL_ACCESS_CODE: "replace-with-your-own-install-code"
+    volumes:
+      - application:/var/lib/linketic
+      - database:/var/lib/mysql
+      - redis:/var/lib/redis
+      - antivirus:/var/lib/clamav
+    stop_grace_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  application:
+  database:
+  redis:
+  antivirus:

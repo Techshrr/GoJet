@@ -1,0 +1,64 @@
+name: P23 Panel Web Installer
+on:
+  push:
+    branches: [feat/p23-panel-web-installer]
+permissions:
+  contents: read
+jobs:
+  panel-installation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Contract checks
+        run: |
+          python3 -m unittest discover -s panel/tests -p 'test_*.py'
+          php8.3 -l panel/bridge.php
+      - name: Build deployable image
+        run: docker build --progress=plain -f panel/Dockerfile -t linketic-panel:ci .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Browser runtime
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+          pnpm install --frozen-lockfile
+          pnpm exec playwright-core install --with-deps chromium
+      - name: Start isolated deployment and external protocol fixtures
+        run: |
+          mkdir -p artifacts/panel
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=panel-ci' -addext 'subjectAltName=DNS:www.linketic.test,DNS:webrisk.googleapis.com,DNS:challenges.cloudflare.com,DNS:mail.fixture' -keyout panel/tests/key.pem -out panel/tests/cert.pem
+          docker run -d --name linketic-ci -p 127.0.0.1:18080:8088 -p 127.0.0.1:11443:11443 --add-host webrisk.googleapis.com:127.0.0.1 --add-host challenges.cloudflare.com:127.0.0.1 --add-host mail.fixture:127.0.0.1 -e SITE_URL=https://www.linketic.test:11443 -e INSTALL_ACCESS_CODE=ci-panel-access-code-1234567890 -v "$PWD/panel/tests:/test:ro" -v panel-app:/var/lib/linketic -v panel-db:/var/lib/mysql -v panel-redis:/var/lib/redis -v panel-av:/var/lib/clamav linketic-panel:ci
+          for i in $(seq 1 90); do if curl -fsS -H 'Host: www.linketic.test' http://127.0.0.1:18080/install/ > /dev/null; then break; fi; sleep 2; done
+          docker exec linketic-ci cp /test/cert.pem /usr/local/share/ca-certificates/panel-ci.crt
+          docker exec linketic-ci update-ca-certificates
+          docker exec -d linketic-ci python3 /test/fixtures.py
+      - name: Real browser installation and admin acceptance
+        run: node panel/tests/browser.mjs
+      - name: Restart persistence
+        run: |
+          docker restart linketic-ci
+          for i in $(seq 1 60); do if docker exec linketic-ci supervisorctl status platformapi | grep -q RUNNING; then break; fi; sleep 2; done
+          docker exec linketic-ci python3 -c 'import json; from pathlib import Path; assert json.loads(Path("/var/lib/linketic/private/installed.json").read_text())["schema"]=="gojet.panel-install.v1"'
+          docker exec linketic-ci supervisorctl status > artifacts/panel/processes-after-restart.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('artifacts/panel/processes-after-restart.txt').read_text()
+          for service in ['platformapi','redirectengine','analyticsworker','analyticsreconciler','mailworker','fileworker','operationsmonitor','logreceiver','webrisk']:
+              assert any(line.startswith(service+' ') and 'RUNNING' in line for line in text.splitlines()), service
+          PY
+      - name: Diagnostics
+        if: always()
+        run: |
+          mkdir -p artifacts/panel
+          docker logs linketic-ci > artifacts/panel/container.log 2>&1 || true
+          docker exec linketic-ci cat /var/lib/linketic/status/progress.json > artifacts/panel/progress.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: panel-installer-${{ github.sha }}
+          path: artifacts/panel
+          retention-days: 14

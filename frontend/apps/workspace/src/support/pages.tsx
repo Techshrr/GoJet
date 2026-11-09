@@ -70,7 +70,7 @@ export function SupportNewPage() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
-  const verification = useTurnstile({ siteKey: String(import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY ?? '').trim(), action: 'ticket-create', testMode: runtime?.testAuthority === true, testToken: runtime?.turnstileToken ?? '' });
+  const verification = useTurnstile({ siteKey: String(document.querySelector<HTMLMetaElement>('meta[name="gojet-turnstile-site-key"]')?.content || import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY || '').trim(), action: 'ticket-create', testMode: runtime?.testAuthority === true, testToken: runtime?.turnstileToken ?? '' });
   const mutation = useMutation({
     networkMode: 'always',
     mutationFn: async () => {

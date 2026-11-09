@@ -11,7 +11,7 @@ export default function ContactPage() {
   const [state, setState] = useState<ContactState>('input');
   const [reference, setReference] = useState('');
   const testTurnstile = import.meta.env.VITE_GOJET_TEST_AUTH_ENABLED === '1' && import.meta.env.VITE_GOJET_TEST_SUPPORT_TURNSTILE_ENABLED === '1';
-  const verification = useTurnstile({ siteKey: String(import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY ?? '').trim(), action: 'public-contact', testMode: testTurnstile, testToken: String(import.meta.env.VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN ?? '').trim() });
+  const verification = useTurnstile({ siteKey: String(document.querySelector<HTMLMetaElement>('meta[name="gojet-turnstile-site-key"]')?.content || import.meta.env.VITE_GOJET_TURNSTILE_SITE_KEY || '').trim(), action: 'public-contact', testMode: testTurnstile, testToken: String(import.meta.env.VITE_GOJET_TEST_SUPPORT_TURNSTILE_TOKEN ?? '').trim() });
   const update = (key: keyof ContactFields, value: string) => { setFields((current) => ({ ...current, [key]: value })); if (state !== 'submitting' && state !== 'success-persistent') setState('input'); };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
