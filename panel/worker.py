@@ -99,6 +99,7 @@ def retire_secrets():
         path.unlink(missing_ok=True)
 
 def install():
+    COMPLETED[:]=STEPS[:2]
     config=read(PRIVATE/'configuration.json')
     progress('installing',STEPS[2]); wait(database_ready,120,'数据库尚未就绪。')
     # Freshclam can take several minutes on the first boot; progress stays visible.

@@ -8,6 +8,8 @@ jobs:
   panel-installation:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +45,7 @@ jobs:
       - name: Restart persistence
         run: |
           docker restart linketic-ci
-          for i in $(seq 1 60); do if docker exec linketic-ci supervisorctl status platformapi | grep -q RUNNING; then break; fi; sleep 2; done
+          for i in $(seq 1 60); do if docker exec linketic-ci supervisorctl status | python3 -c 'import sys; rows=sys.stdin.read().splitlines(); names=["platformapi","redirectengine","analyticsworker","analyticsreconciler","mailworker","fileworker","operationsmonitor","logreceiver","webrisk"]; sys.exit(not all(any(r.startswith(n+" ") and "RUNNING" in r for r in rows) for n in names))'; then break; fi; sleep 2; done
           docker exec linketic-ci python3 -c 'import json; from pathlib import Path; assert json.loads(Path("/var/lib/linketic/private/installed.json").read_text())["schema"]=="gojet.panel-install.v1"'
           docker exec linketic-ci supervisorctl status > artifacts/panel/processes-after-restart.txt
           python3 - <<'PY'
@@ -52,6 +54,12 @@ jobs:
           for service in ['platformapi','redirectengine','analyticsworker','analyticsreconciler','mailworker','fileworker','operationsmonitor','logreceiver','webrisk']:
               assert any(line.startswith(service+' ') and 'RUNNING' in line for line in text.splitlines()), service
           PY
+      - name: Package tested image and publish panel prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 panel/package.py --output "$RUNNER_TEMP/linketic-delivery"
+          gh release create v10.0.0-rc.2-panel.1 --target "$GITHUB_SHA" --title 'Linketic 10.0.0-rc.2 · Panel Web Installer 1' --prerelease --notes-file panel/RELEASE-NOTES.md "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.1-linux-amd64.zip" "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.1-linux-amd64.zip.sha256"
       - name: Diagnostics
         if: always()
         run: |
