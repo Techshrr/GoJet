@@ -27,6 +27,9 @@ class WebSecurity(unittest.TestCase):
   self.assertEqual(self.request('/install/api/configure',{},headers={'Cookie':cookie})[0],403)
   self.assertEqual(self.request('/install/api/configure',{},headers={'Cookie':cookie,'X-CSRF-Token':csrf})[0],400)
   self.assertFalse((self.inbox/'request.json').exists())
+  common.atomic(self.inbox/'request.json',{'pending':True})
+  status=self.request('/install/api/status',headers={'Cookie':cookie});self.assertEqual(json.loads(status[2])['phase'],'queued')
+  (self.inbox/'request.json').unlink()
  def test_z_completed_denies_all_mutations(self):
   common.atomic(self.status/'complete.json',{'complete':True})
   for path in ['login','configure','retry']:

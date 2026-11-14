@@ -17,12 +17,17 @@ try {
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/installer-mobile.png',fullPage:true});await page.setViewportSize({width:1440,height:1050});
  await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
  await page.getByRole('button',{name:'返回修改配置'}).waitFor({timeout:60000});assert((await page.locator('#message').textContent()).includes('Google Web Risk'));
- await page.getByRole('button',{name:'返回修改配置'}).click();await page.locator('#webrisk_key').fill('ci-webrisk-valid-key-1234567890');await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
- await page.getByRole('heading',{name:'安装已完成'}).waitFor({timeout:780000});await page.screenshot({path:out+'/installation-complete.png'});
+ await page.getByRole('button',{name:'返回修改配置'}).click();execFileSync('docker',['exec','linketic-ci','supervisorctl','stop','redis']);await page.locator('#webrisk_key').fill('ci-webrisk-valid-key-1234567890');await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
+ await page.getByRole('button',{name:'重试未完成步骤'}).waitFor({timeout:780000});
+ const failedJournal=JSON.parse(execFileSync('docker',['exec','linketic-ci','cat','/var/lib/linketic/private/data/journal.json'],{encoding:'utf8'}));assert.equal(failedJournal.phase,'failed');assert.equal(failedJournal.failed_at,'admin-started');
+ execFileSync('docker',['exec','linketic-ci','supervisorctl','start','redis']);
+ await page.getByRole('button',{name:'重试未完成步骤'}).click();
+ await page.getByRole('heading',{name:'安装已完成'}).waitFor({timeout:180000});
+ execFileSync('docker',['exec','linketic-ci','python3','-c',`from pathlib import Path; import json; p=Path('/var/lib/linketic/private'); backups=list(p.glob('failed-initialization-*/recovered.json')); assert len(backups)==1; assert backups[0].with_name('database.sql').stat().st_size>0; assert not (p/'recovery.json').exists()`]);await page.screenshot({path:out+'/installation-complete.png'});
  assert.equal((await page.request.post(origin+'/install/api/configure',{data:fields,headers:{Origin:origin}})).status(),410);
  await page.goto(origin+'/admin/login');await page.getByLabel('Email',{exact:true}).fill(fields.admin_email);await page.getByLabel('Password',{exact:true}).fill(fields.admin_password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByText('Authentication complete.',{exact:true}).waitFor();
  const checks=[['/admin/','Operations overview'],['/admin/trust/destination-risk','No destination risk records'],['/admin/tickets','Support tickets'],['/admin/mail','Mail operations'],['/admin/platform/general','General settings']];
  for(const [route,text] of checks){await page.goto(origin+route);await page.getByText(text,{exact:false}).first().waitFor();assert(!await page.getByText('Administrator authentication is required.',{exact:true}).count());}
  await page.screenshot({path:out+'/admin.png'});
- assert.deepEqual(errors,[]);await writeFile(out+'/browser.json',JSON.stringify({passed:true,scenarios:['root wizard','desktop/mobile','upstream invalid key rejected','correction in browser','32 real migrations and native admin','8 processes and TLS adapter health','installer locked','admin login and modules'],external_services:'CI protocol fixtures; no claim of live Google/SMTP/Turnstile account validation'}));
-}finally{await browser.close();}
+ assert.deepEqual(errors,[]);await writeFile(out+'/browser.json',JSON.stringify({passed:true,scenarios:['root wizard','desktop/mobile','upstream invalid key rejected','correction in browser','32 real migrations and native admin','partial bootstrap failure and browser recovery with SQL backup','8 processes and TLS adapter health','installer locked','admin login and modules'],external_services:'CI protocol fixtures; no claim of live Google/SMTP/Turnstile account validation'}));
+}catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});await writeFile(out+'/failure.txt',String(error)+'\n'+await page.locator('body').innerText().catch(()=>''));throw error;}finally{await browser.close();}

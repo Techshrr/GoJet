@@ -93,6 +93,11 @@ def start_services():
         state=subprocess.run(['supervisorctl','status',name],capture_output=True).stdout
         if b'RUNNING' not in state and b'STARTING' not in state: supervisor('start',name)
 
+def retire_secrets():
+    # Idempotent cleanup also runs after a crash between sealing and retirement.
+    for path in [PRIVATE/'configuration.json',PRIVATE/'accepted.json',PRIVATE/'data/request.json',INBOX/'request.json',INBOX/'retry.json',*PRIVATE.glob('failed-initialization-*/data/request.json')]:
+        path.unlink(missing_ok=True)
+
 def install():
     config=read(PRIVATE/'configuration.json')
     progress('installing',STEPS[2]); wait(database_ready,120,'数据库尚未就绪。')
@@ -114,14 +119,12 @@ def install():
     # Seal after real data/service health, then retire all write endpoints.
     atomic(PRIVATE/'installed.json',{'schema':'gojet.panel-install.v1','site_key':config['site_key'],'backend_source':'ce305a9207fd2fe46396e7cf433137c48ab5aec1','installed_at':int(time.time())})
     atomic(PUBLIC/'complete.json',{'complete':True},0o644)
-    # Bootstrap admin password is no longer needed after successful creation.
-    (PRIVATE/'configuration.json').unlink()
-    if (PRIVATE/'data/request.json').exists(): (PRIVATE/'data/request.json').unlink()
-    if (PRIVATE/'accepted.json').exists(): (PRIVATE/'accepted.json').unlink()
+    retire_secrets()
     COMPLETED.extend(STEPS[5:]); progress('complete',STEPS[-1])
 
 def main():
     if (PRIVATE/'installed.json').exists():
+        retire_secrets()
         wait(database_ready,120,'数据库恢复中。'); start_services()
         atomic(PUBLIC/'complete.json',{'complete':True},0o644)
         progress('complete',STEPS[-1])
@@ -136,13 +139,14 @@ def main():
         progress('ready','等待填写安装配置')
     while True:
         if (INBOX/'retry.json').exists():
-            (INBOX/'retry.json').unlink()
             if not (PRIVATE/'installed.json').exists() and (PRIVATE/'accepted.json').exists():
                 try:
                     progress('installing','恢复未完成步骤')
+                    (INBOX/'retry.json').unlink(missing_ok=True)
                     command(['php8.3','/opt/linketic/bridge.php','recover'],timeout=300)
                     install()
                 except Exception as error: progress('failed','安装未完成',str(error) if isinstance(error,StepError) else '后台步骤未完成，已保留现场。')
+            (INBOX/'retry.json').unlink(missing_ok=True)
         request=INBOX/'request.json'
         if request.exists() and not (PRIVATE/'installed.json').exists():
             phase=read(PUBLIC/'progress.json')['phase']

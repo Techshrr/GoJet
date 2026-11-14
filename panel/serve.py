@@ -33,6 +33,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/install/api/status':
             if not self.session(): return self.send(401,{'error':'请先输入安装访问码。'})
             status=read(PUBLIC/'progress.json')
+            if status['phase'] in ('ready','preflight_failed','failed') and any((INBOX/name).exists() for name in ('request.json','retry.json')):
+                status=dict(status,phase='queued',step='请求已接收，等待后台处理',error=None)
             return self.send(200,dict(status,origin=SETTINGS['origin']))
         paths={'/install/':('index.html','text/html; charset=utf-8'),'/install/app.js':('app.js','text/javascript'),'/install/style.css':('style.css','text/css')}
         if self.path in paths:
