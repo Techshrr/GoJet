@@ -1,5 +1,5 @@
 """Container entrypoint. No host mounts, panel API keys, or privileged Docker required."""
-import hashlib, os, pwd, secrets, subprocess
+import hashlib, os, pwd, secrets, socket, struct, subprocess
 from pathlib import Path
 from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, origin
 
@@ -30,7 +30,15 @@ http {
  location / { return 404; }
  }
  server { listen 8088 default_server; server_name _;
+ absolute_redirect off;
 '''
+    # The only trusted ingress is the host-side Docker gateway (port binds host loopback).
+    for row in Path('/proc/net/route').read_text().splitlines()[1:]:
+        parts=row.split()
+        if len(parts)>3 and parts[1]=='00000000' and int(parts[3],16)&2:
+            gateway=socket.inet_ntoa(struct.pack('<I',int(parts[2],16)))
+            prefix+=' set_real_ip_from '+gateway+'; real_ip_header X-Real-IP;\n'
+            break
     # Fixed canonical host, not untrusted forwarded host/proto. Installer never available over a public container port.
     prefix+=' if ($host != '+host.split(':')[0]+') { return 421; }\n'
     prefix+=' location ^~ /install/ { proxy_pass http://127.0.0.1:9170; proxy_set_header Host '+host+'; proxy_read_timeout 20s; }\n'
@@ -88,7 +96,7 @@ def main():
     if not Path('/var/lib/mysql/mysql').exists(): run(['/usr/sbin/mysqld','--initialize-insecure','--user=mysql','--datadir=/var/lib/mysql'])
     atomic('/run/mysqld/init.sql',("ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '"+read(PRIVATE/'mysql.json')['password']+"';\n").encode(),0o640)
     os.chown('/run/mysqld/init.sql',0,pwd.getpwnam('mysql').pw_gid)
-    for path,user,mode in [('/var/lib/redis','redis',0o700),('/var/lib/clamav','clamav',0o750),('/run/clamav','clamav',0o755),('/run/gojet-log','gojet',0o700),(BASE/'files','gojet',0o700),(BASE/'webrisk','webrisk',0o700)]: mkdir(path,user,mode)
+    for path,user,mode in [('/var/lib/redis','redis',0o700),('/var/lib/clamav','clamav',0o750),('/run/clamav','clamav',0o755),('/run/gojet-log','gojet',0o700),(BASE/'files','gojet',0o700),(BASE/'files/quarantine','gojet',0o700),(BASE/'files/published','gojet',0o700),(BASE/'webrisk','webrisk',0o700)]: mkdir(path,user,mode)
     mkdir(PRIVATE/'tls')
     if not (PRIVATE/'tls/cert.pem').exists():
         run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','3650','-subj','/CN=webrisk.internal','-addext','subjectAltName=DNS:webrisk.internal','-keyout',str(PRIVATE/'tls/key.pem'),'-out',str(PRIVATE/'tls/cert.pem')])
