@@ -21,7 +21,7 @@ try {
  await page.getByRole('heading',{name:'安装已完成'}).waitFor({timeout:780000});await page.screenshot({path:out+'/installation-complete.png'});
  assert.equal((await page.request.post(origin+'/install/api/configure',{data:fields,headers:{Origin:origin}})).status(),410);
  await page.goto(origin+'/admin/login');await page.getByLabel('Email',{exact:true}).fill(fields.admin_email);await page.getByLabel('Password',{exact:true}).fill(fields.admin_password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByText('Authentication complete.',{exact:true}).waitFor();
- const checks=[['/admin/','Operations overview'],['/admin/trust/destination-risk','No destination risk records'],['/admin/support/tickets','Support tickets'],['/admin/mail','Mail operations'],['/admin/platform/general','General settings']];
+ const checks=[['/admin/','Operations overview'],['/admin/trust/destination-risk','No destination risk records'],['/admin/tickets','Support tickets'],['/admin/mail','Mail operations'],['/admin/platform/general','General settings']];
  for(const [route,text] of checks){await page.goto(origin+route);await page.getByText(text,{exact:false}).first().waitFor();assert(!await page.getByText('Administrator authentication is required.',{exact:true}).count());}
  await page.screenshot({path:out+'/admin.png'});
  assert.deepEqual(errors,[]);await writeFile(out+'/browser.json',JSON.stringify({passed:true,scenarios:['root wizard','desktop/mobile','upstream invalid key rejected','correction in browser','32 real migrations and native admin','8 processes and TLS adapter health','installer locked','admin login and modules'],external_services:'CI protocol fixtures; no claim of live Google/SMTP/Turnstile account validation'}));

@@ -12,7 +12,10 @@ def progress(phase,step,error=None):
 
 def command(args,env=None,timeout=120):
     r=subprocess.run(args,env=env,capture_output=True,timeout=timeout)
-    if r.returncode: raise StepError('后台步骤执行失败，未宣布安装成功。')
+    if r.returncode:
+        print('Container operation failed:', Path(args[0]).name, flush=True)
+        if Path(args[0]).name=='php8.3': print(r.stderr.decode(errors='replace')[:1024], flush=True)
+        raise StepError('后台步骤执行失败，未宣布安装成功。')
     return r.stdout
 
 def supervisor(action,name): return command(['supervisorctl',action,name],timeout=80)
@@ -67,7 +70,7 @@ def database_ready():
 
 def file_ready():
     env={'PATH':'/usr/bin:/bin','GOJET_FILE_STORAGE_ROOT':str(BASE/'files'),'GOJET_CLAMAV_NETWORK':'unix','GOJET_CLAMAV_ADDRESS':'/run/clamav/clamd.ctl'}
-    return subprocess.run(['runuser','-u','gojet','--','/opt/gojet/native/bin/filepreflight'],env=env,capture_output=True,timeout=8).returncode==0
+    return subprocess.run(['/usr/sbin/runuser','-u','gojet','--','/opt/gojet/native/bin/filepreflight'],env=env,capture_output=True,timeout=8).returncode==0
 
 def running():
     for name in SERVICES+('webrisk',):
@@ -100,7 +103,14 @@ def install():
     command(['php8.3','/opt/linketic/bridge.php','finish'])
     COMPLETED.append(STEPS[3]); progress('installing',STEPS[4]); start_services()
     COMPLETED.append(STEPS[4]); progress('installing',STEPS[5]); wait(health,90,'业务服务健康检查未通过，站点尚未开放。')
-    nginx(True,config['site_key']); command(['nginx','-t']); command(['nginx','-s','reload'])
+    atomic(PRIVATE/'activation-started.json',{'health_checked':True})
+    previous=Path('/etc/nginx/nginx.conf').read_bytes()
+    try:
+        nginx(True,config['site_key']); command(['nginx','-t']); command(['nginx','-s','reload'])
+    except Exception:
+        atomic('/etc/nginx/nginx.conf',previous,0o644)
+        command(['nginx','-t']); command(['nginx','-s','reload'])
+        raise
     # Seal after real data/service health, then retire all write endpoints.
     atomic(PRIVATE/'installed.json',{'schema':'gojet.panel-install.v1','site_key':config['site_key'],'backend_source':'ce305a9207fd2fe46396e7cf433137c48ab5aec1','installed_at':int(time.time())})
     atomic(PUBLIC/'complete.json',{'complete':True},0o644)
@@ -119,11 +129,19 @@ def main():
         # Native journal prevents repeating a partial DDL transaction.
         try: install()
         except Exception: progress('failed','安装中断','安装未完成；已保留数据和原始日志，未重复初始化。')
+    else:
+        # Restart before approval: discard unvalidated secrets and allow a fresh browser submission.
+        (PRIVATE/'configuration.json').unlink(missing_ok=True)
+        (INBOX/'request.json').unlink(missing_ok=True)
+        progress('ready','等待填写安装配置')
     while True:
         if (INBOX/'retry.json').exists():
             (INBOX/'retry.json').unlink()
             if not (PRIVATE/'installed.json').exists() and (PRIVATE/'accepted.json').exists():
-                try: install()
+                try:
+                    progress('installing','恢复未完成步骤')
+                    command(['php8.3','/opt/linketic/bridge.php','recover'],timeout=300)
+                    install()
                 except Exception as error: progress('failed','安装未完成',str(error) if isinstance(error,StepError) else '后台步骤未完成，已保留现场。')
         request=INBOX/'request.json'
         if request.exists() and not (PRIVATE/'installed.json').exists():

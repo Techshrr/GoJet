@@ -28,6 +28,8 @@ class Handler(BaseHTTPRequestHandler):
         except (KeyError,ValueError): return None
     def closed(self): return (PUBLIC/'complete.json').exists()
     def do_GET(self):
+        if self.path=='/install/' and self.closed():
+            return self.send(200,'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>安装已完成</title><link rel="stylesheet" href="/install/style.css"><main><h1>安装已完成</h1><p>安装入口已关闭。</p><a class="button" href="/admin/login">进入管理后台</a></main></html>'.encode(),'text/html; charset=utf-8')
         if self.path == '/install/api/status':
             if not self.session(): return self.send(401,{'error':'请先输入安装访问码。'})
             status=read(PUBLIC/'progress.json')

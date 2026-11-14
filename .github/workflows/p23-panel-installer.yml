@@ -35,7 +35,9 @@ jobs:
           for i in $(seq 1 90); do if curl -fsS -H 'Host: www.linketic.test' http://127.0.0.1:18080/install/ > /dev/null; then break; fi; sleep 2; done
           docker exec linketic-ci cp /test/cert.pem /usr/local/share/ca-certificates/panel-ci.crt
           docker exec linketic-ci update-ca-certificates
-          docker exec -d linketic-ci python3 /test/fixtures.py
+          docker exec -d linketic-ci sh -c 'python3 /test/fixtures.py > /tmp/fixtures.log 2>&1'
+          for i in $(seq 1 30); do if curl --noproxy '*' -kfsS --resolve www.linketic.test:11443:127.0.0.1 https://www.linketic.test:11443/install/ > /dev/null; then break; fi; sleep 1; done
+          curl --noproxy '*' -kfsS --resolve www.linketic.test:11443:127.0.0.1 https://www.linketic.test:11443/install/ > /dev/null
       - name: Real browser installation and admin acceptance
         run: node panel/tests/browser.mjs
       - name: Restart persistence
@@ -55,6 +57,7 @@ jobs:
         run: |
           mkdir -p artifacts/panel
           docker logs linketic-ci > artifacts/panel/container.log 2>&1 || true
+          docker exec linketic-ci cat /tmp/fixtures.log > artifacts/panel/fixtures.log || true
           docker exec linketic-ci cat /var/lib/linketic/status/progress.json > artifacts/panel/progress.json || true
       - uses: actions/upload-artifact@v4
         if: always()
