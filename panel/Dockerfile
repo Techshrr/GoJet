@@ -1,4 +1,5 @@
 FROM node:24.19.0-bookworm-slim AS frontend
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig* ./
 COPY frontend ./frontend
