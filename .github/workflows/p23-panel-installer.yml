@@ -2,6 +2,9 @@ name: P23 Panel Web Installer
 on:
   push:
     branches: [feat/p23-panel-web-installer]
+concurrency:
+  group: panel-installer-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -10,7 +13,16 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      actions: write
     steps:
+      - name: Cancel superseded validation runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api 'repos/Techshrr/GoJet/actions/workflows/p23-panel-installer.yml/runs?branch=feat%2Fp23-panel-web-installer&per_page=30' --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued") | .id' > /tmp/panel-runs.txt
+          while read -r run_id; do
+            if [ "$run_id" -lt "$GITHUB_RUN_ID" ]; then gh api --method POST "repos/Techshrr/GoJet/actions/runs/$run_id/cancel" || true; fi
+          done < /tmp/panel-runs.txt
       - uses: actions/checkout@v4
         with:
           persist-credentials: false

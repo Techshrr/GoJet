@@ -51,7 +51,7 @@ try{
   await page.screenshot({path:out+'/customer-'+mode+'.png',fullPage:true});
   // Password recovery and email-code login must use the same real worker/SMTP path.
   await page.goto(origin+'/forgot-password');await ready();await page.getByLabel('Email',{exact:true}).fill(email);await page.getByRole('button',{name:'Send reset instructions'}).click();
-  const reset=await delivered('grp_');await page.goto(origin+'/reset-password?token='+encodeURIComponent(reset));await ready();
+  const reset=await delivered('grp_');await page.getByRole('link',{name:'Enter password reset code',exact:true}).click();await ready();await page.getByLabel('Password reset code',{exact:true}).fill(reset);
   await page.getByLabel('New password',{exact:true}).fill(password+'updated');await page.getByRole('button',{name:'Reset password',exact:true}).click();await page.getByText('Password reset successfully. You can sign in with the new password.',{exact:true}).waitFor();
   await login(password+'updated');await page.getByText('Signed in successfully.',{exact:false}).waitFor();
   await page.goto(origin+'/login');await ready();await page.getByLabel('Email',{exact:true}).fill(email);await page.getByRole('button',{name:'Send email sign-in code'}).click();const loginCode=await delivered('glc_');await page.getByLabel('Email sign-in code',{exact:true}).fill(loginCode);await page.getByRole('button',{name:'Sign in with email code',exact:true}).click();await page.getByText('Signed in with the one-time email code.',{exact:true}).waitFor();
