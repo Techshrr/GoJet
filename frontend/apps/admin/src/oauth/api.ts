@@ -34,7 +34,7 @@ export type ProviderTestResponse = {
 };
 
 export class AdminOAuthAPIError extends Error {
-  constructor(public readonly status: number) {
+  constructor(public readonly status: number, public readonly code = 'request_failed') {
     super(`Admin OAuth request failed with ${status}`);
   }
 }
@@ -44,7 +44,10 @@ async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> 
   headers.set('Accept', 'application/json');
   if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const response = await fetch(path, { ...init, credentials: 'include', headers });
-  if (!response.ok) throw new AdminOAuthAPIError(response.status);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: { code?: string } };
+    throw new AdminOAuthAPIError(response.status, body.error?.code);
+  }
   return response.json() as Promise<T>;
 }
 

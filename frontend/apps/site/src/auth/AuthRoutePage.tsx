@@ -71,16 +71,32 @@ function AuthFrame({ title, state, notice, children }: { title: string; state: s
 }
 
 function Providers({ intent, providers }: { intent: 'login' | 'register'; providers: AuthProvider[] }) {
-  if (providers.length === 0) return <p className="p15-auth__muted">Social sign-in is not configured.</p>;
+  const available = providers.filter((provider) => provider.enabled);
+  if (available.length === 0) return null;
   return <div className="p15-auth__providers" role="group" aria-label="Social authentication providers">
-    {providers.map((provider) => <a
-      key={provider.provider}
-      href={provider.enabled ? `/api/public/auth/${provider.provider}/start?intent=${intent}` : undefined}
-      aria-disabled={!provider.enabled}
-      className={!provider.enabled ? 'is-disabled' : undefined}
-      onClick={(event) => { if (!provider.enabled) event.preventDefault(); }}
-    >{providerLabels[provider.provider]}{provider.enabled ? '' : ' unavailable'}</a>)}
+    {available.map((provider) => <a key={provider.provider} href={`/api/public/auth/${provider.provider}/start?intent=${intent}`}>{providerLabels[provider.provider]}</a>)}
   </div>;
+}
+
+function VerificationRecovery({ email, initialCooldown = 0 }: { email: string; initialCooldown?: number }) {
+  const client = useAuthClient();
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(initialCooldown);
+  const [message, setMessage] = useState('');
+  useEffect(() => { if (cooldown <= 0) return; const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1000); return () => window.clearTimeout(timer); }, [cooldown]);
+  async function resend() {
+    if (busy || cooldown > 0) return;
+    setBusy(true); setMessage('');
+    try { await client.resendVerification(email); setCooldown(60); setMessage('Verification email requested. Check your inbox and spam folder.'); }
+    catch (caught) { const error = safeError(caught); if (error.code === 'rate_limited') setCooldown(60); setMessage(error.message); }
+    finally { setBusy(false); }
+  }
+  return <section className="p15-auth__resend" aria-label="Email verification recovery">
+    <p>Did not receive a verification email? You can request another without creating a new account.</p>
+    <button type="button" className="p15-auth__secondary" onClick={() => void resend()} disabled={!email || busy || cooldown > 0}>{busy ? 'Requesting…' : cooldown > 0 ? `Resend available in ${cooldown}s` : 'Resend verification email'}</button>
+    {message && <p role="status">{message}</p>}
+    <Link to="/verify-email">Enter verification code</Link>
+  </section>;
 }
 
 function LoginPage() {
@@ -121,13 +137,14 @@ function LoginPage() {
       <label htmlFor="login-password">Password</label><input id="login-password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       <button type="submit" disabled={state === 'submitting'}>Sign in</button>
     </form>
+    {state === 'verification-required' && <VerificationRecovery email={email} />}
     <div className="p15-auth__divider"><span>or</span></div>
     <div className="p15-auth__code-login">
       <button type="button" className="p15-auth__secondary" onClick={sendCode} disabled={!email || state === 'submitting'}>Send email sign-in code</button>
       {codeSent && <><label htmlFor="login-code">Email sign-in code</label><input id="login-code" autoComplete="one-time-code" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} /><button type="button" className="p15-auth__secondary" onClick={signInWithCode} disabled={!emailCode || state === 'submitting'}>Sign in with email code</button></>}
     </div>
     <Providers intent="login" providers={providers} />
-    <p className="p15-auth__links"><Link to="/forgot-password">Forgot password?</Link><span>New to GoJet? <Link to="/register">Create account</Link></span></p>
+    <p className="p15-auth__links"><Link to="/forgot-password">Forgot password?</Link><Link to="/verify-email">Verify email / resend</Link><span>New to GoJet? <Link to="/register">Create account</Link></span></p>
   </AuthFrame>;
 }
 
@@ -140,11 +157,12 @@ function RegisterPage() {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [registered, setRegistered] = useState(false);
   useEffect(() => { client.providers().then((result) => setProviders(result.providers)).catch(() => setProviders([])); }, []);
 
   async function register(event: React.FormEvent) {
     event.preventDefault(); setState('submitting'); setNotice(null);
-    try { await client.register(email, displayName, password); setState('code-sent'); setNotice({ tone: 'success', text: 'Account created. Check your email for the verification code.' }); }
+    try { await client.register(email, displayName, password); setRegistered(true); setPassword(''); setState('code-sent'); setNotice({ tone: 'success', text: 'Account created. Check your email for the verification code.' }); }
     catch (caught) { const error = safeError(caught); setState(authStateFor(error)); setNotice({ tone: 'error', text: error.message }); }
   }
   async function verify() {
@@ -154,13 +172,15 @@ function RegisterPage() {
   }
 
   return <AuthFrame title="Create account" state={state} notice={notice}>
-    <form className="p15-auth__form" onSubmit={register}>
+    {!registered && <form className="p15-auth__form" onSubmit={register}>
       <label htmlFor="register-email">Email</label><input id="register-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
       <label htmlFor="register-name">Display name</label><input id="register-name" autoComplete="name" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       <label htmlFor="register-password">Password</label><input id="register-password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       <button type="submit" disabled={state === 'submitting'}>Create account</button>
-    </form>
-    {(state === 'code-sent' || code !== '') && <div className="p15-auth__verification"><label htmlFor="register-code">Verification code</label><input id="register-code" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} /><button type="button" onClick={verify} disabled={!code || state === 'submitting'}>Verify email</button></div>}
+    </form>}
+    {(registered && state !== 'success') && <div className="p15-auth__verification"><label htmlFor="register-code">Verification code</label><input id="register-code" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} /><button type="button" onClick={verify} disabled={!code || state === 'submitting'}>Verify email</button></div>}
+    {registered && state !== 'success' && <VerificationRecovery email={email} initialCooldown={60} />}
+    <Link to="/verify-email">Already registered but not verified? Verify email / resend</Link>
     <Providers intent="register" providers={providers} />
     <p className="p15-auth__links">Already registered? <Link to="/login">Sign in</Link></p>
   </AuthFrame>;
@@ -171,11 +191,11 @@ function VerifyPage() {
   const initialCode = useMemo(() => new URLSearchParams(window.location.search).get('code') ?? '', []);
   const [code, setCode] = useState(initialCode);
   const [email, setEmail] = useState('');
-  const [state, setState] = useState(initialCode ? 'verifying' : 'invalid-token');
-  const [notice, setNotice] = useState<Notice>(initialCode ? null : { tone: 'error', text: 'Enter the verification code from your email.' });
+  const [state, setState] = useState('input');
+  const [notice, setNotice] = useState<Notice>({ tone: 'info', text: 'Enter your verification code, or request a new email below.' });
   async function verify(event: React.FormEvent) { event.preventDefault(); setState('verifying'); setNotice(null); try { await client.verifyEmail(code); setCode(''); setState('success'); setNotice({ tone: 'success', text: 'Email verified successfully.' }); } catch (caught) { const error = safeError(caught); setState(authStateFor(error, 'invalid-token')); setNotice({ tone: 'error', text: error.message }); } }
-  async function resend() { setNotice(null); try { await client.resendVerification(email); setState('verifying'); setNotice({ tone: 'info', text: 'A new verification email was requested.' }); } catch (caught) { const error = safeError(caught); setState(error.code === 'rate_limited' ? 'resend-limited' : authStateFor(error)); setNotice({ tone: 'error', text: error.message }); } }
-  return <AuthFrame title="Verify email" state={state} notice={notice}><form className="p15-auth__form" onSubmit={verify}><label htmlFor="verify-code">Verification code</label><input id="verify-code" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /><button type="submit">Verify email</button></form><div className="p15-auth__resend"><label htmlFor="verify-email">Email for resend</label><input id="verify-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /><button type="button" className="p15-auth__secondary" onClick={resend} disabled={!email}>Resend verification</button></div></AuthFrame>;
+  
+  return <AuthFrame title="Verify email" state={state} notice={notice}><form className="p15-auth__form" onSubmit={verify}><label htmlFor="verify-code">Verification code</label><input id="verify-code" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /><button type="submit">Verify email</button></form><div className="p15-auth__resend"><label htmlFor="verify-email">Email for resend</label><input id="verify-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /><VerificationRecovery email={email} /></div><p className="p15-auth__links"><Link to="/login">Back to sign in</Link></p></AuthFrame>;
 }
 
 function ForgotPage() {

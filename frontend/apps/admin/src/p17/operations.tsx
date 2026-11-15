@@ -58,7 +58,7 @@ function PlatformReadPage({ page, title, endpoint, responseKey }: { page: string
 
 export function PlatformGeneralPage() {
  const auth = useAdminSession();
- return <ProtectedLayout><section className="p17-admin-page" data-page="admin-platform-general"><header><p className="p17-kicker">Platform</p><h1>General settings</h1></header><ErrorNotice error={auth.error} />{auth.busy && <p role="status">Checking administrator session…</p>}{auth.session && <><GeneralSettings session={auth.session} /><GoogleOneTapSettings session={auth.session} /></>}</section></ProtectedLayout>;
+ return <ProtectedLayout><section className="p17-admin-page" data-page="admin-platform-general"><header><p className="p17-kicker">Platform</p><h1>General settings</h1><p><a href="/admin/platform/oauth">Configure customer sign-in providers</a> — Google, GitHub and other supported services.</p></header><ErrorNotice error={auth.error} />{auth.busy && <p role="status">Checking administrator session…</p>}{auth.session && <><GeneralSettings session={auth.session} /><GoogleOneTapSettings session={auth.session} /></>}</section></ProtectedLayout>;
 }
 export function OfficialDomainsPage() { return <PlatformReadPage page="admin-official-domains" title="Official domains" endpoint="/api/admin/official-domains" responseKey="items" />; }
 export function TurnstilePage() { return <PlatformReadPage page="admin-turnstile" title="Turnstile" endpoint="/api/admin/bot-protection" responseKey="bot_protection" />; }

@@ -143,7 +143,7 @@ final class NativeConfiguration
             'redirectengine' => $database + $redis + $log + ['GOJET_REDIRECTENGINE_ADDR' => '127.0.0.1:8080', 'GOJET_REDIRECT_TRUST_LOOPBACK_PROXY' => '1', 'GOJET_ANALYTICS_ENABLED' => '1'],
             'analyticsworker' => $database + $redis + $log,
             'analyticsreconciler' => $database + $redis + $log + ['GOJET_ANALYTICS_RECONCILE_REPAIR' => '0', 'GOJET_ANALYTICS_RECONCILER_ONCE' => '0'],
-            'mailworker' => $database + $log + ['GOJET_SMTP_ADDR' => $smtp['host'].':'.$smtp['port'], 'GOJET_SMTP_FROM' => $smtp['from'], 'GOJET_SMTP_USERNAME' => $smtp['username'], 'GOJET_SMTP_PASSWORD' => $smtp['password']],
+            'mailworker' => $database + $log + ['GOJET_AUTH_GRANT_KEY_ID' => $keyID, 'GOJET_AUTH_GRANT_KEY_HEX' => $p['secrets']['grant'], 'GOJET_SMTP_ADDR' => $smtp['host'].':'.$smtp['port'], 'GOJET_SMTP_FROM' => $smtp['from'], 'GOJET_SMTP_USERNAME' => $smtp['username'], 'GOJET_SMTP_PASSWORD' => $smtp['password']],
             'fileworker' => $database + $log + $storage,
             'operationsmonitor' => $database + $redis + $log + $riskEnv + ['GOJET_WEBHOOK_DELIVERY_ENABLED' => '0'],
             'logreceiver' => $log];

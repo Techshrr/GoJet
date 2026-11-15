@@ -8,8 +8,12 @@ if name=='webrisk':
     command=['/usr/bin/python3','/opt/linketic/adapter.py']
     account='webrisk'
 else:
-    env={'PATH':'/usr/bin:/bin',**read(PRIVATE/'services.json')[name]}
-    command=['/opt/gojet/native/bin/'+name]; account='gojet'
+    services=read(PRIVATE/'services.json')
+    env={'PATH':'/usr/bin:/bin',**services[name]}
+    if name=='mailworker':
+        # Reuse the API's existing derivation key, including installations made by panel.1/2.
+        for key in ('GOJET_AUTH_GRANT_KEY_ID','GOJET_AUTH_GRANT_KEY_HEX'): env[key]=services['platformapi'][key]
+    command=['/opt/gojet/panel/bin/mailworker' if name=='mailworker' else '/opt/gojet/native/bin/'+name]; account='gojet'
 u=pwd.getpwnam(account); os.initgroups(account,u.pw_gid); os.setgid(u.pw_gid); os.setuid(u.pw_uid)
 if name=='logreceiver':
     path='/run/gojet-log/collector.sock'

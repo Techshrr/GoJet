@@ -34,7 +34,7 @@ export function GoogleOneTapSettings({ session }: { session: AdminSession | null
   }
   return <section aria-label="Google One Tap settings">
     <h2>Google One Tap</h2>
-    <p>Show a Google sign-in prompt to signed-out visitors. Google login must also be configured and enabled.</p>
+    <p>Show a Google sign-in prompt to signed-out visitors. First <a href="/admin/platform/oauth">configure and enable Google sign-in</a> with your Client ID and Client secret.</p>
     <ErrorNotice error={error} />
     <div className="p17-form">
     <fieldset><legend>Sign-in prompt</legend>

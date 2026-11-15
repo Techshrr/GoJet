@@ -2,15 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet/internal/auth"
 	"github.com/Techshrr/GoJet/internal/links"
 	"github.com/Techshrr/GoJet/internal/logging"
 	"github.com/Techshrr/GoJet/internal/releaseinfo"
+	"github.com/Techshrr/GoJet/internal/securetoken"
 	"github.com/Techshrr/GoJet/internal/support"
 )
 
@@ -44,7 +47,17 @@ func main() {
 	}
 	pingCancel()
 
-	store, err := support.NewMySQLMailStore(db)
+	rawGrantKey, err := hex.DecodeString(os.Getenv("GOJET_AUTH_GRANT_KEY_HEX"))
+	if err != nil {
+		logger.Error("mailworker authentication key configuration invalid")
+		os.Exit(1)
+	}
+	grantKey, err := securetoken.NewKey(os.Getenv("GOJET_AUTH_GRANT_KEY_ID"), rawGrantKey)
+	if err != nil {
+		logger.Error("mailworker authentication key configuration invalid")
+		os.Exit(1)
+	}
+	store, err := auth.NewAuthMailQueue(db, grantKey)
 	if err != nil {
 		logger.Error("mailworker store configuration invalid")
 		os.Exit(1)

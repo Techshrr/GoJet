@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, InlineMessage } from '@gojet/ui';
+import { ErrorNotice } from '../p17/api';
 import { AdminShell } from '../shell/AdminShell';
 import {
   AdminOAuthAPIError,
@@ -46,7 +47,7 @@ function formFor(config: OAuthProviderConfig | undefined): FormState {
     authorizationURL: 'https://auth.idcli.com/connect.php',
     tokenURL: 'https://auth.idcli.com/connect.php',
     userInfoURL: 'https://auth.idcli.com/connect.php',
-    redirectURI: config.redirect_uri,
+    redirectURI: config.redirect_uri || `${window.location.origin}/oauth/${config.provider}/callback`,
     scopes: config.scopes.length === 1 ? config.scopes[0]! : 'qq',
   };
   return {
@@ -56,7 +57,7 @@ function formFor(config: OAuthProviderConfig | undefined): FormState {
     authorizationURL: config.authorization_url,
     tokenURL: config.token_url,
     userInfoURL: config.userinfo_url,
-    redirectURI: config.redirect_uri,
+    redirectURI: config.redirect_uri || `${window.location.origin}/oauth/${config.provider}/callback`,
     scopes: config.scopes.join(' '),
   };
 }
@@ -74,12 +75,14 @@ export default function OAuthAdminPage() {
   const [message, setMessage] = useState('');
   const [administratorAuthority, setAdministratorAuthority] = useState(false);
   const [reason, setReason] = useState('');
+  const [errorCode, setErrorCode] = useState('');
+  const [saving, setSaving] = useState(false);
   const alertRef = useRef<HTMLDivElement>(null);
 
   const selectedConfig = useMemo(() => providers.find((item) => item.provider === selected), [providers, selected]);
 
   const load = async () => {
-    setState('loading');
+    setState('loading'); setErrorCode('');
     try {
       const response = await listOAuthProviders();
       const actual = response.providers.map((item) => item.provider);
@@ -111,7 +114,7 @@ export default function OAuthAdminPage() {
 
   const chooseProvider = (provider: string) => {
     const config = providers.find((item) => item.provider === provider);
-    setSelected(provider);
+    setSelected(provider); setErrorCode(''); setShellState('normal');
     setForm(formFor(config));
     setMessage('');
     setState(stateForConfig(config));
@@ -119,6 +122,8 @@ export default function OAuthAdminPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true); setErrorCode('');
     const input: OAuthProviderInput = {
       enabled: form.enabled,
       client_id: form.clientID,
@@ -140,10 +145,11 @@ export default function OAuthAdminPage() {
       setMessage('Provider configuration saved. Client secret remains masked.');
     } catch (error) {
       const status = error instanceof AdminOAuthAPIError ? error.status : 500;
-      setShellState(status === 403 ? 'permission-denied' : 'normal');
+      setShellState(status === 401 ? 'admin-auth-required' : status === 403 && (!(error instanceof AdminOAuthAPIError) || error.code !== 'totp_required') ? 'permission-denied' : 'normal');
       setState('provider-error');
-      setMessage(status === 403 ? 'settings.manage permission is required.' : 'Provider configuration was rejected by server validation.');
-    }
+      setErrorCode(error instanceof AdminOAuthAPIError ? error.code : 'internal_error');
+      setMessage('');
+    } finally { setSaving(false); }
   };
 
   const testProvider = async () => {
@@ -167,11 +173,12 @@ export default function OAuthAdminPage() {
         <header className="p15-admin-oauth__header">
           <span>Platform / OAuth</span>
           <h1>OAuth provider configuration</h1>
-          <p>P15 consumes <code>settings.manage</code>; P17 remains the owner of administrator role and permission lifecycle.</p>
+          <p>Configure customer sign-in services. Only enabled, configured providers are shown on the sign-in page.</p><a href="/admin/platform/general">Back to general settings</a>
         </header>
         {state === 'loading' && <p role="status">Loading provider registry…</p>}
         <div ref={alertRef} tabIndex={-1}>
-          {state === 'provider-error' && <InlineMessage variant="danger">{message}</InlineMessage>}
+          <ErrorNotice error={errorCode} />
+          {state === 'provider-error' && message && <InlineMessage variant="danger">{message}</InlineMessage>}
           {state === 'empty' && <InlineMessage variant="info">No OAuth provider is configured yet. Available providers are listed below; enable only the ones you configure.</InlineMessage>}
           {state === 'incomplete' && <InlineMessage variant="warning">This provider is incomplete and cannot be enabled for customer authentication.</InlineMessage>}
           {state === 'secret-masked' && <InlineMessage variant="success">Client secret is configured. The stored value is never returned to the browser.</InlineMessage>}
@@ -207,7 +214,7 @@ export default function OAuthAdminPage() {
               {administratorAuthority && <p>Changes require recent administrator MFA verification. Leave the client secret blank to keep the stored secret.</p>}
               {administratorAuthority && <label><span>Reason for change</span><input required maxLength={500} value={reason} onChange={(event) => setReason(event.currentTarget.value)} /></label>}
               <div className="p15-admin-oauth__actions">
-                <Button type="submit">Save provider</Button>
+                <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save provider'}</Button>
                 <Button type="button" variant="ghost" disabled={!selectedConfig?.configured || !selectedConfig?.enabled} onClick={() => void testProvider()}>Test provider</Button>
                 <Button type="button" variant="ghost" disabled={!secretMasked} onClick={() => { setState('secret-masked'); setMessage(''); }}>Review secret status</Button>
               </div>
