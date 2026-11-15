@@ -34,7 +34,8 @@ def origin(value):
 
 def validate(d):
     fields = {'admin_email','admin_name','admin_password','smtp_host','smtp_port','smtp_from','smtp_user','smtp_password','turnstile_site_key','turnstile_secret','turnstile_token','webrisk_key'}
-    if not isinstance(d, dict) or set(d) != fields: raise ValueError('安装配置字段不完整。')
+    if not isinstance(d, dict) or fields - set(d): raise ValueError('安装配置字段不完整。')
+    if set(d) - fields: raise ValueError('安装页面提交了不支持的字段，请刷新页面后重试。')
     if any(not isinstance(v, str) or len(v.encode()) > 2048 or any(ord(c)<32 or ord(c)==127 for c in v) for v in d.values()): raise ValueError('配置含有无效字符或过长内容。')
     for key in ('admin_email','smtp_from'):
         if not re.fullmatch(r'[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+', d[key]) or len(d[key])>254: raise ValueError('请输入有效邮箱地址。')

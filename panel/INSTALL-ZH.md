@@ -4,7 +4,7 @@
 
 ## 1. 上传并导入应用
 
-在宝塔文件管理中上传本 ZIP，解压到网站目录以外的独立目录。打开 **Docker → 本地镜像 → 导入镜像**，选择解压出的 `linketic-image.tar`。导入后镜像名应为 `linketic-panel:10.0.0-rc.2-panel.1`。
+在宝塔文件管理中上传本 ZIP，解压到网站目录以外的独立目录。打开 **Docker → 本地镜像 → 导入镜像**，选择解压出的 `linketic-image.tar`。导入后镜像名应为 `linketic-panel:10.0.0-rc.2-panel.2`。
 
 ## 2. 部署
 

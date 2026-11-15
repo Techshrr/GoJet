@@ -18,6 +18,7 @@ jobs:
         run: |
           python3 -m unittest discover -s panel/tests -p 'test_*.py'
           php8.3 -l panel/bridge.php
+          node panel/tests/form_submission.mjs
       - name: Build deployable image
         run: docker build --progress=plain -f panel/Dockerfile -t linketic-panel:ci .
       - uses: actions/setup-node@v4
@@ -59,7 +60,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 panel/package.py --output "$RUNNER_TEMP/linketic-delivery"
-          gh release create v10.0.0-rc.2-panel.1 --target "$GITHUB_SHA" --title 'Linketic 10.0.0-rc.2 · Panel Web Installer 1' --prerelease --notes-file panel/RELEASE-NOTES.md "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.1-linux-amd64.zip" "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.1-linux-amd64.zip.sha256"
+          gh release create v10.0.0-rc.2-panel.2 --target "$GITHUB_SHA" --title 'Linketic 10.0.0-rc.2 · Panel Web Installer 2' --prerelease --notes-file panel/RELEASE-NOTES.md "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.2-linux-amd64.zip" "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.2-linux-amd64.zip.sha256"
       - name: Diagnostics
         if: always()
         run: |

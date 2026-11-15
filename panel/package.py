@@ -1,7 +1,7 @@
 """Package only the image that passed this workflow's installation and restart checks."""
 import argparse, hashlib, json, os, re, shutil, subprocess, zipfile
 from pathlib import Path
-VERSION='10.0.0-rc.2-panel.1'
+VERSION='10.0.0-rc.2-panel.2'
 IMAGE='linketic-panel:'+VERSION
 SERVICES=('platformapi','redirectengine','analyticsworker','analyticsreconciler','mailworker','fileworker','operationsmonitor','logreceiver','webrisk')
 def run(*args):return subprocess.check_output(args,text=True).strip()

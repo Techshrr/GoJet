@@ -6,7 +6,7 @@ const origin='https://www.linketic.test:11443';
 const out='artifacts/panel';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({args:['--no-proxy-server','--host-resolver-rules=MAP www.linketic.test 127.0.0.1']});
 const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1050}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
-await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=>route.fulfill({contentType:'application/javascript',body:`window.turnstile={render:(selector,opts)=>{document.querySelector(selector).textContent='CI protocol fixture';opts.callback('ci-valid-token');return 1},remove:()=>{},reset:()=>{}};`}));
+await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=>route.fulfill({contentType:'application/javascript',body:`window.turnstile={render:(selector,opts)=>{const root=document.querySelector(selector);root.textContent='CI protocol fixture';if(opts['response-field']!==false){const hidden=document.createElement('input');hidden.type='hidden';hidden.name=opts['response-field-name']||'cf-turnstile-response';hidden.value='ci-valid-token';root.append(hidden);}opts.callback('ci-valid-token');return 1},remove:()=>{},reset:()=>{}};`}));
 try {
  await page.goto(origin+'/');await page.getByRole('heading',{name:'准备好，开始安装。'}).waitFor();
  await page.screenshot({path:out+'/installer-desktop.png',fullPage:true});
@@ -15,7 +15,13 @@ try {
  const fields={admin_email:'admin@example.com',admin_name:'Panel Administrator',admin_password:'CI-Admin-password-2026!',smtp_host:'mail.fixture',smtp_port:'1587',smtp_from:'no-reply@example.com',smtp_user:'no-reply@example.com',smtp_password:'ci-mail-password',webrisk_key:'ci-webrisk-invalid-key-1234567890',turnstile_site_key:'ci-turnstile-site-1234567890',turnstile_secret:'ci-turnstile-secret-1234567890'};
  for(const [key,value] of Object.entries(fields))await page.locator('#'+key).fill(value);
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/installer-mobile.png',fullPage:true});await page.setViewportSize({width:1440,height:1050});
- await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
+ await page.getByRole('button',{name:'加载人机验证'}).click();
+ assert.equal(await page.locator('input[name="cf-turnstile-response"]').count(),0);
+ // Also exercise a previously injected field: submission must use the API contract only.
+ await page.evaluate(()=>{const input=document.createElement('input');input.type='hidden';input.name='cf-turnstile-response';input.value='ci-valid-token';document.getElementById('configuration-form').append(input);});
+ const submitted=page.waitForRequest(r=>r.url().endsWith('/install/api/configure')&&r.method()==='POST');
+ await page.getByRole('button',{name:'检查并安装'}).click();
+ const payload=(await submitted).postDataJSON();assert.deepEqual(Object.keys(payload).sort(),[...Object.keys(fields),'turnstile_token'].sort());assert.equal(payload.turnstile_token,'ci-valid-token');
  await page.getByRole('button',{name:'返回修改配置'}).waitFor({timeout:60000});assert((await page.locator('#message').textContent()).includes('Google Web Risk'));
  await page.getByRole('button',{name:'返回修改配置'}).click();execFileSync('docker',['exec','linketic-ci','supervisorctl','stop','redis']);await page.locator('#webrisk_key').fill('ci-webrisk-valid-key-1234567890');await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
  await page.getByRole('button',{name:'重试未完成步骤'}).waitFor({timeout:780000});
@@ -30,5 +36,5 @@ try {
  const checks=[['/admin/','Operations overview'],['/admin/trust/destination-risk','No destination risk records'],['/admin/tickets','Support tickets'],['/admin/mail','Mail operations'],['/admin/platform/general','General settings'],['/admin/commerce/plans','No plans']];
  for(const [route,text] of checks){await page.goto(origin+route);await page.getByText(text,{exact:false}).first().waitFor();await page.waitForLoadState('networkidle');assert.equal(await page.locator('.gj-message[data-variant="danger"]').count(),0);assert(!await page.getByText('Administrator authentication is required.',{exact:true}).count());}
  await page.screenshot({path:out+'/admin.png'});
- assert.deepEqual(apiErrors,[]);assert.deepEqual(errors,[]);await writeFile(out+'/browser.json',JSON.stringify({passed:true,scenarios:['root wizard','desktop/mobile','upstream invalid key rejected','correction in browser','32 real migrations and native admin','partial bootstrap failure and browser recovery with SQL backup','8 processes and TLS adapter health','installer locked','admin login and modules'],external_services:'CI protocol fixtures; no claim of live Google/SMTP/Turnstile account validation'}));
+ assert.deepEqual(apiErrors,[]);assert.deepEqual(errors,[]);await writeFile(out+'/browser.json',JSON.stringify({passed:true,scenarios:['root wizard','Turnstile hidden field excluded from configuration','desktop/mobile','upstream invalid key rejected','correction in browser','32 real migrations and native admin','partial bootstrap failure and browser recovery with SQL backup','8 processes and TLS adapter health','installer locked','admin login and modules'],external_services:'CI protocol fixtures; no claim of live Google/SMTP/Turnstile account validation'}));
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});await writeFile(out+'/failure.txt',String(error)+'\n'+await page.locator('body').innerText().catch(()=>''));throw error;}finally{await browser.close();}
