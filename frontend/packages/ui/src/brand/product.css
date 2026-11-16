@@ -27,3 +27,10 @@
 }
 
 input::placeholder,textarea::placeholder{color:#63718b;opacity:1}
+
+/* Keep wide management tables scrollable inside the page at narrow widths. */
+.p17-admin-page{grid-template-columns:minmax(0,1fr)}
+.p17-admin-page>header.management-heading{display:flex}
+.management-table-wrap{min-width:0;max-width:100%}
+.management-toolbar,.management-toolbar>label{min-width:0}
+@media(max-width:760px){.admin-shell,.admin-shell[data-viewport=mobile]{grid-template-columns:minmax(0,1fr)}.management-heading>div{min-width:0}.management-heading>button{flex-shrink:0}}
