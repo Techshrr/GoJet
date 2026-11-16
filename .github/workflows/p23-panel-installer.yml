@@ -49,6 +49,11 @@ jobs:
           mkdir -p artifacts/panel
           echo "127.0.0.1 www.linketic.test" | sudo tee -a /etc/hosts > /dev/null
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=panel-ci' -addext 'subjectAltName=DNS:www.linketic.test,DNS:webrisk.googleapis.com,DNS:challenges.cloudflare.com,DNS:mail.fixture' -keyout panel/tests/key.pem -out panel/tests/cert.pem
+          sudo apt-get install -y libnss3-tools
+          mkdir -p "$HOME/.pki/nssdb"
+          certutil -N -d "sql:$HOME/.pki/nssdb" --empty-password
+          certutil -A -d "sql:$HOME/.pki/nssdb" -n linketic-ci -t 'C,,' -i panel/tests/cert.pem
+          echo "NODE_EXTRA_CA_CERTS=$PWD/panel/tests/cert.pem" >> "$GITHUB_ENV"
           docker run -d --name linketic-ci -p 127.0.0.1:18080:8088 -p 127.0.0.1:11443:11443 --add-host webrisk.googleapis.com:127.0.0.1 --add-host challenges.cloudflare.com:127.0.0.1 --add-host mail.fixture:127.0.0.1 -e SITE_URL=https://www.linketic.test:11443 -e INSTALL_ACCESS_CODE=ci-panel-access-code-1234567890 -v "$PWD/panel/tests:/test:ro" -v panel-app:/var/lib/linketic -v panel-db:/var/lib/mysql -v panel-redis:/var/lib/redis -v panel-av:/var/lib/clamav linketic-panel:ci
           for i in $(seq 1 90); do if curl -fsS -H 'Host: www.linketic.test' http://127.0.0.1:18080/install/ > /dev/null; then break; fi; sleep 2; done
           docker exec linketic-ci cp /test/cert.pem /usr/local/share/ca-certificates/panel-ci.crt
@@ -96,6 +101,7 @@ jobs:
           sudo journalctl -u linketic.service --no-pager > artifacts/panel/native-service.log 2>&1 || true
           docker logs linketic-ci > artifacts/panel/container.log 2>&1 || true
           docker exec linketic-ci cat /tmp/fixtures.log > artifacts/panel/fixtures.log || true
+          docker exec linketic-ci cat /tmp/fixture-proxy.log > artifacts/panel/fixture-proxy.log || true
           docker exec linketic-ci cat /var/lib/linketic/status/progress.json > artifacts/panel/progress.json || true
       - uses: actions/upload-artifact@v4
         if: always()

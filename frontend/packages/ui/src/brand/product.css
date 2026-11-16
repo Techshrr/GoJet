@@ -12,3 +12,16 @@
 @media(max-width:900px){.website-hero--home{gap:24px}.website-product-body{grid-template-columns:65px 1fr}.website-product-body>div{padding:16px}.website-product-body nav{padding:22px 8px}}@media(max-width:700px){.website-page{padding:32px 22px}.website-hero--home{display:flex;flex-direction:column;gap:48px;align-items:stretch}.website-hero h1{font-size:44px;max-width:14ch}.website-product{transform:none}.website-principles{padding:36px 0}.website-principles ul{grid-template-columns:1fr;gap:22px}.website-hero-actions{gap:20px}.website-lede{font-size:16px}}
 
 .admin-sidebar a.admin-logo[data-status=active]{background:transparent;color:#17223b}
+
+.workspace-sidebar a.workspace-logo[data-status=active]{background:transparent;color:#17223b}
+.workspace-mobile-logo{display:none}
+.p12-metric-grid .gj-card{display:grid;gap:8px}
+.p12-metric-grid span{color:#52617b}
+@media(max-width:760px){
+ .workspace-header .workspace-mobile-logo{display:block;color:#17223b;font-size:21px;font-weight:750;letter-spacing:-.035em}
+ .workspace-header .workspace-header-utility{display:none}
+ .workspace-header .workspace-account{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .workspace-header>div{flex-wrap:nowrap}
+ .p12-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .p12-metric-grid .gj-card{padding:20px}
+}

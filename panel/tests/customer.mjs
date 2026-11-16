@@ -15,7 +15,7 @@ async function delivered(previous=0){return until(()=>messages().filter(m=>m.to?
 function mailCount(){return messages().filter(m=>m.to?.includes(email)).length;}
 function totp(secret){let bits='';for(const c of secret.replace(/=+$/,''))bits+='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(c).toString(2).padStart(5,'0');const key=Buffer.from((bits.match(/.{8}/g)||[]).map(b=>parseInt(b,2)));const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const hash=createHmac('sha1',key).update(counter).digest();const off=hash[19]&15;return ((hash.readUInt32BE(off)&0x7fffffff)%1000000).toString().padStart(6,'0');}
 const browser=await chromium.launch({args:['--no-proxy-server','--host-resolver-rules=MAP www.linketic.test 127.0.0.1']});
-const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1366,height:1000}});const page=await context.newPage();const errors=[];const diagnostics=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')diagnostics.push(m.text())});page.on('response',r=>{if(r.url().includes('/assets/'))diagnostics.push(r.status()+' '+r.headers()['content-type']+' '+new URL(r.url()).pathname)});
+const context=await browser.newContext({ignoreHTTPSErrors:false,viewport:{width:1366,height:1000}});const page=await context.newPage();const errors=[];const diagnostics=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')diagnostics.push(m.text())});page.on('requestfailed',r=>diagnostics.push('FAILED '+r.failure()?.errorText+' '+r.url()));page.on('response',r=>{if(r.url().includes('/assets/'))diagnostics.push(r.status()+' '+r.headers()['content-type']+' '+new URL(r.url()).pathname)});
 await context.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=>route.fulfill({contentType:'application/javascript',body:`const widgets=new Map();window.turnstile={render:(selector,opts)=>{const id=crypto.randomUUID();widgets.set(id,opts);(typeof selector==='string'?document.querySelector(selector):selector).textContent='Security verification fixture';opts.callback('ci-auth-'+crypto.randomUUID());return id;},reset:id=>widgets.get(id)?.callback('ci-auth-'+crypto.randomUUID()),remove:id=>widgets.delete(id)};`}));
 async function ready(){await page.getByText('Security verification fixture',{exact:true}).waitFor();}
 async function login(pass=password){await page.goto(origin+'/login');await ready();await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(pass);await page.getByRole('button',{name:'Sign in',exact:true}).click();}
@@ -75,7 +75,7 @@ try{
   await page.goto(origin+'/app/links');await page.locator('[data-page="links-list"]').waitFor();
   assert.equal(await page.getByText('Workspace identity authority is unavailable in this build.',{exact:true}).count(),0);
   await page.screenshot({path:out+'/customer-links.png',fullPage:true});
-  await page.goto(origin+'/');await page.getByRole('link',{name:'My workspace',exact:true}).first().waitFor();
+  await page.goto(origin+'/');await page.getByRole('link',{name:'My workspace',exact:true}).first().waitFor();await page.screenshot({path:out+'/homepage-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/homepage-mobile.png',fullPage:true});await page.setViewportSize({width:1366,height:1000});
   await page.goto(origin+'/app');await workspace();await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.waitForURL(origin+'/login');await page.screenshot({path:out+'/login-desktop.png',fullPage:true});
   assert.equal((await page.request.get(origin+'/api/me')).status(),401);
   await login();await page.waitForURL(origin+'/app');await workspace();
@@ -84,7 +84,7 @@ try{
   await page.getByLabel('Reset code',{exact:true}).waitFor();await page.screenshot({path:out+'/reset-code.png',fullPage:true});
   const reset=await delivered(resetCount);assert.match(reset,/^[0-9]{6}$/);assert.equal(new URL(page.url()).pathname,'/forgot-password');
   await page.getByLabel('Reset code',{exact:true}).fill(reset);await page.getByLabel('New password',{exact:true}).fill(password+'updated');await page.getByRole('button',{name:'Reset password and continue',exact:true}).click();await page.waitForURL(origin+'/app');await workspace();
-  const stale=await browser.newContext({ignoreHTTPSErrors:true});await stale.addCookies(oldCookies);assert.equal((await stale.request.get(origin+'/api/me')).status(),410);await stale.close();
+  const stale=await browser.newContext({ignoreHTTPSErrors:false});await stale.addCookies(oldCookies);assert.equal((await stale.request.get(origin+'/api/me')).status(),410);await stale.close();
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.waitForURL(origin+'/login');
   await login(password+'updated');await page.waitForURL(origin+'/app');await workspace();
   const loginCount=mailCount();await page.goto(origin+'/login');await ready();await page.getByRole('button',{name:'Email code',exact:true}).click();await page.getByLabel('Email',{exact:true}).fill(email);await page.getByRole('button',{name:'Send sign-in code',exact:true}).click();

@@ -80,11 +80,12 @@ export function WorkspaceShell({
       </aside>
       <div className="workspace-main">
         <header className="workspace-header">
+          <Link to="/app" className="workspace-mobile-logo">Linketic</Link>
           <nav aria-label="Breadcrumb">{workspaceLabel} / {sectionLabel}</nav>
           <div>
-            <Button variant="ghost" onClick={(event) => openOverlay('command', event)}>Command</Button>
-            <Link to="/app/support">Help</Link>
-            <Button variant="ghost" onClick={(event) => openOverlay('notifications', event)} aria-label={notificationLabel}>Notifications{visibleNotificationCount}</Button>
+            <Button className="workspace-header-utility" variant="ghost" onClick={(event) => openOverlay('command', event)}>Shortcuts</Button>
+            <Link className="workspace-header-utility" to="/app/support">Help</Link>
+            <Button className="workspace-header-utility" variant="ghost" onClick={(event) => openOverlay('notifications', event)} aria-label={notificationLabel}>Notifications{visibleNotificationCount}</Button>
             <a className="workspace-account" href="/app/settings/profile">{current?.displayName || 'My account'}</a><button className="workspace-signout" type="button" onClick={() => void signOut()}>Sign out</button>
           </div>
         </header>
@@ -96,7 +97,7 @@ export function WorkspaceShell({
         }} onClick={event => {
           if (event.target instanceof Element && event.target.closest('a[href]')) event.currentTarget.open = false;
         }}>
-          <summary>Workspace navigation</summary>
+          <summary>Workspace menu</summary>
           {switcherOptions ? <label className="workspace-switcher-field"><span>Workspace</span>
             <span id={`${switcherHintId}-mobile`}>Selecting a workspace reloads this page.</span>
             <select className="workspace-switcher" aria-label="Workspace switcher" aria-describedby={`${switcherHintId}-mobile`} value={workspaceId ?? ''} onChange={changeWorkspace}>
