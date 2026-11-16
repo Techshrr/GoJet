@@ -16,9 +16,9 @@ export function WorkspaceOverviewPage() {
   return (
     <P12Shell sectionLabel="Overview">
       <section className="p12-page" data-page="workspace-overview" data-state={pageState}>
-        <header className="p12-page-header"><p className="p12-eyebrow">Workspace authority</p><h1>Workspace overview</h1><p>Server-authoritative membership, organization and notification state for the active Workspace.</p></header>
-        {authority.overview.isError ? <InlineMessage variant="danger">Workspace overview is unavailable from the native API.</InlineMessage> : null}
-        {authority.overview.isPending ? <p role="status">Loading Workspace authority…</p> : null}
+        <header className="p12-page-header"><h1>Your workspace</h1><p>Manage what you share and keep your team organized.</p><div className="p12-actions"><a className="site-primary-link" href="/app/links/new">Create a link</a><a href="/app/links">View all links</a></div></header>
+        {authority.overview.isError ? <InlineMessage variant="danger">We couldn’t load your workspace. Refresh this page to try again.</InlineMessage> : null}
+        {authority.overview.isPending ? <p role="status">Loading your workspace…</p> : null}
         {data ? <>
           {data.notification_state.status !== 'complete' ? <InlineMessage variant="warning">Notification data is {data.notification_state.status}: {data.notification_state.state_reason}</InlineMessage> : null}
           <div className="p12-metric-grid" aria-label="Workspace overview counts">
@@ -28,7 +28,7 @@ export function WorkspaceOverviewPage() {
             <Card><span>Folders</span><strong>{data.counts.folders}</strong></Card>
             <Card><span>Unread</span><strong>{data.counts.unread_notifications}</strong></Card>
           </div>
-          <Card as="section"><h2>{data.workspace.name}</h2><dl className="p12-definition-list"><div><dt>Role</dt><dd>{data.membership.role}</dd></div><div><dt>Status</dt><dd>{data.workspace.status}</dd></div><div><dt>Version</dt><dd>{data.workspace.version}</dd></div><div><dt>Workspace ID</dt><dd><code>{data.workspace.id}</code></dd></div></dl></Card>
+          <Card as="section"><h2>{data.workspace.name}</h2><dl className="p12-definition-list"><div><dt>Role</dt><dd>{data.membership.role}</dd></div><div><dt>Status</dt><dd>{data.workspace.status}</dd></div><div><dt>Next step</dt><dd><a href="/app/links/new">Create your first link</a></dd></div></dl></Card>
         </> : null}
       </section>
     </P12Shell>

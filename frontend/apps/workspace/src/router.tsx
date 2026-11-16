@@ -1,3 +1,4 @@
+import { SessionGate } from './workspace/SessionGate';
 import { lazy, Suspense } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 import {
@@ -40,7 +41,7 @@ const BillingPage = lazy(() => import('./routes/BillingPage'));
 const rootRoute = createRootRoute({
   component: () => (
     <Suspense fallback={<main aria-busy="true">Loading workspace…</main>}>
-      <Outlet />
+      <SessionGate><Outlet /></SessionGate>
     </Suspense>
   ),
 });

@@ -1,3 +1,4 @@
+import { workspaceTransport } from '../links/runtime';
 import { GoJetQRClient } from '@gojet/api-client';
 import { readWorkspaceRuntime, type WorkspaceRuntime } from '../links/runtime';
 
@@ -8,11 +9,5 @@ export function readQRRuntime(): QRRuntime | null {
 }
 
 export function createWorkspaceQRClient(runtime: QRRuntime): GoJetQRClient {
-  return new GoJetQRClient({
-    headers: () => ({
-      'X-GoJet-Test-Actor': runtime.actorId,
-      'X-GoJet-Test-Workspace': runtime.workspaceId,
-      'X-GoJet-Test-Workspace-Role': runtime.role,
-    }),
-  });
+  return new GoJetQRClient(workspaceTransport(runtime));
 }

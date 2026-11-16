@@ -76,10 +76,10 @@ export class GoJetAuthClient {
     });
   }
 
-  loginWithCode(code: string): Promise<AuthStatusResponse> {
+  loginWithCode(code: string, email = ""): Promise<AuthStatusResponse> {
     return this.request('/api/public/login-email-code', {
       method: 'POST',
-      body: JSON.stringify({ code, correlation_id: correlationId() }),
+      body: JSON.stringify({ code, email, correlation_id: correlationId() }),
     });
   }
 
@@ -90,17 +90,17 @@ export class GoJetAuthClient {
     });
   }
 
-  verifyEmail(code: string): Promise<AuthStatusResponse> {
+  verifyEmail(code: string, email = ""): Promise<AuthStatusResponse> {
     return this.request('/api/auth/verifyemail', {
       method: 'POST',
-      body: JSON.stringify({ code, correlation_id: correlationId() }),
+      body: JSON.stringify({ code, email, correlation_id: correlationId() }),
     });
   }
 
-  verifyRegistrationCode(code: string): Promise<AuthStatusResponse> {
+  verifyRegistrationCode(code: string, email = ""): Promise<AuthStatusResponse> {
     return this.request('/api/public/register-email-code', {
       method: 'POST',
-      body: JSON.stringify({ code, correlation_id: correlationId() }),
+      body: JSON.stringify({ code, email, correlation_id: correlationId() }),
     });
   }
 
@@ -118,10 +118,10 @@ export class GoJetAuthClient {
     });
   }
 
-  resetPassword(token: string, password: string): Promise<AuthStatusResponse> {
+  resetPassword(token: string, password: string, email = ""): Promise<AuthStatusResponse> {
     return this.request('/api/auth/resetpassword', {
       method: 'POST',
-      body: JSON.stringify({ token, password, correlation_id: correlationId() }),
+      body: JSON.stringify({ token, password, email, correlation_id: correlationId() }),
     });
   }
 

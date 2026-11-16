@@ -88,6 +88,9 @@ WHERE user_id=? AND purpose='password_reset'
 		return tx.Commit()
 	}
 
+	if _, err := tx.ExecContext(ctx, `UPDATE auth_one_time_grants SET invalidated_at=? WHERE user_id=? AND purpose='password_reset' AND consumed_at IS NULL AND invalidated_at IS NULL`, now, userID); err != nil {
+		return err
+	}
 	grantID, err := newOpaqueID("grt_", 18)
 	if err != nil {
 		return err

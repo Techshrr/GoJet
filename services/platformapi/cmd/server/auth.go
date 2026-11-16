@@ -322,7 +322,13 @@ func (h *authHTTPHandler) handleLoginEmailCode(w http.ResponseWriter, r *http.Re
 		writeAuthServiceError(w, err, input.Code != "")
 		return
 	}
-	if strings.TrimSpace(input.Code) != "" && strings.TrimSpace(input.Email) == "" {
+	if strings.TrimSpace(input.Code) != "" {
+		resolved, resolveErr := authn.ResolveEmailInput(r.Context(), h.db, h.grantKey, input.Email, "login_email_code", input.Code)
+		if resolveErr != nil {
+			writeAuthServiceError(w, resolveErr, true)
+			return
+		}
+		input.Code = resolved
 		secret, consumeErr := h.emailCode.ConsumeLoginCode(r.Context(), input.Code, correlationID)
 		if consumeErr != nil {
 			writeAuthServiceError(w, consumeErr, true)
@@ -380,7 +386,7 @@ func (h *authHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request)
 	if !decodeAuthJSON(w, r, &input) {
 		return
 	}
-	if input.Password == "" || len(input.Password) > 1024 || !utf8.ValidString(input.Password) {
+	if utf8.RuneCountInString(input.Password) < 12 || len(input.Password) > 1024 || !utf8.ValidString(input.Password) {
 		writeAuthServiceError(w, authn.ErrInvalid, false)
 		return
 	}
@@ -403,6 +409,7 @@ func (h *authHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request)
 
 func (h *authHTTPHandler) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Email         string `json:"email"`
 		Code          string `json:"code"`
 		CorrelationID string `json:"correlation_id"`
 	}
@@ -414,8 +421,23 @@ func (h *authHTTPHandler) handleVerifyEmail(w http.ResponseWriter, r *http.Reque
 		writeAuthServiceError(w, err, true)
 		return
 	}
+	resolved, err := authn.ResolveEmailInput(r.Context(), h.db, h.grantKey, input.Email, "email_verification", input.Code)
+	if err != nil {
+		writeAuthServiceError(w, err, true)
+		return
+	}
+	input.Code = resolved
 	result, err := h.verification.VerifyEmail(r.Context(), authn.EmailVerificationInput{Code: input.Code, CorrelationID: correlationID})
 	if err != nil {
+		writeAuthServiceError(w, err, true)
+		return
+	}
+	secret, err := h.store.CreateSession(r.Context(), result.User.ID, 30*24*time.Hour, correlationID)
+	if err != nil {
+		writeAuthServiceError(w, err, true)
+		return
+	}
+	if err = setAuthSessionCookie(w, secret); err != nil {
 		writeAuthServiceError(w, err, true)
 		return
 	}
@@ -541,6 +563,7 @@ func (h *authHTTPHandler) handleForgotPassword(w http.ResponseWriter, r *http.Re
 
 func (h *authHTTPHandler) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Email         string `json:"email"`
 		Token         string `json:"token"`
 		Password      string `json:"password"`
 		CorrelationID string `json:"correlation_id"`
@@ -553,9 +576,30 @@ func (h *authHTTPHandler) handleResetPassword(w http.ResponseWriter, r *http.Req
 		writeAuthServiceError(w, err, true)
 		return
 	}
+	if utf8.RuneCountInString(input.Password) < 12 || len(input.Password) > 1024 || !utf8.ValidString(input.Password) {
+		writeAuthProblem(w, http.StatusBadRequest, "invalid_input", "Use a password with at least 12 characters.")
+		return
+	}
+	resolved, err := authn.ResolveEmailInput(r.Context(), h.db, h.grantKey, input.Email, "password_reset", input.Token)
+	if err != nil {
+		writeAuthServiceError(w, err, true)
+		return
+	}
+	input.Token = resolved
 	if err := h.recovery.ResetPassword(r.Context(), input.Token, input.Password, correlationID); err != nil {
 		writeAuthServiceError(w, err, true)
 		return
+	}
+	if input.Email != "" {
+		secret, err := h.login.LoginPassword(r.Context(), authn.PasswordLoginInput{Email: input.Email, Password: input.Password, CorrelationID: correlationID})
+		if err != nil {
+			writeAuthServiceError(w, err, true)
+			return
+		}
+		if err = setAuthSessionCookie(w, secret); err != nil {
+			writeAuthServiceError(w, err, true)
+			return
+		}
 	}
 	writeAuthJSON(w, http.StatusOK, map[string]string{"status": "password_reset"})
 }
@@ -697,6 +741,12 @@ func (h *authHTTPHandler) handleSocialRegistrationComplete(w http.ResponseWriter
 		writeAuthJSON(w, http.StatusAccepted, map[string]any{"status": "verification_required", "expires_at": grant.ExpiresAt})
 		return
 	}
+	resolved, err := authn.ResolveEmailInput(r.Context(), h.db, h.grantKey, input.Email, "social_email_verification", input.VerificationCode)
+	if err != nil {
+		writeAuthServiceError(w, err, true)
+		return
+	}
+	input.VerificationCode = resolved
 	secret, err := h.social.Complete(r.Context(), authn.CompleteSocialRegistrationInput{SocialCode: input.Code, VerificationCode: input.VerificationCode, CorrelationID: correlationID}, time.Now().UTC())
 	if err != nil {
 		writeAuthServiceError(w, err, true)

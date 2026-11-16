@@ -1,11 +1,11 @@
-FROM golang:1.26.5-bookworm AS mailworker
+FROM golang:1.26.5-bookworm AS backend
 ARG SOURCE_COMMIT=unknown
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY internal ./internal
-COPY services/platformapi/cmd/mailworker ./services/platformapi/cmd/mailworker
-RUN go test ./internal/auth ./internal/support ./internal/securetoken && CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/Techshrr/GoJet/internal/releaseinfo.Version=10.0.0-rc.2-panel.3 -X github.com/Techshrr/GoJet/internal/releaseinfo.Commit=${SOURCE_COMMIT}" -o /out/mailworker ./services/platformapi/cmd/mailworker
+COPY services ./services
+RUN go test ./internal/auth ./internal/support ./internal/securetoken ./services/platformapi/cmd/server && CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/Techshrr/GoJet/internal/releaseinfo.Version=10.0.0-rc.2-panel.4 -X github.com/Techshrr/GoJet/internal/releaseinfo.Commit=${SOURCE_COMMIT}" -o /out/mailworker ./services/platformapi/cmd/mailworker && CGO_ENABLED=0 go build -trimpath -o /out/platformapi ./services/platformapi/cmd/server
 
 FROM node:24.19.0-bookworm-slim AS frontend
 RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,7 @@ RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin
     rm -rf /var/lib/apt/lists/* /var/lib/mysql/* /var/log/mysql/* && \
     useradd --system --no-create-home --shell /usr/sbin/nologin gojet && \
     useradd --system --no-create-home --shell /usr/sbin/nologin webrisk && usermod -a -G clamav gojet
-COPY --from=mailworker /out/mailworker /opt/gojet/panel/bin/mailworker
+COPY --from=backend /out/ /opt/gojet/panel/bin/
 COPY panel /opt/linketic
 RUN python3 /opt/linketic/build_runtime.py && \
     php8.3 /opt/gojet/native/installer/bin/verify-package.php /opt/gojet/native ec4486c8852b51178d37e93addcaaa7cbb1b5755c4d3f8997757e32a85226f75 ce305a9207fd2fe46396e7cf433137c48ab5aec1

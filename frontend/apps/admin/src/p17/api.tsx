@@ -40,7 +40,9 @@ export function ErrorNotice({ error }: { error: string }) {
 }
 
 export function JsonPreview({ value }: { value: unknown }) {
-  return <pre className="p17-json" aria-label="Record detail">{JSON.stringify(value, null, 2)}</pre>;
+  if (value === null || value === undefined) return <span>—</span>;
+  if (typeof value !== 'object') return <span>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</span>;
+  return <dl className="management-record" aria-label="Record detail">{Object.entries(value).map(([key,item])=><div key={key}><dt>{key.replaceAll('_',' ').replace(/^./,letter=>letter.toUpperCase())}</dt><dd>{typeof item==='object'&&item!==null?<JsonPreview value={item}/>:typeof item==='boolean'?(item?'Yes':'No'):String(item??'—')}</dd></div>)}</dl>;
 }
 
 export function ProtectedLayout({ children, state = 'normal' }: { children: ReactNode; state?: 'normal' | 'permission-denied' | 'partial-service-degradation' }) {

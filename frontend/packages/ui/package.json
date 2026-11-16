@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/foundation.css"
+    "./styles.css": "./src/foundation.css",
+    "./product.css": "./src/brand/product.css"
   },
   "types": "./src/index.ts",
   "dependencies": {

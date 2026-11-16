@@ -230,6 +230,10 @@ FROM auth_one_time_grants WHERE id=?`, claimed.Job.ResourceID).
 	if stored != expected {
 		return support.MailDeliveryPayload{}, support.ErrMailState
 	}
+	code, err = NumericEmailCode(q.grantKey, purpose, claimed.Job.ResourceID)
+	if err != nil {
+		return support.MailDeliveryPayload{}, err
+	}
 	return support.MailDeliveryPayload{
 		Template:  template,
 		Values:    map[string]string{variable: code},

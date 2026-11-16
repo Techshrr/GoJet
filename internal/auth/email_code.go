@@ -87,6 +87,9 @@ WHERE user_id=? AND purpose='login_email_code'
 		return ErrRateLimited
 	}
 
+	if _, err := tx.ExecContext(ctx, `UPDATE auth_one_time_grants SET invalidated_at=? WHERE user_id=? AND purpose='login_email_code' AND consumed_at IS NULL AND invalidated_at IS NULL`, now, userID); err != nil {
+		return err
+	}
 	grantID, err := newOpaqueID("grt_", 18)
 	if err != nil {
 		return err

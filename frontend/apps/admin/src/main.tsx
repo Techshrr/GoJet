@@ -12,6 +12,8 @@ import './oauth/oauth.css';
 import './trust/trust.css';
 import './p17/p17.css';
 
+import '@gojet/ui/product.css';
+
 const container = document.getElementById('root');
 if (!container) throw new Error('GoJet Admin root is missing');
 const queryClient = createGoJetQueryClient();

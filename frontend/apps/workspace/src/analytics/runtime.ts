@@ -1,3 +1,4 @@
+import { workspaceTransport } from '../links/runtime';
 import { GoJetAnalyticsClient, type AnalyticsQueryInput } from '@gojet/api-client';
 import { readWorkspaceRuntime, type WorkspaceRuntime } from '../links/runtime';
 
@@ -10,19 +11,13 @@ export function readAnalyticsRuntime(): AnalyticsRuntime | null {
   if (!runtime) return null;
   return {
     ...runtime,
-    analyticsPermission: import.meta.env.VITE_GOJET_TEST_ANALYTICS_PERMISSION === 'allow' ? 'allow' : 'deny',
+    analyticsPermission: !runtime.testAuthority ? 'allow' : import.meta.env.VITE_GOJET_TEST_ANALYTICS_PERMISSION === 'allow' ? 'allow' : 'deny',
   };
 }
 
 export function createWorkspaceAnalyticsClient(runtime: AnalyticsRuntime): GoJetAnalyticsClient {
-  return new GoJetAnalyticsClient({
-    headers: () => ({
-      'X-GoJet-Test-Actor': runtime.actorId,
-      'X-GoJet-Test-Workspace': runtime.workspaceId,
-      'X-GoJet-Test-Workspace-Role': runtime.role,
-      'X-GoJet-Test-Analytics-Permission': runtime.analyticsPermission,
-    }),
-  });
+  const transport = workspaceTransport(runtime);
+  return new GoJetAnalyticsClient({ ...transport, headers: () => ({ ...transport.headers?.(), ...(runtime.testAuthority ? { 'X-GoJet-Test-Analytics-Permission': runtime.analyticsPermission } : {}) }) });
 }
 
 export function defaultAnalyticsQuery(now = new Date()): AnalyticsQueryInput {

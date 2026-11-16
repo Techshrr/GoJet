@@ -19,6 +19,8 @@ import './workspace/workspace.css';
 import './account/account.css';
 import './developer/developer.css';
 
+import '@gojet/ui/product.css';
+
 const container = document.getElementById('root');
 if (!container) throw new Error('GoJet application root is missing');
 const queryClient = createGoJetQueryClient();

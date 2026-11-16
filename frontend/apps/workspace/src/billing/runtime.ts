@@ -1,4 +1,4 @@
-import { readWorkspaceRuntime } from '../links/runtime';
+import { readWorkspaceRuntime, workspaceTransport } from '../links/runtime';
 
 export type BillingMoney = { currency: string; amount_minor: number };
 export type BillingPlanEntitlement = { capability: string; limit_value: number; unit: string; source_version: number };
@@ -51,6 +51,7 @@ export function readBillingRuntime(): BillingRuntime | null {
 }
 
 function authHeaders(runtime: BillingRuntime): Record<string, string> {
+  if (import.meta.env.VITE_GOJET_TEST_AUTH_ENABLED !== '1') return {};
   return {
     'X-GoJet-Test-Actor': runtime.actorId,
     'X-GoJet-Test-Email': runtime.email,
@@ -92,7 +93,7 @@ export async function workspacePayments(runtime: BillingRuntime): Promise<Billin
 }
 
 export async function createOrder(runtime: BillingRuntime, planId: number, kind: 'new' | 'upgrade' | 'renewal') {
-  const response = await fetch(`/api/workspaces/${encodeURIComponent(runtime.workspaceId)}/orders`, {
+  const response = await workspaceTransport({ ...runtime, testAuthority: import.meta.env.VITE_GOJET_TEST_AUTH_ENABLED === '1' }).fetch!(`/api/workspaces/${encodeURIComponent(runtime.workspaceId)}/orders`, {
     method: 'POST', credentials: 'same-origin',
     headers: { ...authHeaders(runtime), 'Content-Type': 'application/json', Accept: 'application/json', 'Idempotency-Key': crypto.randomUUID() },
     body: JSON.stringify({ plan_id: planId, kind }),
