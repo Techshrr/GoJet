@@ -30,6 +30,8 @@ jobs:
         run: |
           python3 -m unittest discover -s panel/tests -p 'test_*.py'
           php8.3 -l panel/bridge.php
+          php8.3 -l panel/refresh_mail_templates.php
+          python3 -m py_compile native/*.py panel/*.py
           node panel/tests/form_submission.mjs
       - name: Build deployable image
         run: docker build --build-arg SOURCE_COMMIT="$GITHUB_SHA" --progress=plain -f panel/Dockerfile -t linketic-panel:ci .
@@ -45,6 +47,7 @@ jobs:
       - name: Start isolated deployment and external protocol fixtures
         run: |
           mkdir -p artifacts/panel
+          echo "127.0.0.1 www.linketic.test" | sudo tee -a /etc/hosts > /dev/null
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=panel-ci' -addext 'subjectAltName=DNS:www.linketic.test,DNS:webrisk.googleapis.com,DNS:challenges.cloudflare.com,DNS:mail.fixture' -keyout panel/tests/key.pem -out panel/tests/cert.pem
           docker run -d --name linketic-ci -p 127.0.0.1:18080:8088 -p 127.0.0.1:11443:11443 --add-host webrisk.googleapis.com:127.0.0.1 --add-host challenges.cloudflare.com:127.0.0.1 --add-host mail.fixture:127.0.0.1 -e SITE_URL=https://www.linketic.test:11443 -e INSTALL_ACCESS_CODE=ci-panel-access-code-1234567890 -v "$PWD/panel/tests:/test:ro" -v panel-app:/var/lib/linketic -v panel-db:/var/lib/mysql -v panel-redis:/var/lib/redis -v panel-av:/var/lib/clamav linketic-panel:ci
           for i in $(seq 1 90); do if curl -fsS -H 'Host: www.linketic.test' http://127.0.0.1:18080/install/ > /dev/null; then break; fi; sleep 2; done
@@ -73,6 +76,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 panel/tests/upgrade.py
+      - name: Build Docker-free systemd package
+        run: python3 native/package.py --output "$RUNNER_TEMP/linketic-native-delivery"
+      - name: Native installation with Docker stopped
+        run: python3 native/acceptance.py
       - name: Package tested image and publish panel prerelease
         if: false # release only after native and full customer acceptance
         env:
@@ -84,6 +91,7 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts/panel
+          sudo journalctl -u linketic.service --no-pager > artifacts/panel/native-service.log 2>&1 || true
           docker logs linketic-ci > artifacts/panel/container.log 2>&1 || true
           docker exec linketic-ci cat /tmp/fixtures.log > artifacts/panel/fixtures.log || true
           docker exec linketic-ci cat /var/lib/linketic/status/progress.json > artifacts/panel/progress.json || true

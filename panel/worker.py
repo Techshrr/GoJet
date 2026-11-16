@@ -1,7 +1,7 @@
 """Fixed-operation root worker, confined to this application's container and volumes."""
 import hashlib, json, os, pwd, secrets, smtplib, ssl, subprocess, time, urllib.parse, urllib.request
 from pathlib import Path
-from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, validate
+from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, validate, DATABASE_PORT, REDIS_PORT
 from init import nginx
 STEPS=['配置检查','连接外部服务','准备数据库与扫描器','初始化数据与管理员','启动业务服务','健康检查','安装完成']
 COMPLETED=[]
@@ -52,8 +52,8 @@ def upstream(d):
 def prepare(d):
     if (PRIVATE/'configuration.json').exists(): return
     native={'schema':'gojet.native-configuration.v1','origin':read(PUBLIC/'entry.json')['origin'],
-      'database':{'port':3306,'name':'gojet','user':'gojet_app','password':secrets.token_hex(32)},
-      'redis':{'port':6379,'db':0,'password':''},
+      'database':{'port':DATABASE_PORT,'name':'gojet','user':'gojet_app','password':secrets.token_hex(32)},
+      'redis':{'port':REDIS_PORT,'db':0,'password':''},
       'secrets':{'key_id':'panel-v1',**{k:secrets.token_hex(32) for k in ('csrf','grant','oauth','admin','file_public','text_public')}},
       'files':{'root':str(BASE/'files'),'clamav_socket':'/run/clamav/clamd.ctl','max_upload_bytes':10485760,'max_files':1000,'max_bytes':1073741824,'types':{'pdf':['application/pdf'],'png':['image/png'],'jpg':['image/jpeg']}},
       'quotas':{'text':1000,'bio':100,'qr':1000},
@@ -107,6 +107,7 @@ def install():
     COMPLETED.append(STEPS[2]); progress('installing',STEPS[3])
     command(['php8.3','/opt/linketic/bridge.php','database'],timeout=300)
     command(['php8.3','/opt/linketic/bridge.php','finish'])
+    command(['php8.3','/opt/linketic/refresh_mail_templates.php'])
     COMPLETED.append(STEPS[3]); progress('installing',STEPS[4]); start_services()
     COMPLETED.append(STEPS[4]); progress('installing',STEPS[5]); wait(health,90,'业务服务健康检查未通过，站点尚未开放。')
     atomic(PRIVATE/'activation-started.json',{'health_checked':True})
@@ -126,7 +127,7 @@ def install():
 def main():
     if (PRIVATE/'installed.json').exists():
         retire_secrets()
-        wait(database_ready,120,'数据库恢复中。'); start_services()
+        wait(database_ready,120,'数据库恢复中。'); command(['php8.3','/opt/linketic/refresh_mail_templates.php']); start_services()
         atomic(PUBLIC/'complete.json',{'complete':True},0o644)
         progress('complete',STEPS[-1])
     elif (PRIVATE/'configuration.json').exists() and (PRIVATE/'accepted.json').exists():

@@ -20,7 +20,7 @@ class External(BaseHTTPRequestHandler):
 class Proxy(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def handle_request(self):
-  c=http.client.HTTPConnection('127.0.0.1',8088,timeout=20)
+  c=http.client.HTTPConnection('127.0.0.1',18080 if Path('/opt/linketic/native-mode').exists() else 8088,timeout=20)
   body=self.rfile.read(int(self.headers.get('Content-Length','0')))
   c.request(self.command,self.path,body,dict(self.headers));r=c.getresponse();raw=r.read();self.send_response(r.status)
   for k,v in r.getheaders():

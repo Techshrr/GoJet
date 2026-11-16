@@ -1,7 +1,7 @@
 import {chromium} from 'playwright-core';
 import assert from 'node:assert/strict';
 import {mkdir,writeFile} from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
+import {runtime as execFileSync} from './runtime.mjs';
 const origin='https://www.linketic.test:11443';
 const out='artifacts/panel';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({args:['--no-proxy-server','--host-resolver-rules=MAP www.linketic.test 127.0.0.1']});
@@ -10,7 +10,7 @@ await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=
 try {
  await page.goto(origin+'/');await page.getByRole('heading',{name:'准备好，开始安装。'}).waitFor();
  await page.screenshot({path:out+'/installer-desktop.png',fullPage:true});
- await page.getByLabel('安装访问码').fill('ci-panel-access-code-1234567890');await page.getByRole('button',{name:'继续',exact:true}).click();
+ await page.getByLabel('安装访问码').fill(process.env.NATIVE_TEST?'CiNativeAccessCode1234567890':'ci-panel-access-code-1234567890');await page.getByRole('button',{name:'继续',exact:true}).click();
  await page.getByRole('heading',{name:'配置你的网站'}).waitFor();
  const fields={admin_email:'admin@example.com',admin_name:'Panel Administrator',admin_password:'CI-Admin-password-2026!',smtp_host:'mail.fixture',smtp_port:'1587',smtp_from:'no-reply@example.com',smtp_user:'no-reply@example.com',smtp_password:'ci-mail-password',webrisk_key:'ci-webrisk-invalid-key-1234567890',turnstile_site_key:'ci-turnstile-site-1234567890',turnstile_secret:'ci-turnstile-secret-1234567890'};
  for(const [key,value] of Object.entries(fields))await page.locator('#'+key).fill(value);

@@ -1,6 +1,6 @@
 import {chromium} from 'playwright-core';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {runtime as execFileSync} from './runtime.mjs';
 import {createHmac} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 const origin='https://www.linketic.test:11443';
@@ -85,7 +85,16 @@ try{
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.waitForURL(origin+'/login');
   await login(password+'updated');await page.waitForURL(origin+'/app');await workspace();
   const loginCount=mailCount();await page.goto(origin+'/login');await ready();await page.getByRole('button',{name:'Email code',exact:true}).click();await page.getByLabel('Email',{exact:true}).fill(email);await page.getByRole('button',{name:'Send sign-in code',exact:true}).click();
-  const loginCode=await delivered(loginCount);assert.match(loginCode,/^[0-9]{6}$/);await page.getByLabel('Email sign-in code',{exact:true}).fill(loginCode);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.waitForURL(origin+'/app');await workspace();
+  let loginCode=await delivered(loginCount);assert.match(loginCode,/^[0-9]{6}$/);
+  if(mode==='full'){
+    const invalid=loginCode==='000000'?'000001':'000000';
+    for(let i=0;i<5;i++)assert.equal((await post('/api/public/login-email-code',{email,code:invalid})).status,401);
+    assert.equal(Number(sql(`SELECT attempt_count FROM auth_one_time_grants WHERE email_normalized='${email}' AND purpose='login_email_code' ORDER BY created_at DESC LIMIT 1`)[0].attempt_count),5);
+    assert.equal((await post('/api/public/login-email-code',{email,code:loginCode})).status,429);
+    sql(`UPDATE auth_one_time_grants SET created_at=UTC_TIMESTAMP()-INTERVAL 2 MINUTE WHERE email_normalized='${email}' AND purpose='login_email_code'`);
+    const again=mailCount();assert.equal((await post('/api/public/login-email-code',{email})).status,202);loginCode=await delivered(again);
+  }
+  await page.getByLabel('Email sign-in code',{exact:true}).fill(loginCode);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.waitForURL(origin+'/app');await workspace();
   if(mode==='full'){
    await page.goto(origin+'/admin/login');await page.getByLabel('Email',{exact:true}).fill('admin@example.com');await page.getByLabel('Password',{exact:true}).fill('CI-Admin-password-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByText('Authentication complete.',{exact:true}).waitFor();
    await page.goto(origin+'/admin/platform/general');await page.getByRole('link',{name:'Configure customer sign-in providers',exact:true}).click();await page.getByRole('heading',{name:'OAuth provider configuration'}).waitFor();await page.getByLabel('Client ID',{exact:true}).fill('fixture-google-client');await page.getByLabel('Client secret',{exact:true}).fill('fixture-google-secret-not-real');await page.getByLabel('Authorization URL',{exact:true}).fill('https://accounts.google.com/o/oauth2/v2/auth');await page.getByLabel('Token URL',{exact:true}).fill('https://oauth2.googleapis.com/token');await page.getByLabel('User info URL',{exact:true}).fill('https://openidconnect.googleapis.com/v1/userinfo');await page.getByLabel('Scopes',{exact:true}).fill('openid email profile');await page.getByLabel('Reason for change',{exact:true}).fill('CI customer sign-in configuration');await page.getByRole('button',{name:'Save provider',exact:true}).click();await page.getByText('This change requires a recent two-factor verification.',{exact:false}).waitFor();
@@ -95,6 +104,6 @@ try{
    await page.goto(origin+'/login');await ready();assert.equal(await page.getByRole('link',{name:'Google',exact:true}).count(),1);assert.equal(await page.getByText(/unavailable$/).count(),0);
    await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/customer-mobile.png',fullPage:true});
   }
-  assert.deepEqual(errors,[]);await writeFile(out+'/customer-'+mode+'.json',JSON.stringify({passed:true,registration_mail:mode==='full',expired_verification_resend:true,existing_account_retained:mode==='after-upgrade',six_digit_codes:true,wrong_mailbox_refused:true,wrong_purpose_refused:true,failed_attempt_charged:true,replay_refused:true,session_survives_refresh:true,homepage_signed_in:true,workspace_creation:true,logout_revokes_session:true,password_login:true,password_reset_mail:true,password_reset_same_page:true,old_session_revoked:true,email_login_code:true,oauth_configuration:mode==='full',live_external_oauth_login:false}));
+  assert.deepEqual(errors,[]);await writeFile(out+'/customer-'+mode+'.json',JSON.stringify({passed:true,registration_mail:mode==='full',expired_verification_resend:true,existing_account_retained:mode==='after-upgrade',six_digit_codes:true,wrong_mailbox_refused:true,wrong_purpose_refused:true,failed_attempt_charged:true,five_attempt_lockout:mode==='full',replay_refused:true,session_survives_refresh:true,homepage_signed_in:true,workspace_creation:true,logout_revokes_session:true,password_login:true,password_reset_mail:true,password_reset_same_page:true,old_session_revoked:true,email_login_code:true,oauth_configuration:mode==='full',live_external_oauth_login:false}));
  }
 }catch(error){await page.screenshot({path:out+'/customer-'+mode+'-failure.png',fullPage:true}).catch(()=>{});await writeFile(out+'/customer-'+mode+'-failure.txt',String(error)+'\n'+await page.locator('body').innerText().catch(()=>''));throw error;}finally{await browser.close();}

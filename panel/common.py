@@ -2,6 +2,9 @@
 import json, os, re, tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
+NATIVE = Path('/opt/linketic/native-mode').is_file()
+DATABASE_PORT = 33306 if NATIVE else 3306
+REDIS_PORT = 36379 if NATIVE else 6379
 BASE = Path('/var/lib/linketic')
 PRIVATE = BASE / 'private'
 INBOX = BASE / 'inbox'

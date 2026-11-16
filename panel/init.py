@@ -1,7 +1,7 @@
 """Container entrypoint. No host mounts, panel API keys, or privileged Docker required."""
 import hashlib, os, pwd, secrets, socket, struct, subprocess
 from pathlib import Path
-from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, origin
+from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, origin, NATIVE, DATABASE_PORT, REDIS_PORT
 
 def mkdir(path, user='root', mode=0o700):
     p=Path(path); p.mkdir(parents=True,exist_ok=True)
@@ -32,8 +32,11 @@ http {
  server { listen 8088 default_server; server_name _;
  absolute_redirect off;
 '''
+    if NATIVE:
+        prefix=prefix.replace('listen 8088 default_server', 'listen 127.0.0.1:18080 default_server')
+        prefix+=' set_real_ip_from 127.0.0.1; real_ip_header X-Real-IP;\n'
     # The only trusted ingress is the host-side Docker gateway (port binds host loopback).
-    for row in Path('/proc/net/route').read_text().splitlines()[1:]:
+    for row in ([] if NATIVE else Path('/proc/net/route').read_text().splitlines()[1:]):
         parts=row.split()
         if len(parts)>3 and parts[1]=='00000000' and int(parts[3],16)&2:
             gateway=socket.inet_ntoa(struct.pack('<I',int(parts[2],16)))
@@ -74,6 +77,9 @@ serverurl=unix:///run/supervisor.sock
       'nginx':('/usr/sbin/nginx -g "daemon off;"','root',30,True),
       'wizard':('/usr/bin/python3 /opt/linketic/serve.py','www-data',30,True),
       'worker':('/usr/bin/python3 /opt/linketic/worker.py','root',40,True)}
+    if NATIVE:
+        command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF',user,priority,auto)
+        command,user,priority,auto=programs['redis']; programs['redis']=(command+' --port='+str(REDIS_PORT),user,priority,auto)
     for name in SERVICES+('webrisk',): programs[name]=('/usr/bin/python3 /opt/linketic/launch.py '+name,'root',50,False)
     for name,(cmd,user,priority,auto) in programs.items():
         config+=f'\n[program:{name}]\ncommand={cmd}\nuser={user}\npriority={priority}\nautostart={str(auto).lower()}\nautorestart=true\nstartsecs=2\nstartretries=100\nstopasgroup=true\nkillasgroup=true\nstopwaitsecs=60\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstderr_logfile=/dev/stderr\nstderr_logfile_maxbytes=0\n'
