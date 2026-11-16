@@ -38,7 +38,7 @@ export default function MembersPage() {
   return (
     <P12Shell sectionLabel="Members">
       <section className="p12-page" data-page="workspace-members" data-state={state}>
-        <header className="p12-page-header"><p className="p12-eyebrow">RBAC</p><h1>Members and invitations</h1><p>Roles are re-resolved from MySQL on every P12-owned request; client role claims are not authorization.</p></header>
+        <header className="p12-page-header"><p className="p12-eyebrow">RBAC</p><h1>Members and invitations</h1><p>Invite teammates and choose what each person can access.</p></header>
         {members.isError ? <InlineMessage variant="danger">Members could not be loaded.</InlineMessage> : null}
         {inviteMutation.isError ? <InlineMessage variant="danger">{message(inviteMutation.error)}</InlineMessage> : null}
         {roleMutation.isError ? <InlineMessage variant="danger">{message(roleMutation.error)}</InlineMessage> : null}

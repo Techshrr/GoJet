@@ -34,11 +34,12 @@ with tempfile.TemporaryDirectory() as tmp:
     with zipfile.ZipFile(archive) as z:z.extract('linketic-image.tar',tmp)
     run('docker','load','--input',str(Path(tmp)/'linketic-image.tar'))
 run('docker','stop','linketic-ci');run('docker','rm','linketic-ci')
-current_browser=(OUT/'browser.json').read_bytes()
+current_browser={p.name:p.read_bytes() for p in OUT.iterdir() if p.is_file()}
 start('linketic-panel:10.0.0-rc.2-panel.2')
 subprocess.run(['node','panel/tests/browser.mjs'],check=True)
-(OUT/'browser-panel2.json').write_bytes((OUT/'browser.json').read_bytes())
-(OUT/'browser.json').write_bytes(current_browser)
+for p in list(OUT.iterdir()):
+    if p.is_file() and p.name in current_browser and p.read_bytes()!=current_browser[p.name]:p.rename(OUT/('panel2-'+p.name))
+for name,data in current_browser.items():(OUT/name).write_bytes(data)
 customer('before-upgrade')
 before=private_digests()
 run('docker','stop','linketic-ci');run('docker','rm','linketic-ci')
@@ -50,4 +51,4 @@ customer('after-upgrade')
 assert private_digests()==before
 identity=json.loads(run('docker','exec','linketic-ci','/opt/gojet/panel/bin/mailworker','--version'))
 assert identity['commit']==os.environ['GITHUB_SHA']
-(OUT/'upgrade.json').write_text(json.dumps({'passed':True,'from':'10.0.0-rc.2-panel.2','to':'10.0.0-rc.2-panel.3','old_package_sha256':SHA,'same_four_volumes':True,'installation_and_credentials_unchanged':True,'pending_account_recovered':True,'mailworker':identity},indent=2)+'\n')
+(OUT/'upgrade.json').write_text(json.dumps({'passed':True,'from':'10.0.0-rc.2-panel.2','to':'10.0.0-rc.2-panel.4','old_package_sha256':SHA,'same_four_volumes':True,'installation_and_credentials_unchanged':True,'pending_account_recovered':True,'mailworker':identity},indent=2)+'\n')

@@ -40,7 +40,7 @@ export default function CommercePlansPage() {
   if (auth.busy || !runtime) return <ModuleSessionNotice busy={auth.busy} error={auth.error} />;
   return <AdminShell state={!runtime ? 'admin-auth-required' : query.isError ? 'partial-service-degradation' : 'normal'}>
     <section className="commerce-page" data-page="admin-commerce-plans" data-state={pageState}>
-      <header><div><p className="commerce-eyebrow">COMMERCE</p><h1>Plans</h1><p>Plan code is immutable after creation. Versioned updates and terminal archive transitions are enforced by the server.</p></div></header>
+      <header><div><p className="commerce-eyebrow">COMMERCE</p><h1>Plans</h1><p>Create subscription plans and manage their pricing and included features.</p></div></header>
       <CommerceNav />
       {!runtime ? <InlineMessage variant="danger">billing.manage authority is unavailable. Admin commerce fails closed.</InlineMessage> : null}
       {query.isPending && runtime ? <p role="status">Loading plans…</p> : null}
@@ -54,7 +54,7 @@ export default function CommercePlansPage() {
           <label>Currency<input value={currency} maxLength={3} onChange={(event) => setCurrency(event.currentTarget.value.toUpperCase())} /></label>
           <label>Amount in minor units<input inputMode="numeric" value={amountMinor} onChange={(event) => setAmountMinor(event.currentTarget.value)} /></label>
           <label>Billing period<select value={billingPeriod} onChange={(event) => setBillingPeriod(event.currentTarget.value as typeof billingPeriod)}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="one_time">One time</option></select></label>
-          <label className="commerce-form-wide">Entitlements<textarea value={entitlements} onChange={(event) => setEntitlements(event.currentTarget.value)} rows={3} aria-describedby="entitlement-help" /><span id="entitlement-help">One per line: capability:positive-limit:unit</span></label>
+          <label className="commerce-form-wide">Entitlements<textarea value={entitlements} onChange={(event) => setEntitlements(event.currentTarget.value)} rows={3} aria-describedby="entitlement-help" /><span id="entitlement-help">One per line, for example links:100:count allows 100 links.</span></label>
         </div><Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>{createMutation.isPending ? 'Creating…' : 'Create draft'}</Button>
       </Card> : null}
       {!query.isPending && runtime && !query.isError && items.length === 0 ? <EmptyState title="No plans" reason="Create a draft plan before publishing billing options." /> : null}

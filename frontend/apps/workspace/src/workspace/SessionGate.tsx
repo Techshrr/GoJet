@@ -11,7 +11,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     if (ready) return; let active = true;
     void (async () => {
       const response = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
-      if (response.status === 401) { window.location.replace('/login'); return; }
+      if (response.status === 401 || response.status === 410) { window.location.replace('/login'); return; }
       if (!response.ok) throw new Error('We couldn’t load your account. Please try again.');
       const session = await response.json() as { user: { id: string; email: string; display_name: string } };
       if (!active) return; setActor(session.user);
@@ -19,6 +19,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       const client = new GoJetWorkspaceClient(workspaceTransport(runtime));
       const result = await client.listWorkspaces();
       if (!active) return;
+      if (window.location.pathname.startsWith('/invite/')) { setReady(true); return; }
       if (!result.items.length) { setEmpty(true); return; }
       let remembered = ''; try { remembered = sessionStorage.getItem('gojet.p12.active-workspace') || ''; } catch { /* optional preference */ }
       const chosen = result.items.find((item) => item.id === remembered) ?? result.items[0]!;

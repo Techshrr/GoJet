@@ -33,8 +33,8 @@ def main():
     code=os.environ.get('INSTALL_ACCESS_CODE') or ''.join(secrets.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(28))
     if not re.fullmatch('[A-Za-z0-9]{24,128}',code):raise SystemExit('INSTALL_ACCESS_CODE 必须为 24–128 位字母和数字。')
     os.umask(0o077)
-    ROOT.mkdir(mode=0o755);DATA.mkdir(mode=0o700)
-    rootfs=ROOT/'runtime';rootfs.mkdir(mode=0o755)
+    ROOT.mkdir(mode=0o755);ROOT.chmod(0o755);DATA.mkdir(mode=0o700)
+    rootfs=ROOT/'runtime';rootfs.mkdir(mode=0o755);rootfs.chmod(0o755)
     def safe_member(member,destination):
         # Rootfs absolute links must point inside the application, including at extraction time.
         if member.issym() and member.linkname.startswith('/'):
@@ -42,6 +42,7 @@ def main():
         checked=tarfile.data_filter(member,destination)
         if checked is not None:
             checked.uid,checked.gid=member.uid,member.gid
+            if member.isdir():checked.mode=member.mode & 0o777
         return checked
     with tarfile.open(archive,'r:gz') as tar:tar.extractall(rootfs,filter=safe_member,numeric_owner=True)
     (rootfs/'opt/linketic/native-mode').write_text('systemd-root-directory-v1\n')

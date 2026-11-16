@@ -38,7 +38,7 @@ export default function NotificationsPage() {
   return (
     <P12Shell sectionLabel="Notifications">
       <section className="p12-page" data-page="workspace-notifications" data-state={state} data-unread-count={query.data?.unread_count ?? 0}>
-        <header className="p12-page-header"><p className="p12-eyebrow">Notification core</p><h1>Notifications</h1><p>Recipient-scoped read state, dedupe and deep-link authorization are server-authoritative.</p></header>
+        <header className="p12-page-header"><p className="p12-eyebrow">Notification core</p><h1>Notifications</h1><p>Keep up with activity and updates in your workspace.</p></header>
         {query.isError ? <InlineMessage variant="danger">Notifications could not be loaded from the Workspace API.</InlineMessage> : null}
         {query.data && query.data.state.status !== 'complete' ? <InlineMessage variant="warning">Data is {query.data.state.status}: {query.data.state.state_reason}</InlineMessage> : null}
         <div className="p12-page-actions">
