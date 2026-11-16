@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Install the self-contained systemd edition. Docker is not required on the host."""
-import argparse, hashlib, json, os, platform, posixpath, secrets, shutil, socket, subprocess, tarfile
+import argparse, hashlib, json, os, platform, posixpath, secrets, shutil, socket, subprocess, tarfile, tempfile, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 ROOT=Path('/opt/linketic-native')
@@ -33,8 +33,6 @@ def main():
     code=os.environ.get('INSTALL_ACCESS_CODE') or ''.join(secrets.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(28))
     if not re.fullmatch('[A-Za-z0-9]{24,128}',code):raise SystemExit('INSTALL_ACCESS_CODE 必须为 24–128 位字母和数字。')
     os.umask(0o077)
-    ROOT.mkdir(mode=0o755);ROOT.chmod(0o755);DATA.mkdir(mode=0o700)
-    rootfs=ROOT/'runtime';rootfs.mkdir(mode=0o755);rootfs.chmod(0o755)
     def safe_member(member,destination):
         # Rootfs absolute links must point inside the application, including at extraction time.
         if member.issym() and member.linkname.startswith('/'):
@@ -44,8 +42,14 @@ def main():
             checked.uid,checked.gid=member.uid,member.gid
             if member.isdir():checked.mode=member.mode & 0o777
         return checked
-    with tarfile.open(archive,'r:gz') as tar:tar.extractall(rootfs,filter=safe_member,numeric_owner=True)
-    (rootfs/'opt/linketic/native-mode').write_text('systemd-root-directory-v1\n')
+    # Failed extraction leaves no deployment directories, so a corrected package can be retried.
+    with tempfile.TemporaryDirectory(prefix='.linketic-stage-',dir=ROOT.parent) as temp:
+        staged=Path(temp)/'deployment';staged.mkdir(mode=0o755);staged.chmod(0o755)
+        rootfs=staged/'runtime';rootfs.mkdir(mode=0o755);rootfs.chmod(0o755)
+        with tarfile.open(archive,'r:gz') as tar:tar.extractall(rootfs,filter=safe_member,numeric_owner=True)
+        (rootfs/'opt/linketic/native-mode').write_text('systemd-root-directory-v1\n')
+        staged.rename(ROOT)
+    rootfs=ROOT/'runtime';DATA.mkdir(mode=0o700)
     binds=[]
     for name,target in [('app','/var/lib/linketic'),('mysql','/var/lib/mysql'),('redis','/var/lib/redis'),('clamav','/var/lib/clamav')]:
         source=DATA/name;source.mkdir(mode=0o700);(rootfs/target.lstrip('/')).mkdir(parents=True,exist_ok=True)
@@ -80,7 +84,17 @@ WantedBy=multi-user.target
     UNIT.write_text(content);UNIT.chmod(0o644)
     (DATA/'deployment.json').write_text(json.dumps({'version':manifest['version'],'source':manifest['source'],'site_url':args.site_url,'runtime_sha256':manifest['runtime_sha256']}))
     run('systemctl','daemon-reload');run('systemctl','enable','--now','linketic.service')
-    print('\n原生服务已启动，无需 Docker。')
+    request=urllib.request.Request('http://127.0.0.1:18080/install/',headers={'Host':urlsplit(args.site_url).netloc})
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    deadline=time.monotonic()+180
+    while time.monotonic()<deadline:
+        try:
+            with opener.open(request,timeout=3) as response:
+                if response.status==200:break
+        except OSError:pass
+        time.sleep(2)
+    else:raise SystemExit('初始化尚未就绪，已保留程序和数据。请查看 journalctl -u linketic.service --no-pager 的错误；不要重新安装。')
+    print('\n原生服务与安装页面已就绪，无需 Docker。')
     print('面板反向代理目标：http://127.0.0.1:18080')
     print('网站安装地址：'+args.site_url)
     print('首次安装访问码：'+code)

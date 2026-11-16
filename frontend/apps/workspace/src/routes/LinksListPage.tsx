@@ -107,9 +107,8 @@ export default function LinksListPage() {
       <section className="links-page" data-page="links-list">
         <header className="links-page-header">
           <div>
-            <p className="links-eyebrow">LINKS</p>
             <h1>Links</h1>
-            <p>Manage destinations, routing controls and link lifecycle from one workspace.</p>
+            <p>Create short links, update destinations and track clicks.</p>
           </div>
           <div className="links-page-actions">
             <Button variant="outline" onClick={() => exportMutation.mutate()} disabled={!runtime || exportMutation.isPending}>Export</Button>
@@ -117,8 +116,8 @@ export default function LinksListPage() {
           </div>
         </header>
 
-        {!runtime ? <InlineMessage variant="warning">Workspace and authentication authority is unavailable in this build. P12/P15 must provide the production identity context.</InlineMessage> : null}
-        {linksQuery.isError ? <InlineMessage variant="danger">Links could not be loaded from the Workspace API.</InlineMessage> : null}
+        {!runtime ? <InlineMessage variant="warning">Your workspace could not be loaded. Refresh this page or sign in again.</InlineMessage> : null}
+        {linksQuery.isError ? <InlineMessage variant="danger">We couldn’t load your links. Refresh the page to try again.</InlineMessage> : null}
         {bulkMutation.isError ? <InlineMessage variant="danger">The bulk request failed. Refresh the list before retrying.</InlineMessage> : null}
         {exportState ? <InlineMessage variant="success">{exportState}</InlineMessage> : null}
 
@@ -133,8 +132,6 @@ export default function LinksListPage() {
           ]} />
           <TextField id="links-from" label="Updated from" type="date" value={fromDate} onChange={(event) => setFromDate(event.currentTarget.value)} />
           <TextField id="links-to" label="Updated to" type="date" value={toDate} onChange={(event) => setToDate(event.currentTarget.value)} />
-          <SelectField id="links-campaign" label="Campaign" disabled value="" options={[{ value: '', label: 'Available with Campaigns' }]} helpText="Campaign filtering is owned by P07/P12 and is not fabricated in P05." />
-          <SelectField id="links-tag" label="Tag" disabled value="" options={[{ value: '', label: 'Available with Tags' }]} helpText="Tag filtering is owned by P12 and remains unavailable in P05." />
         </section>
 
         <div className="links-summary" aria-live="polite">

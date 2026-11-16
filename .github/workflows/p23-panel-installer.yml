@@ -80,13 +80,15 @@ jobs:
         run: python3 native/package.py --output "$RUNNER_TEMP/linketic-native-delivery"
       - name: Native installation with Docker stopped
         run: python3 native/acceptance.py
+      - name: Seal native acceptance into delivery archive
+        run: python3 native/package.py --finalize --output "$RUNNER_TEMP/linketic-native-delivery"
       - name: Package tested image and publish panel prerelease
         if: false # release only after native and full customer acceptance
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 panel/package.py --output "$RUNNER_TEMP/linketic-delivery"
-          gh release create v10.0.0-rc.2-panel.3 --target "$GITHUB_SHA" --title 'Linketic 10.0.0-rc.2 · Panel Web Installer 3' --prerelease --notes-file panel/RELEASE-NOTES.md "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.3-linux-amd64.zip" "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.3-linux-amd64.zip.sha256"
+          gh release create v10.0.0-rc.2-panel.4 --target "$GITHUB_SHA" --title 'Linketic 10.0.0-rc.2 · Panel Web Installer 4' --prerelease --notes-file panel/RELEASE-NOTES.md "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.4-linux-amd64.zip" "$RUNNER_TEMP/linketic-delivery/Linketic-Panel-10.0.0-rc.2-panel.4-linux-amd64.zip.sha256" "$RUNNER_TEMP/linketic-native-delivery/Linketic-Native-10.0.0-rc.2-panel.4-linux-amd64.zip" "$RUNNER_TEMP/linketic-native-delivery/Linketic-Native-10.0.0-rc.2-panel.4-linux-amd64.zip.sha256"
       - name: Diagnostics
         if: always()
         run: |

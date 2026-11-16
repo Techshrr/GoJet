@@ -1,7 +1,7 @@
 """Package only the image that passed this workflow's installation and restart checks."""
 import argparse, hashlib, json, os, re, shutil, subprocess, zipfile
 from pathlib import Path
-VERSION='10.0.0-rc.2-panel.3'
+VERSION='10.0.0-rc.2-panel.4'
 IMAGE='linketic-panel:'+VERSION
 SERVICES=('platformapi','redirectengine','analyticsworker','analyticsreconciler','mailworker','fileworker','operationsmonitor','logreceiver','webrisk')
 def run(*args):return subprocess.check_output(args,text=True).strip()
@@ -15,6 +15,7 @@ def main():
     customer=json.loads(Path('artifacts/panel/customer-full.json').read_text());assert customer['passed'] is True
     upgrade=json.loads(Path('artifacts/panel/upgrade.json').read_text());assert upgrade['passed'] is True
     recovery=json.loads(Path('artifacts/panel/customer-after-upgrade.json').read_text());assert recovery['passed'] is True
+    native=json.loads(Path('artifacts/panel/native-acceptance.json').read_text());assert native['passed'] is True
     processes=Path('artifacts/panel/processes-after-restart.txt').read_text().splitlines()
     assert all(any(row.startswith(name+' ') and 'RUNNING' in row for row in processes) for name in SERVICES)
     out=Path(args.output);out.mkdir(parents=True,exist_ok=False);stage=out/'content';stage.mkdir()
@@ -31,7 +32,7 @@ def main():
     subprocess.run(['docker','compose','-f',str(stage/'docker-compose.yml'),'config','--quiet'],check=True)
     shutil.copyfile('panel/INSTALL-ZH.md',stage/'INSTALL-ZH.md')
     shutil.copyfile('panel/UPGRADE-ZH.md',stage/'UPGRADE-ZH.md')
-    release={'schema':'linketic.panel-release.v1','version':VERSION,'platform':'linux/amd64','source':source,'native_baseline_source':'ce305a9207fd2fe46396e7cf433137c48ab5aec1','mailworker_source':source,'customer_acceptance':customer,'upgrade_acceptance':upgrade,'recovery_acceptance':recovery,'image':IMAGE,'image_id':image_id,'workflow':'https://github.com/Techshrr/GoJet/actions/runs/'+run_id,'browser':browser,'restart_services':list(SERVICES),'distribution_archive_roundtrip':True,'panel_ui_import_verified':False,'onepanel_network_verified':False}
+    release={'schema':'linketic.panel-release.v1','version':VERSION,'platform':'linux/amd64','source':source,'native_baseline_source':'ce305a9207fd2fe46396e7cf433137c48ab5aec1','mailworker_source':source,'platformapi_source':source,'customer_acceptance':customer,'upgrade_acceptance':upgrade,'recovery_acceptance':recovery,'image':IMAGE,'image_id':image_id,'workflow':'https://github.com/Techshrr/GoJet/actions/runs/'+run_id,'browser':browser,'restart_services':list(SERVICES),'distribution_archive_roundtrip':True,'panel_ui_import_verified':False,'onepanel_network_verified':False}
     (stage/'release.json').write_text(json.dumps(release,ensure_ascii=False,indent=2)+'\n')
     (stage/'SHA256SUMS').write_text(''.join(digest(p)+'  '+p.name+'\n' for p in sorted(stage.iterdir())))
     archive=out/('Linketic-Panel-'+VERSION+'-linux-amd64.zip')

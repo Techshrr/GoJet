@@ -1,5 +1,5 @@
 """CI-only external protocol fixtures. Never copied into the runtime image."""
-import http.client, json, smtplib, socketserver, ssl, threading, email
+import json, socketserver, ssl, threading, email, subprocess
 from pathlib import Path
 MAIL_LOCK=threading.Lock()
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,16 +17,6 @@ class External(BaseHTTPRequestHandler):
   data=parse_qs(self.rfile.read(int(self.headers['Content-Length'])).decode())
   token=data.get('response',[''])[0]
   self.answer({'success':data.get('secret')==['ci-turnstile-secret-1234567890'] and (token=='ci-valid-token' or token.startswith('ci-auth-')),'hostname':'www.linketic.test','action':'authentication' if token.startswith('ci-auth-') else 'install'})
-class Proxy(BaseHTTPRequestHandler):
- def log_message(self,*args):pass
- def handle_request(self):
-  c=http.client.HTTPConnection('127.0.0.1',18080 if Path('/opt/linketic/native-mode').exists() else 8088,timeout=20)
-  body=self.rfile.read(int(self.headers.get('Content-Length','0')))
-  c.request(self.command,self.path,body,dict(self.headers));r=c.getresponse();raw=r.read();self.send_response(r.status)
-  for k,v in r.getheaders():
-   if k.lower() not in ('connection','transfer-encoding','content-length','server','date'):self.send_header(k,v)
-  self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);c.close()
- do_GET=do_POST=do_PATCH=do_PUT=do_DELETE=handle_request
 class SMTP(socketserver.StreamRequestHandler):
  def handle(self):
   self.wfile.write(b'220 mail.fixture ESMTP\r\n');self.wfile.flush()
@@ -55,6 +45,23 @@ class SMTP(socketserver.StreamRequestHandler):
    elif verb==b'QUIT':self.wfile.write(b'221 Bye\r\n');self.wfile.flush();return
    else:self.wfile.write(b'250 OK\r\n')
    self.wfile.flush()
-for port,handler in [(443,External),(11443,Proxy)]:
- server=ThreadingHTTPServer(('0.0.0.0',port),handler);server.socket=CTX.wrap_socket(server.socket,server_side=True);threading.Thread(target=server.serve_forever,daemon=True).start()
+# Use the deployed panel's Nginx TLS proxy behavior. The small Python HTTP/1.0
+# proxy could drop parallel Chromium asset connections (ERR_TOO_MANY_RETRIES).
+upstream=18080 if Path('/opt/linketic/native-mode').exists() else 8088
+config=Path('/tmp/fixture-proxy.conf')
+config.write_text("""pid /tmp/fixture-proxy.pid;
+error_log /tmp/fixture-proxy.log warn;
+events { worker_connections 1024; }
+http { access_log off; server { listen 11443 ssl; server_name www.linketic.test;
+ssl_certificate /test/cert.pem; ssl_certificate_key /test/key.pem;
+location / { proxy_pass http://127.0.0.1:UPSTREAM;
+proxy_http_version 1.1; proxy_set_header Connection "";
+proxy_set_header Host $http_host; proxy_set_header X-Forwarded-Proto https;
+proxy_set_header X-Real-IP $remote_addr; }
+} }
+""".replace('UPSTREAM',str(upstream)))
+subprocess.run(['/usr/sbin/nginx','-c',str(config),'-p','/tmp'],check=True)
+server=ThreadingHTTPServer(('0.0.0.0',443),External)
+server.socket=CTX.wrap_socket(server.socket,server_side=True)
+threading.Thread(target=server.serve_forever,daemon=True).start()
 socketserver.ThreadingTCPServer(('0.0.0.0',1587),SMTP).serve_forever()
