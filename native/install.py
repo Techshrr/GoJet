@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Install the self-contained systemd edition. Docker is not required on the host."""
-import argparse, hashlib, json, os, platform, posixpath, secrets, shutil, socket, subprocess, tarfile, tempfile, time, urllib.request
+import argparse, hashlib, json, os, platform, posixpath, secrets, shutil, socket, subprocess, sys, tarfile, tempfile, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 ROOT=Path('/opt/linketic-native')
@@ -18,6 +18,7 @@ def main():
     if not re.fullmatch(r'https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[1-9][0-9]{0,4})?',args.site_url) or not urlsplit(args.site_url).hostname:raise SystemExit('请输入完整 HTTPS 站点地址，不带末尾斜杠。')
     if os.geteuid()!=0:raise SystemExit('请在面板终端以 root 运行一次初始化。')
     if platform.machine()!='x86_64' or not Path('/run/systemd/system').is_dir():raise SystemExit('本包需要 Linux x86_64 和运行中的 systemd。')
+    if sys.version_info<(3,11):raise SystemExit('本包需要 Python 3.11 或更新版本。')
     if not hasattr(tarfile,'data_filter'):raise SystemExit('请先更新系统 Python 3 安全补丁（需要 tarfile.data_filter）。')
     package=Path(__file__).resolve().parent
     manifest=json.loads((package/'native-release.json').read_text())

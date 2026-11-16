@@ -80,7 +80,7 @@ function Providers({ intent, providers }: { intent: 'login' | 'register'; provid
 
 async function enterWorkspace() {
   const response = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
-  if (!response.ok) throw new Error('Your session could not be saved. Please sign in again.');
+  if (!response.ok) throw new GoJetApiError(response.status, 'session_unavailable', 'Your session could not be saved. Please sign in again.');
   window.location.replace('/app');
 }
 

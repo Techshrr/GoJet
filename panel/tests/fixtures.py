@@ -1,5 +1,5 @@
 """CI-only external protocol fixtures. Never copied into the runtime image."""
-import json, socketserver, ssl, threading, email, subprocess
+import json, socketserver, ssl, threading, email, subprocess, shutil
 from pathlib import Path
 MAIL_LOCK=threading.Lock()
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,14 +45,16 @@ class SMTP(socketserver.StreamRequestHandler):
    elif verb==b'QUIT':self.wfile.write(b'221 Bye\r\n');self.wfile.flush();return
    else:self.wfile.write(b'250 OK\r\n')
    self.wfile.flush()
-# Use the deployed panel's Nginx TLS proxy behavior. The small Python HTTP/1.0
-# proxy could drop parallel Chromium asset connections (ERR_TOO_MANY_RETRIES).
+# Isolate this CI TLS proxy from the production Nginx process and cache paths.
 upstream=18080 if Path('/opt/linketic/native-mode').exists() else 8088
+cache=Path('/tmp/fixture-proxy-cache');cache.mkdir(mode=0o700,exist_ok=True)
+shutil.chown(cache,user='www-data',group='www-data')
 config=Path('/tmp/fixture-proxy.conf')
-config.write_text("""pid /tmp/fixture-proxy.pid;
+config.write_text("""user www-data;
+pid /tmp/fixture-proxy.pid;
 error_log /tmp/fixture-proxy.log warn;
 events { worker_connections 1024; }
-http { access_log off; server { listen 11443 ssl; server_name www.linketic.test;
+http { access_log off; proxy_temp_path /tmp/fixture-proxy-cache; server { listen 11443 ssl; server_name www.linketic.test;
 ssl_certificate /test/cert.pem; ssl_certificate_key /test/key.pem;
 location / { proxy_pass http://127.0.0.1:UPSTREAM;
 proxy_http_version 1.1; proxy_set_header Connection "";
