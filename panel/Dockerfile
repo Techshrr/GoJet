@@ -5,6 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY internal ./internal
 COPY services ./services
+COPY scripts ./scripts
 RUN go test ./internal/auth ./internal/support ./internal/securetoken ./services/platformapi/cmd/server && CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/Techshrr/GoJet/internal/releaseinfo.Version=10.0.0-rc.2-panel.4 -X github.com/Techshrr/GoJet/internal/releaseinfo.Commit=${SOURCE_COMMIT}" -o /out/mailworker ./services/platformapi/cmd/mailworker && CGO_ENABLED=0 go build -trimpath -o /out/platformapi ./services/platformapi/cmd/server
 
 FROM node:24.19.0-bookworm-slim AS frontend
