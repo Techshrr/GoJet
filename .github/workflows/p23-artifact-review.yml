@@ -12,19 +12,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        file: [native-service.log, workspace-desktop.png, workspace-mobile.png, homepage-desktop.png, homepage-mobile.png, login-desktop.png, customer-mobile.png, reset-code.png, admin-users-desktop.png, admin-users-mobile.png]
+        file: [failure.txt, workspace-desktop.png, workspace-mobile.png, homepage-desktop.png, homepage-mobile.png, login-desktop.png, customer-mobile.png, reset-code.png, admin-users-desktop.png, admin-users-mobile.png]
     steps:
       - name: Read immutable CI evidence
         env:
           GH_TOKEN: ${{ github.token }}
           EVIDENCE_FILE: ${{ matrix.file }}
         run: |
-          gh api repos/Techshrr/GoJet/actions/artifacts/14273759362/zip > /tmp/evidence.zip
+          gh api repos/Techshrr/GoJet/actions/artifacts/14295120124/zip > /tmp/evidence.zip
           python3 - <<'PY'
           import os,zipfile,hashlib,base64
           from pathlib import Path
           p=Path('/tmp/evidence.zip')
-          assert hashlib.sha256(p.read_bytes()).hexdigest()=='18da15fce08d7dde5cabee8523edb7190a7b38a993331df32d77e7d2185e7d21'
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='8506f607f05d8b9d2094fba7eda25cfe5b861495e86b493269d90c19e23513c3'
           name=os.environ['EVIDENCE_FILE']
           with zipfile.ZipFile(p) as z: raw=z.read(name)
           if name.endswith('.png'):
