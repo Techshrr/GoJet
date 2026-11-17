@@ -78,7 +78,7 @@ serverurl=unix:///run/supervisor.sock
       'wizard':('/usr/bin/python3 /opt/linketic/serve.py','www-data',30,True),
       'worker':('/usr/bin/python3 /opt/linketic/worker.py','root',40,True)}
     if NATIVE:
-        command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF --log-error=/dev/stderr',user,priority,auto)
+        command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF --log-error=',user,priority,auto)
         command,user,priority,auto=programs['redis']; programs['redis']=(command+' --port '+str(REDIS_PORT),user,priority,auto)
     for name in SERVICES+('webrisk',): programs[name]=('/usr/bin/python3 /opt/linketic/launch.py '+name,'root',50,False)
     if NATIVE:
