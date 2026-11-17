@@ -1,0 +1,39 @@
+name: Panel evidence inspection
+on:
+  push:
+    branches: [review/panel4-evidence]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        file: [native-service.log, workspace-desktop.png, workspace-mobile.png, homepage-desktop.png, homepage-mobile.png, login-desktop.png, customer-mobile.png, reset-code.png, admin-users-desktop.png, admin-users-mobile.png]
+    steps:
+      - name: Read immutable CI evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_FILE: ${{ matrix.file }}
+        run: |
+          gh api repos/Techshrr/GoJet/actions/artifacts/14273759362/zip > /tmp/evidence.zip
+          python3 - <<'PY'
+          import os,zipfile,hashlib,base64
+          from pathlib import Path
+          p=Path('/tmp/evidence.zip')
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='18da15fce08d7dde5cabee8523edb7190a7b38a993331df32d77e7d2185e7d21'
+          name=os.environ['EVIDENCE_FILE']
+          with zipfile.ZipFile(p) as z: raw=z.read(name)
+          if name.endswith('.png'):
+              encoded=base64.b64encode(raw).decode()
+              print('BEGIN_IMAGE:'+name)
+              for n in range(0,len(encoded),120): print(encoded[n:n+120])
+              print('END_IMAGE')
+          else:
+              print('BEGIN_DIAGNOSTIC')
+              print(raw.decode(errors='replace')[-24000:])
+              print('END_DIAGNOSTIC')
+          PY
