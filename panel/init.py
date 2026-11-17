@@ -81,8 +81,15 @@ serverurl=unix:///run/supervisor.sock
         command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF',user,priority,auto)
         command,user,priority,auto=programs['redis']; programs['redis']=(command+' --port='+str(REDIS_PORT),user,priority,auto)
     for name in SERVICES+('webrisk',): programs[name]=('/usr/bin/python3 /opt/linketic/launch.py '+name,'root',50,False)
+    if NATIVE:
+        mkdir(PRIVATE/'logs')
     for name,(cmd,user,priority,auto) in programs.items():
-        config+=f'\n[program:{name}]\ncommand={cmd}\nuser={user}\npriority={priority}\nautostart={str(auto).lower()}\nautorestart=true\nstartsecs=2\nstartretries=100\nstopasgroup=true\nkillasgroup=true\nstopwaitsecs=60\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstderr_logfile=/dev/stderr\nstderr_logfile_maxbytes=0\n'
+        # systemd journal descriptors are sockets: reopening /dev/stdout fails with ENXIO.
+        # Native child logs use private, bounded files; Docker keeps its stdout collector.
+        stdout=str(PRIVATE/'logs'/f'{name}.stdout.log') if NATIVE else '/dev/stdout'
+        stderr=str(PRIVATE/'logs'/f'{name}.stderr.log') if NATIVE else '/dev/stderr'
+        maxbytes='5MB' if NATIVE else '0'
+        config+=f'\n[program:{name}]\ncommand={cmd}\nuser={user}\npriority={priority}\nautostart={str(auto).lower()}\nautorestart=true\nstartsecs=2\nstartretries=100\nstopasgroup=true\nkillasgroup=true\nstopwaitsecs=60\nstdout_logfile={stdout}\nstdout_logfile_maxbytes={maxbytes}\nstdout_logfile_backups=2\nstderr_logfile={stderr}\nstderr_logfile_maxbytes={maxbytes}\nstderr_logfile_backups=2\n'
     atomic('/etc/supervisor/supervisord.conf',config.encode(),0o600)
 
 def main():
