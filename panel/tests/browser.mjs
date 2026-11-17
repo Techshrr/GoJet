@@ -15,7 +15,7 @@ try {
  const fields={admin_email:'admin@example.com',admin_name:'Panel Administrator',admin_password:'CI-Admin-password-2026!',smtp_host:'mail.fixture',smtp_port:'1587',smtp_from:'no-reply@example.com',smtp_user:'no-reply@example.com',smtp_password:'ci-mail-password',webrisk_key:'ci-webrisk-invalid-key-1234567890',turnstile_site_key:'ci-turnstile-site-1234567890',turnstile_secret:'ci-turnstile-secret-1234567890'};
  for(const [key,value] of Object.entries(fields))await page.locator('#'+key).fill(value);
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/installer-mobile.png',fullPage:true});await page.setViewportSize({width:1440,height:1050});
- await page.getByRole('button',{name:'加载人机验证'}).click();
+ await page.getByRole('button',{name:'加载人机验证'}).click();await page.waitForFunction(()=>document.getElementById('turnstile_token')?.value==='ci-valid-token');
  assert.equal(await page.locator('input[name="cf-turnstile-response"]').count(),0);
  // Also exercise a previously injected field: submission must use the API contract only.
  await page.evaluate(()=>{const input=document.createElement('input');input.type='hidden';input.name='cf-turnstile-response';input.value='ci-valid-token';document.getElementById('configuration-form').append(input);});
@@ -23,7 +23,7 @@ try {
  await page.getByRole('button',{name:'检查并安装'}).click();
  const payload=(await submitted).postDataJSON();assert.deepEqual(Object.keys(payload).sort(),[...Object.keys(fields),'turnstile_token'].sort());assert.equal(payload.turnstile_token,'ci-valid-token');
  await page.getByRole('button',{name:'返回修改配置'}).waitFor({timeout:60000});assert((await page.locator('#message').textContent()).includes('Google Web Risk'));
- await page.getByRole('button',{name:'返回修改配置'}).click();execFileSync('docker',['exec','linketic-ci','supervisorctl','stop','redis']);await page.locator('#webrisk_key').fill('ci-webrisk-valid-key-1234567890');await page.getByRole('button',{name:'加载人机验证'}).click();await page.getByRole('button',{name:'检查并安装'}).click();
+ await page.getByRole('button',{name:'返回修改配置'}).click();execFileSync('docker',['exec','linketic-ci','supervisorctl','stop','redis']);await page.locator('#webrisk_key').fill('ci-webrisk-valid-key-1234567890');await page.getByRole('button',{name:'加载人机验证'}).click();await page.waitForFunction(()=>document.getElementById('turnstile_token')?.value==='ci-valid-token');await page.getByRole('button',{name:'检查并安装'}).click();
  await page.getByRole('button',{name:'重试未完成步骤'}).waitFor({timeout:780000});
  const failedJournal=JSON.parse(execFileSync('docker',['exec','linketic-ci','cat','/var/lib/linketic/private/data/journal.json'],{encoding:'utf8'}));assert.equal(failedJournal.phase,'failed');assert.equal(failedJournal.failed_at,'admin-started');
  execFileSync('docker',['exec','linketic-ci','supervisorctl','start','redis']);
