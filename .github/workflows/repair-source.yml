@@ -1,0 +1,19 @@
+name: Export source for isolated repair
+on:
+  push:
+    branches: [repair/link-detail-business]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar HEAD -o /tmp/gojet-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repair-source
+          path: /tmp/gojet-source.tar
+          retention-days: 3
