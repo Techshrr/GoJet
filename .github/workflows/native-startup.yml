@@ -1,0 +1,37 @@
+name: Native startup diagnosis
+on:
+  push:
+    branches: [review/native-startup]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build exact runtime
+        run: docker build --build-arg SOURCE_COMMIT="$GITHUB_SHA" -f panel/Dockerfile -t linketic-panel:ci .
+      - name: Build native archive
+        run: python3 native/package.py --output "$RUNNER_TEMP/linketic-native-delivery"
+      - name: Start native runtime
+        run: |
+          sudo systemctl stop docker.service docker.socket
+          sudo env INSTALL_ACCESS_CODE=CiNativeAccessCode1234567890 python3 "$RUNNER_TEMP/linketic-native-delivery/native/install.py" --site-url https://www.linketic.test
+          sleep 15
+      - name: Database startup evidence
+        if: always()
+        run: |
+          sudo journalctl -u linketic.service --no-pager -n 100
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          roots=[Path('/opt/linketic-native/runtime/var/log/mysql'),Path('/var/lib/linketic-native/mysql'),Path('/var/lib/linketic-native/app/private/logs')]
+          for root in roots:
+              for f in root.glob('*'):
+                  if f.is_file() and (f.suffix in ('.err','.log') or f.name=='error.log'):
+                      print('\nFILE',f)
+                      print(f.read_text(errors='replace')[-20000:])
+          PY
+          sudo journalctl -k --no-pager | tail -n 60
