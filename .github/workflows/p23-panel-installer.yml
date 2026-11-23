@@ -88,7 +88,6 @@ jobs:
       - name: Seal native acceptance into delivery archive
         run: python3 native/package.py --finalize --output "$RUNNER_TEMP/linketic-native-delivery"
       - name: Package tested image and publish panel prerelease
-        if: false # release only after native and full customer acceptance
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -100,7 +99,8 @@ jobs:
           mkdir -p artifacts/panel
           sudo journalctl -u linketic.service --no-pager > artifacts/panel/native-service.log 2>&1 || true
           sudo sh -c 'for f in /var/lib/linketic-native/app/private/logs/*.log; do [ -f "$f" ] || continue; printf "\\n%s\\n" "$(basename "$f")"; tail -n 80 "$f"; done' > artifacts/panel/native-processes.log 2>&1 || true
-          cat artifacts/panel/native-service.log artifacts/panel/native-processes.log
+          sudo sh -c 'for f in /opt/linketic-native/runtime/var/log/mysql/*.log /var/lib/linketic-native/mysql/*.err; do [ -f "$f" ] || continue; printf "\\n%s\\n" "$(basename "$f")"; tail -n 80 "$f"; done' > artifacts/panel/native-mysql.log 2>&1 || true
+          cat artifacts/panel/native-service.log artifacts/panel/native-processes.log artifacts/panel/native-mysql.log
           docker logs linketic-ci > artifacts/panel/container.log 2>&1 || true
           docker exec linketic-ci cat /tmp/fixtures.log > artifacts/panel/fixtures.log || true
           docker exec linketic-ci cat /tmp/fixture-proxy.log > artifacts/panel/fixture-proxy.log || true

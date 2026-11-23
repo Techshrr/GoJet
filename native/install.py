@@ -41,7 +41,7 @@ def main():
         checked=tarfile.data_filter(member,destination)
         if checked is not None:
             checked.uid,checked.gid=member.uid,member.gid
-            if member.isdir():checked.mode=member.mode & 0o777
+            if member.isdir():checked.mode=member.mode & 0o1777
         return checked
     # Failed extraction leaves no deployment directories, so a corrected package can be retried.
     with tempfile.TemporaryDirectory(prefix='.linketic-stage-',dir=ROOT.parent) as temp:

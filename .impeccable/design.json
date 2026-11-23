@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T00:00:00Z",
+  "title": "Design System: Linketic",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Action Blue"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White Surface"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Cool Canvas"
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Slate Ink"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Supporting Slate"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Quiet Divider"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Website Display",
+        "purpose": "Public website hero; the narrow-screen implementation uses 44px."
+      },
+      "product-title": {
+        "displayName": "Product Title",
+        "purpose": "Administration and customer-workspace page headings."
+      },
+      "auth-title": {
+        "displayName": "Authentication Title",
+        "purpose": "Form task headings; reduces to 26px at 760px."
+      },
+      "body": {
+        "displayName": "Product Body",
+        "purpose": "Default product text."
+      },
+      "label": {
+        "displayName": "Compact Label",
+        "purpose": "Management toolbar labels."
+      },
+      "brand": {
+        "displayName": "Brand Text",
+        "purpose": "Implemented text wordmark; does not replace supplied logo assets."
+      }
+    },
+    "shadows": [
+      {
+        "name": "auth-ambient",
+        "value": "0 12px 45px #17223b08",
+        "purpose": "Authentication and workspace-welcome cards."
+      },
+      {
+        "name": "website-preview",
+        "value": "0 24px 70px #23385d0d",
+        "purpose": "Illustrative website product panel."
+      },
+      {
+        "name": "auth-mode-selected",
+        "value": "0 2px 6px #182c4f0a",
+        "purpose": "Selected authentication mode."
+      },
+      {
+        "name": "shared-card",
+        "value": "0 1px 2px rgba(15,23,42,.05)",
+        "purpose": "Explicit elevated variant of shared cards."
+      },
+      {
+        "name": "shared-popover",
+        "value": "0 8px 24px rgba(15,23,42,.08)",
+        "purpose": "Shared popovers and tooltips."
+      },
+      {
+        "name": "shared-dialog",
+        "value": "0 20px 60px rgba(15,23,42,.12)",
+        "purpose": "Shared modal dialogs."
+      }
+    ],
+    "motion": [
+      {
+        "name": "shared-feedback-duration",
+        "value": "160ms",
+        "purpose": "Shared button state transitions."
+      },
+      {
+        "name": "shared-feedback-ease",
+        "value": "cubic-bezier(.2,0,0,1)",
+        "purpose": "Shared button state transitions."
+      },
+      {
+        "name": "auth-background-transition",
+        "value": "background .15s ease",
+        "purpose": "Authentication button background changes."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition: none !important; scroll-behavior: auto !important",
+        "purpose": "Product-layer reduced-motion override; pressed transforms require cascade verification."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "product-compact-desktop",
+        "value": "1000px"
+      },
+      {
+        "name": "website-compact-desktop",
+        "value": "900px"
+      },
+      {
+        "name": "product-phone",
+        "value": "760px"
+      },
+      {
+        "name": "website-stack",
+        "value": "700px"
+      },
+      {
+        "name": "auth-provider-stack",
+        "value": "40rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared primary action. Retains the shared UI hover, pressed and focus tokens.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Save changes</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;height:36px;padding-inline:12px;border:1px solid var(--gojet-action-primary,#2855df);border-radius:8px;background:var(--gojet-action-primary,#2855df);color:var(--gojet-action-on-primary,#fff);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);cursor:pointer;transition:background-color 160ms cubic-bezier(.2,0,0,1),color 160ms cubic-bezier(.2,0,0,1),border-color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-primary:hover{background:var(--gojet-action-primary-hover,#1D4ED8);border-color:var(--gojet-action-primary-hover,#1D4ED8)}.ds-primary:active{background:var(--gojet-action-primary-active,#1E40AF);border-color:var(--gojet-action-primary-active,#1E40AF);transform:translateY(1px)}.ds-primary:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-primary:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none;transform:none}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default shared button variant with a visible boundary.",
+      "html": "<button class=\"ds-secondary\" type=\"button\">Cancel</button>",
+      "css": ".ds-secondary{min-height:40px;height:36px;padding-inline:12px;border:1px solid var(--gojet-border-strong,#334155);border-radius:8px;background:var(--gojet-surface-default,#fff);color:var(--gojet-text-primary,#17223b);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);cursor:pointer;transition:background-color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-secondary:hover{background:var(--gojet-surface-muted,#F1F5F9)}.ds-secondary:active{background:var(--gojet-action-selected-bg,#DBEAFE);transform:translateY(1px)}.ds-secondary:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-secondary:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none;transform:none}}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Transparent shared action with a visible boundary.",
+      "html": "<button class=\"ds-outline\" type=\"button\">View details</button>",
+      "css": ".ds-outline{min-height:40px;height:36px;padding-inline:12px;border:1px solid var(--gojet-border-strong,#334155);border-radius:8px;background:transparent;color:var(--gojet-text-primary,#17223b);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);cursor:pointer;transition:background-color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-outline:hover{background:var(--gojet-surface-muted,#F1F5F9)}.ds-outline:active{background:var(--gojet-action-selected-bg,#DBEAFE);transform:translateY(1px)}.ds-outline:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-outline:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-outline{transition:none;transform:none}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis shared action used in management controls.",
+      "html": "<button class=\"ds-ghost\" type=\"button\">Refresh</button>",
+      "css": ".ds-ghost{min-height:40px;height:36px;padding-inline:12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--gojet-text-primary,#17223b);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);cursor:pointer;transition:background-color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-ghost:hover{background:var(--gojet-surface-muted,#F1F5F9)}.ds-ghost:active{background:var(--gojet-action-selected-bg,#DBEAFE);transform:translateY(1px)}.ds-ghost:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-ghost:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-ghost{transition:none;transform:none}}"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Existing shared destructive variant; does not imply every access action currently uses it.",
+      "html": "<button class=\"ds-destructive\" type=\"button\">Delete</button>",
+      "css": ".ds-destructive{min-height:40px;height:36px;padding-inline:12px;border:1px solid var(--gojet-action-destructive,#B91C1C);border-radius:8px;background:var(--gojet-action-destructive,#B91C1C);color:var(--gojet-action-on-destructive,#fff);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);cursor:pointer;transition:background-color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-destructive:hover{background:var(--gojet-action-destructive-hover,#991B1B);border-color:var(--gojet-action-destructive-hover,#991B1B)}.ds-destructive:active{background:var(--gojet-action-destructive-active,#7F1D1D);border-color:var(--gojet-action-destructive-active,#7F1D1D);transform:translateY(1px)}.ds-destructive:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-destructive:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-destructive{transition:none;transform:none}}"
+    },
+    {
+      "name": "Link Button",
+      "kind": "button",
+      "refersTo": "button-link",
+      "description": "Shared text action with an underline.",
+      "html": "<button class=\"ds-link\" type=\"button\">Learn more</button>",
+      "css": ".ds-link{min-height:40px;height:36px;padding-inline:12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--gojet-text-link,#234cce);font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;cursor:pointer;transition:color 160ms cubic-bezier(.2,0,0,1),transform 160ms cubic-bezier(.2,0,0,1)}.ds-link:hover{color:var(--gojet-text-link-hover,#1E40AF)}.ds-link:active{transform:translateY(1px)}.ds-link:focus-visible{outline:2px solid var(--gojet-focus-ring,#2563EB);outline-offset:2px;box-shadow:0 0 0 2px var(--gojet-focus-backplate,#fff)}.ds-link:disabled{background:var(--gojet-surface-muted,#F1F5F9);color:var(--gojet-text-disabled,#64748B);border-color:var(--gojet-border-divider,#e3e7ef);cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-link{transition:none;transform:none}}"
+    },
+    {
+      "name": "Authentication Input",
+      "kind": "input",
+      "refersTo": "auth-input",
+      "description": "Labeled authentication field with existing specific focus treatment.",
+      "html": "<label class=\"ds-auth-label\" for=\"ds-email\">Email address</label><input class=\"ds-auth-input\" id=\"ds-email\" type=\"email\" autocomplete=\"email\" placeholder=\"you@example.com\">",
+      "css": ".ds-auth-label{display:block;margin-bottom:7px;color:var(--gojet-text-primary,#17223b);font:650 .875rem/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif)}.ds-auth-input{width:100%;height:46px;min-height:2.8rem;padding:.7rem .8rem;border:1px solid #d7deea;border-radius:8px;background:#fff;color:var(--gojet-text-primary,#17223b);font:15px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);caret-color:#2855df}.ds-auth-input::placeholder{color:#63718b;opacity:1}.ds-auth-input:focus,.ds-auth-input:focus-visible{outline:2px solid color-mix(in srgb,var(--gojet-focus-ring,#2563EB) 28%,transparent);outline-offset:2px;border-color:var(--gojet-focus-ring,#2563EB)}.ds-auth-input:read-only{background:#f7f8fb;color:#53617a}"
+    },
+    {
+      "name": "Product Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "sidebar-link",
+      "description": "Quiet navigation with a distinct current destination.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Workspace\"><a class=\"ds-nav-link\" href=\"#overview\" aria-current=\"page\">Overview</a><a class=\"ds-nav-link\" href=\"#links\">Links</a><a class=\"ds-nav-link\" href=\"#files\">Files</a></nav>",
+      "css": ".ds-nav{display:grid;gap:8px;background:#fff;padding:16px}.ds-nav-link{display:block;min-height:38px;padding:9px 14px;border-radius:7px;color:#52617b;text-decoration:none;font:13px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif)}.ds-nav-link:hover{background:#f0f4fc;color:#254ec8}.ds-nav-link[aria-current=page]{background:#eaf0ff;color:#234cce;font-weight:650}.ds-nav-link:focus-visible{outline:3px solid #93afff;outline-offset:3px}"
+    },
+    {
+      "name": "Management Status",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Informational status labels; no interactive hover or focus behavior.",
+      "html": "<span class=\"ds-status\" data-status=\"active\">Active</span> <span class=\"ds-status\" data-status=\"pending_verification\">Pending verification</span> <span class=\"ds-status\">Disabled</span>",
+      "css": ".ds-status{display:inline-flex;padding:4px 9px;border-radius:5px;background:#f1f3f7;color:#5b687d;font:11px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif);text-transform:capitalize}.ds-status[data-status=active]{background:#e8f5ed;color:#236441}.ds-status[data-status=pending_verification]{background:#fff5de;color:#875b16}"
+    },
+    {
+      "name": "Shared Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat shared container; not an implicitly interactive control.",
+      "html": "<section class=\"ds-card\"><strong>Workspace overview</strong><p class=\"ds-card-copy\">Manage your links and shared content.</p></section>",
+      "css": ".ds-card{padding:16px;border:1px solid var(--gojet-border-divider,#e3e7ef);border-radius:12px;background:#fff;color:var(--gojet-text-primary,#17223b);box-shadow:none;font:14px/1.55 var(--gojet-font-family-latin,Inter,ui-sans-serif,system-ui,sans-serif)}.ds-card[data-elevated=true]{box-shadow:0 1px 2px rgba(15,23,42,.05)}.ds-card[data-selected=true]{border-color:var(--gojet-action-selected-fg,#1E40AF);background:var(--gojet-action-selected-bg,#DBEAFE)}.ds-card-copy{color:var(--gojet-text-secondary,#55627a)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Task-first clarity",
+    "overview": "Linketic uses a restrained white, slate and blue interface. Its product identity comes from readable typography, clear actions, quiet boundaries and consistent navigation. Preserve the Linketic name and supplied identity assets; the implementation choices recorded here do not replace trademark assets.\n\nWorking surfaces are denser than the public website. Authentication concentrates attention on one form, while administration and customer workspaces use persistent navigation and structured records. Product illustrations support the website and authentication layout; they are explicitly labeled as example content.",
+    "keyCharacteristics": [
+      "White working surfaces on a cool, pale canvas.",
+      "Self-hosted Inter with compact product typography and larger website headlines.",
+      "Blue primary actions and selected navigation.",
+      "Rounded controls, thin boundaries and selective soft shadows.",
+      "Explicit state labels and responsive records with visible actions."
+    ],
+    "rules": [
+      {
+        "name": "The State Label Rule",
+        "body": "Color supports a written status; it never replaces the status label.",
+        "section": "colors"
+      },
+      {
+        "name": "The Task Hierarchy Rule",
+        "body": "Page titles, the current task and its actions establish the hierarchy before supplemental description or illustration.",
+        "section": "layout"
+      },
+      {
+        "name": "The Selective Elevation Rule",
+        "body": "Use borders and surface tone for ordinary working groups; reserve existing shadow treatments for their established elevated or illustrative roles.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do preserve Linketic branding and supplied identity assets.",
+      "Do use the shared primitives while respecting existing surface-specific sizing.",
+      "Do pair status colors with readable text.",
+      "Do keep keyboard focus visible and navigation controls explicitly labeled.",
+      "Do preserve identity, field labels and access actions when records reflow on phones.",
+      "Do label illustrative product data as example content.",
+      "Do distinguish source inspection, automated tests and visual acceptance in delivery evidence."
+    ],
+    "donts": [
+      "Don't introduce decorative headings above every task title.",
+      "Don't replace SVG interface icons with decorative text glyphs.",
+      "Don't turn illustration-sized text into a functional text standard.",
+      "Don't apply preview rotation or ambient shadows indiscriminately to working surfaces.",
+      "Don't treat the current light product layer as proof that dark mode is visually complete.",
+      "Don't use this document to imply that secondary screens, localized typography or all interaction states have been visually approved."
+    ]
+  }
+}

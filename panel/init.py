@@ -3,6 +3,9 @@ import hashlib, os, pwd, secrets, socket, struct, subprocess
 from pathlib import Path
 from common import BASE, PRIVATE, PUBLIC, INBOX, SERVICES, atomic, read, origin, NATIVE, DATABASE_PORT, REDIS_PORT
 
+# The host MySQL AppArmor profile permits its data directory, not arbitrary /run files.
+MYSQL_INIT_FILE = '/var/lib/mysql/.linketic-init.sql' if NATIVE else '/run/mysqld/init.sql'
+
 def mkdir(path, user='root', mode=0o700):
     p=Path(path); p.mkdir(parents=True,exist_ok=True)
     u=pwd.getpwnam(user); os.chown(p,u.pw_uid,u.pw_gid); os.chmod(p,mode)
@@ -70,7 +73,7 @@ supervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface
 serverurl=unix:///run/supervisor.sock
 '''
     programs={
-      'mysql':('/usr/sbin/mysqld --user=mysql --bind-address=127.0.0.1 --skip-name-resolve --log-bin-trust-function-creators=ON --init-file=/run/mysqld/init.sql','root',10,True),
+      'mysql':(f'/usr/sbin/mysqld --user=mysql --bind-address=127.0.0.1 --skip-name-resolve --log-bin-trust-function-creators=ON --init-file={MYSQL_INIT_FILE}','root',10,True),
       'redis':('/usr/bin/redis-server --bind 127.0.0.1 --protected-mode yes --save "" --appendonly yes --dir /var/lib/redis','redis',10,True),
       'freshclam':('/usr/bin/freshclam --daemon --foreground=true','clamav',10,True),
       'clamav':('/usr/sbin/clamd --foreground=true','clamav',20,True),
@@ -78,7 +81,7 @@ serverurl=unix:///run/supervisor.sock
       'wizard':('/usr/bin/python3 /opt/linketic/serve.py','www-data',30,True),
       'worker':('/usr/bin/python3 /opt/linketic/worker.py','root',40,True)}
     if NATIVE:
-        command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF --log-error=',user,priority,auto)
+        command,user,priority,auto=programs['mysql']; programs['mysql']=(command+' --port='+str(DATABASE_PORT)+' --mysqlx=OFF',user,priority,auto)
         command,user,priority,auto=programs['redis']; programs['redis']=(command+' --port '+str(REDIS_PORT),user,priority,auto)
     for name in SERVICES+('webrisk',): programs[name]=('/usr/bin/python3 /opt/linketic/launch.py '+name,'root',50,False)
     if NATIVE:
@@ -107,8 +110,8 @@ def main():
     if not (PRIVATE/'mysql.json').exists(): atomic(PRIVATE/'mysql.json',{'password':secrets.token_hex(32)})
     mkdir('/run/mysqld','mysql',0o750); mkdir('/var/lib/mysql','mysql',0o750)
     if not Path('/var/lib/mysql/mysql').exists(): run(['/usr/sbin/mysqld','--initialize-insecure','--user=mysql','--datadir=/var/lib/mysql'])
-    atomic('/run/mysqld/init.sql',("ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '"+read(PRIVATE/'mysql.json')['password']+"';\n").encode(),0o640)
-    os.chown('/run/mysqld/init.sql',0,pwd.getpwnam('mysql').pw_gid)
+    atomic(MYSQL_INIT_FILE,("ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '"+read(PRIVATE/'mysql.json')['password']+"';\n").encode(),0o640)
+    os.chown(MYSQL_INIT_FILE,0,pwd.getpwnam('mysql').pw_gid)
     for path,user,mode in [('/var/lib/redis','redis',0o700),('/var/lib/clamav','clamav',0o750),('/run/clamav','clamav',0o755),('/run/gojet-log','gojet',0o700),(BASE/'files','gojet',0o700),(BASE/'files/quarantine','gojet',0o700),(BASE/'files/published','gojet',0o700),(BASE/'webrisk','webrisk',0o700)]: mkdir(path,user,mode)
     mkdir(PRIVATE/'tls')
     if not (PRIVATE/'tls/cert.pem').exists():
