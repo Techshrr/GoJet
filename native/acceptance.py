@@ -24,7 +24,7 @@ try:
     run('sudo','env','INSTALL_ACCESS_CODE=CiNativeAccessCode1234567890','python3',str(package/'install.py'),'--site-url','https://www.linketic.test:11443')
     wait(lambda:'RUNNING' in inside('/usr/bin/supervisorctl','status','wizard'))
     # Fail before browser initialization when a foundational service cannot start.
-    wait(lambda:all(any(row.startswith(name+' ') and 'RUNNING' in row for row in inside('/usr/bin/supervisorctl','status').splitlines()) for name in ['mysql','redis']),seconds=45)
+    wait(lambda:all(any(row.startswith(name+' ') and 'RUNNING' in row for row in inside('/usr/bin/supervisorctl','status',name).splitlines()) for name in ['mysql','redis']),seconds=45)
     wait(lambda:inside('/usr/bin/python3','-c',"import sys;sys.path.insert(0,'/opt/linketic');from worker import database_ready;print(database_ready())")=='True',seconds=30)
     run('sudo','cp','-r','panel/tests',str(root/'test'))
     inside('/usr/bin/python3','-c',"from pathlib import Path;p=Path('/etc/hosts');p.write_text(p.read_text()+'\\n127.0.0.1 webrisk.googleapis.com challenges.cloudflare.com mail.fixture\\n')")
